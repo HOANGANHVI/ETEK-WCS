@@ -1,0 +1,28 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using WCS.Application.Abstractions;
+using WCS.Application.Flows;
+using WCS.Application.Services;
+
+namespace WCS.Application;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddWcsApplication(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<ProcessFlowOptions>(configuration.GetSection(ProcessFlowOptions.SectionName));
+        services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
+
+        services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<ISchedulerStatus, SchedulerStatus>();
+        services.AddSingleton<IFlowCatalog, FlowCatalog>();
+
+        services.AddScoped<IInventoryService, InventoryService>();
+        services.AddScoped<ITaskOrchestrator, TaskOrchestrator>();
+        services.AddScoped<ITaskScheduler, Services.TaskScheduler>();
+        services.AddScoped<StationRequestProcessor>();
+        services.AddScoped<WcsQueries>();
+        services.AddScoped<AgvStatusService>();
+        return services;
+    }
+}

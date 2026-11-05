@@ -1,0 +1,19 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace WCS.Runtime;
+
+public static class DependencyInjection
+{
+    /// <summary>Registers background workers. Set Runtime:EnableWorkers=false to run the API without the scheduler.</summary>
+    public static IServiceCollection AddWcsRuntime(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddHostedService<DatabaseSeedHostedService>();
+        if (configuration.GetValue("Runtime:EnableWorkers", true))
+        {
+            services.AddHostedService<SchedulerHostedService>();
+            services.AddHostedService<AgvStatusHostedService>();
+        }
+        return services;
+    }
+}

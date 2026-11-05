@@ -1,0 +1,144 @@
+using WCS.Domain.Common;
+
+namespace WCS.Domain.Tasks;
+
+/// <summary>
+/// WCS business task (independent from the RCS task; mapping is kept in <see cref="RcsTaskCode"/>).
+/// All state changes MUST go through <see cref="TransitionTo"/> so invalid transitions are impossible.
+/// </summary>
+public class TransportTask
+{
+    private readonly List<TaskHistoryEntry> _history = [];
+
+    private TransportTask() { }
+
+    public static TransportTask Create(string requestKey, ProcessFlow flow, RackKind rackKind, Guid agvId,
+        Guid requestLocationId, string? requestedBy, DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(requestKey)) throw new DomainException("REQUEST_KEY_REQUIRED", "RequestKey is required for idempotency.");
+        var id = Guid.NewGuid();
+        var t = new TransportTask
+        {
+            Id = id,
+            RequestKey = requestKey.Trim(),
+            Flow = flow,
+            RackKind = rackKind,
+            AgvId = agvId,
+            RequestLocationId = requestLocationId,
+            RequestedBy = requestedBy,
+            State = TaskState.Pending,
+            RcsRequestCode = $"WCS-{id:N}",
+            CurrentLeg = TaskLeg.Pick,
+            CreatedAt = now,
+            UpdatedAt = now,
+            StateEnteredAt = now,
+        };
+        t._history.Add(new TaskHistoryEntry(id, null, TaskState.Pending, "TASK_CREATED", $"flow={flow}", "WCS", now));
+        return t;
+    }
+
+    public Guid Id { get; private set; }
+    /// <summary>Idempotency key of the originating request (PLC request identity/sequence or API key).</summary>
+    public string RequestKey { get; private set; } = default!;
+    public ProcessFlow Flow { get; private set; }
+    public RackKind RackKind { get; private set; }
+    public Guid AgvId { get; private set; }
+    /// <summary>Station/location that raised the request.</summary>
+    public Guid RequestLocationId { get; private set; }
+    public Guid? SourceLocationId { get; private set; }
+    public Guid? DestinationLocationId { get; private set; }
+    public Guid? RackId { get; private set; }
+    public TaskState State { get; private set; }
+    public TaskLeg CurrentLeg { get; private set; }
+    public bool PlcPermissionGranted { get; private set; }
+    public string? StateReason { get; private set; }
+    public string? RequestedBy { get; private set; }
+
+    /// <summary>Unique request code sent to RCS (idempotent task creation).</summary>
+    public string RcsRequestCode { get; private set; } = default!;
+    /// <summary>RCS task code mapping (task-state-machine.md 3.1). Null until RCS accepted.</summary>
+    public string? RcsTaskCode { get; private set; }
+    public int DispatchAttempts { get; private set; }
+
+    public DateTimeOffset? PickConfirmedAt { get; private set; }
+    public DateTimeOffset? DropConfirmedAt { get; private set; }
+    /// <summary>Set when physical outcome is uncertain; resources stay held until reconciled (inventory-management.md 4.8).</summary>
+    public bool RequiresReconciliation { get; private set; }
+    public bool ReconciliationCompleted { get; private set; }
+
+    public DateTimeOffset CreatedAt { get; private set; }
+    public DateTimeOffset UpdatedAt { get; private set; }
+    public DateTimeOffset StateEnteredAt { get; private set; }
+    public DateTimeOffset? FinishedAt { get; private set; }
+
+    /// <summary>Optimistic concurrency token (PostgreSQL xmin).</summary>
+    public uint Version { get; private set; }
+
+    public IReadOnlyCollection<TaskHistoryEntry> History => _history;
+
+    public bool IsTerminal => TaskStateMachine.IsTerminal(State);
+    public bool OccupiesAgv => TaskStateMachine.OccupiesAgv(State);
+
+    public void TransitionTo(TaskState next, string reason, string source, DateTimeOffset now)
+    {
+        if (!TaskStateMachine.CanTransition(State, next)) throw new InvalidTaskTransitionException(State, next);
+        var prev = State;
+        State = next;
+        StateReason = reason;
+        StateEnteredAt = now;
+        UpdatedAt = now;
+        if (TaskStateMachine.IsTerminal(next)) FinishedAt = now;
+        _history.Add(new TaskHistoryEntry(Id, prev, next, "STATE_CHANGED", reason, source, now));
+    }
+
+    public void Note(string eventName, string? detail, string source, DateTimeOffset now)
+    {
+        UpdatedAt = now;
+        _history.Add(new TaskHistoryEntry(Id, State, State, eventName, detail, source, now));
+    }
+
+    public void AssignSource(Guid locationId, Guid rackId, DateTimeOffset now)
+    {
+        SourceLocationId = locationId; RackId = rackId; UpdatedAt = now;
+    }
+
+    public void AssignDestination(Guid locationId, DateTimeOffset now)
+    {
+        DestinationLocationId = locationId; UpdatedAt = now;
+    }
+
+    public void RegisterDispatchAttempt(DateTimeOffset now) { DispatchAttempts++; UpdatedAt = now; }
+
+    public void AttachRcsTask(string rcsTaskCode, DateTimeOffset now)
+    {
+        if (RcsTaskCode is not null && RcsTaskCode != rcsTaskCode)
+            throw new DomainException("RCS_TASK_CODE_MISMATCH", "Task is already mapped to a different RCS task code.");
+        RcsTaskCode = rcsTaskCode; UpdatedAt = now;
+    }
+
+    public void SetPlcPermission(bool granted, DateTimeOffset now) { PlcPermissionGranted = granted; UpdatedAt = now; }
+
+    public void ConfirmPick(DateTimeOffset now)
+    {
+        if (PickConfirmedAt is not null) throw new DomainException("PICK_ALREADY_CONFIRMED", "Pick already confirmed.");
+        PickConfirmedAt = now; CurrentLeg = TaskLeg.Drop; PlcPermissionGranted = false; UpdatedAt = now;
+    }
+
+    public void ConfirmDrop(DateTimeOffset now)
+    {
+        if (PickConfirmedAt is null) throw new DomainException("DROP_BEFORE_PICK", "Drop cannot be confirmed before pick.");
+        if (DropConfirmedAt is not null) throw new DomainException("DROP_ALREADY_CONFIRMED", "Drop already confirmed.");
+        DropConfirmedAt = now; PlcPermissionGranted = false; UpdatedAt = now;
+    }
+
+    public void RequireReconciliation(string detail, DateTimeOffset now)
+    {
+        RequiresReconciliation = true; UpdatedAt = now;
+        _history.Add(new TaskHistoryEntry(Id, State, State, "RECONCILIATION_REQUIRED", detail, "WCS", now));
+    }
+
+    public void MarkReconciled(DateTimeOffset now)
+    {
+        ReconciliationCompleted = true; RequiresReconciliation = false; UpdatedAt = now;
+    }
+}

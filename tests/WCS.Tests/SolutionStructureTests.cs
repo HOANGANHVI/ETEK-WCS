@@ -1,16 +1,13 @@
 namespace WCS.Tests;
 
-/// <summary>
-/// Foundation smoke tests only: verify that the test project is wired to the
-/// solution layers. No business (AGV, Task, Inventory, PLC/RCS) tests here.
-/// </summary>
+/// <summary>Foundation smoke test: the test project is wired to every solution layer.</summary>
 public class SolutionStructureTests
 {
     [Theory]
-    [InlineData(typeof(WCS.Domain.Class1))]
-    [InlineData(typeof(WCS.Application.Class1))]
-    [InlineData(typeof(WCS.Infrastructure.Class1))]
-    [InlineData(typeof(WCS.Runtime.Class1))]
+    [InlineData(typeof(WCS.Domain.Agvs.Agv))]
+    [InlineData(typeof(WCS.Application.Flows.FlowCatalog))]
+    [InlineData(typeof(WCS.Infrastructure.IntegrationOptions))]
+    [InlineData(typeof(WCS.Runtime.SchedulerHostedService))]
     public void Layer_assembly_is_referenced(Type marker)
     {
         Assert.NotNull(marker.Assembly);

@@ -1,0 +1,113 @@
+using WCS.Application.Common;
+using WCS.Application.Flows;
+using WCS.Domain.Common;
+using WCS.Domain.Inventory;
+using WCS.Domain.Locations;
+using WCS.Domain.Tasks;
+
+namespace WCS.Application.Abstractions;
+
+/// <summary>A realtime event emitted after a transaction commits (published through SignalR by the API layer).</summary>
+public sealed record WcsEvent(string Name, object Payload);
+
+public interface IWcsNotifier
+{
+    Task PublishAsync(IReadOnlyCollection<WcsEvent> events, CancellationToken ct = default);
+}
+
+public sealed record NoSourceResult(bool Found, Location? Location, Rack? Rack);
+
+/// <summary>
+/// WCS-owned inventory (BR-03). Methods taking a task MUST be called inside <see cref="IUnitOfWork.ExecuteAsync{T}"/>;
+/// they only mutate tracked entities and never save by themselves.
+/// </summary>
+public interface IInventoryService
+{
+    Task<NoSourceResult> ReserveSourceAsync(TransportTask task, FlowRule rule, CancellationToken ct = default);
+    /// <summary>Reserve one slot at the first suitable destination (in configured order). Null when none is available.</summary>
+    Task<Location?> ReserveDestinationAsync(TransportTask task, FlowRule rule, CancellationToken ct = default);
+    Task ConfirmPickAsync(TransportTask task, ConfirmationSource source, string? user, CancellationToken ct = default);
+    Task<BindOutcome> ConfirmDropAsync(TransportTask task, FlowRule rule, ConfirmationSource source, string? user,
+        string? externalRackId, CancellationToken ct = default);
+    /// <summary>Release every ACTIVE reservation of a task that never reached the physical world.</summary>
+    Task ReleaseReservationsAsync(TransportTask task, CancellationToken ct = default);
+    /// <summary>Mark racks/locations uncertain after a failure/cancel with physical uncertainty (4.8 steps 1-2).</summary>
+    Task MarkUncertainAsync(TransportTask task, CancellationToken ct = default);
+
+    // API-level operations (own transaction)
+    Task<IReadOnlyList<Guid>> DeclareInitialStockAsync(string locationCode, RackKind kind, int quantity, string user, CancellationToken ct = default);
+    Task<int> AdjustStockAsync(string locationCode, RackKind kind, int targetQuantity, string user, string? note, CancellationToken ct = default);
+    /// <summary>Operator-confirmed physical outcome after an incident (4.8 steps 4-6).</summary>
+    Task ReconcileTaskAsync(Guid taskId, string actualLocationCode, string user, string? note, CancellationToken ct = default);
+}
+
+public enum SignalKind
+{
+    AgvStarted = 1,
+    PlcPermissionRequested = 2,
+    PlcPermissionGranted = 3,
+    PickConfirmed = 4,
+    DropConfirmed = 5,
+    RcsCancelConfirmed = 6,
+    RcsInterrupted = 7,
+    /// <summary>RCS reports the task as ended. Does NOT complete the task without a confirmed drop.</summary>
+    RcsEnded = 8,
+}
+
+/// <summary>Vendor-neutral task event produced by adapters (RCS callback, PLC) or by the simulator.</summary>
+public sealed record TaskSignal(
+    SignalKind Kind,
+    Guid? TaskId = null,
+    string? RcsTaskCode = null,
+    string? RobotCode = null,
+    string? EventKey = null,
+    ConfirmationSource Source = ConfirmationSource.Rcs,
+    string? User = null,
+    string? Detail = null,
+    string? ExternalRackId = null);
+
+public enum SignalOutcome { Applied = 1, Duplicate = 2, Ignored = 3, Rejected = 4 }
+
+public sealed record SignalResult(SignalOutcome Outcome, string Message, TaskDto? Task);
+
+public sealed record CreateTaskCommand(string RequestKey, string Flow, string StationCode, string? RequestedBy);
+
+public sealed record CreateTaskResult(TaskDto Task, bool Created);
+
+public interface ITaskOrchestrator
+{
+    Task<CreateTaskResult> CreateTaskAsync(CreateTaskCommand command, CancellationToken ct = default);
+    Task<SignalResult> HandleSignalAsync(TaskSignal signal, CancellationToken ct = default);
+    Task<TaskDto> CancelTaskAsync(Guid taskId, string reason, string? user, CancellationToken ct = default);
+
+    // Driven by the scheduler / recovery
+    Task ProcessTaskAsync(Guid taskId, CancellationToken ct = default);
+    Task TryDispatchNextAsync(Guid agvId, CancellationToken ct = default);
+    Task DispatchToRcsAsync(Guid taskId, CancellationToken ct = default);
+    Task TryResolveDestinationAsync(Guid taskId, CancellationToken ct = default);
+    Task SendContinueAsync(Guid taskId, CancellationToken ct = default);
+    Task ReconcileCancelPendingAsync(Guid taskId, CancellationToken ct = default);
+    Task EnforceTimeoutAsync(Guid taskId, CancellationToken ct = default);
+}
+
+public sealed class SchedulerOptions
+{
+    public const string SectionName = "Scheduler";
+    public int TickIntervalMs { get; set; } = 1000;
+    public int MaxDispatchAttempts { get; set; } = 5;
+    /// <summary>Per-state timeouts in seconds. Null/absent = disabled. Real values must be agreed with PLC/RCS teams (5.3).</summary>
+    public Dictionary<string, int> StateTimeoutsSeconds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public interface ITaskScheduler
+{
+    Task RunOnceAsync(CancellationToken ct = default);
+}
+
+/// <summary>Heartbeat for the system-health endpoint.</summary>
+public interface ISchedulerStatus
+{
+    DateTimeOffset? LastRunAt { get; }
+    string? LastError { get; }
+    void Report(DateTimeOffset at, string? error);
+}
