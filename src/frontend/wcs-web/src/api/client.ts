@@ -1,22 +1,12 @@
+import { DEMO_MODE } from '../config'
+import { demoApi } from '../demo/demoApi'
+import { ApiRequestError } from './errors'
 import type {
-  Agv, ApiError, ApiResponse, InventoryTransaction, Location, Paged, Rack, SimulationStep, SystemHealth,
+  Agv, ApiResponse, InventoryTransaction, Location, Paged, Rack, SimulationStep, SystemHealth,
   TaskHistory, TaskState, TransportTask,
 } from './types'
 
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
-
-export class ApiRequestError extends Error {
-  readonly code: string
-  readonly status: number
-  readonly details?: unknown
-  constructor(status: number, error: ApiError) {
-    super(error.message)
-    this.name = 'ApiRequestError'
-    this.status = status
-    this.code = error.code
-    this.details = error.details
-  }
-}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response
@@ -48,7 +38,7 @@ const qs = (params: Record<string, string | number | undefined>) => {
   return text ? `?${text}` : ''
 }
 
-export const api = {
+const realApi = {
   health: () => request<SystemHealth>('/api/system/health'),
   agvs: () => request<Agv[]>('/api/agvs'),
   locations: () => request<Location[]>('/api/locations'),
@@ -61,3 +51,8 @@ export const api = {
     request<TransportTask>(`/api/tasks/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason, user }) }),
   simulateNext: (id: string) => request<SimulationStep>(`/api/simulator/tasks/${id}/advance`, { method: 'POST' }),
 }
+
+export { ApiRequestError }
+
+/** In Demo Mode every call is answered by the in-browser engine; no request ever leaves the page. */
+export const api: typeof realApi = DEMO_MODE ? demoApi : realApi

@@ -6,7 +6,7 @@ const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 export const WCS_EVENTS = ['TaskCreated', 'TaskStateChanged', 'InventoryChanged', 'AgvStatusChanged'] as const
 export type WcsEventName = (typeof WCS_EVENTS)[number]
 
-export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
+export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'demo'
 
 export function createWcsConnection(): HubConnection {
   return new HubConnectionBuilder()

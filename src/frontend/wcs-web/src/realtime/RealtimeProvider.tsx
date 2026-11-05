@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { DEMO_MODE } from '../config'
+import { demo } from '../demo/engine'
 import { createWcsConnection, toStatus, WCS_EVENTS, type ConnectionStatus, type WcsEventName } from './signalr'
 
 type Listener = (name: WcsEventName, payload: unknown) => void
@@ -14,10 +16,13 @@ const RealtimeContext = createContext<RealtimeContextValue>({ status: 'disconnec
 export const useRealtime = () => useContext(RealtimeContext)
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<ConnectionStatus>('connecting')
+  const [status, setStatus] = useState<ConnectionStatus>(DEMO_MODE ? 'demo' : 'connecting')
   const listeners = useRef(new Set<Listener>())
 
   useEffect(() => {
+    // Demo Mode: events come from the in-browser engine and no SignalR connection is ever opened.
+    if (DEMO_MODE) return demo.on((name, payload) => listeners.current.forEach((l) => l(name, payload)))
+
     const connection = createWcsConnection()
     let disposed = false
     for (const name of WCS_EVENTS) {
