@@ -1,0 +1,33 @@
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+TestResults/
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs and local data
+*.log
+logs/
+data/
+
+# Secrets / local configuration (use User Secrets or environment variables)
+secrets.json
+appsettings.Local.json
+appsettings.*.local.json
+*.pfx
+*.pem
+*.key
