@@ -23,8 +23,10 @@ public sealed class TaskOrchestrator(
     IRcsClient rcs,
     IStationSignalService stations,
     IProcessedEventRepository processed,
+    IReservationRepository reservationRepo,
     IWcsNotifier notifier,
     IClock clock,
+    Auth.IAuditLog audit,
     IOptions<ProcessFlowOptions> flowOptions,
     IOptions<SchedulerOptions> schedulerOptions,
     ILogger<TaskOrchestrator> logger) : ITaskOrchestrator
@@ -466,49 +468,75 @@ public sealed class TaskOrchestrator(
     {
         if (!string.IsNullOrWhiteSpace(expectedState) && !task.State.ToString().Equals(expectedState.Trim(), StringComparison.OrdinalIgnoreCase))
             throw AppException.Conflict("TASK_STATE_CHANGED", $"Nhiệm vụ đã chuyển sang trạng thái {task.State}. Vui lòng tải lại dữ liệu.");
-        if (task.IsUserEditable) return;
+        if (task.IsUntouchedByAgvAndRcs) return;
         throw actor.IsAdmin
             ? AppException.Conflict("TASK_NOT_EDITABLE", $"Nhiệm vụ đang ở trạng thái {task.State} nên không thể sửa/xóa trực tiếp. Hãy dùng chức năng hủy hoặc đối soát.")
             : AppException.Forbidden("TASK_LOCKED", "Nhiệm vụ đã được AGV tiếp nhận hoặc đã kết thúc; tài khoản Operator không có quyền sửa/xóa.");
     }
 
-    public async Task<TaskDto> UpdateTaskAsync(Guid taskId, string stationCode, string? expectedState, Auth.ActorInfo actor, CancellationToken ct = default)
+    public async Task<TaskDto> UpdateTaskAsync(Guid taskId, string flowText, string stationCode, string? expectedState, Auth.ActorInfo actor, CancellationToken ct = default)
     {
-        var dto = await Tx(async (events, _, t) =>
+        return await Tx(async (events, _, t) =>
         {
             var task = await tasks.GetAsync(taskId, t) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Không tìm thấy nhiệm vụ.");
             EnsureUserEditable(task, expectedState, actor);
-            var rule = flows.Get(task.Flow);
+
+            // The new request is validated exactly like a new one (same rules as CreateTaskAsync).
+            if (!flows.TryParseFlow(flowText, out var flow))
+            {
+                var normalized = (flowText ?? "").Replace("-", "").Replace("_", "").Trim();
+                throw normalized.Equals("BP04", StringComparison.OrdinalIgnoreCase)
+                    ? AppException.Rejected("FLOW_IN_REVIEW", "BP-04 (slide 8) is REVIEW and not approved for implementation.")
+                    : AppException.Rejected("FLOW_NOT_SUPPORTED", $"Flow '{flowText}' is not an approved flow.");
+            }
+            var rule = flows.Get(flow);
             var station = await locations.GetByCodeAsync((stationCode ?? "").Trim(), t)
                           ?? throw AppException.NotFound("STATION_NOT_FOUND", $"Không tìm thấy trạm '{stationCode}'.");
             if (!rule.AllowedRequestStations.Contains(station.Code))
-                throw AppException.Rejected("STATION_NOT_ALLOWED", $"Trạm {station.Code} không được phép yêu cầu quy trình {task.Flow}.");
-            if (station.Id == task.RequestLocationId) return task.ToDto(); // nothing to change
+                throw AppException.Rejected("STATION_NOT_ALLOWED", $"Trạm {station.Code} không được phép yêu cầu quy trình {flow}.");
+            var agv = await agvs.GetByRoleAsync(rule.AgvRole, t)
+                      ?? throw AppException.Rejected("AGV_NOT_CONFIGURED", $"No AGV with role {rule.AgvRole} is configured.");
+            if (!agv.Enabled) throw AppException.Rejected("AGV_DISABLED", $"{agv.Code} is disabled.");
+            if (flow == task.Flow && station.Id == task.RequestLocationId) return task.ToDto();   // nothing to change
 
-            var oldCode = (await locations.GetAsync(task.RequestLocationId, t))?.Code ?? "?";
-            var sourceFollowsStation = rule.SourceMode == LocationSelectionMode.Request;
-            if (sourceFollowsStation) await inventory.ReleaseReservationsAsync(task, t);
-            task.ChangeRequestStation(station.Id, sourceFollowsStation, $"station {oldCode} -> {station.Code}", actor.Username, clock.UtcNow);
-            if (sourceFollowsStation && task.State == TaskState.Queued && !(await inventory.ReserveSourceAsync(task, rule, t)).Found)
-                throw AppException.Rejected("NO_SOURCE_AT_STATION", $"Trạm {station.Code} hiện không có rack phù hợp để lấy. Nhiệm vụ không bị thay đổi.");
+            var oldStation = (await locations.GetAsync(task.RequestLocationId, t))?.Code ?? "?";
+            var oldFlow = task.Flow;
+            await inventory.ReleaseReservationsAsync(task, t);
+            task.ReconfigureRequest(flow, rule.RackKind, agv.Id, station.Id, $"flow {oldFlow}/{oldStation} -> {flow}/{station.Code}", actor.Username, clock.UtcNow);
+            // A task that is already queued holds a source rack: re-select it for the new request. If none exists the whole edit is
+            // refused and rolled back. Pending/Validating tasks have no reservation; the normal processing step reserves later.
+            if (task.State == TaskState.Queued && !(await inventory.ReserveSourceAsync(task, rule, t)).Found)
+                throw AppException.Rejected("NO_SOURCE_AT_STATION", "Không có rack nguồn phù hợp cho yêu cầu mới. Nhiệm vụ không bị thay đổi.");
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return task.ToDto();
         }, ct);
-        return dto;
     }
 
-    /// <summary>"Delete" keeps the record: the task becomes Cancelled (history preserved, reservations released). Nothing is physically removed.</summary>
+    /// <summary>
+    /// HARD delete. Inside one transaction on the freshly loaded task: permission/state re-checked, the audit entry is staged in the same
+    /// transaction (it has no foreign key to the task and therefore survives it), reservations/processed events/history of the task are
+    /// removed together with the task. A concurrent dispatch changes the row version, so one of the two transactions loses and re-checks.
+    /// </summary>
     public async Task<TaskDto> DeleteTaskAsync(Guid taskId, string? expectedState, Auth.ActorInfo actor, CancellationToken ct = default)
     {
         return await Tx(async (events, _, t) =>
         {
             var task = await tasks.GetAsync(taskId, t) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Không tìm thấy nhiệm vụ.");
             EnsureUserEditable(task, expectedState, actor);
-            task.Note("TASK_DELETED", $"deleted by {actor.Username}", actor.Username, clock.UtcNow);
-            task.TransitionTo(TaskState.Cancelled, $"Deleted by {actor.Username} before dispatch", actor.Username, clock.UtcNow);
+            var dto = task.ToDto();
+            var station = (await locations.GetAsync(task.RequestLocationId, t))?.Code;
+            var code = $"NV-{task.Id.ToString("N")[..8].ToUpperInvariant()}";
+            audit.Enlist(new Auth.AuditRecord("TASK_DELETE", actor.Username, actor.Role.ToString(), "Task", task.Id.ToString(), WCS.Domain.Users.AuditResult.Success,
+                $"Đã xóa cứng nhiệm vụ {code}",
+                Before: new { code, task.Id, task.RequestKey, flow = task.Flow.ToString(), state = task.State.ToString(), requestStation = station, task.RequestedBy,
+                              task.AgvId, task.SourceLocationId, task.DestinationLocationId, task.CreatedAt, deletedState = task.State.ToString() },
+                After: null, IpAddress: actor.IpAddress));
             await inventory.ReleaseReservationsAsync(task, t);
-            events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
-            return task.ToDto();
+            await reservationRepo.RemoveAllForTaskAsync(task.Id, t);
+            await processed.RemoveForTaskAsync(task.Id, t);
+            tasks.Remove(task);
+            events.Add(new WcsEvent("TaskDeleted", new { id = task.Id }));
+            return dto;
         }, ct);
     }
 

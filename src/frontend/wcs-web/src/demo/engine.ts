@@ -54,7 +54,7 @@ interface DReservation { id: string; taskId: string; kind: 'rack' | 'dest'; rack
 interface DTask { pub: TransportTask; history: TaskHistory[]; kind: Kind; flow: string }
 interface DAgv { id: string; code: string; robotCode: string | null; enabled: boolean; role: Agv['role']; kind: Kind; status: Agv['connectionStatus']; detail: string | null; at: string }
 
-export type DemoEventName = 'TaskCreated' | 'TaskStateChanged' | 'InventoryChanged' | 'AgvStatusChanged'
+export type DemoEventName = 'TaskCreated' | 'TaskStateChanged' | 'TaskDeleted' | 'InventoryChanged' | 'AgvStatusChanged'
 type Listener = (name: DemoEventName, payload: unknown) => void
 
 const LOCATION_DEFS: Omit<DLocation, 'id' | 'recon' | 'enabled'>[] = [
@@ -227,46 +227,49 @@ export class DemoEngine {
       : new DemoError(403, 'TASK_LOCKED', 'Nhiệm vụ đã được AGV tiếp nhận hoặc đã kết thúc; tài khoản Operator không có quyền sửa/xóa.')
   }
 
-  updateTask(id: string, stationCode: string, expectedState: string | undefined, isAdmin: boolean): TransportTask {
+  /** Edits ALL request data (flow + station), like the backend: the AGV and rack kind follow the flow, the source is re-selected. */
+  updateTask(id: string, flow: string, stationCode: string, expectedState: string | undefined, isAdmin: boolean): TransportTask {
     const t = this.require(id)
     this.ensureUserEditable(t, expectedState, isAdmin)
-    const rule = DEMO_FLOWS[t.flow]
+    const rule = DEMO_FLOWS[flow.toUpperCase()]
+    if (!rule) throw new DemoError(422, 'FLOW_NOT_SUPPORTED', 'Quy trình này không được hỗ trợ.')
     const station = this.locations.find((l) => l.code === stationCode)
     if (!station) throw new DemoError(404, 'STATION_NOT_FOUND', `Không tìm thấy trạm '${stationCode}'.`)
-    if (!rule.stations.includes(station.code)) throw new DemoError(422, 'STATION_NOT_ALLOWED', `Trạm ${station.code} không được phép yêu cầu quy trình ${t.flow}.`)
-    if (station.id === t.pub.requestLocationId) return t.pub
-    const oldCode = this.locationCode(t.pub.requestLocationId)
+    if (!rule.stations.includes(station.code)) throw new DemoError(422, 'STATION_NOT_ALLOWED', `Trạm ${station.code} không được phép yêu cầu quy trình ${flow}.`)
+    const agv = this.agvs.find((a) => a.kind === rule.kind)!
+    const newFlow = flow.toUpperCase()
+    if (newFlow === t.flow && station.id === t.pub.requestLocationId) return t.pub
+
+    const before = { flow: t.flow, kind: t.kind, agvId: t.pub.agvId, rackKind: t.pub.rackKind, req: t.pub.requestLocationId, src: t.pub.sourceLocationId, rack: t.pub.rackId }
     const oldReservations = this.reservations.filter((r) => r.active && r.taskId === t.pub.id)
-    const saved = { src: t.pub.sourceLocationId, rack: t.pub.rackId }
-    if (rule.srcMode === 'Request') {
-      oldReservations.forEach((r) => { r.active = false })
-      t.pub.sourceLocationId = null; t.pub.rackId = null
-    }
-    t.pub.requestLocationId = station.id; t.pub.destinationLocationId = null
-    if (rule.srcMode === 'Request' && t.pub.state === 'Queued' && !this.reserveSource(t, rule)) {
-      // Not possible: leave everything exactly as it was.
-      t.pub.requestLocationId = this.locations.find((l) => l.code === oldCode)!.id
-      t.pub.sourceLocationId = saved.src; t.pub.rackId = saved.rack
+    const oldText = `${t.flow}/${this.locationCode(t.pub.requestLocationId)}`
+    oldReservations.forEach((r) => { r.active = false })
+    t.flow = newFlow; t.kind = rule.kind; t.pub.flow = newFlow; t.pub.rackKind = rule.kind; t.pub.agvId = agv.id
+    t.pub.requestLocationId = station.id; t.pub.sourceLocationId = null; t.pub.rackId = null; t.pub.destinationLocationId = null
+    if (t.pub.state === 'Queued' && !this.reserveSource(t, rule)) {
+      t.flow = before.flow; t.kind = before.kind; t.pub.flow = before.flow; t.pub.rackKind = before.rackKind; t.pub.agvId = before.agvId
+      t.pub.requestLocationId = before.req; t.pub.sourceLocationId = before.src; t.pub.rackId = before.rack
       oldReservations.forEach((r) => { r.active = true })
-      throw new DemoError(422, 'NO_SOURCE_AT_STATION', `Trạm ${station.code} hiện không có rack phù hợp để lấy. Nhiệm vụ không bị thay đổi.`)
+      throw new DemoError(422, 'NO_SOURCE_AT_STATION', 'Không có rack nguồn phù hợp cho yêu cầu mới. Nhiệm vụ không bị thay đổi.')
     }
     t.pub.updatedAt = nowIso()
-    this.log(t, t.pub.state, t.pub.state, 'TASK_EDITED', `station ${oldCode} -> ${station.code}`, 'operator')
+    this.log(t, t.pub.state, t.pub.state, 'TASK_EDITED', `flow ${oldText} -> ${newFlow}/${station.code}`, 'operator')
     this.schedule()
     this.changed()
     return t.pub
   }
 
-  /** "Delete" keeps the record: the task becomes Cancelled and its reservations are released. */
+  /** HARD delete (the task disappears, like the backend). The audit trail lives on the server and is not part of the demo data. */
   deleteTask(id: string, expectedState: string | undefined, isAdmin: boolean): TransportTask {
     const t = this.require(id)
     this.ensureUserEditable(t, expectedState, isAdmin)
-    this.log(t, t.pub.state, t.pub.state, 'TASK_DELETED', 'deleted by user', 'operator')
-    this.move(t, 'Cancelled', 'Deleted by user before dispatch', 'operator')
+    const snapshot = structuredClone(t.pub)
     this.releaseReservations(t)
+    this.reservations = this.reservations.filter((r) => r.taskId !== id)
+    this.tasks = this.tasks.filter((x) => x !== t)
     this.schedule()
     this.changed()
-    return t.pub
+    return snapshot
   }
 
   cancelTask(id: string, reason: string): TransportTask {

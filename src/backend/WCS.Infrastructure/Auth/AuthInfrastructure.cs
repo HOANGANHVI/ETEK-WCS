@@ -49,8 +49,12 @@ internal sealed class PasswordService : IPasswordService
 }
 
 /// <summary>Audit trail writer. Uses its own short-lived DbContext so it neither joins nor is rolled back with a business transaction.</summary>
-internal sealed class AuditLog(DbContextOptions<WcsDbContext> options, IClock clock, ILogger<AuditLog> logger) : IAuditLog
+internal sealed class AuditLog(DbContextOptions<WcsDbContext> options, WcsDbContext scoped, IClock clock, ILogger<AuditLog> logger) : IAuditLog
 {
+    public void Enlist(AuditRecord r) =>
+        scoped.AuditLog.Add(new AuditEntry(clock.UtcNow, Cut(r.Actor, 100), Cut(r.ActorRole, 40), Cut(r.Action, 100)!, Cut(r.TargetType, 50), Cut(r.TargetId, 100),
+            r.Result, Cut(r.Detail, 1000), Serialize(r.Before), Serialize(r.After), Cut(r.IpAddress, 64)));
+
     private static readonly JsonSerializerOptions Json = new() { Converters = { new JsonStringEnumConverter() }, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     private static readonly string[] SecretWords = ["password", "token", "secret", "hash", "apikey"];
 
@@ -87,7 +91,10 @@ internal sealed class AuditLog(DbContextOptions<WcsDbContext> options, IClock cl
     {
         await using var db = new WcsDbContext(options);
         var name = username.Trim().ToLowerInvariant();
-        return await db.AuditLog.CountAsync(x => x.Actor == name, ct);
+        // Anything this account ever did: audited actions, tasks it requested, inventory changes it made.
+        return await db.AuditLog.CountAsync(x => x.Actor == name, ct)
+             + await db.Tasks.CountAsync(x => x.RequestedBy == name, ct)
+             + await db.InventoryTransactions.CountAsync(x => x.UserName == name, ct);
     }
 
     private static string? Cut(string? s, int max) => s is null ? null : s.Length <= max ? s : s[..max];

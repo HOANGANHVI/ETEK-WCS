@@ -16,7 +16,7 @@ import {
 const CANCELLABLE: TaskState[] = [
   'Pending', 'Validating', 'Queued', 'Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing',
 ]
-const EVENTS = ['TaskCreated', 'TaskStateChanged'] as const
+const EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted'] as const
 
 type Dialog = { kind: 'create' } | { kind: 'edit'; task: TransportTask } | { kind: 'delete'; task: TransportTask } | null
 

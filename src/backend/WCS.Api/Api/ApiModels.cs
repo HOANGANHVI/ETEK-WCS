@@ -78,5 +78,6 @@ public sealed record ResetPasswordRequest([property: Required, StringLength(200)
 
 /// <summary>ExpectedState is the state the screen showed; a mismatch makes the server answer 409 (reload). It never grants permission.</summary>
 public sealed record UpdateTaskRequest(
+    [property: Required, StringLength(20)] string Flow,
     [property: Required, StringLength(50)] string StationCode,
     [property: StringLength(40)] string? ExpectedState);

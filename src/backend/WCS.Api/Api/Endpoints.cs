@@ -20,14 +20,14 @@ namespace WCS.Api.Api;
 internal static class Audited
 {
     public static async Task<T> RunAsync<T>(HttpContext c, string action, string? targetType, string? targetId, object? before,
-        Func<Task<T>> operation, Func<T, object?>? after = null, string? detail = null)
+        Func<Task<T>> operation, Func<T, object?>? after = null, string? detail = null, bool auditSuccess = true)
     {
         var log = c.RequestServices.GetRequiredService<IAuditLog>();
         var actor = c.Actor();
         try
         {
             var result = await operation();
-            await log.WriteAsync(new AuditRecord(action, actor.Username, actor.Role.ToString(), targetType, targetId, AuditResult.Success, detail,
+            if (auditSuccess) await log.WriteAsync(new AuditRecord(action, actor.Username, actor.Role.ToString(), targetType, targetId, AuditResult.Success, detail,
                 before, after?.Invoke(result), actor.IpAddress), c.RequestAborted);
             return result;
         }
@@ -89,7 +89,7 @@ public static class Endpoints
         loc.MapGet("", async (HttpContext c, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.ListLocationsAsync(ct)));
         loc.MapGet("{code}", async (HttpContext c, string code, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.GetLocationAsync(code, ct)));
 
-        // ---- Inventory (owned by WCS). Reading: both roles. Changing stock: Admin only (the specification grants Operator no stock-edit right).
+        // ---- Inventory (owned by WCS). CR-001 (approved 2026-11-06): both roles may read AND use the existing stock operations; every change is audited.
         var inv = api.MapGroup("/inventory").WithTags("Inventory");
         inv.MapGet("racks", async (HttpContext c, WcsQueries q, string? location, RackStatus? status, int? take, CancellationToken ct) =>
             ApiResults.Ok(c, await q.ListRacksAsync(location, status, take ?? 200, ct)));
@@ -101,14 +101,14 @@ public static class Endpoints
                 () => svc.DeclareInitialStockAsync(r.LocationCode, r.RackKind, r.Quantity, c.Actor().Username, ct),
                 res => new { r.LocationCode, rackKind = r.RackKind.ToString(), created = res.Count });
             return ApiResults.Ok(c, new { created = ids.Count, rackIds = ids }, StatusCodes.Status201Created);
-        }).RequireAuthorization(admin);
+        });
         inv.MapPost("adjustments", async (HttpContext c, StockAdjustmentRequest r, IInventoryService svc, CancellationToken ct) =>
         {
             var qty = await Audited.RunAsync(c, "INVENTORY_ADJUST", "Location", r.LocationCode, null,
                 () => svc.AdjustStockAsync(r.LocationCode, r.RackKind, r.TargetQuantity, c.Actor().Username, r.Note, ct),
                 res => new { r.LocationCode, rackKind = r.RackKind.ToString(), target = r.TargetQuantity, quantity = res }, r.Note);
             return ApiResults.Ok(c, new { quantity = qty });
-        }).RequireAuthorization(admin);
+        });
 
         // ---- Process flows available for task requests (read-only view of the deployed configuration; lets the UI avoid hard-coding stations)
         api.MapGet("/flows", (HttpContext c, WCS.Application.Flows.IFlowCatalog flows) =>
@@ -138,14 +138,15 @@ public static class Endpoints
         {
             var before = await q.GetTaskAsync(id, ct);
             var updated = await Audited.RunAsync(c, "TASK_UPDATE", "Task", id.ToString(), Audited.TaskSnapshot(before),
-                () => o.UpdateTaskAsync(id, r.StationCode, r.ExpectedState, c.Actor(), ct), Audited.TaskSnapshot);
+                () => o.UpdateTaskAsync(id, r.Flow, r.StationCode, r.ExpectedState, c.Actor(), ct), Audited.TaskSnapshot);
             return ApiResults.Ok(c, updated);
         });
         task.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? expectedState, ITaskOrchestrator o, WcsQueries q, CancellationToken ct) =>
         {
             var before = await q.GetTaskAsync(id, ct);
+            // The success entry is written INSIDE the delete transaction by the orchestrator; only failures are audited here.
             var deleted = await Audited.RunAsync(c, "TASK_DELETE", "Task", id.ToString(), Audited.TaskSnapshot(before),
-                () => o.DeleteTaskAsync(id, expectedState, c.Actor(), ct), Audited.TaskSnapshot);
+                () => o.DeleteTaskAsync(id, expectedState, c.Actor(), ct), auditSuccess: false);
             return ApiResults.Ok(c, deleted);
         });
         // Cancelling or reconciling a task that an AGV already took is an exception-handling action: Admin only.

@@ -1,5 +1,12 @@
 # Change Log
 
+## v1.5 – CR-001 final business rules (approved 2026-11-06)
+
+- Change Request: CR-001 (APPROVED).
+- Operator: edit ALL request information of waiting tasks, HARD delete waiting tasks (audit committed with the delete and kept), view and edit inventory through the existing APIs.
+- SUPERSEDED: station-only edit, soft delete to Cancelled, Operator read-only inventory.
+- New specification file docs/specification/access-control.md. No migration. State machine, BP flows and scheduling rules unchanged.
+
 ## v1.4 – Authentication and authorization (CR-001)
 
 - Change Request: CR-001 (IMPLEMENTED; see the register for open decisions).

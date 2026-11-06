@@ -301,9 +301,9 @@ Everything below is **committed but NOT applied to `wcs_db`**: run `dotnet ef da
 | `/api/auth/logout, me, change-password` | yes | yes |
 | `GET /api/agvs, locations, inventory/*, tasks*, flows, system/health` | yes | yes |
 | `POST /api/tasks` | yes | yes (requester taken from the session) |
-| `PUT/DELETE /api/tasks/{id}` | waiting tasks only | waiting tasks only (403 `TASK_LOCKED` otherwise) |
+| `PUT/DELETE /api/tasks/{id}` | waiting tasks only | waiting tasks only (403 `TASK_LOCKED` otherwise). **Edit = whole request, delete = HARD delete: see section 13 (the "soft delete / station only" wording of section 11 is SUPERSEDED)** |
 | `POST /api/tasks/{id}/cancel, /reconcile` | yes | 403 |
-| `POST /api/inventory/initial-stock, adjustments` | yes | 403 |
+| `POST /api/inventory/initial-stock, adjustments` | yes | ~~403~~ **SUPERSEDED: yes (section 13)** |
 | `/api/config/*`, `/api/simulator/*`, `/api/users*`, `/api/audit` | yes | 403 |
 | `/hubs/wcs` (SignalR) | yes | yes (same cookie) |
 
@@ -324,7 +324,7 @@ Task edit/delete: the permission and the state are checked **inside the transact
 
 ### Not done / open (see CR-001 for the decision list)
 - `wcs_db` migration `AddAuthentication` not applied (production rule: never automatic).
-- Interpretations to confirm: what "edit task" means (only the requesting station today), "delete" = soft delete to Cancelled, Operator read-only inventory, Admin handling of failed/cancelled tasks, password/lockout/session defaults.
+- ~~Interpretations to confirm~~ **(resolved by the owner, section 13)**: what "edit task" means (only the requesting station today), "delete" = soft delete to Cancelled, Operator read-only inventory, Admin handling of failed/cancelled tasks, password/lockout/session defaults.
 - Security items still open: TLS/HTTPS termination and `Secure` cookie in production, backup of the Data Protection key ring, no MFA, no e-mail password reset, no per-IP rate limiting, `X-WCS-Client` is defence in depth (not a secret).
 - Demo Mode has its own in-browser demo accounts (`demo-admin`, `demo-operator`, no passwords). They exist only in `demo/demoAuth.ts`, are reachable only when `VITE_DEMO_MODE=true`, and never touch the backend.
 
@@ -361,3 +361,24 @@ Task edit/delete: the permission and the state are checked **inside the transact
 ### Open / security notes
 - admin/admin exists in `wcs_db` as soon as the API starts there; change it at first sign-in. Never expose a fresh system on a network before that.
 - Still open: HTTPS termination, Data Protection key backup, MFA, e-mail password reset, per-IP rate limiting (lockout is per account), confirmation of CR-001 interpretations (task edit = station only, delete = soft delete to Cancelled, Operator read-only inventory, password/session defaults).
+
+---
+
+## 13. Update 2026-11-06 – CR-001 final business rules (APPROVED)
+
+CR-001 is **APPROVED (2026-11-06)**. Old statements in sections 11–12 about *station-only edit*, *soft delete to Cancelled* and *Operator read-only inventory* are **SUPERSEDED** by this section and by docs/specification/access-control.md. Password policy and session lifetime are unchanged (not yet approved).
+
+### Rules implemented
+- **Edit (Operator and Admin, waiting tasks only)**: the whole request can change: process flow and requesting station. AGV, rack kind, source rack follow from the approved flow rules and are recomputed (no manual override). Identity fields stay. A queued task re-reserves a source rack; if none exists the edit is refused and nothing changes. Condition re-checked in the transaction: state Pending/Validating/Queued **and** no RCS task, no dispatch attempt, no pick/drop. Tasks an AGV took: Operator 403 `TASK_LOCKED`, Admin 409 `TASK_NOT_EDITABLE`; stale screen 409 `TASK_STATE_CHANGED`.
+- **Hard delete**: the task row, its history, reservations and processed events are removed. The audit entry `TASK_DELETE` (task code NV-xxxxxxxx, id, request key, flow, state, station, requester, actor, role, time, result) is written in the SAME transaction (`IAuditLog.Enlist`) and has no foreign key to the task, so it survives. Refused deletes are audited as Denied/Failed. Concurrent dispatch vs delete: row-version conflict + retry + re-check; an FK violation from a concurrent history insert is retried too (`EfUnitOfWork`).
+- **Inventory**: `POST /api/inventory/initial-stock` and `/adjustments` are now open to Operator (still Admin too); requester comes from the session; audited (success and failure); capacity / allowed rack kind / reserved-rack guards unchanged. Cancel, reconcile, configuration, simulator, accounts, audit remain Admin-only.
+- **Accounts**: history check now also counts tasks the account requested and inventory changes it made (not only audit rows); self-delete always refused; last Admin protected; history means disable, not delete.
+
+### Files changed (main)
+Backend: `WCS.Domain/Tasks/TransportTask.cs` (ReconfigureRequest, IsUntouchedByAgvAndRcs), `WCS.Application/Services/TaskOrchestrator.cs` (UpdateTaskAsync, DeleteTaskAsync), `Abstractions/{Persistence,Services}.cs`, `Auth/AuthAbstractions.cs` (IAuditLog.Enlist), `WCS.Infrastructure/{Auth/AuthInfrastructure.cs,Persistence/EfUnitOfWork.cs,Persistence/Repositories/Repositories.cs}`, `WCS.Api/Api/{Endpoints,ApiModels}.cs`. Frontend: `pages/TaskDialogs.tsx`, `pages/TasksPage.tsx`, `api/client.ts`, `demo/{engine,demoApi}.ts`, `realtime/signalr.ts`, `i18n/vi.ts`. Docs: access-control.md (new), inventory-management.md, task-state-machine.md, CHANGE_REQUESTS/CHANGELOG/TRACEABILITY, ADR-0003. Tests: `AuthApiTests`, `AuthIntegrationTests`, `AuthFakes`.
+- **Migration: none.**
+
+### Not possible / still missing
+- No UI yet to edit stock (APIs only); no warehouse operations beyond the existing two (no receive/issue/move), Rack-ID model unchanged (NEEDS_CONFIRMATION).
+- Cancel/reconcile are not delegated to Operator (not decided).
+- A deleted task cannot be restored.

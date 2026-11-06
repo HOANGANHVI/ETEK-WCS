@@ -98,3 +98,7 @@ Khi mất kết nối, task interrupted, AGV dừng giữa đường hoặc khô
 4. Người có quyền xác nhận vị trí thực tế.
 5. Ghi inventory transaction điều chỉnh.
 6. Giải phóng reservation sau khi đối soát hoàn tất.
+
+## Quyền thao tác tồn kho (CR-001, đã phê duyệt 2026-11-06)
+
+Admin và Operator đều được xem và dùng các API tồn kho hiện có (khai báo ban đầu, điều chỉnh số lượng); mọi thay đổi được ghi nhật ký. Các kiểm tra sức chứa, loại rack và rack đang giữ chỗ không thay đổi. Chi tiết và phần còn thiếu: access-control.md mục 5.

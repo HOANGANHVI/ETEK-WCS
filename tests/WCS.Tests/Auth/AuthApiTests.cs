@@ -56,8 +56,6 @@ public class AuthApiTests
     [InlineData("PUT", "/api/users/00000000-0000-0000-0000-000000000001")]
     [InlineData("POST", "/api/users/00000000-0000-0000-0000-000000000001/reset-password")]
     [InlineData("GET", "/api/audit")]
-    [InlineData("POST", "/api/inventory/initial-stock")]
-    [InlineData("POST", "/api/inventory/adjustments")]
     [InlineData("POST", "/api/tasks/00000000-0000-0000-0000-000000000001/cancel")]
     [InlineData("POST", "/api/tasks/00000000-0000-0000-0000-000000000001/reconcile")]
     public async Task An_operator_gets_403_on_admin_only_endpoints(string method, string url)

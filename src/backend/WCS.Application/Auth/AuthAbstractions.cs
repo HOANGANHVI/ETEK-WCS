@@ -29,6 +29,11 @@ public interface IAuditLog
 {
     /// <summary>Appends an entry in its own transaction. Never throws to the caller: a failing audit write is logged, not propagated.</summary>
     Task WriteAsync(AuditRecord record, CancellationToken ct = default);
+    /// <summary>
+    /// Adds the entry to the CURRENT unit of work, so it is committed atomically with the change it describes (used when the audited
+    /// object itself is destroyed, e.g. hard-deleting a task). The entry has no foreign key to the object and survives its deletion.
+    /// </summary>
+    void Enlist(AuditRecord record);
     Task<IReadOnlyList<AuditEntry>> QueryAsync(AuditQuery query, CancellationToken ct = default);
     /// <summary>Number of audit entries made by (or about a sign-in attempt of) this username. Used to protect traceability when deleting accounts.</summary>
     Task<int> CountByActorAsync(string username, CancellationToken ct = default);

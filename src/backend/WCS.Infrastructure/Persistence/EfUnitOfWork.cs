@@ -53,7 +53,7 @@ internal sealed class EfUnitOfWork(WcsDbContext db, ILogger<EfUnitOfWork> logger
     {
         DbUpdateConcurrencyException => true,
         DbUpdateException { InnerException: PostgresException pg } =>
-            pg.SqlState is PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected,
+            pg.SqlState is PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.ForeignKeyViolation,
         PostgresException p => p.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected,
         _ => false,
     };

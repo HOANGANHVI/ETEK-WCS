@@ -62,8 +62,8 @@ const realApi = {
   simulateNext: (id: string) => request<SimulationStep>(`/api/simulator/tasks/${id}/advance`, { method: 'POST' }),
   createTask: (flow: string, stationCode: string, requestKey: string) =>
     request<TransportTask>('/api/tasks', { method: 'POST', body: JSON.stringify({ requestKey, flow, stationCode }) }),
-  updateTask: (id: string, stationCode: string, expectedState?: string) =>
-    request<TransportTask>(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify({ stationCode, expectedState }) }),
+  updateTask: (id: string, flow: string, stationCode: string, expectedState?: string) =>
+    request<TransportTask>(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify({ flow, stationCode, expectedState }) }),
   deleteTask: (id: string, expectedState?: string) =>
     request<TransportTask>(`/api/tasks/${id}${qs({ expectedState })}`, { method: 'DELETE' }),
 

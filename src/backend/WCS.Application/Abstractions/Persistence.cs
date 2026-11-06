@@ -50,6 +50,8 @@ public interface IRackRepository
 public interface IReservationRepository
 {
     void Add(Reservation reservation);
+    /// <summary>Removes every reservation row (active or released) of a task that is being hard-deleted.</summary>
+    Task RemoveAllForTaskAsync(Guid taskId, CancellationToken ct = default);
     Task<IReadOnlyList<Reservation>> ListActiveByTaskAsync(Guid taskId, CancellationToken ct = default);
     Task<int> CountActiveDestinationAsync(Guid locationId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountActiveDestinationByLocationAsync(CancellationToken ct = default);
@@ -66,6 +68,7 @@ public sealed record TaskQuery(TaskState? State, Guid? AgvId, int Skip, int Take
 public interface ITransportTaskRepository
 {
     void Add(TransportTask task);
+    void Remove(TransportTask task);
     Task<TransportTask?> GetAsync(Guid id, CancellationToken ct = default);
     Task<TransportTask?> GetByRequestKeyAsync(string requestKey, CancellationToken ct = default);
     Task<TransportTask?> GetByRcsTaskCodeAsync(string rcsTaskCode, CancellationToken ct = default);
@@ -81,4 +84,5 @@ public interface IProcessedEventRepository
 {
     Task<bool> ExistsAsync(string source, string eventKey, CancellationToken ct = default);
     void Add(ProcessedEvent processed);
+    Task RemoveForTaskAsync(Guid taskId, CancellationToken ct = default);
 }

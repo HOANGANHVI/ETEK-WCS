@@ -24,6 +24,7 @@ public sealed class RecordingAuditLog : IAuditLog
 {
     public List<AuditRecord> Records { get; } = [];
     public Task WriteAsync(AuditRecord record, CancellationToken ct = default) { lock (Records) Records.Add(record); return Task.CompletedTask; }
+    public void Enlist(AuditRecord record) { lock (Records) Records.Add(record); }
     public Task<IReadOnlyList<AuditEntry>> QueryAsync(AuditQuery query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<AuditEntry>>([]);
     public Task<int> CountByActorAsync(string username, CancellationToken ct = default) { lock (Records) return Task.FromResult(Records.Count(r => r.Actor == username)); }
 }

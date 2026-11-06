@@ -87,3 +87,7 @@ Các mã trạng thái RCS từng được ghi nhận trong tài liệu API:
 - Khi task bị interrupt, chuyển trạng thái lỗi/chờ xử lý theo chính sách; không tự đánh dấu hoàn thành.
 - Nếu rack đã được lấy khỏi nguồn nhưng chưa thả tại đích, trạng thái rack phải là đang vận chuyển/đang xử lý, không được ghi nhận ở nguồn hoặc đích như bình thường.
 - Cần đối soát vị trí thực tế trước khi giải phóng khóa rack/vị trí.
+
+## Sửa / xóa nhiệm vụ bởi người dùng (CR-001, đã phê duyệt 2026-11-06)
+
+Bảng chuyển trạng thái **không đổi**. Nhiệm vụ còn chờ (Pending, Validating, Queued) và chưa được AGV/RCS tiếp nhận có thể được người dùng sửa thông tin yêu cầu hoặc **xóa cứng** (bản ghi bị xóa, không chuyển sang Cancelled); nhật ký thao tác được giữ. Chi tiết: access-control.md mục 3–4.

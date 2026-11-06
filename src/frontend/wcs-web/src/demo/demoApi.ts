@@ -39,8 +39,8 @@ export const demoDataApi = {
 
   createTask: (flow: string, stationCode: string, requestKey: string) =>
     call(() => { requireSession(); void requestKey; return demo.createTask(flow, stationCode) }),
-  updateTask: (id: string, stationCode: string, expectedState?: string) =>
-    call(() => demo.updateTask(id, stationCode, expectedState, requireSession() === 'Admin')),
+  updateTask: (id: string, flow: string, stationCode: string, expectedState?: string) =>
+    call(() => demo.updateTask(id, flow, stationCode, expectedState, requireSession() === 'Admin')),
   deleteTask: (id: string, expectedState?: string) =>
     call(() => demo.deleteTask(id, expectedState, requireSession() === 'Admin')),
   cancelTask: (id: string, reason: string) => adminWrite(() => demo.cancelTask(id, reason)),

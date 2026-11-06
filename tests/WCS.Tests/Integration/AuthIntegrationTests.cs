@@ -94,8 +94,10 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
         Assert.Equal(TaskState.Accepted, task.State);             // AGV1 was free, so it was dispatched and accepted (simulated RCS)
     }
 
+    private static Task<bool> TaskExists(Harness h, Guid id) => h.Db(db => db.Tasks.AsNoTracking().AnyAsync(t => t.Id == id));
+
     [Fact]
-    public async Task Operator_can_delete_a_waiting_task_and_a_refused_edit_leaves_it_untouched()
+    public async Task Operator_hard_deletes_a_waiting_task_and_the_audit_entry_survives_it()
     {
         var (h, f) = await ArrangeAsync(a1Racks: 1);
         await using var _h = h; await using var _f = f;
@@ -104,48 +106,95 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
         var busy = await CreateTaskAs(op, "busy");                         // takes AGV1 and A1's only rack
         var queued = await CreateTaskAs(op, "queued", station: "A2");      // waits for AGV1
         Assert.Equal(TaskState.Queued, (await h.GetTaskAsync(queued)).State);
-
-        var edit = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { stationCode = "A1", expectedState = "Queued" });
-        Assert.Equal(422, edit.Status);                                     // A1 has nothing left to pick
-        Assert.Equal("NO_SOURCE_AT_STATION", edit.Root.ErrorCode());
-        var untouched = await h.GetTaskAsync(queued);
-        Assert.Equal((await h.Db(d => d.Locations.AsNoTracking().SingleAsync(l => l.Code == "A2"))).Id, untouched.RequestLocationId);
-        Assert.Equal(TaskState.Queued, untouched.State);
-        Assert.Equal(2, (await h.ActiveReservationsAsync()).Count);        // its reservation is still held
+        Assert.Equal(2, (await h.ActiveReservationsAsync()).Count);
 
         var del = await op.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{queued}?expectedState=Queued");
         Assert.Equal(200, del.Status);
-        var deleted = await h.GetTaskAsync(queued);
-        Assert.Equal(TaskState.Cancelled, deleted.State);                   // the record and its history are kept
-        Assert.Contains(deleted.History, e => e.EventName == "TASK_DELETED");
-        Assert.Single(await h.ActiveReservationsAsync());                   // only the running task keeps its rack
-        Assert.NotEqual(TaskState.Cancelled, (await h.GetTaskAsync(busy)).State);
+
+        Assert.False(await TaskExists(h, queued));                                       // the row is really gone (not Cancelled)
+        Assert.Equal(0, await h.Db(db => db.TaskHistory.AsNoTracking().CountAsync(x => x.TaskId == queued)));
+        Assert.Equal(0, await h.Db(db => db.Reservations.AsNoTracking().CountAsync(x => x.TaskId == queued)));
+        Assert.Single(await h.ActiveReservationsAsync());                                // only the running task keeps its rack
+        Assert.True(await TaskExists(h, busy));
+        Assert.Equal(404, (await op.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{queued}")).Status);   // gone for good
+
+        // The audit entry was committed with the delete and is still there, with everything needed to trace the task.
+        var audit = await h.Db(db => db.AuditLog.AsNoTracking().Where(a => a.Action == "TASK_DELETE").ToListAsync());
+        var entry = Assert.Single(audit);
+        Assert.Equal("op1", entry.Actor); Assert.Equal("Operator", entry.ActorRole);
+        Assert.Equal(queued.ToString(), entry.TargetId);
+        Assert.Equal(AuditResult.Success, entry.Result);
+        Assert.Contains("NV-" + queued.ToString("N")[..8].ToUpperInvariant(), entry.Detail);
+        Assert.Contains("queued", entry.BeforeJson);                                      // request key
+        Assert.Contains("Bp01", entry.BeforeJson);                                        // flow
+        Assert.Contains("Queued", entry.BeforeJson);                                      // state when deleted
+        Assert.True(entry.OccurredAt > DateTimeOffset.UtcNow.AddMinutes(-5));
+        // the admin can still read it through the API after the task is gone
+        var admin = await As(f, "admin1");
+        Assert.Equal(1, (await admin.SendJsonAsync(HttpMethod.Get, "/api/audit?action=TASK_DELETE")).Root.GetProperty("data").GetArrayLength());
     }
 
     [Fact]
-    public async Task Operator_can_move_a_waiting_task_to_another_allowed_station()
+    public async Task A_refused_delete_is_audited_as_failed_or_denied_and_changes_nothing()
     {
-        var (h, f) = await ArrangeAsync(a1Racks: 2);
+        var (h, f) = await ArrangeAsync();
         await using var _h = h; await using var _f = f;
         var op = await As(f, "op1");
-        await CreateTaskAs(op, "busy");                                     // A1 rack #1
-        var queued = await CreateTaskAs(op, "queued", station: "A2");       // reserves A2's rack
+        var id = await CreateTaskAs(op, "taken");                          // dispatched at once: Accepted
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{id}")).Status);
+        Assert.True(await TaskExists(h, id));
+        var denied = await h.Db(db => db.AuditLog.AsNoTracking().Where(a => a.Action == "TASK_DELETE").ToListAsync());
+        Assert.Contains(denied, a => a.Result == AuditResult.Denied && a.Actor == "op1");
+    }
 
-        var bad = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { stationCode = "B1" });
-        Assert.Equal(422, bad.Status); Assert.Equal("STATION_NOT_ALLOWED", bad.Root.ErrorCode());   // BP01 requests come from A1/A2 only
+    [Fact]
+    public async Task Operator_can_edit_every_request_field_of_a_waiting_task_and_a_refused_edit_changes_nothing()
+    {
+        var (h, f) = await ArrangeAsync(a1Racks: 1);
+        await using var _h = h; await using var _f = f;
+        var op = await As(f, "op1");
+        await h.StockAsync("B1", RackKind.Empty, 1);                       // an empty rack for a later BP-03 request
+        await CreateTaskAs(op, "busy");                                     // takes AGV1 and A1's only rack
+        var queued = await CreateTaskAs(op, "queued", station: "A2");       // waits for AGV1, holds A2's rack
+        var queuedBefore = await h.GetTaskAsync(queued);
 
-        var ok = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { stationCode = "A1", expectedState = "Queued" });
+        // refused: A1's only rack belongs to the running task -> nothing may change
+        var refused = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { flow = "Bp01", stationCode = "A1", expectedState = "Queued" });
+        Assert.Equal(422, refused.Status); Assert.Equal("NO_SOURCE_AT_STATION", refused.Root.ErrorCode());
+        var untouched = await h.GetTaskAsync(queued);
+        Assert.Equal(queuedBefore.RequestLocationId, untouched.RequestLocationId);
+        Assert.Equal(queuedBefore.RackId, untouched.RackId);
+        Assert.Equal(2, (await h.ActiveReservationsAsync()).Count);
+
+        // invalid requests are refused with the same rules as creating a task
+        Assert.Equal("FLOW_IN_REVIEW", (await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { flow = "BP04", stationCode = "A2" })).Root.ErrorCode());
+        Assert.Equal("STATION_NOT_ALLOWED", (await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { flow = "Bp01", stationCode = "B1" })).Root.ErrorCode());
+        Assert.Equal("FLOW_NOT_SUPPORTED", (await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { flow = "BP99", stationCode = "A2" })).Root.ErrorCode());
+
+        // change EVERYTHING: flow BP-01 (AGV1, full racks) -> BP-03 (AGV2, empty racks) and station A2 -> B1
+        var ok = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { flow = "Bp03", stationCode = "B1", expectedState = "Queued" });
         Assert.Equal(200, ok.Status);
-        var a1 = await h.LocationAsync("A1");
+        var b1 = await h.LocationAsync("B1");
+        var agv2 = await h.AgvAsync("AGV2");
         var moved = await h.GetTaskAsync(queued);
-        Assert.Equal(a1.Id, moved.RequestLocationId);
-        Assert.Equal(a1.Id, moved.SourceLocationId);                         // source re-selected for the new station
+        Assert.Equal(ProcessFlow.Bp03, moved.Flow);
+        Assert.Equal(RackKind.Empty, moved.RackKind);
+        Assert.Equal(agv2.Id, moved.AgvId);                                // the AGV follows the flow
+        Assert.Equal(b1.Id, moved.RequestLocationId);
+        Assert.Equal(b1.Id, moved.SourceLocationId);                       // source re-selected for the new request
+        Assert.Equal("queued", moved.RequestKey);                          // identity never changes
+        Assert.Equal("op1", moved.RequestedBy);
         Assert.Contains(moved.History, e => e.EventName == "TASK_EDITED");
-        Assert.Equal(2, (await h.ActiveReservationsAsync()).Count);          // old reservation released, new one taken
-        Assert.Equal(2, (await h.ActiveReservationsAsync()).Select(r => r.RackId).Distinct().Count());
+        var reservations = await h.ActiveReservationsAsync();
+        Assert.Equal(2, reservations.Count);                               // old reservation released, new one taken
+        Assert.DoesNotContain(reservations, r => r.RackId == queuedBefore.RackId);
 
-        var same = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { stationCode = "A1" });
-        Assert.Equal(200, same.Status);                                     // no-op
+        // AGV2 is free: the scheduler now picks the edited task up (it did not wait behind AGV1)
+        using (var scope = f.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<WCS.Application.Abstractions.ITaskScheduler>().RunOnceAsync();
+        Assert.Equal(TaskState.Accepted, (await h.GetTaskAsync(queued)).State);
+
+        // and now that an AGV took it, it is locked
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{queued}", new { flow = "Bp03", stationCode = "B2" })).Status);
     }
 
     [Fact]
@@ -157,7 +206,7 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
         var id = await CreateTaskAs(op, "taken");
         await AdvanceUntil(f, h, id, TaskState.Accepted);
 
-        var edit = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{id}", new { stationCode = "A2" });
+        var edit = await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{id}", new { flow = "Bp01", stationCode = "A2" });
         var del = await op.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{id}");
         Assert.Equal(403, edit.Status); Assert.Equal("TASK_LOCKED", edit.Root.ErrorCode());
         Assert.Equal(403, del.Status);
@@ -167,7 +216,7 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
         await AdvanceUntil(f, h, id, TaskState.Executing);
         Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{id}")).Status);
         await AdvanceUntil(f, h, id, TaskState.Completed);
-        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{id}", new { stationCode = "A2" })).Status);
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Put, $"/api/tasks/{id}", new { flow = "Bp01", stationCode = "A2" })).Status);
         Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{id}")).Status);
     }
 
@@ -189,7 +238,7 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Admin_can_edit_and_delete_waiting_tasks_but_gets_a_business_error_for_running_ones()
+    public async Task Admin_can_hard_delete_waiting_tasks_but_gets_a_business_error_for_running_ones()
     {
         var (h, f) = await ArrangeAsync();
         await using var _h = h; await using var _f = f;
@@ -198,7 +247,7 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
         var waiting = await CreateTaskAs(admin, "a2", station: "A2");
 
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{waiting}")).Status);
-        Assert.Equal(TaskState.Cancelled, (await h.GetTaskAsync(waiting)).State);
+        Assert.False(await TaskExists(h, waiting));                        // hard delete for Admin too (same waiting-state rule)
 
         await AdvanceUntil(f, h, first, TaskState.Executing);
         var r = await admin.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{first}");
@@ -208,19 +257,77 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Cancel_and_stock_changes_are_admin_only()
+    public async Task Cancel_reconcile_simulator_and_configuration_stay_admin_only_while_reads_are_open_to_both()
     {
         var (h, f) = await ArrangeAsync();
         await using var _h = h; await using var _f = f;
         var op = await As(f, "op1");
         var id = await CreateTaskAs(op, "x");
         Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Post, $"/api/tasks/{id}/cancel", new { reason = "no" })).Status);
-        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Post, "/api/inventory/initial-stock", new { locationCode = "A1", rackKind = "Full", quantity = 1, user = "x" })).Status);
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Post, $"/api/tasks/{id}/reconcile", new { actualLocationCode = "A1", user = "x" })).Status);
         Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Post, $"/api/simulator/tasks/{id}/advance")).Status);
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Get, "/api/config/plc")).Status);
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Put, "/api/config/rcs", new { enabled = false })).Status);
         Assert.NotEqual(TaskState.Cancelled, (await h.GetTaskAsync(id)).State);
-        // read access for both roles
         foreach (var url in new[] { "/api/tasks", "/api/agvs", "/api/locations", "/api/inventory/racks", "/api/inventory/transactions", "/api/system/health" })
             Assert.Equal(200, (await op.SendJsonAsync(HttpMethod.Get, url)).Status);
+    }
+
+    // ---------------------------------------------------------------- inventory (CR-001: Operator may use the existing stock operations)
+    [Fact]
+    public async Task Operator_can_view_and_adjust_stock_through_the_existing_APIs_and_every_change_is_audited()
+    {
+        var (h, f) = await ArrangeAsync();
+        await using var _h = h; await using var _f = f;
+        var op = await As(f, "op1");
+
+        var view = await op.SendJsonAsync(HttpMethod.Get, "/api/inventory/racks?location=A1");
+        Assert.Equal(200, view.Status); Assert.Equal(1, view.Root.GetProperty("data").GetArrayLength());
+
+        // initial stock declaration (existing API) at an empty-rack location, the requester comes from the session
+        var declare = await op.SendJsonAsync(HttpMethod.Post, "/api/inventory/initial-stock", new { locationCode = "F3", rackKind = "Empty", quantity = 2, user = "forged" });
+        Assert.Equal(201, declare.Status);
+        Assert.Equal(2, (await h.RacksAtAsync("F3")).Count);
+
+        // adjustment (existing API): 2 -> 4 at F3
+        var adjust = await op.SendJsonAsync(HttpMethod.Post, "/api/inventory/adjustments", new { locationCode = "F3", rackKind = "Empty", targetQuantity = 4, user = "forged", note = "kiểm kê" });
+        Assert.Equal(200, adjust.Status);
+        var racks = await h.RacksAtAsync("F3");
+        Assert.Equal(4, racks.Count);                                              // Rack <-> Location consistent
+        Assert.All(racks, r => Assert.Equal(RackStatus.Empty, r.Status));
+        var tx = await h.Db(db => db.InventoryTransactions.AsNoTracking().Where(t => t.ToLocationId == racks[0].CurrentLocationId).ToListAsync());
+        Assert.All(tx, t => Assert.Equal("op1", t.UserName));                       // never the forged name from the body
+        Assert.DoesNotContain(tx, t => t.UserName == "forged");
+
+        // audited, with actor and the change
+        var audit = await h.Db(db => db.AuditLog.AsNoTracking().Where(a => a.Action.StartsWith("INVENTORY_")).ToListAsync());
+        Assert.Contains(audit, a => a is { Action: "INVENTORY_INITIAL_STOCK", Actor: "op1", Result: AuditResult.Success });
+        var adj = Assert.Single(audit, a => a.Action == "INVENTORY_ADJUST");
+        Assert.Equal("op1", adj.Actor); Assert.Equal("Operator", adj.ActorRole);
+        Assert.Contains("\"target\":4", adj.AfterJson); Assert.Equal("kiểm kê", adj.Detail);
+
+        // business guards still apply to an Operator: capacity (5 at F3) and reserved racks are protected
+        var tooMany = await op.SendJsonAsync(HttpMethod.Post, "/api/inventory/adjustments", new { locationCode = "F3", rackKind = "Empty", targetQuantity = 9, user = "x" });
+        Assert.Equal(409, tooMany.Status); Assert.Equal("CAPACITY_EXCEEDED", tooMany.Root.ErrorCode());
+        Assert.Equal(4, (await h.RacksAtAsync("F3")).Count);
+        var wrongKind = await op.SendJsonAsync(HttpMethod.Post, "/api/inventory/adjustments", new { locationCode = "F1", rackKind = "Empty", targetQuantity = 1, user = "x" });
+        Assert.Equal("RACK_KIND_NOT_ALLOWED", wrongKind.Root.ErrorCode());         // F1 accepts only full racks
+
+        await CreateTaskAs(op, "busy");                                            // reserves A1's only full rack
+        var removeReserved = await op.SendJsonAsync(HttpMethod.Post, "/api/inventory/adjustments", new { locationCode = "A1", rackKind = "Full", targetQuantity = 0, user = "x" });
+        Assert.Equal(409, removeReserved.Status); Assert.Equal("RACKS_RESERVED", removeReserved.Root.ErrorCode());
+        Assert.Single(await h.RacksAtAsync("A1"));
+        Assert.Contains(await h.Db(db => db.AuditLog.AsNoTracking().ToListAsync()), a => a is { Action: "INVENTORY_ADJUST", Result: AuditResult.Failed });
+    }
+
+    [Fact]
+    public async Task Unauthenticated_callers_get_401_and_nothing_changes_on_the_stock_APIs()
+    {
+        var (h, f) = await ArrangeAsync();
+        await using var _h = h; await using var _f = f;
+        var anon = f.CreateClient().WithClientHeader();
+        Assert.Equal(401, (await anon.SendJsonAsync(HttpMethod.Post, "/api/inventory/adjustments", new { locationCode = "A1", rackKind = "Full", targetQuantity = 0, user = "x" })).Status);
+        Assert.Single(await h.RacksAtAsync("A1"));
     }
 
     [Fact]
@@ -237,7 +344,7 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
 
     // ---------------------------------------------------------------- race conditions
     [Fact]
-    public async Task Deleting_a_waiting_task_while_the_AGV_frees_up_never_deletes_a_task_that_got_dispatched()
+    public async Task Hard_deleting_a_waiting_task_while_the_AGV_frees_up_never_deletes_a_task_that_got_dispatched()
     {
         await using var f = new DbApiFactory(fixture);
         for (var round = 0; round < 6; round++)
@@ -257,20 +364,46 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
             var delete = op.SendJsonAsync(HttpMethod.Delete, $"/api/tasks/{q}");
             await Task.WhenAll(finish, delete);
 
-            var after = await h.GetTaskAsync(q);
+            var stillThere = await TaskExists(h, q);
+            var after = stillThere ? await h.GetTaskAsync(q) : null;
             var status = (await delete).Status;
-            if (after.State == TaskState.Cancelled)
+            if (!stillThere)
             {
-                Assert.Equal(200, status);
-                Assert.Null(after.RcsTaskCode);                              // it never reached RCS
+                Assert.Equal(200, status);                                   // deleted only because it was still untouched
                 Assert.Empty(await h.ActiveReservationsAsync());
+                Assert.Single(await h.Db(db => db.AuditLog.AsNoTracking().Where(a => a.Action == "TASK_DELETE").ToListAsync()));
             }
-            else Assert.True(status is 403 or 409, $"round {round}: state {after.State}, delete returned {status}");
+            else
+            {
+                Assert.True(status is 403 or 409, $"round {round}: state {after?.State}, delete returned {status}");
+                Assert.NotNull(after!.RcsTaskCode ?? after.State.ToString());
+                Assert.Equal(0, await h.Db(db => db.AuditLog.AsNoTracking().CountAsync(a => a.Action == "TASK_DELETE" && a.Result == AuditResult.Success)));
+            }
             Assert.True(await h.ActiveTaskCountAsync("AGV1") <= 1);
         }
     }
 
     // ---------------------------------------------------------------- accounts on the real database
+    [Fact]
+    public async Task An_account_with_history_in_tasks_or_inventory_cannot_be_deleted_only_disabled()
+    {
+        var (h, f) = await ArrangeAsync();
+        await using var _h = h; await using var _f = f;
+        await AddUsersAsync(f, ("worker", UserRole.Operator), ("idle", UserRole.Operator));
+        var admin = await As(f, "admin1");
+        // history that is NOT in the audit table: a task it requested (inserted directly, no audit entry exists for 'worker')
+        var agv = await h.AgvAsync("AGV1"); var a1 = await h.LocationAsync("A1");
+        await h.Db(async db => { db.Tasks.Add(TransportTask.Create("w1", ProcessFlow.Bp01, RackKind.Full, agv.Id, a1.Id, "worker", DateTimeOffset.UtcNow)); await db.SaveChangesAsync(); return 0; });
+        Guid IdOf(string n) { using var s = f.Services.CreateScope(); return s.ServiceProvider.GetRequiredService<WcsDbContext>().Users.Single(u => u.Username == n).Id; }
+
+        var refused = await admin.SendJsonAsync(HttpMethod.Delete, $"/api/users/{IdOf("worker")}");
+        Assert.Equal(422, refused.Status); Assert.Equal("USER_HAS_HISTORY", refused.Root.ErrorCode());
+        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/users/{IdOf("worker")}", new { displayName = "WORKER", role = "Operator", isActive = false })).Status);   // disable instead
+        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Delete, $"/api/users/{IdOf("idle")}")).Status);                                                                 // no history: deletable
+        var self = await admin.SendJsonAsync(HttpMethod.Delete, $"/api/users/{IdOf("admin1")}");
+        Assert.Equal("CANNOT_DELETE_SELF", self.Root.ErrorCode());
+    }
+
     [Fact]
     public async Task Two_admins_demoting_each_other_at_the_same_time_cannot_leave_zero_admins()
     {

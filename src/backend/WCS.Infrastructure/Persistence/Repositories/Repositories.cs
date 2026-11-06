@@ -62,6 +62,14 @@ internal sealed class ReservationRepository(WcsDbContext db) : IReservationRepos
 {
     public void Add(Reservation reservation) => db.Reservations.Add(reservation);
 
+    public async Task RemoveAllForTaskAsync(Guid taskId, CancellationToken ct)
+    {
+        var rows = await db.Reservations.Where(x => x.TaskId == taskId).ToListAsync(ct);
+        db.Reservations.RemoveRange(rows);
+        foreach (var pending in db.ChangeTracker.Entries<Reservation>().Where(e => e.State == EntityState.Added && e.Entity.TaskId == taskId).ToList())
+            pending.State = EntityState.Detached;
+    }
+
     public async Task<IReadOnlyList<Reservation>> ListActiveByTaskAsync(Guid taskId, CancellationToken ct)
     {
         // Include reservations added in this unit of work that are not yet saved.
@@ -107,6 +115,8 @@ internal sealed class ProcessedEventRepository(WcsDbContext db) : IProcessedEven
     public Task<bool> ExistsAsync(string source, string eventKey, CancellationToken ct) =>
         db.ProcessedEvents.AnyAsync(x => x.Source == source && x.EventKey == eventKey, ct);
     public void Add(ProcessedEvent processed) => db.ProcessedEvents.Add(processed);
+    public async Task RemoveForTaskAsync(Guid taskId, CancellationToken ct) =>
+        db.ProcessedEvents.RemoveRange(await db.ProcessedEvents.Where(x => x.TaskId == taskId).ToListAsync(ct));
 }
 
 internal sealed class TransportTaskRepository(WcsDbContext db) : ITransportTaskRepository
@@ -116,6 +126,7 @@ internal sealed class TransportTaskRepository(WcsDbContext db) : ITransportTaskR
     private IQueryable<TransportTask> WithHistory => db.Tasks.Include(t => t.History);
 
     public void Add(TransportTask task) => db.Tasks.Add(task);
+    public void Remove(TransportTask task) => db.Tasks.Remove(task);
     public Task<TransportTask?> GetAsync(Guid id, CancellationToken ct) => WithHistory.FirstOrDefaultAsync(x => x.Id == id, ct);
     public Task<TransportTask?> GetByRequestKeyAsync(string requestKey, CancellationToken ct) =>
         WithHistory.FirstOrDefaultAsync(x => x.RequestKey == requestKey, ct);

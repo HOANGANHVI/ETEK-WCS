@@ -113,15 +113,21 @@ public class TransportTask
     public bool IsUserEditable => IsUserEditableState(State);
 
     /// <summary>
-    /// Changes the station that raised the request. Only allowed before dispatch. The source selection is cleared so it is
-    /// re-evaluated for the new station by the caller (reservations are released by the caller).
+    /// True when nothing has been handed to an AGV or to RCS yet: waiting state, no RCS task, no dispatch attempt, no physical event.
+    /// Only then may a user edit or hard-delete the task (CR-001, approved 2026-11-06).
     /// </summary>
-    public void ChangeRequestStation(Guid newLocationId, bool clearSource, string detail, string source, DateTimeOffset now)
+    public bool IsUntouchedByAgvAndRcs => IsUserEditable && RcsTaskCode is null && DispatchAttempts == 0 && PickConfirmedAt is null && DropConfirmedAt is null;
+
+    /// <summary>
+    /// Replaces ALL user-supplied request data (process flow and requesting station; the rack kind and AGV follow from the flow).
+    /// Identity (id, request key, requester, RCS codes) is never changed. Source/destination selection is cleared so it is re-evaluated;
+    /// the caller releases reservations and re-reserves.
+    /// </summary>
+    public void ReconfigureRequest(ProcessFlow flow, RackKind rackKind, Guid agvId, Guid requestLocationId, string detail, string source, DateTimeOffset now)
     {
-        if (!IsUserEditable) throw new DomainException("TASK_NOT_EDITABLE", $"Task in state {State} can no longer be edited.");
-        RequestLocationId = newLocationId;
-        if (clearSource) { SourceLocationId = null; RackId = null; }
-        DestinationLocationId = null;
+        if (!IsUntouchedByAgvAndRcs) throw new DomainException("TASK_NOT_EDITABLE", $"Task in state {State} can no longer be edited.");
+        Flow = flow; RackKind = rackKind; AgvId = agvId; RequestLocationId = requestLocationId;
+        SourceLocationId = null; RackId = null; DestinationLocationId = null;
         UpdatedAt = now;
         _history.Add(new TaskHistoryEntry(Id, State, State, "TASK_EDITED", detail, source, now));
     }
