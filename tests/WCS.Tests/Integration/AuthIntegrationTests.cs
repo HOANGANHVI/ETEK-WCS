@@ -347,6 +347,60 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task Default_admin_account_is_created_once_forces_a_password_change_and_is_never_recreated_or_reset()
+    {
+        await using var h = await Harness.CreateAsync(fixture);
+        await using var f = new DbApiFactory(fixture);
+        async Task RunBootstrap() { using var scope = f.Services.CreateScope(); await scope.ServiceProvider.GetRequiredService<AdminBootstrapper>().RunAsync(); }
+        await RunBootstrap(); await RunBootstrap();
+
+        var u = Assert.Single(await h.Db(db => db.Users.AsNoTracking().ToListAsync()));
+        Assert.Equal("admin", u.Username); Assert.Equal(UserRole.Admin, u.Role); Assert.True(u.MustChangePassword);
+        Assert.StartsWith("AQAAAA", u.PasswordHash);                       // Identity v3 hash, not the literal password
+
+        var c = f.CreateClient().WithClientHeader();
+        Assert.Equal(200, await c.LoginAsync("admin", "admin"));
+        var blocked = await c.SendJsonAsync(HttpMethod.Get, "/api/agvs");
+        Assert.Equal(403, blocked.Status); Assert.Equal("PASSWORD_CHANGE_REQUIRED", blocked.Root.ErrorCode());   // the change cannot be skipped
+        Assert.Equal(400, (await c.SendJsonAsync(HttpMethod.Post, "/api/auth/change-password", new { currentPassword = "admin", newPassword = "admin" })).Status);
+        Assert.Equal(200, (await c.SendJsonAsync(HttpMethod.Post, "/api/auth/change-password", new { currentPassword = "admin", newPassword = "Changed-Root-2026" })).Status);
+        Assert.Equal(200, (await c.SendJsonAsync(HttpMethod.Get, "/api/agvs")).Status);
+
+        // a restart must neither recreate nor reset anything, and admin/admin no longer works
+        await RunBootstrap();
+        Assert.Equal(401, await f.CreateClient().WithClientHeader().LoginAsync("admin", "admin"));
+        Assert.Equal(200, await f.CreateClient().WithClientHeader().LoginAsync("admin", "Changed-Root-2026"));
+        Assert.Single(await h.Db(db => db.Users.AsNoTracking().ToListAsync()));
+    }
+
+    [Fact]
+    public async Task Default_admin_is_not_created_in_Production_unless_a_bootstrap_password_is_configured()
+    {
+        await using var h = await Harness.CreateAsync(fixture);
+        async Task<int> Run(Dictionary<string, string?> cfg)
+        {
+            await using var f = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(cfg)); });
+            using var scope = f.Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<AdminBootstrapper>().RunAsync();
+            return await h.Db(db => db.Users.CountAsync());
+        }
+        Assert.Equal(0, await Run(new()));                                                          // no admin/admin on a production system
+        Assert.Equal(1, await Run(new() { ["Bootstrap:Admin:Password"] = "Prod-Bootstrap-77" }));  // explicit, separate password
+    }
+
+    [Fact]
+    public async Task Bootstrap_never_touches_an_existing_account_named_admin()
+    {
+        await using var h = await Harness.CreateAsync(fixture);
+        await using var f = new DbApiFactory(fixture);
+        await AddUsersAsync(f, ("admin", UserRole.Operator));      // same name, not an admin, password = TestUsers.Password
+        using (var scope = f.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<AdminBootstrapper>().RunAsync();
+        var u = Assert.Single(await h.Db(db => db.Users.AsNoTracking().ToListAsync()));
+        Assert.Equal(UserRole.Operator, u.Role);
+        Assert.Equal(200, await f.CreateClient().WithClientHeader().LoginAsync("admin", TestUsers.Password));   // password untouched
+    }
+
+    [Fact]
     public async Task Bootstrap_does_nothing_without_configuration_or_with_a_weak_password_or_when_an_admin_exists()
     {
         await using var h = await Harness.CreateAsync(fixture);
@@ -357,7 +411,7 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
             await scope.ServiceProvider.GetRequiredService<AdminBootstrapper>().RunAsync();
             return await h.Db(db => db.Users.CountAsync());
         }
-        Assert.Equal(0, await Run(new()));                                                                                          // nothing configured
+        Assert.Equal(0, await Run(new() { ["Bootstrap:Admin:AllowDefaultCredentials"] = "false" }));                                // default account switched off
         Assert.Equal(0, await Run(new() { ["Bootstrap:Admin:Username"] = "boss", ["Bootstrap:Admin:Password"] = "weak" }));        // policy
         Assert.Equal(1, await Run(new() { ["Bootstrap:Admin:Username"] = "boss", ["Bootstrap:Admin:Password"] = "Strong-Pass-123" }));
         Assert.Equal(1, await Run(new() { ["Bootstrap:Admin:Username"] = "other", ["Bootstrap:Admin:Password"] = "Strong-Pass-123" })); // admin exists

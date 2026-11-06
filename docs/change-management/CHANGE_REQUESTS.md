@@ -81,3 +81,10 @@
   7. One role per account; accounts are never deleted (disable only) so audit history stays meaningful.
 - **Open security items:** HTTPS/TLS termination and cookie Secure flag outside Development, backup of the Data Protection key ring, password-reset by e-mail is not provided, no multi-factor authentication, no per-IP rate limiting.
 - **Tests:** TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integration).
+
+#### CR-001 amendment (2026-11-06, project owner message "Triển khai đăng nhập thực tế và quản lý tài khoản")
+
+- The simulated sign-in (role buttons without password) is removed everywhere, including Demo Mode. Demo Mode still simulates DATA only; authentication, accounts and audit always use the real backend and PostgreSQL.
+- Bootstrap account: admin / admin is created when no active Admin exists and no account named admin exists; forced password change at first sign-in; never recreated or reset. In Production it is NOT created unless Bootstrap:Admin:Password is configured (or AllowDefaultCredentials=true is set explicitly).
+- Added: account deletion (refused for yourself, the last active Admin, and any account that already has audit history; disable instead), activation flag at creation, confirmation password in the UI, explicit message for a blocked account (shown only to someone who knows the password).
+- NEEDS_CONFIRMATION: deleting is a hard delete restricted as above (the request asked to prefer disabling when traceability matters); self-deletion is refused entirely (stricter than "refused if last Admin").

@@ -1,5 +1,6 @@
 import { DEMO_MODE } from '../config'
-import { demoApi } from '../demo/demoApi'
+import { demoDataApi } from '../demo/demoApi'
+import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Role, UserRow } from './authTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
@@ -73,10 +74,11 @@ const realApi = {
   changePassword: (currentPassword: string, newPassword: string) =>
     request<Me>('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
   users: (search?: string) => request<UserRow[]>(`/api/users${qs({ search })}`),
-  createUser: (b: { username: string; displayName: string; role: Role; password: string }) =>
+  createUser: (b: { username: string; displayName: string; role: Role; password: string; isActive: boolean }) =>
     request<UserRow>('/api/users', { method: 'POST', body: JSON.stringify(b) }),
   updateUser: (id: string, b: { displayName: string; role: Role; isActive: boolean }) =>
     request<UserRow>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  deleteUser: (id: string) => request<{ deleted: boolean }>(`/api/users/${id}`, { method: 'DELETE' }),
   resetPassword: (id: string, newPassword: string) =>
     request<{ reset: boolean }>(`/api/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) }),
   audit: (f: AuditFilter) =>
@@ -98,5 +100,17 @@ const realApi = {
 
 export { ApiRequestError }
 
-/** In Demo Mode every call is answered by the in-browser engine; no request ever leaves the page. */
+/**
+ * Demo Mode: DATA calls (tasks, AGVs, inventory, configuration) are answered by the in-browser engine and never leave the page.
+ * Authentication, accounts and the audit trail are always real (same backend, same PostgreSQL users); the signed-in role is only
+ * mirrored so the demo data obeys the same permission rules.
+ */
+const demoApi: typeof realApi = {
+  ...realApi,
+  ...demoDataApi,
+  login: async (u, p) => { const me = await realApi.login(u, p); setDemoSessionRole(me.role); return me },
+  me: async () => { try { const me = await realApi.me(); setDemoSessionRole(me.role); return me } catch (e) { setDemoSessionRole(null); throw e } },
+  logout: async () => { try { return await realApi.logout() } finally { setDemoSessionRole(null) } },
+}
+
 export const api: typeof realApi = DEMO_MODE ? demoApi : realApi

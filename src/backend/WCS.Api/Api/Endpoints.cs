@@ -210,9 +210,14 @@ public static class Endpoints
         var users = api.MapGroup("/users").WithTags("Users").RequireAuthorization(admin);
         users.MapGet("", async (HttpContext c, string? search, UserAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListAsync(c.Actor(), search, ct)));
         users.MapPost("", async (HttpContext c, CreateUserRequest r, UserAdminService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.CreateAsync(c.Actor(), new CreateUserCommand(r.Username, r.DisplayName, r.Role, r.Password), ct), StatusCodes.Status201Created));
+            ApiResults.Ok(c, await s.CreateAsync(c.Actor(), new CreateUserCommand(r.Username, r.DisplayName, r.Role, r.Password, r.IsActive ?? true), ct), StatusCodes.Status201Created));
         users.MapPut("{id:guid}", async (HttpContext c, Guid id, UpdateUserRequest r, UserAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await s.UpdateAsync(c.Actor(), id, new UpdateUserCommand(r.DisplayName, r.Role, r.IsActive), ct)));
+        users.MapDelete("{id:guid}", async (HttpContext c, Guid id, UserAdminService s, CancellationToken ct) =>
+        {
+            await s.DeleteAsync(c.Actor(), id, ct);
+            return ApiResults.Ok(c, new { deleted = true });
+        });
         users.MapPost("{id:guid}/reset-password", async (HttpContext c, Guid id, ResetPasswordRequest r, UserAdminService s, CancellationToken ct) =>
         {
             await s.ResetPasswordAsync(c.Actor(), id, r.NewPassword, ct);

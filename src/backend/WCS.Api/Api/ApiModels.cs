@@ -66,7 +66,8 @@ public sealed record CreateUserRequest(
     [property: Required, StringLength(50)] string Username,
     [property: Required, StringLength(100)] string DisplayName,
     WCS.Domain.Users.UserRole Role,
-    [property: Required, StringLength(200)] string Password);
+    [property: Required, StringLength(200)] string Password,
+    bool? IsActive = null);
 
 public sealed record UpdateUserRequest(
     [property: Required, StringLength(100)] string DisplayName,

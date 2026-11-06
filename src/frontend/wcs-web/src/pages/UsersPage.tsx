@@ -11,7 +11,7 @@ import { checkPassword } from '../auth/passwordPolicy'
 import { Field } from './config/FormKit'
 import { fromApiError, type Errors } from './config/formUtils'
 
-type Dialog = { kind: 'create' } | { kind: 'edit'; user: UserRow } | { kind: 'reset'; user: UserRow } | null
+type Dialog = { kind: 'create' } | { kind: 'edit'; user: UserRow } | { kind: 'reset'; user: UserRow } | { kind: 'delete'; user: UserRow } | null
 
 export function UsersPage() {
   const { user: me } = useAuth()
@@ -36,7 +36,7 @@ export function UsersPage() {
           {(rows) => (
             <div className="table-wrap">
               <table className="grid">
-                <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Vai trò</th><th>Trạng thái</th><th>Đăng nhập gần nhất</th><th>Thao tác</th></tr></thead>
+                <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Vai trò</th><th>Trạng thái</th><th>Thời điểm tạo</th><th>Đăng nhập gần nhất</th><th>Thao tác</th></tr></thead>
                 <tbody>
                   {rows.map((u) => (
                     <tr key={u.id}>
@@ -48,10 +48,12 @@ export function UsersPage() {
                         {u.lockedUntil && <span className="flag" title={`Khóa tạm đến ${formatDateTime(u.lockedUntil)}`}> 🔒</span>}
                         {u.mustChangePassword && <small className="muted"> · chờ đổi mật khẩu</small>}
                       </td>
-                      <td className="nowrap">{formatDateTime(u.lastLoginAt)}</td>
+                      <td className="nowrap">{formatDateTime(u.createdAt)}</td>
+                      <td className="nowrap">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Chưa đăng nhập'}</td>
                       <td className="nowrap">
                         <Button size="sm" onClick={() => setDialog({ kind: 'edit', user: u })}>Sửa</Button>{' '}
-                        <Button size="sm" onClick={() => setDialog({ kind: 'reset', user: u })}>Đặt lại mật khẩu</Button>
+                        <Button size="sm" onClick={() => setDialog({ kind: 'reset', user: u })}>Đặt lại mật khẩu</Button>{' '}
+                        <Button size="sm" variant="danger" disabled={u.username === me?.username} title={u.username === me?.username ? 'Không thể tự xóa tài khoản của mình' : undefined} onClick={() => setDialog({ kind: 'delete', user: u })}>Xóa</Button>
                       </td>
                     </tr>
                   ))}
@@ -64,6 +66,7 @@ export function UsersPage() {
 
       {dialog?.kind === 'create' && <CreateDialog onClose={() => setDialog(null)} onDone={() => done('Đã tạo tài khoản. Người dùng phải đổi mật khẩu ở lần đăng nhập đầu tiên.')} />}
       {dialog?.kind === 'edit' && <EditDialog user={dialog.user} isSelf={dialog.user.username === me?.username} onClose={() => setDialog(null)} onDone={() => done('Đã cập nhật tài khoản.')} />}
+      {dialog?.kind === 'delete' && <DeleteDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => done(`Đã xóa tài khoản ${dialog.user.username}.`)} />}
       {dialog?.kind === 'reset' && <ResetDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => done(`Đã đặt lại mật khẩu của ${dialog.user.username}. Mọi phiên đăng nhập hiện tại của tài khoản này đã bị đăng xuất.`)} />}
     </>
   )
@@ -96,12 +99,15 @@ function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState<Role>('Operator')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [active, setActive] = useState(true)
   const pwProblem = password ? checkPassword(password, username) : null
-  const s = useSubmit(() => api.createUser({ username: username.trim(), displayName: displayName.trim(), role, password }), onDone)
+  const mismatch = confirm && confirm !== password ? 'Mật khẩu xác nhận không khớp.' : null
+  const s = useSubmit(() => api.createUser({ username: username.trim(), displayName: displayName.trim(), role, password, isActive: active }), onDone)
   return (
     <Modal title="Tạo tài khoản" onClose={onClose} footer={<>
       <Button onClick={onClose}>Bỏ qua</Button>
-      <Button variant="primary" disabled={s.busy || !username.trim() || !displayName.trim() || !password || !!pwProblem} onClick={() => void s.run()}>Tạo tài khoản</Button>
+      <Button variant="primary" disabled={s.busy || !username.trim() || !displayName.trim() || !password || !!pwProblem || confirm !== password} onClick={() => void s.run()}>Tạo tài khoản</Button>
     </>}>
       {s.general && <div className="notice notice-bad" role="alert">{s.general}</div>}
       <div className="form-grid single">
@@ -111,6 +117,9 @@ function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
         <Field label="Vai trò" error={s.errors.role}><RoleSelect value={role} onChange={setRole} /></Field>
         <Field label="Mật khẩu ban đầu" error={s.errors.password ?? pwProblem ?? undefined} hint="Người dùng bắt buộc đổi mật khẩu khi đăng nhập lần đầu.">
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></Field>
+        <Field label="Xác nhận mật khẩu" error={mismatch ?? undefined}>
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" /></Field>
+        <label className="check"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Kích hoạt tài khoản (được phép đăng nhập)</label>
       </div>
     </Modal>
   )
@@ -131,7 +140,7 @@ function EditDialog({ user, isSelf, onClose, onDone }: { user: UserRow; isSelf: 
       <div className="form-grid single">
         <Field label="Họ tên hiển thị" error={s.errors.displayName}><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
         <Field label="Vai trò" error={s.errors.role}><RoleSelect value={role} onChange={setRole} disabled={isSelf} /></Field>
-        <label className="check"><input type="checkbox" checked={active} disabled={isSelf} onChange={(e) => setActive(e.target.checked)} /> Tài khoản đang hoạt động (được phép đăng nhập)</label>
+        <label className="check"><input type="checkbox" checked={active} disabled={isSelf} onChange={(e) => setActive(e.target.checked)} /> Tài khoản đang hoạt động. Bỏ chọn để khóa tài khoản (không đăng nhập được, phiên hiện tại bị ngắt).</label>
       </div>
     </Modal>
   )
@@ -151,6 +160,22 @@ function ResetDialog({ user, onClose, onDone }: { user: UserRow; onClose: () => 
         <Field label="Mật khẩu tạm thời mới" error={s.errors.newPassword ?? problem ?? undefined} hint="Người dùng phải đổi mật khẩu ở lần đăng nhập kế tiếp; các phiên hiện tại bị đăng xuất.">
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></Field>
       </div>
+    </Modal>
+  )
+}
+
+function DeleteDialog({ user, onClose, onDone }: { user: UserRow; onClose: () => void; onDone: () => void }) {
+  const s = useSubmit(() => api.deleteUser(user.id), onDone)
+  return (
+    <Modal title={`Xóa tài khoản ${user.username}`} onClose={onClose} footer={<>
+      <Button onClick={onClose}>Bỏ qua</Button>
+      <Button variant="danger" disabled={s.busy} onClick={() => void s.run()}>Xác nhận xóa</Button>
+    </>}>
+      {s.general && <div className="notice notice-bad" role="alert">{s.general}</div>}
+      <p className="dialog-hint">
+        Bạn sắp xóa vĩnh viễn tài khoản <strong>{user.username}</strong> ({user.displayName}). Thao tác không thể hoàn tác.
+        Tài khoản đã có lịch sử thao tác, hoặc là Admin đang hoạt động cuối cùng, sẽ không xóa được; khi đó hãy khóa (vô hiệu hóa) tài khoản.
+      </p>
     </Modal>
   )
 }

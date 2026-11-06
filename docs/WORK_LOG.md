@@ -327,3 +327,37 @@ Task edit/delete: the permission and the state are checked **inside the transact
 - Interpretations to confirm: what "edit task" means (only the requesting station today), "delete" = soft delete to Cancelled, Operator read-only inventory, Admin handling of failed/cancelled tasks, password/lockout/session defaults.
 - Security items still open: TLS/HTTPS termination and `Secure` cookie in production, backup of the Data Protection key ring, no MFA, no e-mail password reset, no per-IP rate limiting, `X-WCS-Client` is defence in depth (not a secret).
 - Demo Mode has its own in-browser demo accounts (`demo-admin`, `demo-operator`, no passwords). They exist only in `demo/demoAuth.ts`, are reachable only when `VITE_DEMO_MODE=true`, and never touch the backend.
+
+---
+
+## 12. Update 2026-11-06 – Real sign-in only, bootstrap admin/admin, delete accounts (CR-001 amendment)
+
+### What changed
+- **Simulated login removed**: no "Vào với vai trò Admin/Operator (mô phỏng)" buttons, no frontend session store. Files `demo/demoAuth.ts` deleted. In **Demo Mode** the data (tasks, AGVs, inventory, configuration) is still simulated in the browser, but **sign-in, accounts and audit always go to the real backend** (`api/client.ts` routes only `/api/auth|users|audit` out of the browser; every other `/api` or `/hubs` call is still blocked). Demo Mode therefore now needs the API + PostgreSQL running for login. The signed-in role is mirrored into `demo/session.ts` only so the demo data obeys the same permission rules.
+- **Bootstrap administrator** (`AdminBootstrapper`, run at API start): creates `admin` / `admin` **only if** no active Admin exists and no account named `admin` exists; flagged `MustChangePassword`; password hashed (Identity PasswordHasher); never logged; never recreated or reset afterwards (a restart after the change does nothing). The weak default is allowed only here; the forced change enforces the normal policy (and refuses `admin` as the new password).
+  - **Production safety**: when `ASPNETCORE_ENVIRONMENT=Production` the default account is **not** created. Set `Bootstrap:Admin:Password` (user secrets / env `Bootstrap__Admin__Password`, optional `Bootstrap__Admin__Username`) to create a first Admin with a separate password, or `Bootstrap:Admin:AllowDefaultCredentials=true` to opt in explicitly. `AllowDefaultCredentials=false` disables the default account in any environment.
+- **Accounts**: new `DELETE /api/users/{id}`; create accepts `isActive`; UI has confirmation password, activation checkbox, created-at column, delete with confirmation. Delete is refused for yourself (`CANNOT_DELETE_SELF`), for the last active Admin (`LAST_ADMIN`) and for accounts that already have audit history (`USER_HAS_HISTORY`: disable instead, so actions stay attributable). Every change is audited (`USER_DELETE`).
+- **Blocked account message**: wrong password / unknown user stay the same generic message; an account that is disabled answers `ACCOUNT_DISABLED` ("Tài khoản đã bị khóa") only when the password is correct; lockout after repeated failures answers `ACCOUNT_LOCKED`.
+- Unchanged: cookie session design, role policies, backend enforcement, state machine, BP flows, scheduling rules.
+
+### Migration
+- No new migration was needed: `AddAuthentication` (tables `app_users`, `audit_log`) already covers every field. It has now been **applied to `wcs_db`** (CREATE only; row counts before/after identical: agvs 2, locations 0, racks 0, tasks 0, connection_settings 0; app_users 0). The bootstrap account is created the first time the API starts.
+
+### How to start / manage
+1. `cd src/backend && dotnet run --project WCS.Api` (Development): log shows "Creating the DEFAULT bootstrap administrator 'admin'". Open the web app, sign in `admin` / `admin`, you are taken to the mandatory password change (min 10 chars, letters + digits, not containing the username), then to the admin dashboard. Do this immediately on any machine reachable from a network.
+2. Operators: Admin → "Quản lý tài khoản" → "Tạo tài khoản" (role Operator, initial password + confirmation, optional inactive). The operator must change that password at first sign-in. Lock = untick "đang hoạt động" in Sửa (session ends at once); unlock = tick it; reset password = "Đặt lại mật khẩu"; delete only for never-used accounts.
+3. Production: set `ASPNETCORE_ENVIRONMENT=Production`, `Bootstrap__Admin__Password` (secret), serve over HTTPS (cookie is `Secure` outside Development), set `DataProtection:KeysPath`.
+
+### API added/changed this round
+`DELETE /api/users/{id}` (Admin); `POST /api/users` body gains `isActive`; `POST /api/auth/login` may answer `ACCOUNT_DISABLED`. All other endpoints as in section 11.
+
+### Verified (executed)
+- Backend build 0 warnings/0 errors; **218 tests, 218 passed, 0 skipped** (3 consecutive runs): new tests for default admin (created once, forced change cannot be skipped, not recreated/reset after restart, admin/admin stops working), Production safety, existing account named admin untouched, blocked-account message, inactive creation, delete rules (self, last admin, history, operator 403, audit).
+- Frontend lint, `build`, `build:demo` clean.
+- Headless Chrome, real mode (API + scratch PostgreSQL + Vite proxy), **39/39**: admin/admin → forced change → admin dashboard, wrong password, create operator (with confirmation), operator forced change, 4 operator menus only, direct admin URLs refused, admin APIs 403 for the operator, admin locks operator → blocked-account message, generic message for wrong password, admin resets password → operator signs in with it and must change it, delete confirmation, delete refused for an account with history, deletion of a never-used account, own delete button disabled, cookie HttpOnly/SameSite=Strict, SignalR connected, audit page shows no password.
+- Headless Chrome, Demo Mode with the real backend, **11/11**: no simulated-role buttons, real form, server rejects a wrong password, admin sees dock + all menus, operator forced change and restricted menus, only `/api/auth|users|audit` leave the browser.
+- Scratch databases were dropped; `wcs_db` unchanged apart from the empty new tables.
+
+### Open / security notes
+- admin/admin exists in `wcs_db` as soon as the API starts there; change it at first sign-in. Never expose a fresh system on a network before that.
+- Still open: HTTPS termination, Data Protection key backup, MFA, e-mail password reset, per-IP rate limiting (lockout is per account), confirmation of CR-001 interpretations (task edit = station only, delete = soft delete to Cancelled, Operator read-only inventory, password/session defaults).

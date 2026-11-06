@@ -33,6 +33,7 @@ internal sealed class UserRepository(WcsDbContext db) : IUserRepository
 
     public Task<bool> AnyAdminAsync(CancellationToken ct) => db.Users.AnyAsync(x => x.Role == UserRole.Admin && x.IsActive, ct);
     public void Add(AppUser user) => db.Users.Add(user);
+    public void Remove(AppUser user) => db.Users.Remove(user);
 }
 
 /// <summary>ASP.NET Core Identity password hasher (PBKDF2, per-password random salt, versioned format).</summary>
@@ -82,6 +83,13 @@ internal sealed class AuditLog(DbContextOptions<WcsDbContext> options, IClock cl
             .Skip(Math.Max(0, q.Skip)).Take(Math.Clamp(q.Take, 1, 500)).ToListAsync(ct);
     }
 
+    public async Task<int> CountByActorAsync(string username, CancellationToken ct = default)
+    {
+        await using var db = new WcsDbContext(options);
+        var name = username.Trim().ToLowerInvariant();
+        return await db.AuditLog.CountAsync(x => x.Actor == name, ct);
+    }
+
     private static string? Cut(string? s, int max) => s is null ? null : s.Length <= max ? s : s[..max];
 
     /// <summary>Serializes a snapshot and blanks any string value whose key looks like a secret (defence in depth).</summary>
@@ -115,50 +123,73 @@ internal sealed class AuditLog(DbContextOptions<WcsDbContext> options, IClock cl
 public sealed class BootstrapAdminOptions
 {
     public const string SectionName = "Bootstrap:Admin";
+    /// <summary>Login of the first administrator. Defaults to "admin".</summary>
     public string? Username { get; set; }
-    /// <summary>Initial password. Supply via user secrets / environment variable (Bootstrap__Admin__Password), never in source control.</summary>
+    /// <summary>Initial password supplied by the deployment (user secrets / Bootstrap__Admin__Password). Never commit it. Must satisfy the password policy.</summary>
     public string? Password { get; set; }
     public string? DisplayName { get; set; }
+    /// <summary>
+    /// Allows the well-known bootstrap account admin / admin when no Password is configured. Default: true outside Production, false in Production.
+    /// The account is flagged "must change password" and the system refuses every other call until it is changed.
+    /// </summary>
+    public bool? AllowDefaultCredentials { get; set; }
 }
 
 /// <summary>
-/// Creates the FIRST administrator, only when no active administrator exists and the deployment supplied credentials.
-/// The account must change the password at first login. There is no built-in default account.
+/// Creates the FIRST administrator, only when no active administrator exists AND no account with that name exists.
+/// It never overwrites or resets an existing account. The password is hashed; it is never logged.
+/// Production safety: without an explicit Bootstrap:Admin:Password the default admin/admin account is NOT created in Production.
 /// </summary>
 public sealed class AdminBootstrapper(IUserRepository users, IPasswordService passwords, IUnitOfWork uow, IAuditLog audit, IClock clock,
-    IConfiguration configuration, ILogger<AdminBootstrapper> logger)
+    IConfiguration configuration, Microsoft.Extensions.Hosting.IHostEnvironment environment, ILogger<AdminBootstrapper> logger)
 {
+    public const string DefaultUsername = "admin";
+    private const string DefaultPassword = "admin";   // bootstrap only; forced change at first sign-in
+
     public async Task RunAsync(CancellationToken ct = default)
     {
         var o = configuration.GetSection(BootstrapAdminOptions.SectionName).Get<BootstrapAdminOptions>() ?? new();
         var created = await uow.ExecuteAsync(async t =>
         {
             if (await users.AnyAdminAsync(t)) return (string?)null;
-            if (string.IsNullOrWhiteSpace(o.Username) || string.IsNullOrEmpty(o.Password))
+
+            var name = AppUser.NormalizeUsername(string.IsNullOrWhiteSpace(o.Username) ? DefaultUsername : o.Username);
+            string password;
+            if (!string.IsNullOrEmpty(o.Password))
             {
-                logger.LogWarning("No active administrator exists and no bootstrap credentials are configured (Bootstrap:Admin:Username / Bootstrap:Admin:Password). Nobody can sign in until one is provided.");
-                return null;
+                var errors = PasswordPolicy.Check(o.Password, name);
+                if (!AppUser.IsValidUsername(name) || errors.Count > 0)
+                {
+                    logger.LogError("Bootstrap administrator was NOT created: username or password does not satisfy the policy ({Problems}).",
+                        string.Join("; ", errors.Select(e => e.Message)));
+                    return null;
+                }
+                password = o.Password;
             }
-            var name = AppUser.NormalizeUsername(o.Username);
-            var errors = PasswordPolicy.Check(o.Password, name);
-            if (!AppUser.IsValidUsername(name) || errors.Count > 0)
+            else
             {
-                logger.LogError("Bootstrap administrator was NOT created: username or password does not satisfy the policy ({Problems}).",
-                    string.Join("; ", errors.Select(e => e.Message)));
-                return null;
+                var allowDefault = o.AllowDefaultCredentials ?? !string.Equals(environment.EnvironmentName, "Production", StringComparison.OrdinalIgnoreCase);
+                if (!allowDefault)
+                {
+                    logger.LogWarning("No active administrator exists and the default bootstrap account is disabled for this environment. Set Bootstrap:Admin:Password (and optionally Username), then restart.");
+                    return null;
+                }
+                if (!AppUser.IsValidUsername(name)) { logger.LogError("Bootstrap administrator was NOT created: invalid username."); return null; }
+                password = DefaultPassword;
+                logger.LogWarning("Creating the DEFAULT bootstrap administrator '{Username}'. The password must be changed at first sign-in; the account is unusable until then.", name);
             }
             if (await users.GetByUsernameAsync(name, t) is not null)
             {
-                logger.LogError("Bootstrap administrator was NOT created: the username '{Username}' already belongs to a non-admin or disabled account.", name);
+                logger.LogError("Bootstrap administrator was NOT created: an account named '{Username}' already exists (it is not modified).", name);
                 return null;
             }
-            users.Add(AppUser.Create(name, string.IsNullOrWhiteSpace(o.DisplayName) ? name : o.DisplayName!, UserRole.Admin,
-                passwords.Hash(o.Password), mustChangePassword: true, clock.UtcNow));
+            users.Add(AppUser.Create(name, string.IsNullOrWhiteSpace(o.DisplayName) ? "Quản trị viên" : o.DisplayName!, UserRole.Admin,
+                passwords.Hash(password), mustChangePassword: true, clock.UtcNow));
             return name;
         }, ct);
 
         if (created is null) return;
         logger.LogInformation("Bootstrap administrator '{Username}' created; the password must be changed at first sign-in.", created);
-        await audit.WriteAsync(new AuditRecord("USER_BOOTSTRAP_ADMIN", "system", null, "User", created, AuditResult.Success, "first administrator created from deployment configuration"), ct);
+        await audit.WriteAsync(new AuditRecord("USER_BOOTSTRAP_ADMIN", "system", null, "User", created, AuditResult.Success, "first administrator created (bootstrap)"), ct);
     }
 }

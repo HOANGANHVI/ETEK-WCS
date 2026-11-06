@@ -13,7 +13,7 @@ public sealed class AuthService(IUserRepository users, IPasswordService password
     private const string DummyHashSource = "dummy-password-for-constant-time-comparison-1";
     private static string? _dummyHash;
 
-    private enum Outcome { Ok, Invalid, Locked }
+    private enum Outcome { Ok, Invalid, Locked, Disabled }
     private sealed record LoginAttempt(Outcome Outcome, AuthenticatedUser? User, string? Reason);
 
     public async Task<AuthenticatedUser> LoginAsync(string? username, string? password, string? ip, CancellationToken ct = default)
@@ -37,7 +37,8 @@ public sealed class AuthService(IUserRepository users, IPasswordService password
                 user.RegisterFailedLogin(now, o.MaxFailedLogins, TimeSpan.FromMinutes(o.LockoutMinutes));
                 return new LoginAttempt(Outcome.Invalid, null, "wrong password");
             }
-            if (!user.IsActive) return new LoginAttempt(Outcome.Invalid, null, "disabled account");
+            // Only someone who proves knowledge of the password learns that the account is blocked.
+            if (!user.IsActive) return new LoginAttempt(Outcome.Disabled, null, "disabled account");
             user.RegisterSuccessfulLogin(now);
             return new LoginAttempt(Outcome.Ok,
                 new AuthenticatedUser(user.Id, user.Username, user.DisplayName, user.Role, user.MustChangePassword, user.SecurityStamp), null);
@@ -51,9 +52,12 @@ public sealed class AuthService(IUserRepository users, IPasswordService password
         }
         // The attempted name is user-supplied text: it is recorded as the actor but never the password.
         await audit.WriteAsync(new AuditRecord("AUTH_LOGIN", Truncate(name), null, "User", null, AuditResult.Failed, attempt.Reason, IpAddress: ip), ct);
-        throw attempt.Outcome == Outcome.Locked
-            ? AppException.Unauthorized("ACCOUNT_LOCKED", "Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.")
-            : AppException.Unauthorized("INVALID_CREDENTIALS", Generic);
+        throw attempt.Outcome switch
+        {
+            Outcome.Locked => AppException.Unauthorized("ACCOUNT_LOCKED", "Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau."),
+            Outcome.Disabled => AppException.Unauthorized("ACCOUNT_DISABLED", "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên."),
+            _ => AppException.Unauthorized("INVALID_CREDENTIALS", Generic),
+        };
     }
 
     public Task LogoutAsync(ActorInfo actor, CancellationToken ct = default) =>

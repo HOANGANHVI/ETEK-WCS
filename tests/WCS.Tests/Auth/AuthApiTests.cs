@@ -96,7 +96,7 @@ public class AuthApiTests
 
     // ---------------------------------------------------------------- login
     [Fact]
-    public async Task Wrong_password_unknown_user_and_disabled_account_all_get_the_same_generic_401()
+    public async Task Wrong_password_and_unknown_user_get_the_same_generic_401_and_a_blocked_account_is_named_only_to_its_owner()
     {
         await using var f = new ConfigApiFactory();
         f.Users.Users.Add(TestUsers.Make("gone", UserRole.Operator, active: false));
@@ -104,14 +104,17 @@ public class AuthApiTests
 
         var wrong = await c.SendJsonAsync(HttpMethod.Post, "/api/auth/login", new { username = "op1", password = "bad-password-1" });
         var unknown = await c.SendJsonAsync(HttpMethod.Post, "/api/auth/login", new { username = "nobody", password = "bad-password-1" });
+        var disabledWrongPw = await c.SendJsonAsync(HttpMethod.Post, "/api/auth/login", new { username = "gone", password = "bad-password-1" });
         var disabled = await c.SendJsonAsync(HttpMethod.Post, "/api/auth/login", new { username = "gone", password = TestUsers.Password });
 
-        foreach (var r in new[] { wrong, unknown, disabled })
+        foreach (var r in new[] { wrong, unknown, disabledWrongPw })
         {
             Assert.Equal(401, r.Status);
             Assert.Equal("INVALID_CREDENTIALS", r.Root.ErrorCode());
         }
-        Assert.Equal(wrong.Root.GetProperty("error").GetProperty("message").GetString(), disabled.Root.GetProperty("error").GetProperty("message").GetString());
+        Assert.Equal(wrong.Root.GetProperty("error").GetProperty("message").GetString(), unknown.Root.GetProperty("error").GetProperty("message").GetString());
+        Assert.Equal(401, disabled.Status);
+        Assert.Equal("ACCOUNT_DISABLED", disabled.Root.ErrorCode());
         Assert.Equal(401, (await c.SendJsonAsync(HttpMethod.Get, "/api/auth/me")).Status); // a disabled account got no session
     }
 
@@ -332,6 +335,57 @@ public class AuthApiTests
         Assert.Equal(401, await NewClient(f).LoginAsync("op1"));                                       // old password rejected
         Assert.Equal(200, await NewClient(f).LoginAsync("op1", "Reset-Pass-2026"));
         Assert.True(f.Users.Users.Single(u => u.Username == "op1").MustChangePassword);
+    }
+
+    // ---------------------------------------------------------------- create inactive / delete
+    [Fact]
+    public async Task An_account_created_as_inactive_cannot_sign_in_until_activated()
+    {
+        await using var f = new ConfigApiFactory();
+        var admin = await As(f, "admin1");
+        var created = await admin.SendJsonAsync(HttpMethod.Post, "/api/users", new { username = "sleeper", displayName = "S", role = "Operator", password = "Initial-Pass-55", isActive = false });
+        Assert.Equal(201, created.Status);
+        Assert.False(created.Root.GetProperty("data").GetProperty("isActive").GetBoolean());
+        Assert.Equal(401, await NewClient(f).LoginAsync("sleeper", "Initial-Pass-55"));
+        var id = created.Root.GetProperty("data").GetProperty("id").GetGuid();
+        await admin.SendJsonAsync(HttpMethod.Put, $"/api/users/{id}", new { displayName = "S", role = "Operator", isActive = true });
+        Assert.Equal(200, await NewClient(f).LoginAsync("sleeper", "Initial-Pass-55"));
+    }
+
+    [Fact]
+    public async Task Deleting_accounts_follows_the_safety_rules()
+    {
+        await using var f = new ConfigApiFactory();
+        var admin = await As(f, "admin1");
+        Guid Id(string n) => f.Users.Users.Single(u => u.Username == n).Id;
+
+        var self = await admin.SendJsonAsync(HttpMethod.Delete, $"/api/users/{Id("admin1")}");
+        Assert.Equal(422, self.Status); Assert.Equal("CANNOT_DELETE_SELF", self.Root.ErrorCode());
+
+        // op1 has signed in (audit history): it must be disabled, not deleted
+        await NewClient(f).LoginAsync("op1");
+        var history = await admin.SendJsonAsync(HttpMethod.Delete, $"/api/users/{Id("op1")}");
+        Assert.Equal(422, history.Status); Assert.Equal("USER_HAS_HISTORY", history.Root.ErrorCode());
+        Assert.Contains(f.Users.Users, u => u.Username == "op1");
+
+        // a never-used account can be deleted
+        var fresh = await admin.SendJsonAsync(HttpMethod.Post, "/api/users", new { username = "temp.op", displayName = "T", role = "Operator", password = "Initial-Pass-55" });
+        var freshId = fresh.Root.GetProperty("data").GetProperty("id").GetGuid();
+        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Delete, $"/api/users/{freshId}")).Status);
+        Assert.DoesNotContain(f.Users.Users, u => u.Username == "temp.op");
+        Assert.Contains(f.Audit.Records, r => r.Action == "USER_DELETE" && r.Actor == "admin1");
+
+        // the last active admin cannot be deleted (service rule; the caller is another, hypothetical admin)
+        f.Users.Users.RemoveAll(u => u.Username == "admin2");
+        using var scope = f.Services.CreateScope();
+        var svc = scope.ServiceProvider.GetRequiredService<WCS.Application.Auth.UserAdminService>();
+        var ex = await Assert.ThrowsAsync<WCS.Application.Common.AppException>(() => svc.DeleteAsync(
+            new WCS.Application.Auth.ActorInfo(Guid.NewGuid(), "ghost", UserRole.Admin), Id("admin1")));
+        Assert.Equal("LAST_ADMIN", ex.Code);
+
+        // operators cannot delete anything
+        var op = await As(f, "op1");
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Delete, $"/api/users/{freshId}")).Status);
     }
 
     // ---------------------------------------------------------------- audit trail

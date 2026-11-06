@@ -12,7 +12,8 @@ if (DEMO_MODE) {
   const realFetch = window.fetch.bind(window)
   window.fetch = (input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url
-    if (/(^|\/\/[^/]+)\/(api|hubs)\//.test(url)) {
+    // Data stays in the browser; only sign-in, accounts and the audit trail talk to the real backend.
+    if (/(^|\/\/[^/]+)\/(api|hubs)\//.test(url) && !/\/api\/(auth|users|audit)(\/|\?|$)/.test(url)) {
       console.warn('[demo] blocked network call to', url)
       return Promise.reject(new TypeError('Network access is disabled in Demo Mode'))
     }

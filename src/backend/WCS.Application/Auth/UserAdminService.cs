@@ -43,6 +43,7 @@ public sealed class UserAdminService(IUserRepository users, IPasswordService pas
                 throw new ValidationFailedException([new FieldError("username", "Tên đăng nhập đã tồn tại.")]);
             // A new account must change the password handed over by the administrator at first login.
             var user = AppUser.Create(name, cmd.DisplayName, cmd.Role, passwords.Hash(cmd.Password), mustChangePassword: true, clock.UtcNow);
+            if (!cmd.IsActive) user.SetActive(false, clock.UtcNow);
             users.Add(user);
             return ToDto(user);
         }, ct);
@@ -82,6 +83,34 @@ public sealed class UserAdminService(IUserRepository users, IPasswordService pas
         }, ct);
         await Audit(actor, "USER_UPDATE", id, before, new { dto.Username, dto.DisplayName, role = dto.Role.ToString(), dto.IsActive }, ct);
         return dto;
+    }
+
+    /// <summary>
+    /// Permanently removes an account. Refused for yourself, for the last active administrator and for any account that already has
+    /// audit history (disable it instead, so past actions stay attributable).
+    /// </summary>
+    public async Task DeleteAsync(ActorInfo actor, Guid id, CancellationToken ct = default)
+    {
+        RequireAdmin(actor);
+        object? before = null;
+        var hasHistory = false;
+        await uow.ExecuteAsync(async t =>
+        {
+            var user = await users.GetAsync(id, t) ?? throw AppException.NotFound("USER_NOT_FOUND", "Không tìm thấy tài khoản.");
+            before = Snapshot(user);
+            if (user.Id == actor.Id) throw AppException.Rejected("CANNOT_DELETE_SELF", "Không thể tự xóa tài khoản của chính mình.");
+            if (user is { Role: UserRole.Admin, IsActive: true })
+            {
+                var admins = await users.ListActiveAdminsAsync(t);
+                if (admins.Count <= 1) throw AppException.Rejected("LAST_ADMIN", "Không thể xóa Admin đang hoạt động cuối cùng.");
+                foreach (var a in admins) a.Touch(clock.UtcNow);
+            }
+            hasHistory = await audit.CountByActorAsync(user.Username, t) > 0;
+            if (hasHistory) throw AppException.Rejected("USER_HAS_HISTORY", "Tài khoản đã có lịch sử thao tác nên không thể xóa để giữ khả năng truy vết. Hãy vô hiệu hóa tài khoản.");
+            users.Remove(user);
+            return 0;
+        }, ct);
+        await Audit(actor, "USER_DELETE", id, before, null, ct);
     }
 
     public async Task ResetPasswordAsync(ActorInfo actor, Guid id, string? newPassword, CancellationToken ct = default)

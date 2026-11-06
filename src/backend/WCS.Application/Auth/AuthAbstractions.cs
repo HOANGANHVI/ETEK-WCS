@@ -11,6 +11,7 @@ public interface IUserRepository
     Task<IReadOnlyList<AppUser>> ListActiveAdminsAsync(CancellationToken ct = default);
     Task<bool> AnyAdminAsync(CancellationToken ct = default);
     void Add(AppUser user);
+    void Remove(AppUser user);
 }
 
 /// <summary>Password hashing (salted, slow hash). Implemented in infrastructure; the application never sees plain hashes' internals.</summary>
@@ -29,6 +30,8 @@ public interface IAuditLog
     /// <summary>Appends an entry in its own transaction. Never throws to the caller: a failing audit write is logged, not propagated.</summary>
     Task WriteAsync(AuditRecord record, CancellationToken ct = default);
     Task<IReadOnlyList<AuditEntry>> QueryAsync(AuditQuery query, CancellationToken ct = default);
+    /// <summary>Number of audit entries made by (or about a sign-in attempt of) this username. Used to protect traceability when deleting accounts.</summary>
+    Task<int> CountByActorAsync(string username, CancellationToken ct = default);
 }
 
 public sealed record AuditQuery(string? Actor, string? Action, AuditResult? Result, DateTimeOffset? From, DateTimeOffset? To, int Skip, int Take);
@@ -55,5 +58,5 @@ public sealed record AuthenticatedUser(Guid Id, string Username, string DisplayN
 public sealed record UserDto(Guid Id, string Username, string DisplayName, UserRole Role, bool IsActive, bool MustChangePassword,
     DateTimeOffset? LastLoginAt, DateTimeOffset? LockedUntil, DateTimeOffset CreatedAt);
 
-public sealed record CreateUserCommand(string Username, string DisplayName, UserRole Role, string Password);
+public sealed record CreateUserCommand(string Username, string DisplayName, UserRole Role, string Password, bool IsActive = true);
 public sealed record UpdateUserCommand(string DisplayName, UserRole Role, bool IsActive);

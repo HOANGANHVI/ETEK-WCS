@@ -17,6 +17,7 @@ public sealed class InMemoryUserRepository : IUserRepository
         Task.FromResult<IReadOnlyList<AppUser>>(Users.Where(u => u is { Role: UserRole.Admin, IsActive: true }).ToList());
     public Task<bool> AnyAdminAsync(CancellationToken ct = default) => Task.FromResult(Users.Any(u => u is { Role: UserRole.Admin, IsActive: true }));
     public void Add(AppUser user) => Users.Add(user);
+    public void Remove(AppUser user) => Users.Remove(user);
 }
 
 public sealed class RecordingAuditLog : IAuditLog
@@ -24,6 +25,7 @@ public sealed class RecordingAuditLog : IAuditLog
     public List<AuditRecord> Records { get; } = [];
     public Task WriteAsync(AuditRecord record, CancellationToken ct = default) { lock (Records) Records.Add(record); return Task.CompletedTask; }
     public Task<IReadOnlyList<AuditEntry>> QueryAsync(AuditQuery query, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<AuditEntry>>([]);
+    public Task<int> CountByActorAsync(string username, CancellationToken ct = default) { lock (Records) return Task.FromResult(Records.Count(r => r.Actor == username)); }
 }
 
 /// <summary>Controllable clock for the cookie handler (idle/absolute session timeout tests).</summary>
