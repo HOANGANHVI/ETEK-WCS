@@ -142,25 +142,43 @@ interfaces) · `WCS.Infrastructure` (EF, migrations in `Persistence/Migrations`,
 
 ## 8. Update 2026-11-06 – Full UI redesign (Vietnamese, industrial WCS look)
 
-Scope: **frontend only**. No change to Backend code, database, PLC/RCS adapters or the state machine; no change to .
-(Only data change outside the frontend: the *placeholder* location names in  were translated to Vietnamese; the seed stays opt-in.)
+Scope: **frontend only**. No change to Backend code, database, PLC/RCS adapters or the state machine; no change to `docs/specification/`.
+(The only non-frontend edit: the *placeholder* location names in `appsettings.Development.json` were translated to Vietnamese; the seed stays opt-in.)
 
 Delivered:
-- **Design system** (; components in ): navy / white / light-grey palette; green = normal, amber = warning/waiting, red = error/stopped; larger type for operator screens. Shared pieces: , inline SVG icons (no new packages).
-- **One layout** for all pages: header (ETEK WCS, optional area name from , PLC status, RCS status, live clock/date), sidebar with icons and active state, content area, and (demo only) a bottom simulation dock.
-- **100 % Vietnamese UI** via  (state/role/occupancy/rack/flow/event/error vocabularies,  for backend/simulator free-text, ); technical codes (AGV1, BP-01, PLC, RCS, API, Rack ID, backend state names) are unchanged in the data layer. Dates use vi-VN.
-- **Tổng quan**: 6 KPIs, AGV supervision cards, task bar chart (grouped states), inventory overview with per-location fill bars, latest activity log (tasks + inventory transactions).
-- **Giám sát AGV**: AGV1/AGV2 cards with role, RCS connection, activity, current task, route, 5-step flow stepper, last activity, recent tasks. *No AGV position is shown – the API has no position data; the card says so.*
-- **Quản lý nhiệm vụ**: table (code, created, flow, AGV, from, to, state, actions), filters (search/AGV/state), detail pane (general info, AGV, flow, actions incl. cancel with mandatory reason, state history, PLC/RCS events). The newest task is auto-selected so the pane is never empty.
-- **Vị trí và tồn kho**: schematic grouped by data (location type / accepted rack kind, not hard-coded codes) with slot squares (full / empty / reserved / free / unknown), legend, location detail pane, rack table, transaction history. Rack model left untouched (Rack ID shown only when present; "Chưa gán Rack ID" otherwise).
-- **Demo**: the orange banner and the floating panel are gone. A small header chip "Chế độ mô phỏng" plus a **bottom simulation dock** (layout row, never overlays content): Bắt đầu / Tạm dừng / Chạy từng bước / tốc độ / Khởi tạo lại, expandable "Tình huống và sự cố" with BP-01, BP-01 không có vị trí đích, BP-02, BP-03, BP-05, BP-06, gián đoạn, hủy, đối soát, ngắt/nối AGV, giải phóng vị trí F1. BP-04 is not simulated.
-- Bug fixed during testing: pausing auto-run did not refresh the dock (store version was not bumped in ).
+- **Design system** (`src/styles/tokens.css`, `base.css`, `layout.css`, `pages.css`; components in `src/components/ui.tsx`): navy / white / light-grey palette;
+  green = normal, amber = warning/waiting, red = error/stopped; larger type for operator screens. Shared pieces: `PageHeader`, `Panel`, `Kpi`,
+  status pills (`TaskStatePill`, `ConnectionPill`, `OccupancyPill`, `RackPill`), `Button`, `Async` (loading/error/empty), `FlowStepper`; inline SVG
+  icons in `icons.tsx` (no new packages).
+- **One layout** for all pages: header (ETEK WCS, optional area name from `VITE_SITE_NAME`, PLC status, RCS status, live clock/date), sidebar with
+  icons and active state, content area and – demo only – a bottom simulation dock.
+- **100 % Vietnamese UI** through `src/i18n/vi.ts` (state/role/occupancy/rack/flow/event/error vocabularies, `reasonVi()` for backend/simulator free
+  text, `describeError()`); technical codes (AGV1, BP-01, PLC, RCS, API, Rack ID, backend state names) stay unchanged in the data layer. Dates use vi-VN.
+- **Tổng quan**: 6 KPIs, AGV supervision cards, task bar chart (grouped states), inventory overview with per-location fill bars, latest activity log
+  (tasks + inventory transactions).
+- **Giám sát AGV**: AGV1/AGV2 cards with role, RCS connection, activity, current task, route, 5-step flow stepper, last activity, recent tasks.
+  *No AGV position is shown – the API has no position data; the card says so.*
+- **Quản lý nhiệm vụ**: table (code, created, flow, AGV, from, to, state, actions), filters (search/AGV/state), detail pane (general info, AGV, flow,
+  actions incl. cancel with mandatory reason, state history, PLC/RCS events). The newest task is auto-selected so the pane is never empty.
+- **Vị trí và tồn kho**: schematic grouped by data (location type / accepted rack kind, not by hard-coded codes) with slot squares
+  (full / empty / reserved / free / unknown), legend, location detail pane, rack table, transaction history. Rack model untouched
+  (Rack ID shown only when present, otherwise "Chưa gán Rack ID").
+- **Demo**: the orange banner and the floating panel are gone. A small header chip "Chế độ mô phỏng" plus a **bottom simulation dock** (a layout row,
+  never overlays content): Bắt đầu / Tạm dừng / Chạy từng bước / tốc độ / Khởi tạo lại, and an expandable "Tình huống và sự cố" with BP-01,
+  BP-01 không có vị trí đích, BP-02, BP-03, BP-05, BP-06, gián đoạn, hủy, đối soát, ngắt/nối AGV, giải phóng vị trí F1. BP-04 is not simulated.
+- Bug found and fixed during testing: pausing auto-run did not refresh the dock (store version was not bumped in `stopAutoplay`).
 
-Verified (executed):  clean;  and  clean; headless-Chrome screenshots of all 4 pages at 1920x1080 and 1366x768; a Chrome-DevTools-Protocol script drove the demo UI (20 checks: pages render, no demo banner, all five BP scenarios present and BP-04 absent, step, auto-run, pause, interrupt → Thất bại, reconcile, reset, cancel needs a reason, location details); engine script (12 checks) still passes; real mode with the backend down shows Vietnamese error cards with "Thử lại", header PLC/RCS = "Không có dữ liệu", KPIs "—".
-Not verified: real mode against a live backend + PostgreSQL (still blocked on the DB password, section 6); 1920/1366 only (other resolutions untested); no browser other than Chrome.
+Verified (executed): `npm run lint` clean; `npm run build` and `npm run build:demo` clean; headless-Chrome screenshots of all 4 pages at 1920x1080
+and 1366x768; a Chrome DevTools Protocol script drove the demo UI (20 checks: pages render, no demo banner, all five BP scenarios present and BP-04
+absent, step, auto-run, pause, interrupt → Thất bại, reconcile, reset, cancel needs a reason, location details); the engine script (12 checks) still
+passes; real mode with the backend down shows Vietnamese error cards with "Thử lại", header PLC/RCS = "Không có dữ liệu", KPIs "—".
+
+Not verified: real mode against a live backend + PostgreSQL (still blocked on the DB password, see section 6); only 1920x1080 and 1366x768 were
+checked, only in Chrome.
 
 Known limits / follow-ups:
-- RCS header status is **derived** (simulator → "Mô phỏng"; otherwise from AGV statuses) because there is no RCS health endpoint yet.
-- Dashboard counts come from the latest 200 tasks (completed/failed totals use separate count queries).
-- Demo engine still duplicates backend rules by hand (may drift).
-- Keep the NEEDS_CONFIRMATION list (section 5) – the redesign did not resolve any of it.
+- The RCS header status is **derived** (simulator → "Mô phỏng"; otherwise from AGV statuses) because there is no RCS health endpoint yet.
+- Dashboard task counts use the latest 200 tasks (completed/failed totals use separate count queries).
+- The demo engine still duplicates backend rules by hand (may drift).
+- The NEEDS_CONFIRMATION list (section 5) is unchanged – the redesign resolved none of it.
+- Next step is still section 6 (DB password → migration → full test run → run API + frontend together).
