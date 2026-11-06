@@ -3,6 +3,7 @@ import { demoDataApi } from '../demo/demoApi'
 import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Role, UserRow } from './authTypes'
+import type { AddressIssue, HandshakeState, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, SimulationStep, SystemHealth,
@@ -83,6 +84,29 @@ const realApi = {
     request<{ reset: boolean }>(`/api/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) }),
   audit: (f: AuditFilter) =>
     request<AuditRow[]>(`/api/audit${qs({ actor: f.actor, action: f.action, result: f.result, skip: f.skip ?? 0, take: f.take ?? 100 })}`),
+
+  // PLC monitoring and configuration (CR-002)
+  plcOverview: () => request<PlcOverview>('/api/plc/overview'),
+  plcStationIo: (stationId: string) => request<StationSnapshot>(`/api/plc/stations/${encodeURIComponent(stationId)}/io`),
+  plcHandshake: () => request<HandshakeState[]>('/api/plc/handshake'),
+  plcConnections: () => request<PlcConnection[]>('/api/plc/connections'),
+  plcSaveConnection: (plcId: string, b: SavePlcConnectionBody) => request<PlcConnection>(`/api/plc/connections/${plcId}`, { method: 'PUT', body: JSON.stringify(b) }),
+  plcTestConnection: (plcId: string) => request<ProbeResultView>(`/api/plc/connections/${plcId}/test`, { method: 'POST' }),
+  plcAddressCheck: (plcId: string) => request<AddressIssue[]>(`/api/plc/connections/${plcId}/address-check`),
+  plcSetAddress: (id: string, b: { address: string; wordLength?: number | null; encoding?: string | null }) =>
+    request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'PUT', body: JSON.stringify(b) }),
+  plcClearAddress: (id: string) => request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'DELETE' }),
+  plcApprovePoint: (id: string) => request<IoPointState>(`/api/plc/points/${id}/approve`, { method: 'POST' }),
+  plcWriteAllowed: (id: string, allowed: boolean) => request<IoPointState>(`/api/plc/points/${id}/write-allowed`, { method: 'PUT', body: JSON.stringify({ allowed }) }),
+  plcLogs: (f: { plcId?: string; stationId?: string; minLevel?: string; take?: number }) =>
+    request<PlcLogRow[]>(`/api/plc/logs${qs({ plcId: f.plcId, stationId: f.stationId, minLevel: f.minLevel, take: f.take ?? 100 })}`),
+  plcTestWrite: (stationId: string, signal: string, value: boolean | number | string) =>
+    request<{ success: boolean }>(`/api/plc/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}/test-write`, { method: 'POST', body: JSON.stringify({ value }) }),
+  plcSimValue: (plcId: string, stationId: string, signal: string, value: boolean | number | string) =>
+    request<unknown>('/api/plc/simulator/value', { method: 'POST', body: JSON.stringify({ plcId, stationId, signal, value }) }),
+  plcSimOnline: (plcId: string, online: boolean) => request<unknown>('/api/plc/simulator/plc-online', { method: 'POST', body: JSON.stringify({ plcId, online }) }),
+  plcSimStationFault: (plcId: string, stationId: string, failing: boolean) =>
+    request<unknown>('/api/plc/simulator/station-fault', { method: 'POST', body: JSON.stringify({ plcId, stationId, failing }) }),
 
   // configuration (secrets are write-only)
   plcConfig: () => request<PlcConfig>('/api/config/plc'),

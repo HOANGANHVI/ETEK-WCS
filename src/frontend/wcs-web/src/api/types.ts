@@ -122,7 +122,7 @@ export interface SystemHealth {
   time: string
   database: { connected: boolean }
   scheduler: { lastRunAt: string | null; lastError: string | null; stale: boolean }
-  integration: { mode: string; plc: string }
+  integration: { mode: string; plc: string; plcRuntime?: { mode: string; running: boolean; connected: number; total: number } }
 }
 
 export interface SimulationStep {

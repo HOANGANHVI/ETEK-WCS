@@ -10,7 +10,7 @@ import { useClock } from '../hooks/useClock'
 import { formatDate, formatTime } from '../i18n/format'
 import { CONNECTION_VI, ROLE_SHORT_VI, type Tone } from '../i18n/vi'
 import { useRealtime } from '../realtime/RealtimeProvider'
-import { IconAgv, IconLog, IconOverview, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
+import { IconAgv, IconLog, IconOverview, IconPlc, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
 
 const SITE_NAME = (import.meta.env.VITE_SITE_NAME as string | undefined)?.trim()
 
@@ -19,6 +19,7 @@ const NAV = [
   { to: '/agvs', label: 'Giám sát AGV', icon: <IconAgv /> },
   { to: '/tasks', label: 'Quản lý nhiệm vụ', icon: <IconTasks /> },
   { to: '/inventory', label: 'Vị trí và tồn kho', icon: <IconWarehouse /> },
+  { to: '/plc', label: 'Giám sát PLC', icon: <IconPlc /> },
 ]
 
 // Shown to Admin only. Hiding them is a convenience: the API and the routes enforce the same rule independently.
@@ -33,6 +34,13 @@ interface LinkView { tone: Tone; text: string }
 /** PLC link, from the API health. In simulator mode we say so instead of pretending to see a real controller. */
 function plcView(health: SystemHealth | null): LinkView {
   if (!health) return { tone: 'bad', text: 'Không có dữ liệu' }
+  const rt = health.integration.plcRuntime
+  if (rt) {
+    if (rt.mode === 'Simulator') return { tone: 'info', text: 'Mô phỏng' }
+    if (!rt.running) return { tone: 'warn', text: 'Chưa chạy' }
+    if (rt.connected === 0) return { tone: 'bad', text: `0/${rt.total} PLC` }
+    return { tone: rt.connected === rt.total ? 'ok' : 'warn', text: `${rt.connected}/${rt.total} PLC` }
+  }
   if (health.integration.mode === 'Simulator') return { tone: 'info', text: 'Mô phỏng' }
   switch (health.integration.plc) {
     case 'Connected': return { tone: 'ok', text: 'Đã kết nối' }

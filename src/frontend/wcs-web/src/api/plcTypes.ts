@@ -1,0 +1,60 @@
+// DTOs of the PLC monitoring / configuration API (CR-002).
+
+export type EndpointState = 'Disconnected' | 'Connecting' | 'Connected' | 'Faulted' | 'NeedsConfiguration' | 'Disabled'
+
+export interface PlcDiagnostics {
+  requests: number; failures: number; timeouts: number; reconnects: number
+  lastEndCode: number | null; lastError: string | null; lastLatencyMs: number | null
+  lastSuccessAt: string | null; lastErrorAt: string | null; bytesSent: number; bytesReceived: number
+}
+
+export interface PlcWorkerStatus {
+  plcId: string; name: string; state: EndpointState; mode: string; reason: string | null; missingParameters: string[]
+  lastPollAt: string | null; lastSuccessAt: string | null; cycles: number; reconnects: number; consecutiveFailures: number
+  stations: number; totalPoints: number; configuredPoints: number; goodPoints: number
+  ipAddress: string | null; lastError: string | null; diagnostics: PlcDiagnostics | null
+}
+
+export interface PlcRuntimeInfo {
+  mode: string; effectiveMode: string; allowLiveConnection: boolean; writeEnabled: boolean; writeKeysComplete: boolean; running: boolean; notes: string[]
+}
+
+export interface PlcStationSummary {
+  stationId: string; plcId: string; order: number; role: string; locationCode: string | null
+  total: number; configured: number; good: number; approved: number | null
+}
+
+export interface PlcOverview { runtime: PlcRuntimeInfo; plcs: PlcWorkerStatus[]; stations: PlcStationSummary[] }
+
+export interface IoPointState {
+  id: string; plcId: string; stationId: string; seq: number; group: string; signalName: string
+  direction: 'PlcToSoftware' | 'SoftwareToPlc'; dataType: 'Bool' | 'Int' | 'String'; configStatus: string
+  value: boolean | number | string | null; quality: string; lastUpdated: string | null; address: string | null; error: string | null
+}
+
+export interface StationSnapshot { plcId: string; stationId: string; total: number; configured: number; good: number; points: IoPointState[] }
+
+export interface HandshakeState {
+  plcId: string; stationId: string; approval: string; phase: string; phaseSince: string; reason: string | null
+  approvedRules: number; signalsAwaitingConfirmation: number; active: { signal: string; since: string; timedOut: boolean }[]
+  lastAction: string | null; lastError: string | null
+}
+
+export interface PlcConnection {
+  plcId: string; name: string; ipAddress: string; port: number | null; protocol: string | null; networkNumber: number | null; pcNumber: number | null
+  moduleIoNumber: number | null; plcStationNumber: number | null; monitoringTimer: number | null; timeoutMs: number | null; pollingIntervalMs: number | null
+  enabled: boolean; configStatus: string; missingParameters: string[]; stations: string[]; updatedAt: string; updatedBy: string | null
+}
+
+export interface SavePlcConnectionBody {
+  name?: string | null; ipAddress: string; port: number | null; protocol: string | null; networkNumber: number | null; pcNumber: number | null
+  moduleIoNumber: number | null; plcStationNumber: number | null; monitoringTimer: number | null; timeoutMs: number | null; pollingIntervalMs: number | null; enabled: boolean
+}
+
+export interface PlcLogRow {
+  id: string; occurredAt: string; plcId: string | null; stationId: string | null; level: 'Info' | 'Warning' | 'Error'; event: string; message: string
+}
+
+export interface AddressIssue { pointId: string; stationId: string; signal: string; code: string; message: string }
+
+export interface ProbeResultView { outcome: string; mode: string; message: string; error: string | null; latencyMs: number | null }

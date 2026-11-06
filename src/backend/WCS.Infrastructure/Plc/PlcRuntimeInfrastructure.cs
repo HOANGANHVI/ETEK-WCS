@@ -26,8 +26,10 @@ public sealed class SimulatedPlcNetwork : ISimulatorControl
     public void SetStationFault(string plcId, string stationId, bool failing) => _failing[(plcId, stationId)] = failing;
     public bool IsStationFailing(string plcId, string stationId) => _failing.GetValueOrDefault((plcId, stationId));
 
+    /// <summary>Simulated stations are healthy by default (Station_Online = 1); every other signal starts at 0 / empty until set.</summary>
     public PointValue Get(string plcId, string stationId, string signal, PlcDataType type) =>
         _values.TryGetValue((plcId, stationId, signal), out var v) ? v
+            : signal == "Station_Online" ? PointValue.OfBool(true)
             : type switch { PlcDataType.Bool => PointValue.OfBool(false), PlcDataType.Int => PointValue.OfInt(0), _ => PointValue.OfString("") };
 }
 

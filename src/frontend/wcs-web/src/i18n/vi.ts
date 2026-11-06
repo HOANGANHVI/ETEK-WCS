@@ -1,3 +1,4 @@
+import { PLC_ERROR_VI } from './plc'
 /**
  * Vietnamese UI vocabulary. Technical codes (AGV1, BP-01, PLC, RCS, API, Rack ID, backend state names) are never renamed in the
  * data layer: only the text shown to the user is translated here.
@@ -191,7 +192,7 @@ export function describeError(e: unknown): string {
   if (e instanceof ApiRequestError) {
     if (e.status === 0 || e.code === 'NETWORK_ERROR' || [502, 503, 504].includes(e.status))
       return 'Không kết nối được tới máy chủ WCS (API). Hãy kiểm tra Backend đang chạy rồi thử lại.'
-    return ERROR_VI[e.code] ?? `Yêu cầu không thành công (mã ${e.code}).`
+    return ERROR_VI[e.code] ?? PLC_ERROR_VI[e.code] ?? `Yêu cầu không thành công (mã ${e.code}).`
   }
   return 'Đã xảy ra lỗi không xác định.'
 }

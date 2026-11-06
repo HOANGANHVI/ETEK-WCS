@@ -11,6 +11,7 @@ import { ConfigPage } from './pages/ConfigPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { LoginPage } from './pages/LoginPage'
+import { PlcPage } from './pages/PlcPage'
 import { TasksPage } from './pages/TasksPage'
 import { UsersPage } from './pages/UsersPage'
 
@@ -39,6 +40,7 @@ function App() {
         <Route path="agvs" element={<AgvPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="inventory" element={<InventoryPage />} />
+        <Route path="plc" element={<PlcPage />} />
         <Route path="account/password" element={<ChangePasswordPage />} />
         <Route path="config" element={<RequireRole roles={['Admin']}><ConfigPage /></RequireRole>} />
         <Route path="users" element={<RequireRole roles={['Admin']}><UsersPage /></RequireRole>} />

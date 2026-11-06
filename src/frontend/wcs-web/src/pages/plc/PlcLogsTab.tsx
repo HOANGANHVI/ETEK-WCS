@@ -1,0 +1,50 @@
+import { useCallback, useState } from 'react'
+import { api } from '../../api/client'
+import { Async, Panel, Pill } from '../../components/ui'
+import { useApi } from '../../hooks/useApi'
+import { LOG_LEVEL_TONE, LOG_LEVEL_VI } from '../../i18n/plc'
+import { fmtTime } from './plcFormat'
+
+const PLC_IDS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04']
+
+/** Admin-only communication log (state changes, connect errors, refused writes, handshake actions). Never contains data payloads or secrets. */
+export function PlcLogsTab() {
+  const [plcId, setPlcId] = useState('')
+  const [level, setLevel] = useState('')
+  const [take, setTake] = useState(100)
+  const logs = useApi(useCallback(() => api.plcLogs({ plcId: plcId || undefined, minLevel: level || undefined, take }), [plcId, level, take]), ['PlcLog'])
+  return (
+    <Panel title="Nhật ký giao tiếp PLC" flush actions={
+      <>
+        <select aria-label="Lọc theo PLC" value={plcId} onChange={(e) => { setPlcId(e.target.value); setTake(100) }}>
+          <option value="">Tất cả PLC</option>{PLC_IDS.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select aria-label="Lọc theo mức" value={level} onChange={(e) => { setLevel(e.target.value); setTake(100) }}>
+          <option value="">Mọi mức</option>{Object.entries(LOG_LEVEL_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </>
+    }>
+      <Async state={logs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có bản ghi nào', hint: 'Nhật ký xuất hiện khi trạng thái kết nối thay đổi hoặc có lỗi giao tiếp.' }}>
+        {(rows) => (
+          <>
+            <div className="table-wrap">
+              <table className="grid">
+                <thead><tr><th>Thời gian</th><th>Mức</th><th>PLC</th><th>Trạm</th><th>Sự kiện</th><th>Nội dung</th></tr></thead>
+                <tbody>
+                  {rows.map((l) => (
+                    <tr key={l.id}>
+                      <td className="nowrap num">{fmtTime(l.occurredAt)}</td>
+                      <td><Pill tone={LOG_LEVEL_TONE[l.level]} dot={false}>{LOG_LEVEL_VI[l.level]}</Pill></td>
+                      <td>{l.plcId ?? '—'}</td><td>{l.stationId ?? '—'}</td><td className="mono">{l.event}</td><td>{l.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {rows.length >= take && <div className="pad"><button type="button" className="btn btn-secondary btn-sm" onClick={() => setTake(take + 100)}>Tải thêm</button></div>}
+          </>
+        )}
+      </Async>
+    </Panel>
+  )
+}
