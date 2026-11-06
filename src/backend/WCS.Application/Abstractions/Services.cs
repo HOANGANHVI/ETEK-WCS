@@ -79,6 +79,10 @@ public interface ITaskOrchestrator
     Task<CreateTaskResult> CreateTaskAsync(CreateTaskCommand command, CancellationToken ct = default);
     Task<SignalResult> HandleSignalAsync(TaskSignal signal, CancellationToken ct = default);
     Task<TaskDto> CancelTaskAsync(Guid taskId, string reason, string? user, CancellationToken ct = default);
+    /// <summary>Changes the requesting station of a task that has not been claimed by an AGV yet. Re-checked against the database state.</summary>
+    Task<TaskDto> UpdateTaskAsync(Guid taskId, string stationCode, string? expectedState, Auth.ActorInfo actor, CancellationToken ct = default);
+    /// <summary>Soft delete (state Cancelled) of a task that has not been claimed by an AGV yet.</summary>
+    Task<TaskDto> DeleteTaskAsync(Guid taskId, string? expectedState, Auth.ActorInfo actor, CancellationToken ct = default);
 
     // Driven by the scheduler / recovery
     Task ProcessTaskAsync(Guid taskId, CancellationToken ct = default);

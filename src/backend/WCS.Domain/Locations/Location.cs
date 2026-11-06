@@ -56,7 +56,12 @@ public class Location
         return reserved > 0 ? OccupancyStatus.Reserved : OccupancyStatus.Empty;
     }
 
-    public void Touch(DateTimeOffset now) => LastInventoryChangeAt = now;
+    /// <summary>
+    /// Marks the location as changed. The value is guaranteed to differ from the stored one, so EF always issues an UPDATE and the
+    /// row-version (xmin) check serializes concurrent allocations of the last free slot even when two calls share the same clock reading.
+    /// </summary>
+    public void Touch(DateTimeOffset now) =>
+        LastInventoryChangeAt = LastInventoryChangeAt is { } last && now <= last ? last.AddTicks(1) : now;
 
     public void SetReconciliationRequired(bool value, DateTimeOffset now)
     {

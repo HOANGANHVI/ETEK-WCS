@@ -107,6 +107,25 @@ public class TransportTask
         DestinationLocationId = locationId; UpdatedAt = now;
     }
 
+    /// <summary>States in which a user may still edit/delete a task: no AGV has been claimed and nothing was sent to RCS.</summary>
+    public static bool IsUserEditableState(TaskState s) => s is TaskState.Pending or TaskState.Validating or TaskState.Queued;
+
+    public bool IsUserEditable => IsUserEditableState(State);
+
+    /// <summary>
+    /// Changes the station that raised the request. Only allowed before dispatch. The source selection is cleared so it is
+    /// re-evaluated for the new station by the caller (reservations are released by the caller).
+    /// </summary>
+    public void ChangeRequestStation(Guid newLocationId, bool clearSource, string detail, string source, DateTimeOffset now)
+    {
+        if (!IsUserEditable) throw new DomainException("TASK_NOT_EDITABLE", $"Task in state {State} can no longer be edited.");
+        RequestLocationId = newLocationId;
+        if (clearSource) { SourceLocationId = null; RackId = null; }
+        DestinationLocationId = null;
+        UpdatedAt = now;
+        _history.Add(new TaskHistoryEntry(Id, State, State, "TASK_EDITED", detail, source, now));
+    }
+
     public void RegisterDispatchAttempt(DateTimeOffset now) { DispatchAttempts++; UpdatedAt = now; }
 
     public void AttachRcsTask(string rcsTaskCode, DateTimeOffset now)

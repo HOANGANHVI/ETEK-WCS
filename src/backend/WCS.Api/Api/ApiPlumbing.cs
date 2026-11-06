@@ -47,6 +47,8 @@ public static class ExceptionMapping
                 ErrorKind.Validation => 400,
                 ErrorKind.NotFound => 404,
                 ErrorKind.Conflict => 409,
+                ErrorKind.Unauthorized => 401,
+                ErrorKind.Forbidden => 403,
                 _ => 422,
             }, a.Code, a.Message),
             InvalidTaskTransitionException t => (409, t.Code, t.Message),
@@ -65,7 +67,8 @@ public static class ExceptionMapping
     });
 }
 
-/// <summary>SignalR hub. No authentication yet (no approved authorization requirements); [Authorize] can be added later.</summary>
+/// <summary>SignalR hub. Only signed-in Admin/Operator sessions (same cookie as the REST API) may connect.</summary>
+[Microsoft.AspNetCore.Authorization.Authorize(Policy = AuthSetup.OperationsPolicy)]
 public sealed class WcsHub : Hub
 {
 }

@@ -26,6 +26,10 @@ public static class DependencyInjection
         services.AddScoped<AgvStatusService>();
         services.AddScoped<ConnectionConfigService>();
         services.AddScoped<OperationalConfigService>();
+
+        services.Configure<Auth.AuthOptions>(configuration.GetSection(Auth.AuthOptions.SectionName));
+        services.AddScoped<Auth.AuthService>();
+        services.AddScoped<Auth.UserAdminService>();
         return services;
     }
 }

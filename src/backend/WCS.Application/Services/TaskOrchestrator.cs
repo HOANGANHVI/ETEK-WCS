@@ -456,6 +456,62 @@ public sealed class TaskOrchestrator(
         return await GetDto(taskId, ct);
     }
 
+    // ============================================================================ user edit / delete (before an AGV has accepted the task)
+
+    /// <summary>
+    /// The authoritative permission/state check, run inside the transaction on the freshly loaded task. The state the client saw
+    /// (<paramref name="expectedState"/>) is only a hint used to tell the user to reload; it can never grant access.
+    /// </summary>
+    private static void EnsureUserEditable(TransportTask task, string? expectedState, Auth.ActorInfo actor)
+    {
+        if (!string.IsNullOrWhiteSpace(expectedState) && !task.State.ToString().Equals(expectedState.Trim(), StringComparison.OrdinalIgnoreCase))
+            throw AppException.Conflict("TASK_STATE_CHANGED", $"Nhiệm vụ đã chuyển sang trạng thái {task.State}. Vui lòng tải lại dữ liệu.");
+        if (task.IsUserEditable) return;
+        throw actor.IsAdmin
+            ? AppException.Conflict("TASK_NOT_EDITABLE", $"Nhiệm vụ đang ở trạng thái {task.State} nên không thể sửa/xóa trực tiếp. Hãy dùng chức năng hủy hoặc đối soát.")
+            : AppException.Forbidden("TASK_LOCKED", "Nhiệm vụ đã được AGV tiếp nhận hoặc đã kết thúc; tài khoản Operator không có quyền sửa/xóa.");
+    }
+
+    public async Task<TaskDto> UpdateTaskAsync(Guid taskId, string stationCode, string? expectedState, Auth.ActorInfo actor, CancellationToken ct = default)
+    {
+        var dto = await Tx(async (events, _, t) =>
+        {
+            var task = await tasks.GetAsync(taskId, t) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Không tìm thấy nhiệm vụ.");
+            EnsureUserEditable(task, expectedState, actor);
+            var rule = flows.Get(task.Flow);
+            var station = await locations.GetByCodeAsync((stationCode ?? "").Trim(), t)
+                          ?? throw AppException.NotFound("STATION_NOT_FOUND", $"Không tìm thấy trạm '{stationCode}'.");
+            if (!rule.AllowedRequestStations.Contains(station.Code))
+                throw AppException.Rejected("STATION_NOT_ALLOWED", $"Trạm {station.Code} không được phép yêu cầu quy trình {task.Flow}.");
+            if (station.Id == task.RequestLocationId) return task.ToDto(); // nothing to change
+
+            var oldCode = (await locations.GetAsync(task.RequestLocationId, t))?.Code ?? "?";
+            var sourceFollowsStation = rule.SourceMode == LocationSelectionMode.Request;
+            if (sourceFollowsStation) await inventory.ReleaseReservationsAsync(task, t);
+            task.ChangeRequestStation(station.Id, sourceFollowsStation, $"station {oldCode} -> {station.Code}", actor.Username, clock.UtcNow);
+            if (sourceFollowsStation && task.State == TaskState.Queued && !(await inventory.ReserveSourceAsync(task, rule, t)).Found)
+                throw AppException.Rejected("NO_SOURCE_AT_STATION", $"Trạm {station.Code} hiện không có rack phù hợp để lấy. Nhiệm vụ không bị thay đổi.");
+            events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+            return task.ToDto();
+        }, ct);
+        return dto;
+    }
+
+    /// <summary>"Delete" keeps the record: the task becomes Cancelled (history preserved, reservations released). Nothing is physically removed.</summary>
+    public async Task<TaskDto> DeleteTaskAsync(Guid taskId, string? expectedState, Auth.ActorInfo actor, CancellationToken ct = default)
+    {
+        return await Tx(async (events, _, t) =>
+        {
+            var task = await tasks.GetAsync(taskId, t) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Không tìm thấy nhiệm vụ.");
+            EnsureUserEditable(task, expectedState, actor);
+            task.Note("TASK_DELETED", $"deleted by {actor.Username}", actor.Username, clock.UtcNow);
+            task.TransitionTo(TaskState.Cancelled, $"Deleted by {actor.Username} before dispatch", actor.Username, clock.UtcNow);
+            await inventory.ReleaseReservationsAsync(task, t);
+            events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+            return task.ToDto();
+        }, ct);
+    }
+
     private async Task SendCancelToRcsAsync(Guid taskId, CancellationToken ct)
     {
         var plan = await Tx(async (_, _, t) =>

@@ -25,7 +25,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Agvs.Agv", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Code")
@@ -137,7 +136,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Common.ProcessedEvent", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("EventKey")
@@ -167,7 +165,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Inventory.InventoryTransaction", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Bind")
@@ -232,7 +229,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Inventory.Rack", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("CurrentLocationId")
@@ -280,7 +276,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Inventory.Reservation", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset?>("ClosedAt")
@@ -324,7 +319,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Locations.Location", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("AllowedRackKind")
@@ -382,7 +376,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Tasks.TaskHistoryEntry", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Detail")
@@ -423,7 +416,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("WCS.Domain.Tasks.TransportTask", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("AgvId")
@@ -547,6 +539,131 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("AgvId", "State", "CreatedAt");
 
                     b.ToTable("transport_tasks", (string)null);
+                });
+
+            modelBuilder.Entity("WCS.Domain.Users.AppUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("FailedLoginCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LastLoginAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid>("SecurityStamp")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
+
+                    b.ToTable("app_users", (string)null);
+                });
+
+            modelBuilder.Entity("WCS.Domain.Users.AuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Actor")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ActorRole")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("TargetType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Action");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("Actor", "OccurredAt");
+
+                    b.ToTable("audit_log", (string)null);
                 });
 
             modelBuilder.Entity("WCS.Domain.Inventory.Rack", b =>

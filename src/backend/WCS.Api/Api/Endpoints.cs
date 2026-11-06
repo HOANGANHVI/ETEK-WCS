@@ -1,22 +1,83 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using WCS.Application;
 using WCS.Application.Abstractions;
+using WCS.Application.Auth;
+using WCS.Application.Common;
 using WCS.Application.Config;
 using WCS.Application.Services;
 using WCS.Domain.Common;
 using WCS.Domain.Tasks;
+using WCS.Domain.Users;
 using WCS.Infrastructure;
 using WCS.Infrastructure.Persistence;
 using WCS.Infrastructure.Simulation;
 
 namespace WCS.Api.Api;
 
+/// <summary>Runs an operation and writes one audit entry for the outcome (success, denied or failed). Secrets must not be in the snapshots.</summary>
+internal static class Audited
+{
+    public static async Task<T> RunAsync<T>(HttpContext c, string action, string? targetType, string? targetId, object? before,
+        Func<Task<T>> operation, Func<T, object?>? after = null, string? detail = null)
+    {
+        var log = c.RequestServices.GetRequiredService<IAuditLog>();
+        var actor = c.Actor();
+        try
+        {
+            var result = await operation();
+            await log.WriteAsync(new AuditRecord(action, actor.Username, actor.Role.ToString(), targetType, targetId, AuditResult.Success, detail,
+                before, after?.Invoke(result), actor.IpAddress), c.RequestAborted);
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var code = ex switch { AppException a => a.Code, DomainException d => d.Code, _ => "ERROR" };
+            var denied = ex is AppException { Kind: ErrorKind.Forbidden or ErrorKind.Unauthorized };
+            await log.WriteAsync(new AuditRecord(action, actor.Username, actor.Role.ToString(), targetType, targetId,
+                denied ? AuditResult.Denied : AuditResult.Failed, $"{code}: {ex.Message}", before, null, actor.IpAddress), CancellationToken.None);
+            throw;
+        }
+    }
+
+    public static Task WriteAsync(HttpContext c, string action, string? targetType, string? targetId, string? detail = null) =>
+        c.RequestServices.GetRequiredService<IAuditLog>().WriteAsync(new AuditRecord(action, c.Actor().Username, c.Actor().Role.ToString(),
+            targetType, targetId, AuditResult.Success, detail, IpAddress: c.Actor().IpAddress), c.RequestAborted);
+
+    public static object TaskSnapshot(TaskDto t) => new { t.Id, t.Flow, t.State, t.RequestLocationId, t.SourceLocationId, t.DestinationLocationId, t.AgvId };
+}
+
 public static class Endpoints
 {
     public static void MapWcsApi(this WebApplication app)
     {
-        var api = app.MapGroup("/api").AddEndpointFilter<ValidationFilter>();
+        // ---------------------------------------------------------------- authentication (no role required, login is anonymous)
+        var auth = app.MapGroup("/api/auth").WithTags("Auth").AddEndpointFilter<ValidationFilter>();
+        auth.MapPost("login", async (HttpContext c, LoginRequest r, AuthService svc, CancellationToken ct) =>
+        {
+            var user = await svc.LoginAsync(r.Username, r.Password, c.Connection.RemoteIpAddress?.ToString(), ct);
+            await c.SignInAsync(user);
+            return ApiResults.Ok(c, Me(user.Username, user.DisplayName, user.Role, user.MustChangePassword));
+        }).AllowAnonymous();
+        auth.MapPost("logout", async (HttpContext c, AuthService svc, CancellationToken ct) =>
+        {
+            await svc.LogoutAsync(c.Actor(), ct);
+            await c.SignOutAsync(AuthSetup.Scheme);
+            return ApiResults.Ok(c, new { signedOut = true });
+        }).RequireAuthorization();
+        auth.MapGet("me", (HttpContext c) =>
+            ApiResults.Ok(c, Me(c.User.Identity!.Name!, c.User.DisplayName(), c.Actor().Role, c.User.MustChangePassword()))).RequireAuthorization();
+        auth.MapPost("change-password", async (HttpContext c, ChangePasswordRequest r, AuthService svc, CancellationToken ct) =>
+        {
+            var user = await svc.ChangeOwnPasswordAsync(c.Actor(), r.CurrentPassword, r.NewPassword, ct);
+            await c.SignInAsync(user); // the security stamp changed: re-issue this session, every other session of the account ends
+            return ApiResults.Ok(c, Me(user.Username, user.DisplayName, user.Role, user.MustChangePassword));
+        }).RequireAuthorization();
+
+        // ---------------------------------------------------------------- operational API (Admin + Operator)
+        var api = app.MapGroup("/api").AddEndpointFilter<ValidationFilter>().RequireAuthorization(AuthSetup.OperationsPolicy);
+        var admin = AuthSetup.AdminPolicy;
 
         // ---- AGV
         var agv = api.MapGroup("/agvs").WithTags("AGV");
@@ -28,7 +89,7 @@ public static class Endpoints
         loc.MapGet("", async (HttpContext c, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.ListLocationsAsync(ct)));
         loc.MapGet("{code}", async (HttpContext c, string code, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.GetLocationAsync(code, ct)));
 
-        // ---- Inventory (owned by WCS)
+        // ---- Inventory (owned by WCS). Reading: both roles. Changing stock: Admin only (the specification grants Operator no stock-edit right).
         var inv = api.MapGroup("/inventory").WithTags("Inventory");
         inv.MapGet("racks", async (HttpContext c, WcsQueries q, string? location, RackStatus? status, int? take, CancellationToken ct) =>
             ApiResults.Ok(c, await q.ListRacksAsync(location, status, take ?? 200, ct)));
@@ -36,14 +97,18 @@ public static class Endpoints
             ApiResults.Ok(c, await q.ListTransactionsAsync(location, taskId, take ?? 100, ct)));
         inv.MapPost("initial-stock", async (HttpContext c, InitialStockRequest r, IInventoryService svc, CancellationToken ct) =>
         {
-            var ids = await svc.DeclareInitialStockAsync(r.LocationCode, r.RackKind, r.Quantity, r.User, ct);
+            var ids = await Audited.RunAsync(c, "INVENTORY_INITIAL_STOCK", "Location", r.LocationCode, null,
+                () => svc.DeclareInitialStockAsync(r.LocationCode, r.RackKind, r.Quantity, c.Actor().Username, ct),
+                res => new { r.LocationCode, rackKind = r.RackKind.ToString(), created = res.Count });
             return ApiResults.Ok(c, new { created = ids.Count, rackIds = ids }, StatusCodes.Status201Created);
-        });
+        }).RequireAuthorization(admin);
         inv.MapPost("adjustments", async (HttpContext c, StockAdjustmentRequest r, IInventoryService svc, CancellationToken ct) =>
         {
-            var qty = await svc.AdjustStockAsync(r.LocationCode, r.RackKind, r.TargetQuantity, r.User, r.Note, ct);
+            var qty = await Audited.RunAsync(c, "INVENTORY_ADJUST", "Location", r.LocationCode, null,
+                () => svc.AdjustStockAsync(r.LocationCode, r.RackKind, r.TargetQuantity, c.Actor().Username, r.Note, ct),
+                res => new { r.LocationCode, rackKind = r.RackKind.ToString(), target = r.TargetQuantity, quantity = res }, r.Note);
             return ApiResults.Ok(c, new { quantity = qty });
-        });
+        }).RequireAuthorization(admin);
 
         // ---- Task
         var task = api.MapGroup("/tasks").WithTags("Task");
@@ -54,37 +119,100 @@ public static class Endpoints
             ApiResults.Ok(c, await q.GetTaskHistoryAsync(id, ct)));
         task.MapPost("", async (HttpContext c, CreateTaskRequest r, ITaskOrchestrator o, CancellationToken ct) =>
         {
-            var result = await o.CreateTaskAsync(new CreateTaskCommand(r.RequestKey, r.Flow, r.StationCode, r.RequestedBy), ct);
+            // RequestedBy always comes from the session; a value sent in the body is ignored.
+            var result = await Audited.RunAsync(c, "TASK_CREATE", "Task", null, null,
+                () => o.CreateTaskAsync(new CreateTaskCommand(r.RequestKey, r.Flow, r.StationCode, c.Actor().Username), ct),
+                res => Audited.TaskSnapshot(res.Task), $"flow={r.Flow}, station={r.StationCode}");
             return ApiResults.Ok(c, result.Task, result.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK);
         });
-        task.MapPost("{id:guid}/cancel", async (HttpContext c, Guid id, CancelTaskRequest r, ITaskOrchestrator o, CancellationToken ct) =>
-            ApiResults.Ok(c, await o.CancelTaskAsync(id, r.Reason, r.User, ct)));
+        task.MapPut("{id:guid}", async (HttpContext c, Guid id, UpdateTaskRequest r, ITaskOrchestrator o, WcsQueries q, CancellationToken ct) =>
+        {
+            var before = await q.GetTaskAsync(id, ct);
+            var updated = await Audited.RunAsync(c, "TASK_UPDATE", "Task", id.ToString(), Audited.TaskSnapshot(before),
+                () => o.UpdateTaskAsync(id, r.StationCode, r.ExpectedState, c.Actor(), ct), Audited.TaskSnapshot);
+            return ApiResults.Ok(c, updated);
+        });
+        task.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? expectedState, ITaskOrchestrator o, WcsQueries q, CancellationToken ct) =>
+        {
+            var before = await q.GetTaskAsync(id, ct);
+            var deleted = await Audited.RunAsync(c, "TASK_DELETE", "Task", id.ToString(), Audited.TaskSnapshot(before),
+                () => o.DeleteTaskAsync(id, expectedState, c.Actor(), ct), Audited.TaskSnapshot);
+            return ApiResults.Ok(c, deleted);
+        });
+        // Cancelling or reconciling a task that an AGV already took is an exception-handling action: Admin only.
+        task.MapPost("{id:guid}/cancel", async (HttpContext c, Guid id, CancelTaskRequest r, ITaskOrchestrator o, WcsQueries q, CancellationToken ct) =>
+        {
+            var before = await q.GetTaskAsync(id, ct);
+            return ApiResults.Ok(c, await Audited.RunAsync(c, "TASK_CANCEL", "Task", id.ToString(), Audited.TaskSnapshot(before),
+                () => o.CancelTaskAsync(id, r.Reason, c.Actor().Username, ct), Audited.TaskSnapshot, r.Reason));
+        }).RequireAuthorization(admin);
         task.MapPost("{id:guid}/reconcile", async (HttpContext c, Guid id, ReconcileTaskRequest r, IInventoryService inv2, WcsQueries q, CancellationToken ct) =>
         {
-            await inv2.ReconcileTaskAsync(id, r.ActualLocationCode, r.User, r.Note, ct);
+            await Audited.RunAsync(c, "TASK_RECONCILE", "Task", id.ToString(), null,
+                async () => { await inv2.ReconcileTaskAsync(id, r.ActualLocationCode, c.Actor().Username, r.Note, ct); return 0; },
+                _ => new { r.ActualLocationCode }, r.Note);
             return ApiResults.Ok(c, await q.GetTaskAsync(id, ct));
-        });
+        }).RequireAuthorization(admin);
 
-        // ---- Configuration (connections + operational parameters). Secrets are never returned.
-        var cfg = api.MapGroup("/config").WithTags("Configuration");
+        // ---- Configuration (connections + operational parameters): Admin only. Secrets are never returned.
+        var cfg = api.MapGroup("/config").WithTags("Configuration").RequireAuthorization(admin);
         cfg.MapGet("plc", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetPlcAsync(ct)));
         cfg.MapPut("plc", async (HttpContext c, PlcSettingsRequest r, ConnectionConfigService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.UpdatePlcAsync(new UpdatePlcCommand(r.Enabled,
-                new PlcSettings(r.DeviceName, r.IpAddress, r.Port, r.Protocol, r.NetworkNumber, r.PcNumber, r.StationNumber, r.TimeoutMs, r.PollingIntervalMs), r.UpdatedBy), ct)));
-        cfg.MapPost("plc/test", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.TestAsync(ConnectionKind.Plc, ct)));
+        {
+            var before = await s.GetPlcAsync(ct);
+            return ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_PLC_UPDATE", "ConnectionSetting", "Plc", before,
+                () => s.UpdatePlcAsync(new UpdatePlcCommand(r.Enabled,
+                    new PlcSettings(r.DeviceName, r.IpAddress, r.Port, r.Protocol, r.NetworkNumber, r.PcNumber, r.StationNumber, r.TimeoutMs, r.PollingIntervalMs),
+                    c.Actor().Username), ct), res => res));
+        });
+        cfg.MapPost("plc/test", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_PLC_TEST", "ConnectionSetting", "Plc", null, () => s.TestAsync(ConnectionKind.Plc, ct), res => res)));
         cfg.MapGet("rcs", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetRcsAsync(ct)));
         cfg.MapPut("rcs", async (HttpContext c, RcsSettingsRequest r, ConnectionConfigService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.UpdateRcsAsync(new UpdateRcsCommand(r.Enabled,
-                new RcsSettings(r.SystemName, r.Host, r.Port, r.BaseUrl, r.AuthMode ?? ConnectionOptions.AuthNone, r.Username, r.TimeoutMs),
-                r.Password, r.ClearPassword, r.Token, r.ClearToken, r.UpdatedBy), ct)));
-        cfg.MapPost("rcs/test", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.TestAsync(ConnectionKind.Rcs, ct)));
+        {
+            var before = await s.GetRcsAsync(ct);
+            // Only the FACT that a secret was replaced/cleared is recorded, never its value.
+            var secretNote = string.Join(", ", new[]
+            {
+                r.Password is not null ? "password replaced" : null, r.ClearPassword ? "password cleared" : null,
+                r.Token is not null ? "token replaced" : null, r.ClearToken ? "token cleared" : null,
+            }.Where(x => x is not null));
+            return ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_RCS_UPDATE", "ConnectionSetting", "Rcs", before,
+                () => s.UpdateRcsAsync(new UpdateRcsCommand(r.Enabled,
+                    new RcsSettings(r.SystemName, r.Host, r.Port, r.BaseUrl, r.AuthMode ?? ConnectionOptions.AuthNone, r.Username, r.TimeoutMs),
+                    r.Password, r.ClearPassword, r.Token, r.ClearToken, c.Actor().Username), ct), res => res, secretNote.Length == 0 ? null : secretNote));
+        });
+        cfg.MapPost("rcs/test", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_RCS_TEST", "ConnectionSetting", "Rcs", null, () => s.TestAsync(ConnectionKind.Rcs, ct), res => res)));
         cfg.MapGet("operations", async (HttpContext c, OperationalConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetAsync(ct)));
         cfg.MapPut("agvs/{id:guid}", async (HttpContext c, Guid id, AgvConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.UpdateAgvAsync(id, new UpdateAgvCommand(r.RcsRobotCode, r.Enabled), ct)));
+            ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_AGV_UPDATE", "Agv", id.ToString(), null,
+                () => s.UpdateAgvAsync(id, new UpdateAgvCommand(r.RcsRobotCode, r.Enabled), ct), res => res)));
         cfg.MapPost("locations", async (HttpContext c, LocationConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.SaveLocationAsync(new SaveLocationCommand(r.Code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), true, ct), StatusCodes.Status201Created));
+            ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_LOCATION_CREATE", "Location", r.Code, null,
+                () => s.SaveLocationAsync(new SaveLocationCommand(r.Code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), true, ct),
+                res => res), StatusCodes.Status201Created));
         cfg.MapPut("locations/{code}", async (HttpContext c, string code, LocationConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.SaveLocationAsync(new SaveLocationCommand(code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), false, ct)));
+            ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_LOCATION_UPDATE", "Location", code, null,
+                () => s.SaveLocationAsync(new SaveLocationCommand(code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), false, ct),
+                res => res)));
+
+        // ---- Account management and audit trail: Admin only
+        var users = api.MapGroup("/users").WithTags("Users").RequireAuthorization(admin);
+        users.MapGet("", async (HttpContext c, string? search, UserAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListAsync(c.Actor(), search, ct)));
+        users.MapPost("", async (HttpContext c, CreateUserRequest r, UserAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.CreateAsync(c.Actor(), new CreateUserCommand(r.Username, r.DisplayName, r.Role, r.Password), ct), StatusCodes.Status201Created));
+        users.MapPut("{id:guid}", async (HttpContext c, Guid id, UpdateUserRequest r, UserAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.UpdateAsync(c.Actor(), id, new UpdateUserCommand(r.DisplayName, r.Role, r.IsActive), ct)));
+        users.MapPost("{id:guid}/reset-password", async (HttpContext c, Guid id, ResetPasswordRequest r, UserAdminService s, CancellationToken ct) =>
+        {
+            await s.ResetPasswordAsync(c.Actor(), id, r.NewPassword, ct);
+            return ApiResults.Ok(c, new { reset = true });
+        });
+        api.MapGet("/audit", async (HttpContext c, IAuditLog log, string? actor, string? action, AuditResult? result, DateTimeOffset? from, DateTimeOffset? to,
+            int? skip, int? take, CancellationToken ct) =>
+            ApiResults.Ok(c, await log.QueryAsync(new AuditQuery(actor, action, result, from, to, skip ?? 0, take ?? 100), ct)))
+            .WithTags("Audit").RequireAuthorization(admin);
 
         // ---- System
         api.MapGet("/system/health", async (HttpContext c, WcsDbContext db, ISchedulerStatus scheduler, IPlcAdapter plc,
@@ -105,20 +233,27 @@ public static class Endpoints
         }).WithTags("System");
     }
 
+    private static object Me(string username, string displayName, UserRole role, bool mustChangePassword) =>
+        new { username, displayName, role = role.ToString(), mustChangePassword };
+
     /// <summary>
-    /// Simulator-only endpoints. They inject vendor-neutral signals, NOT the RCS callback API (no real RCS endpoint is assumed).
+    /// Simulator-only endpoints (Admin only). They inject vendor-neutral signals, NOT the RCS callback API (no real RCS endpoint is assumed).
     /// Registered only when Integration:Mode = Simulator, and never in Production unless explicitly enabled.
     /// </summary>
     public static void MapSimulatorApi(this WebApplication app)
     {
-        var sim = app.MapGroup("/api/simulator").WithTags("Simulator").AddEndpointFilter<ValidationFilter>();
+        var sim = app.MapGroup("/api/simulator").WithTags("Simulator").AddEndpointFilter<ValidationFilter>().RequireAuthorization(AuthSetup.AdminPolicy);
         sim.MapPost("tasks/{id:guid}/advance", async (HttpContext c, Guid id, SimulationDriver d, CancellationToken ct) =>
-            ApiResults.Ok(c, await d.AdvanceAsync(id, ct)));
+            ApiResults.Ok(c, await Audited.RunAsync(c, "SIMULATOR_ADVANCE", "Task", id.ToString(), null, () => d.AdvanceAsync(id, ct), res => new { res.Signal, res.Message })));
         sim.MapPost("tasks/{id:guid}/run", async (HttpContext c, Guid id, SimulationDriver d, CancellationToken ct) =>
-            ApiResults.Ok(c, await d.RunAsync(id, 20, ct)));
-        sim.MapPost("station-requests", (HttpContext c, SimulatedStationRequest r, StationSignalSimulator s) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "SIMULATOR_RUN", "Task", id.ToString(), null, () => d.RunAsync(id, 20, ct), res => new { steps = res.Count })));
+        sim.MapPost("station-requests", async (HttpContext c, SimulatedStationRequest r, StationSignalSimulator s) =>
         {
-            s.EnqueueRequest(new StationRequest(r.StationCode, r.Flow, r.RequestKey));
+            await Audited.RunAsync(c, "SIMULATOR_STATION_REQUEST", "Location", r.StationCode, null, () =>
+            {
+                s.EnqueueRequest(new StationRequest(r.StationCode, r.Flow, r.RequestKey));
+                return Task.FromResult(0);
+            }, _ => new { r.StationCode, r.Flow, r.RequestKey });
             return ApiResults.Ok(c, new { queued = true }, StatusCodes.Status202Accepted);
         });
     }

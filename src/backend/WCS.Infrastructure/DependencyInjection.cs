@@ -61,6 +61,11 @@ public static class DependencyInjection
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<WcsDataSeeder>();
 
+        services.AddScoped<WCS.Application.Auth.IUserRepository, WCS.Infrastructure.Auth.UserRepository>();
+        services.AddSingleton<WCS.Application.Auth.IPasswordService, WCS.Infrastructure.Auth.PasswordService>();
+        services.AddScoped<WCS.Application.Auth.IAuditLog, WCS.Infrastructure.Auth.AuditLog>();
+        services.AddScoped<WCS.Infrastructure.Auth.AdminBootstrapper>();
+
         var dp = services.AddDataProtection().SetApplicationName("ETEK.WCS");
         var keysPath = configuration["DataProtection:KeysPath"];
         if (!string.IsNullOrWhiteSpace(keysPath)) dp.PersistKeysToFileSystem(new DirectoryInfo(keysPath));

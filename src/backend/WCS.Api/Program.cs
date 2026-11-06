@@ -20,6 +20,7 @@ builder.Services.AddWcsApplication(builder.Configuration);
 builder.Services.AddWcsInfrastructure(builder.Configuration);
 builder.Services.AddWcsRuntime(builder.Configuration);
 builder.Services.AddSingleton<IWcsNotifier, SignalRWcsNotifier>(); // replaces the null notifier from Infrastructure
+builder.Services.AddWcsAuth(builder.Configuration, builder.Environment);
 
 var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
@@ -34,8 +35,11 @@ _ = app.Services.GetRequiredService<IFlowCatalog>();
 
 app.UseExceptionHandler(ExceptionMapping.Configure);
 app.UseSerilogRequestLogging();
-if (app.Environment.IsDevelopment()) app.MapOpenApi();
 app.UseCors();
+app.UseAuthentication();
+app.UseWcsRequestGuards();
+app.UseAuthorization();
+if (app.Environment.IsDevelopment()) app.MapOpenApi().AllowAnonymous();
 
 app.MapWcsApi();
 if (app.Configuration["Integration:Mode"] is null or "Simulator" && app.Configuration.GetValue("Simulator:ExposeApi", app.Environment.IsDevelopment()))

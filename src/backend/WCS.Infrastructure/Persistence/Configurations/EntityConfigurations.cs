@@ -171,3 +171,40 @@ internal sealed class ConnectionSettingConfiguration : IEntityTypeConfiguration<
         b.Property(x => x.Version).IsRowVersion();
     }
 }
+
+internal sealed class AppUserConfiguration : IEntityTypeConfiguration<WCS.Domain.Users.AppUser>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Users.AppUser> b)
+    {
+        b.ToTable("app_users");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Username).HasMaxLength(50).IsRequired();
+        b.Property(x => x.DisplayName).HasMaxLength(100).IsRequired();
+        b.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired(); // salted hash only, never the password
+        b.HasIndex(x => x.Username).IsUnique();
+        b.Property(x => x.Version).IsRowVersion();
+    }
+}
+
+internal sealed class AuditEntryConfiguration : IEntityTypeConfiguration<WCS.Domain.Users.AuditEntry>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Users.AuditEntry> b)
+    {
+        b.ToTable("audit_log");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Actor).HasMaxLength(100);
+        b.Property(x => x.ActorRole).HasMaxLength(40);
+        b.Property(x => x.Action).HasMaxLength(100).IsRequired();
+        b.Property(x => x.TargetType).HasMaxLength(50);
+        b.Property(x => x.TargetId).HasMaxLength(100);
+        b.Property(x => x.Detail).HasMaxLength(1000);
+        b.Property(x => x.BeforeJson).HasColumnType("text");
+        b.Property(x => x.AfterJson).HasColumnType("text");
+        b.Property(x => x.IpAddress).HasMaxLength(64);
+        b.HasIndex(x => x.OccurredAt);
+        b.HasIndex(x => new { x.Actor, x.OccurredAt });
+        b.HasIndex(x => x.Action);
+    }
+}

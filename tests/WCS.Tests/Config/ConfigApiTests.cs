@@ -18,6 +18,16 @@ public sealed class ConfigApiFactory : WebApplicationFactory<Program>
 {
     public FakeConnectionRepo Repo { get; } = new();
     public RecordingProbe Probe { get; } = new();
+    public InMemoryUserRepository Users { get; } = new();
+    public RecordingAuditLog Audit { get; } = new();
+    public FakeTimeProvider Time { get; } = new();
+
+    public ConfigApiFactory()
+    {
+        Users.Users.Add(TestUsers.Make("admin1", WCS.Domain.Users.UserRole.Admin));
+        Users.Users.Add(TestUsers.Make("admin2", WCS.Domain.Users.UserRole.Admin));
+        Users.Users.Add(TestUsers.Make("op1", WCS.Domain.Users.UserRole.Operator));
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -33,6 +43,9 @@ public sealed class ConfigApiFactory : WebApplicationFactory<Program>
             s.RemoveAll<IConnectionSettingRepository>(); s.AddSingleton<IConnectionSettingRepository>(Repo);
             s.RemoveAll<ISecretProtector>(); s.AddSingleton<ISecretProtector, FakeProtector>();
             s.RemoveAll<IConnectionProbe>(); s.AddSingleton<IConnectionProbe>(Probe);
+            s.RemoveAll<WCS.Application.Auth.IUserRepository>(); s.AddSingleton<WCS.Application.Auth.IUserRepository>(Users);
+            s.RemoveAll<WCS.Application.Auth.IAuditLog>(); s.AddSingleton<WCS.Application.Auth.IAuditLog>(Audit);
+            s.PostConfigure<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(WCS.Api.Api.AuthSetup.Scheme, o => o.TimeProvider = Time);
         });
     }
 }
@@ -41,6 +54,13 @@ public class ConfigApiTests(ConfigApiFactory factory) : IClassFixture<ConfigApiF
 {
     private const string Secret = "Api-S3cret-Value-42";
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+
+    private static async Task<HttpClient> Admin(ConfigApiFactory f)
+    {
+        var c = f.CreateClient().WithClientHeader();
+        Assert.Equal(200, await c.LoginAsync("admin1"));
+        return c;
+    }
 
     private static async Task<(HttpStatusCode Status, JsonElement Root, string Raw)> Call(HttpClient c, HttpMethod m, string url, object? body = null)
     {
@@ -60,7 +80,7 @@ public class ConfigApiTests(ConfigApiFactory factory) : IClassFixture<ConfigApiF
     [Fact]
     public async Task Get_returns_an_empty_unconfigured_view_and_the_unified_envelope()
     {
-        var c = factory.CreateClient();
+        var c = await Admin(factory);
         var (status, root, _) = await Call(c, HttpMethod.Get, "/api/config/rcs");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -74,7 +94,7 @@ public class ConfigApiTests(ConfigApiFactory factory) : IClassFixture<ConfigApiF
     [Fact]
     public async Task Put_then_get_round_trips_and_never_returns_the_secret()
     {
-        var c = factory.CreateClient();
+        var c = await Admin(factory);
         var body = new
         {
             enabled = true, systemName = "RCS", host = "rcs.example.test", port = 8182, baseUrl = (string?)null, authMode = ConnectionOptions.AuthUserPassword,
@@ -100,7 +120,7 @@ public class ConfigApiTests(ConfigApiFactory factory) : IClassFixture<ConfigApiF
     [Fact]
     public async Task Invalid_input_returns_400_with_per_field_details_and_does_not_save()
     {
-        var c = factory.CreateClient();
+        var c = await Admin(factory);
         var bad = new { enabled = true, ipAddress = "300.1.1.1", port = 70000, protocol = "Modbus", timeoutMs = 5 };
         var (status, root, _) = await Call(c, HttpMethod.Put, "/api/config/plc", bad);
 
@@ -116,7 +136,7 @@ public class ConfigApiTests(ConfigApiFactory factory) : IClassFixture<ConfigApiF
     public async Task Check_without_saved_config_reports_not_executed_and_never_calls_the_probe()
     {
         var f = new ConfigApiFactory();
-        var (status, root, _) = await Call(f.CreateClient(), HttpMethod.Post, "/api/config/plc/test");
+        var (status, root, _) = await Call(await Admin(f), HttpMethod.Post, "/api/config/plc/test");
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal("NotExecuted", root.GetProperty("data").GetProperty("outcome").GetString());
         Assert.Empty(f.Probe.Calls);
@@ -126,7 +146,7 @@ public class ConfigApiTests(ConfigApiFactory factory) : IClassFixture<ConfigApiF
     public async Task Check_runs_only_after_saving_and_reports_the_simulated_mode()
     {
         var f = new ConfigApiFactory();
-        var c = f.CreateClient();
+        var c = await Admin(f);
         await Call(c, HttpMethod.Put, "/api/config/plc", ValidPlc());
 
         var (_, root, _) = await Call(c, HttpMethod.Post, "/api/config/plc/test");

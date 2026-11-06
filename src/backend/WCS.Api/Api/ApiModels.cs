@@ -52,3 +52,30 @@ public sealed record AgvConfigRequest(string? RcsRobotCode, bool Enabled);
 
 public sealed record LocationConfigRequest(string Code, string Name, LocationType Type, int RackCapacity, AllowedRackKind AllowedRackKind,
     bool Enabled, bool RequiresPlcPermission);
+
+// ---- authentication / accounts (passwords appear in requests only; they are never returned or logged) ----
+public sealed record LoginRequest(
+    [property: Required, StringLength(100)] string Username,
+    [property: Required, StringLength(200)] string Password);
+
+public sealed record ChangePasswordRequest(
+    [property: Required, StringLength(200)] string CurrentPassword,
+    [property: Required, StringLength(200)] string NewPassword);
+
+public sealed record CreateUserRequest(
+    [property: Required, StringLength(50)] string Username,
+    [property: Required, StringLength(100)] string DisplayName,
+    WCS.Domain.Users.UserRole Role,
+    [property: Required, StringLength(200)] string Password);
+
+public sealed record UpdateUserRequest(
+    [property: Required, StringLength(100)] string DisplayName,
+    WCS.Domain.Users.UserRole Role,
+    bool IsActive);
+
+public sealed record ResetPasswordRequest([property: Required, StringLength(200)] string NewPassword);
+
+/// <summary>ExpectedState is the state the screen showed; a mismatch makes the server answer 409 (reload). It never grants permission.</summary>
+public sealed record UpdateTaskRequest(
+    [property: Required, StringLength(50)] string StationCode,
+    [property: StringLength(40)] string? ExpectedState);
