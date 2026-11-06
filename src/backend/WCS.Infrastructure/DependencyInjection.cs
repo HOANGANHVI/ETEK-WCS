@@ -91,7 +91,11 @@ public static class DependencyInjection
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
         services.AddSingleton<IRcsClient>(sp => sp.GetRequiredService<RcsSimulator>());
-        services.AddSingleton<IStationSignalService>(sp => sp.GetRequiredService<StationSignalSimulator>());
+        // The legacy simulator stays the default. The PLC-backed service is used only when Plc:Integration:Enabled=true (approved flow mappings required).
+        services.AddSingleton<IStationSignalService>(sp =>
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WCS.Application.Plc.PlcRuntimeOptions>>().Value.Integration.Enabled
+                ? sp.GetRequiredService<WCS.Application.Plc.PlcStationSignalService>()
+                : sp.GetRequiredService<StationSignalSimulator>());
         services.AddScoped<SimulationDriver>();
 
         services.TryAddSingleton<IWcsNotifier, NullWcsNotifier>();

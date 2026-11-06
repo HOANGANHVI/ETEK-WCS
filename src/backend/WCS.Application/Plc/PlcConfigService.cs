@@ -195,10 +195,13 @@ public static class WritePolicy
     public static bool WriteKeysComplete(PlcRuntimeOptions o) =>
         o.AllowLiveConnection && o.Write.Enabled && !string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference) && o.Write.HandshakeApproved;
 
-    public static Decision Evaluate(PlcRuntimeOptions o, IoPointRef p)
+    /// <param name="forHandshake">The write comes from an APPROVED handshake rule (not from a manual test). Only then may the simulator drive motion permits;
+    /// real modes keep them blocked: they cannot be allow-listed until a separate approved change exists.</param>
+    public static Decision Evaluate(PlcRuntimeOptions o, IoPointRef p, bool forHandshake = false)
     {
         if (p.Direction != PlcSignalDirection.SoftwareToPlc) return new(false, "WRITE_DIRECTION", "Chỉ ghi được tín hiệu chiều Phần mềm → PLC.");
-        if (IsBlockedSignal(p.SignalName, p.Group)) return new(false, "WRITE_BLOCKED_SAFETY", "Tín hiệu Safety/Interlock hoặc Transfer/Departure Permit bị chặn ghi thử.");
+        if (IsBlockedSignal(p.SignalName, p.Group) && !(forHandshake && EffectiveMode(o) == PlcRuntimeMode.Simulator && !p.SignalName.Contains("Safety", StringComparison.OrdinalIgnoreCase) && !p.Group.Contains("Safety", StringComparison.OrdinalIgnoreCase)))
+            return new(false, "WRITE_BLOCKED_SAFETY", "Tín hiệu Safety/Interlock hoặc Transfer/Departure Permit bị chặn ghi thử.");
         var mode = EffectiveMode(o);
         switch (mode)
         {

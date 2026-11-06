@@ -104,6 +104,7 @@ public sealed class PlcRuntimeOptions
     public int ReconnectMaxDelayMs { get; set; } = 15000;
     public int LogRetentionDays { get; set; } = 30;
     public PlcIntegrationOptions Integration { get; set; } = new();
+    public PlcHandshakeOptions Handshake { get; set; } = new();
 }
 
 /// <summary>Extra keys required before any write to a real PLC. All must be provided by the deployment, none has a default.</summary>

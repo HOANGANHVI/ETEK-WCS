@@ -109,6 +109,18 @@ public static partial class PlcEndpoints
         plc.MapGet("stations/{stationId}/io", (HttpContext c, string stationId, IPlcRuntime rt) =>
             rt.Station(stationId, IsAdmin(c)) is { } snap ? ApiResults.Ok(c, snap) : ApiResults.Fail(c, 404, "STATION_NOT_FOUND", $"Không tìm thấy trạm {stationId}."));
 
+        plc.MapGet("handshake", (HttpContext c, HandshakeCoordinator hs) => ApiResults.Ok(c, hs.States()));
+        plc.MapGet("handshake/catalog", (HttpContext c) =>
+        {
+            var cat = WCS.Infrastructure.Plc.PlcCatalog.LoadEmbedded();
+            var covered = cat.Handshake.Select(h => h.SignalName).Distinct().ToHashSet();
+            return ApiResults.Ok(c, new
+            {
+                rows = cat.Handshake.Count, pending = cat.Handshake.Count(h => h.ApprovalStatus == "PENDING"), approved = cat.Handshake.Count(h => h.ApprovalStatus == "APPROVED"),
+                signalsWithoutDefinition = cat.Template.Select(t => t.SignalName).Where(n => !covered.Contains(n)).ToArray(), sourceSha256 = cat.Source.Sha256,
+            });
+        }).RequireAuthorization(admin);
+
         // ---------------------------------------------------------------------------------------------- guarded test write (Admin)
         plc.MapPost("stations/{stationId}/signals/{signal}/test-write", async (HttpContext c, string stationId, string signal, TestWriteRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {

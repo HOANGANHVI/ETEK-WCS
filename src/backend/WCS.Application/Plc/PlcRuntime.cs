@@ -22,7 +22,7 @@ public interface IPlcRuntime
     Task StopAsync();
     /// <summary>Rebuilds one PLC's worker from the database (after a configuration change). Other PLCs keep running untouched.</summary>
     Task ReloadPlcAsync(string plcId, CancellationToken ct = default);
-    Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default);
+    Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default, bool handshake = false);
 }
 
 /// <summary>Controls of the in-memory simulator (act as "the PLC side"). Only meaningful in Simulator mode.</summary>
@@ -130,13 +130,13 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         return result;
     }
 
-    public async Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default)
+    public async Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default, bool handshake = false)
     {
         var worker = Worker(plcId);
         var handler = worker?.Stations.FirstOrDefault(s => s.StationId == stationId);
         var point = handler?.Find(signal);
         if (worker is null || handler is null || point is null) return new WriteResult(false, "NOT_FOUND", "Không tìm thấy IO point.");
-        var decision = WritePolicy.Evaluate(Options, point);
+        var decision = WritePolicy.Evaluate(Options, point, handshake);
         if (!decision.Allowed)
         {
             events.Log(PlcLogLevel.Warning, plcId, stationId, "WRITE_DENIED", $"{actor}: {stationId}/{signal} bị chặn ({decision.Code}).");

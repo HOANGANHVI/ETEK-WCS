@@ -84,6 +84,20 @@ public sealed class PlcRuntimeHostedService(IPlcRuntime runtime, IServiceScopeFa
     }
 }
 
+/// <summary>Ticks the handshake coordinator (observation always; writes only for approved rules).</summary>
+public sealed class HandshakeHostedService(HandshakeCoordinator coordinator, ILogger<HandshakeHostedService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            try { await coordinator.StepAsync(stoppingToken); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogError(ex, "Handshake step failed"); }
+        }
+    }
+}
+
 /// <summary>Runs the additive seed at host start (not during design-time tooling, which never starts the host).</summary>
 public sealed class DatabaseSeedHostedService(IServiceScopeFactory scopes, ILogger<DatabaseSeedHostedService> logger) : IHostedService
 {
