@@ -60,6 +60,8 @@ public static class DependencyInjection
         services.AddScoped<ITransportTaskRepository, TransportTaskRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<WcsDataSeeder>();
+        services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
+        services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
 
         services.AddScoped<WCS.Application.Auth.IUserRepository, WCS.Infrastructure.Auth.UserRepository>();
         services.AddSingleton<WCS.Application.Auth.IPasswordService, WCS.Infrastructure.Auth.PasswordService>();

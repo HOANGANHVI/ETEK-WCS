@@ -81,3 +81,11 @@ public sealed record UpdateTaskRequest(
     [property: Required, StringLength(20)] string Flow,
     [property: Required, StringLength(50)] string StationCode,
     [property: StringLength(40)] string? ExpectedState);
+
+// ---- PLC topology / IO (CR-002). No value has a default: unknown parameters stay null (NEEDS_CONFIGURATION). ----
+public sealed record UpdatePlcConnectionRequest(string? Name, [property: Required, StringLength(64)] string IpAddress, int? Port, string? Protocol,
+    int? NetworkNumber, int? PcNumber, int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs, bool Enabled);
+
+public sealed record SetPointAddressRequest([property: Required, StringLength(20)] string Address, int? WordLength, [property: StringLength(40)] string? Encoding);
+
+public sealed record SetWriteAllowedRequest(bool Allowed);

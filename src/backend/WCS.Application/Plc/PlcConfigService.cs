@@ -1,0 +1,213 @@
+using WCS.Application.Abstractions;
+using WCS.Application.Common;
+using WCS.Application.Config;
+using WCS.Domain.Plc;
+
+namespace WCS.Application.Plc;
+
+public interface IPlcConfigRepository
+{
+    Task<IReadOnlyList<PlcConnection>> ListConnectionsAsync(CancellationToken ct = default);
+    Task<PlcConnection?> GetConnectionAsync(string plcId, CancellationToken ct = default);
+    void AddConnection(PlcConnection c);
+    Task<IReadOnlyList<PlcStation>> ListStationsAsync(CancellationToken ct = default);
+    Task<PlcStation?> GetStationAsync(string stationId, CancellationToken ct = default);
+    void AddStation(PlcStation s);
+    Task<IReadOnlyList<StationIoPoint>> ListPointsAsync(string? plcId, string? stationId, CancellationToken ct = default);
+    Task<StationIoPoint?> GetPointAsync(Guid id, CancellationToken ct = default);
+    Task<StationIoPoint?> FindPointAsync(string plcId, string stationId, string signal, CancellationToken ct = default);
+    void AddPoint(StationIoPoint p);
+    void AddLog(PlcCommLogEntry e);
+    Task<IReadOnlyList<PlcCommLogEntry>> QueryLogsAsync(string? plcId, string? stationId, PlcLogLevel? minLevel, int skip, int take, CancellationToken ct = default);
+    Task<int> PurgeLogsAsync(DateTimeOffset olderThan, CancellationToken ct = default);
+}
+
+// ---- DTOs (Admin sees configuration; Operator sees monitoring data without addresses or network parameters) -------------------------
+public sealed record PlcConnectionView(string PlcId, string Name, string IpAddress, int? Port, string? Protocol, int? NetworkNumber, int? PcNumber,
+    int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs, bool Enabled, string ConfigStatus,
+    IReadOnlyList<string> MissingParameters, IReadOnlyList<string> Stations, DateTimeOffset UpdatedAt, string? UpdatedBy);
+
+public sealed record UpdatePlcConnectionCommand(string? Name, string IpAddress, int? Port, string? Protocol, int? NetworkNumber, int? PcNumber,
+    int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs, bool Enabled);
+
+public sealed record PlcStationView(string StationId, string PlcId, int Order, string? LocationCode, bool Enabled, string Role,
+    int PointCount, int ConfiguredPoints, int ApprovedPoints);
+
+public sealed record IoPointView(Guid Id, string PlcId, string StationId, int Seq, string Group, string SignalName, string Direction, string DataType,
+    string Description, string ConfigStatus, string? TemplateAddressReference, string? ActualAddress, int? WordLength, string? Encoding,
+    bool? WriteAllowed, string? ApprovedBy, DateTimeOffset? ApprovedAt);
+
+public sealed record SetPointAddressCommand(string Address, int? WordLength, string? Encoding);
+
+public static class PlcLabels
+{
+    public static string Status(IoConfigStatus s) => s switch { IoConfigStatus.Approved => "APPROVED", IoConfigStatus.Configured => "CONFIGURED", _ => "NEEDS_CONFIGURATION" };
+}
+
+/// <summary>
+/// Configuration of the 4 PLC connections, 16 Stations and their IO points. It never connects to a device and never invents a value:
+/// addresses exist only when an Admin enters them (and the PLC engineer's approval is recorded separately).
+/// </summary>
+public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow, IClock clock)
+{
+    public async Task<IReadOnlyList<PlcConnectionView>> ListConnectionsAsync(CancellationToken ct = default)
+    {
+        var stations = await repo.ListStationsAsync(ct);
+        return (await repo.ListConnectionsAsync(ct)).Select(c => ToView(c, stations.Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList())).ToList();
+    }
+
+    private static PlcConnectionView ToView(PlcConnection c, IReadOnlyList<string> stations)
+    {
+        var missing = c.MissingParameters();
+        return new(c.Id, c.Name, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer,
+            c.TimeoutMs, c.PollingIntervalMs, c.Enabled, missing.Count == 0 ? "CONFIGURED" : "NEEDS_CONFIGURATION", missing, stations, c.UpdatedAt, c.UpdatedBy);
+    }
+
+    public async Task<PlcConnectionView> UpdateConnectionAsync(string plcId, UpdatePlcConnectionCommand cmd, PlcRuntimeOptions options, string? by, CancellationToken ct = default)
+    {
+        var errors = new List<FieldError>();
+        if (string.IsNullOrWhiteSpace(cmd.IpAddress) || !ConnectionValidator.IsStrictIp(cmd.IpAddress.Trim())) errors.Add(new("ipAddress", "Địa chỉ IP không hợp lệ."));
+        Range(errors, "port", cmd.Port, 1, 65535, "Cổng TCP");
+        Range(errors, "networkNumber", cmd.NetworkNumber, 0, 255, "Network number");
+        Range(errors, "pcNumber", cmd.PcNumber, 0, 255, "PC number");
+        Range(errors, "moduleIoNumber", cmd.ModuleIoNumber, 0, 65535, "Request destination module I/O number");
+        Range(errors, "plcStationNumber", cmd.PlcStationNumber, 0, 255, "PLC station number");
+        Range(errors, "monitoringTimer", cmd.MonitoringTimer, 0, 65535, "Monitoring timer");
+        Range(errors, "timeoutMs", cmd.TimeoutMs, 100, 60_000, "Timeout (ms)");
+        Range(errors, "pollingIntervalMs", cmd.PollingIntervalMs, 50, 60_000, "Chu kỳ đọc (ms)");
+        if (!string.IsNullOrWhiteSpace(cmd.Protocol) && !ConnectionOptions.PlcProtocols.Contains(cmd.Protocol.Trim()))
+            errors.Add(new("protocol", "Giao thức không được hỗ trợ."));
+        if (errors.Count > 0) throw new ValidationFailedException(errors);
+
+        return await uow.ExecuteAsync(async t =>
+        {
+            var c = await repo.GetConnectionAsync(plcId, t) ?? throw AppException.NotFound("PLC_NOT_FOUND", $"Không tìm thấy {plcId}.");
+            var name = string.IsNullOrWhiteSpace(cmd.Name) ? c.Name : cmd.Name.Trim();
+            c.Update(name, cmd.IpAddress.Trim(), cmd.Port, ConnectionValidator.Clean(cmd.Protocol), cmd.NetworkNumber, cmd.PcNumber, cmd.ModuleIoNumber,
+                cmd.PlcStationNumber, cmd.MonitoringTimer, cmd.TimeoutMs, cmd.PollingIntervalMs, cmd.Enabled, by, clock.UtcNow);
+            // Switching a REAL connection on needs the complete, confirmed parameter set. The simulator never needs them.
+            if (cmd.Enabled && options.Mode != PlcRuntimeMode.Simulator && c.MissingParameters() is { Count: > 0 } missing)
+                throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).")).ToList());
+            var stations = (await repo.ListStationsAsync(t)).Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList();
+            return ToView(c, stations);
+        }, ct);
+    }
+
+    private static void Range(List<FieldError> e, string field, int? v, int min, int max, string label)
+    {
+        if (v is { } x && (x < min || x > max)) e.Add(new(field, $"{label} phải nằm trong khoảng {min}–{max}."));
+    }
+
+    public async Task<IReadOnlyList<PlcStationView>> ListStationsAsync(CancellationToken ct = default)
+    {
+        var points = await repo.ListPointsAsync(null, null, ct);
+        return (await repo.ListStationsAsync(ct)).OrderBy(s => s.PlcId).ThenBy(s => s.Order).Select(s =>
+        {
+            var mine = points.Where(p => p.StationId == s.Id).ToList();
+            return new PlcStationView(s.Id, s.PlcId, s.Order, s.LocationCode, s.Enabled, s.Role, mine.Count,
+                mine.Count(p => p.Status != IoConfigStatus.NeedsConfiguration), mine.Count(p => p.Status == IoConfigStatus.Approved));
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default) =>
+        (await repo.ListPointsAsync(plcId, stationId, ct)).OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).Select(p => ToView(p, includeConfiguration)).ToList();
+
+    public static IoPointView ToView(StationIoPoint p, bool includeConfiguration) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
+        p.Direction.ToString(), p.DataType.ToString(), p.Description, PlcLabels.Status(p.Status),
+        includeConfiguration ? p.TemplateAddressReference : null, includeConfiguration ? p.ActualAddress : null, includeConfiguration ? p.WordLength : null,
+        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null);
+
+    /// <summary>Records an address confirmed by the PLC engineer. Conflicts with other points of the SAME PLC are rejected; other PLCs are independent.</summary>
+    public Task<IoPointView> SetAddressAsync(Guid pointId, SetPointAddressCommand cmd, CancellationToken ct = default) =>
+        uow.ExecuteAsync(async t =>
+        {
+            var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            var address = DeviceAddress.TryParse(cmd.Address, out var parsed) ? parsed.ToString() : cmd.Address?.Trim();
+            var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, address, cmd.WordLength);
+            if (AddressValidator.ValidateOne(spec) is { } issue) throw new ValidationFailedException([new("address", issue.Message)]);
+            if (p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(cmd.Encoding))
+                throw new ValidationFailedException([new("encoding", "STRING cần encoding được xác nhận.")]);
+
+            var others = (await repo.ListPointsAsync(p.PlcId, null, t)).Where(x => x.Id != p.Id)
+                .Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength));
+            var conflict = AddressValidator.Validate(others.Append(spec)).FirstOrDefault(i => i.PointId == p.Id || i.ConflictWith == p.Id);
+            if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message)]);
+
+            p.ConfigureAddress(address!, p.DataType == PlcDataType.String ? cmd.WordLength : null, p.DataType == PlcDataType.String ? cmd.Encoding!.Trim() : null, clock.UtcNow);
+            return ToView(p, true);
+        }, ct);
+
+    public Task<IoPointView> ClearAddressAsync(Guid pointId, CancellationToken ct = default) =>
+        uow.ExecuteAsync(async t =>
+        {
+            var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            p.ClearAddress(clock.UtcNow);
+            return ToView(p, true);
+        }, ct);
+
+    /// <summary>Records that the PLC engineer confirmed the address. The approver is the authenticated Admin; the note names the engineer / document.</summary>
+    public Task<IoPointView> ApproveAsync(Guid pointId, string approvedBy, CancellationToken ct = default) =>
+        uow.ExecuteAsync(async t =>
+        {
+            var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            if (p.Status == IoConfigStatus.NeedsConfiguration) throw AppException.Rejected("IO_NO_ADDRESS", "Cần nhập địa chỉ trước khi xác nhận.");
+            p.Approve(approvedBy, clock.UtcNow);
+            return ToView(p, true);
+        }, ct);
+
+    public Task<IoPointView> SetWriteAllowedAsync(Guid pointId, bool allowed, CancellationToken ct = default) =>
+        uow.ExecuteAsync(async t =>
+        {
+            var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            if (allowed && WritePolicy.IsBlockedSignal(p.SignalName, p.Group))
+                throw AppException.Rejected("WRITE_BLOCKED_SAFETY", "Tín hiệu Safety/Interlock và Transfer/Departure Permit không được cho phép ghi từ chức năng thử.");
+            try { p.SetWriteAllowed(allowed, clock.UtcNow); }
+            catch (WCS.Domain.Common.DomainException ex) { throw AppException.Rejected(ex.Code, ex.Message); }
+            return ToView(p, true);
+        }, ct);
+
+    /// <summary>Address conflicts currently present on a PLC (empty list = consistent).</summary>
+    public async Task<IReadOnlyList<AddressIssue>> CheckPlcAsync(string plcId, CancellationToken ct = default) =>
+        AddressValidator.Validate((await repo.ListPointsAsync(plcId, null, ct)).Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength)));
+
+    public Task<IReadOnlyList<PlcCommLogEntry>> LogsAsync(string? plcId, string? stationId, PlcLogLevel? minLevel, int skip, int take, CancellationToken ct = default) =>
+        repo.QueryLogsAsync(plcId, stationId, minLevel, skip, Math.Clamp(take, 1, 500), ct);
+}
+
+/// <summary>Rules that keep control signals out of reach of test writes (CR-002 safety rules).</summary>
+public static class WritePolicy
+{
+    /// <summary>Safety / interlock and motion permits are never writable through the test facility.</summary>
+    public static readonly IReadOnlySet<string> BlockedSignals = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Safety_Ready", "Transfer_Permit", "AGV_Departure_Permit",
+    };
+
+    public static bool IsBlockedSignal(string signalName, string group) =>
+        BlockedSignals.Contains(signalName) || group.Contains("Safety", StringComparison.OrdinalIgnoreCase) || group.Contains("Interlock", StringComparison.OrdinalIgnoreCase);
+
+    public sealed record Decision(bool Allowed, string? Code = null, string? Reason = null);
+
+    /// <summary>The mode that is really in force: READ_WRITE degrades to READ_ONLY unless every write key is present.</summary>
+    public static PlcRuntimeMode EffectiveMode(PlcRuntimeOptions o) =>
+        o.Mode == PlcRuntimeMode.RealReadWrite && !WriteKeysComplete(o) ? PlcRuntimeMode.RealReadOnly : o.Mode;
+
+    public static bool WriteKeysComplete(PlcRuntimeOptions o) =>
+        o.AllowLiveConnection && o.Write.Enabled && !string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference) && o.Write.HandshakeApproved;
+
+    public static Decision Evaluate(PlcRuntimeOptions o, IoPointRef p)
+    {
+        if (p.Direction != PlcSignalDirection.SoftwareToPlc) return new(false, "WRITE_DIRECTION", "Chỉ ghi được tín hiệu chiều Phần mềm → PLC.");
+        if (IsBlockedSignal(p.SignalName, p.Group)) return new(false, "WRITE_BLOCKED_SAFETY", "Tín hiệu Safety/Interlock hoặc Transfer/Departure Permit bị chặn ghi thử.");
+        var mode = EffectiveMode(o);
+        switch (mode)
+        {
+            case PlcRuntimeMode.Simulator: return new(true);
+            case PlcRuntimeMode.RealReadOnly: return new(false, "READ_ONLY", "Hệ thống đang ở chế độ chỉ đọc (REAL_READ_ONLY).");
+            default:
+                if (!p.WriteAllowed) return new(false, "WRITE_NOT_ALLOWED", "Tín hiệu chưa nằm trong danh sách được phép ghi.");
+                if (string.IsNullOrWhiteSpace(p.Address)) return new(false, "NO_ADDRESS", "Tín hiệu chưa có địa chỉ được xác nhận.");
+                return new(true);
+        }
+    }
+}

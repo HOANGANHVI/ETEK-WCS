@@ -23,6 +23,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Plc/Catalog/plc-io-catalog.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="WCS.Tests" />
   </ItemGroup>
 

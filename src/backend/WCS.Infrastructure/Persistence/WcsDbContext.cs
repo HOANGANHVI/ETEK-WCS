@@ -20,6 +20,10 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<ConnectionSetting> ConnectionSettings => Set<ConnectionSetting>();
     public DbSet<WCS.Domain.Users.AppUser> Users => Set<WCS.Domain.Users.AppUser>();
     public DbSet<WCS.Domain.Users.AuditEntry> AuditLog => Set<WCS.Domain.Users.AuditEntry>();
+    public DbSet<WCS.Domain.Plc.PlcConnection> PlcConnections => Set<WCS.Domain.Plc.PlcConnection>();
+    public DbSet<WCS.Domain.Plc.PlcStation> PlcStations => Set<WCS.Domain.Plc.PlcStation>();
+    public DbSet<WCS.Domain.Plc.StationIoPoint> StationIoPoints => Set<WCS.Domain.Plc.StationIoPoint>();
+    public DbSet<WCS.Domain.Plc.PlcCommLogEntry> PlcCommLog => Set<WCS.Domain.Plc.PlcCommLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
