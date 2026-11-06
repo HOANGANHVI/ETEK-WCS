@@ -257,3 +257,25 @@ and task-template codes (not modelled yet) · whether a TCP-open check is meanin
 2. Run the API and exercise `/api/config/*` against PostgreSQL (check the stored blob is not readable text).
 3. Once PLC/RCS parameters are confirmed: finalise the field list, then write the real adapters behind `IPlcAdapter` / `IRcsClient` (not before).
 4. Add authentication and role checks for `/api/config/*`.
+
+---
+
+## 10. Update 2026-11-06 – First run against PostgreSQL (migrations, full suite, real API)
+
+Executed with the password from .NET User Secrets (`Database:Password`); it was never printed and does not appear in the API log.
+
+- **Database**: PostgreSQL 16.15, `wcs_db` was empty (no tables, no `__EFMigrationsHistory`). Both migrations were applied in order:
+  `20261105134238_InitialCreate`, `20261106050711_AddConnectionSettings`. No data was dropped or changed by them.
+  On first start the API's base seeder created the AGV1/AGV2 rows in `wcs_db` (2 rows; locations/racks/tasks/connection_settings are empty).
+- **Bugs found only by running against PostgreSQL (fixed, no test weakened)**
+  1. EF treated new child rows with an application-assigned Guid (e.g. task history) as *Modified* -> UPDATE hit 0 rows -> 38 integration tests failed with
+     "Operation failed after repeated concurrent modification". Fix: `ValueGeneratedNever()` on all Guid keys (no schema/model-snapshot change).
+  2. `continueTask` retry after an unknown (timeout) outcome did not query RCS first. Fix: `SendContinueAsync` now queries the RCS task status before
+     any retry (task-state-machine.md 3.5).
+  3. Test `Queue_is_fifo...` was flaky: the frozen test clock gave all tasks the same `CreatedAt`, so the Guid tie-breaker decided the order. The test now
+     advances the test clock between creations. Note: production ties on `CreatedAt` would also fall back to Guid order (very unlikely, still unapproved FIFO).
+- **Tests**: 153 total, 153 passed, 0 failed, 0 skipped (5 consecutive full runs). Integration tests use a throw-away database `wcs_test_<guid>` that is dropped
+  afterwards; `wcs_db` is not touched by tests.
+- **Real API** (`http://localhost:5007`, Development): GET/PUT/test for `/api/config/plc|rcs` and GET `/api/config/operations` verified. Write calls were run
+  against a scratch database (`wcs_api_check`, since dropped) to keep `wcs_db` clean. Secret never in responses or logs; check result is "Simulated".
+- Still open: the real-PostgreSQL run of the frontend against this API, authentication on `/api/config/*`, items listed in sections 6 and 9.

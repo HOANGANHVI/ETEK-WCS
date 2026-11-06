@@ -390,8 +390,11 @@ public class RobustnessTests(DatabaseFixture fixture)
         await h.SeedStandardAsync(bufferCapacity: 10);
         await h.StockAsync("F1", RackKind.Full, 3);
 
+        // The test clock is frozen, so creation times must be made distinct explicitly (equal timestamps fall back to a random Guid order).
         var a = (await h.CreateTaskAsync("BP05", "F5", "a")).Task;
+        h.Clock.Advance(TimeSpan.FromSeconds(1));
         var b = (await h.CreateTaskAsync("BP05", "F5", "b")).Task;
+        h.Clock.Advance(TimeSpan.FromSeconds(1));
         var c = (await h.CreateTaskAsync("BP05", "F5", "c")).Task;
         await h.AdvanceUntilAsync(a.Id, TaskState.Completed);
         Assert.Equal(TaskState.Accepted, (await h.GetTaskAsync(b.Id)).State);

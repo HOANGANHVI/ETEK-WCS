@@ -364,16 +364,30 @@ public sealed class TaskOrchestrator(
             var task = await tasks.GetAsync(taskId, t);
             if (task is null || task.State != TaskState.Continuing || task.RcsTaskCode is null) return null;
             var dest = await locations.GetAsync(task.DestinationLocationId ?? Guid.Empty, t);
-            return dest is null ? null : new ContinuePlan(task.RcsRequestCode, task.RcsTaskCode, dest.Code);
+            var isRetry = task.History.Any(h => h.EventName == "RCS_CONTINUE_UNKNOWN");
+            return dest is null ? null : new ContinuePlan(task.RcsRequestCode, task.RcsTaskCode, dest.Code, isRetry);
         }, ct);
         if (plan is null) return;
 
-        RcsCallResult result;
-        try { result = await rcs.ContinueTaskAsync(plan.RequestCode, plan.RcsTaskCode, plan.DestinationCode, ct); }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        RcsCallResult? result = null;
+        if (plan.IsRetry)
         {
-            logger.LogWarning(ex, "RCS continue call failed for {RequestCode}", plan.RequestCode);
-            result = new RcsCallResult(RcsCallOutcome.Unknown, null, ex.Message);
+            // A previous continue attempt had an unknown outcome: ask RCS first (task-state-machine.md 3.5), never blindly resend.
+            try
+            {
+                var (status, _) = await rcs.QueryTaskStatusAsync(plan.RequestCode, ct);
+                if (status == RcsTaskStatus.Executing) result = new RcsCallResult(RcsCallOutcome.Accepted, null, "Confirmed by status query before retry");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogWarning(ex, "RCS status query before continue retry failed"); }
+        }
+        if (result is null)
+        {
+            try { result = await rcs.ContinueTaskAsync(plan.RequestCode, plan.RcsTaskCode, plan.DestinationCode, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "RCS continue call failed for {RequestCode}", plan.RequestCode);
+                result = new RcsCallResult(RcsCallOutcome.Unknown, null, ex.Message);
+            }
         }
         if (result.Outcome == RcsCallOutcome.Unknown)
         {
@@ -404,7 +418,7 @@ public sealed class TaskOrchestrator(
         }, ct);
     }
 
-    private sealed record ContinuePlan(string RequestCode, string RcsTaskCode, string DestinationCode);
+    private sealed record ContinuePlan(string RequestCode, string RcsTaskCode, string DestinationCode, bool IsRetry);
 
     // ============================================================================ cancel
 

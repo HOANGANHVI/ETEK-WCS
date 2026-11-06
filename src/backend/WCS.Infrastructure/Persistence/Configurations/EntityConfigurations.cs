@@ -14,6 +14,7 @@ internal sealed class AgvConfiguration : IEntityTypeConfiguration<Agv>
     {
         b.ToTable("agvs");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.Code).HasMaxLength(50).IsRequired();
         b.Property(x => x.RcsRobotCode).HasMaxLength(100);
         b.Property(x => x.StatusDetail).HasMaxLength(500);
@@ -33,6 +34,7 @@ internal sealed class LocationConfiguration : IEntityTypeConfiguration<Location>
     {
         b.ToTable("locations", t => t.HasCheckConstraint("ck_locations_capacity", "\"RackCapacity\" >= 0"));
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.Code).HasMaxLength(50).IsRequired();
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.Version).IsRowVersion();
@@ -48,6 +50,7 @@ internal sealed class RackConfiguration : IEntityTypeConfiguration<Rack>
         b.ToTable("racks", t => t.HasCheckConstraint("ck_racks_transit_no_location",
             "\"Status\" <> 'InTransit' OR \"CurrentLocationId\" IS NULL"));
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.ExternalRackId).HasMaxLength(100);
         b.Property(x => x.RackType).HasMaxLength(100);
         b.Property(x => x.Version).IsRowVersion();
@@ -64,6 +67,7 @@ internal sealed class ReservationConfiguration : IEntityTypeConfiguration<Reserv
     {
         b.ToTable("reservations");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.HasIndex(x => x.TaskId);
         b.HasIndex(x => new { x.LocationId, x.Status });
         // Two tasks can never hold the same rack: unique while the source-rack reservation is ACTIVE.
@@ -78,6 +82,7 @@ internal sealed class InventoryTransactionConfiguration : IEntityTypeConfigurati
     {
         b.ToTable("inventory_transactions");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.UserName).HasMaxLength(100);
         b.Property(x => x.Note).HasMaxLength(1000);
         b.HasIndex(x => x.TaskId);
@@ -93,6 +98,7 @@ internal sealed class ProcessedEventConfiguration : IEntityTypeConfiguration<Pro
     {
         b.ToTable("processed_events");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.Source).HasMaxLength(50).IsRequired();
         b.Property(x => x.EventKey).HasMaxLength(200).IsRequired();
         b.HasIndex(x => new { x.Source, x.EventKey }).IsUnique(); // callback idempotency
@@ -105,6 +111,7 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
     {
         b.ToTable("transport_tasks");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.RequestKey).HasMaxLength(200).IsRequired();
         b.Property(x => x.RcsRequestCode).HasMaxLength(100).IsRequired();
         b.Property(x => x.RcsTaskCode).HasMaxLength(100);
@@ -141,6 +148,7 @@ internal sealed class TaskHistoryConfiguration : IEntityTypeConfiguration<TaskHi
     {
         b.ToTable("task_history");
         b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.EventName).HasMaxLength(100).IsRequired();
         b.Property(x => x.Detail).HasMaxLength(2000);
         b.Property(x => x.Source).HasMaxLength(50).IsRequired();
