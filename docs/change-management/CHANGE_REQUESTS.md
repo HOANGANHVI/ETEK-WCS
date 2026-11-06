@@ -25,7 +25,7 @@
 |---|---|---|---|---|---|
 | CR-000 | Establish v1.3 change-management framework | Project owner confirmation | APPROVED | 1.3 | Framework only; no business behavior change |
 | CR-001 | Authentication, Admin/Operator authorization, account management, audit trail, Operator task edit/hard-delete, Operator inventory edit | Project owner messages (2026-11-06) | **APPROVED** (2026-11-06) | Phase 1 | Final business rules confirmed by the project owner; implemented; see docs/specification/access-control.md |
-| CR-002 | Replace single-PLC topology with 4 PLC connections and 16 independent Station IO sets using the common 23-signal template | Project owner confirmation and `ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx` (2026-11-06) | **APPROVED** (architecture direction, 2026-11-06) | Phase 1 | Specification addenda and controlled IO workbook updated; actual device addresses/protocol/handshake remain unconfirmed |
+| CR-002 | Replace single-PLC topology with 4 PLC connections and 16 independent Station IO sets using the common 23-signal template | Project owner confirmation and `ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx` (2026-11-06) | **IMPLEMENTED** (Simulator/Mock; real PLC untested) | Phases 1-7 | Specification addenda and controlled IO workbook updated; actual device addresses/protocol/handshake remain unconfirmed |
 
 ## New Change Request template
 
@@ -126,3 +126,4 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Acceptance criteria:** Four configurable PLC connections; 16 Station IO instances; no address collision between Stations on the same PLC; identical device addresses allowed across different PLCs; no invented address or handshake behavior; PLC simulator and real-hardware verification reported separately.
 - **Rollback:** Revert CR-002-specific config/code/document changes through Git; retain prior files/commit for traceability.
 - **Decision:** APPROVED for architecture and documentation direction. Live PLC commissioning remains blocked on PLC engineer confirmation of the open parameters.
+- **Implementation note (2026-11-06):** Full implementation approved and delivered (Phases 2-7). Migration `AddPlcTopology` (4 new tables, CREATE only) exists and is NOT applied to production. SOURCE CODE IMPLEMENTED: yes. SIMULATOR/MOCK TESTED: yes (302 backend tests). REAL PLC TESTED: no. Commissioning remains blocked on PLC engineer confirmation; see ADR-0004 and TESTING_REPORT_CR-002.md.

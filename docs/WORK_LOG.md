@@ -407,3 +407,16 @@ Still not confirmed:
 - No live PLC connection or hardware test is claimed by this documentation update.
 
 Verification: documentation/package consistency only. No source code was changed and no software tests were run as part of this document update.
+
+## 10. Update 2026-11-06 – CR-002 PLC communication implementation (Phases 2-7)
+
+Delivered: IO catalog generator and idempotent seeder; address validator; PLC/Station config API; migration AddPlcTopology (not applied to wcs_db); MC 3E binary codec, TCP client and mock server; 4 PLC workers with write queue and reconnect; Station IO handlers; handshake framework (no rules); opt-in WCS integration; Vietnamese monitoring UI; ADR-0004; TESTING_REPORT_CR-002.md.
+
+Commits: e112b0f (P2), 7efa2e9 (P3), b3946be (P4), 442e3bd (P5), 064514f (P6), plus Phase 7 docs.
+
+Tests: 302 backend passed; frontend lint/tsc/build/build:demo clean; browser E2E 39/39 (Simulator).
+
+Status: SOURCE CODE IMPLEMENTED yes; SIMULATOR/MOCK TESTED yes; REAL PLC TESTED no.
+
+Open (NEEDS_CONFIRMATION): actual addresses, TCP port and MC parameters, INT sign, STRING encoding/length, heartbeat scope, handshake set/reset/timeouts, Pickup/Delivery to flow mapping, Transfer_Permit write path.
+

@@ -1,5 +1,14 @@
 # Change Log
 
+## v1.6 – CR-002 PLC communication implemented (2026-11-06)
+
+- Change Request: CR-002 (IMPLEMENTED in Simulator/Mock; REAL PLC NOT TESTED).
+- 4 PLC workers (one TCP connection each), 16 Station IO handlers, 368 IO points, MC 3E binary driver, mock server, write queue, reconnect, SignalR (admin group for sensitive data), handshake framework (no rules shipped), opt-in WCS integration, Vietnamese PLC monitoring UI.
+- Modes SIMULATOR (default) / REAL_READ_ONLY / REAL_READ_WRITE; no automatic switch; Safety and Transfer Permit never written for testing.
+- New tables plc_connections, plc_stations, station_io_points, plc_comm_log (migration AddPlcTopology, not auto-applied). Actual addresses stay NULL.
+- No change to PER_AGV, BP-01/02/03/05/06, BP-04 (REVIEW), A3/A4, D1/D2, inventory rules or roles.
+- See decisions/ADR/ADR-0004 and TESTING_REPORT_CR-002.md.
+
 ## v1.5 – CR-001 final business rules (approved 2026-11-06)
 
 - Change Request: CR-001 (APPROVED).
