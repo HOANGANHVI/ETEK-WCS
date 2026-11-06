@@ -1,15 +1,16 @@
 import { useCallback } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Agv, SystemHealth } from '../api/types'
+import { hasRole, useAuth } from '../auth/AuthContext'
 import { DEMO_MODE } from '../config'
 import { DemoDock } from '../demo/DemoDock'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
 import { formatDate, formatTime } from '../i18n/format'
-import { CONNECTION_VI, type Tone } from '../i18n/vi'
+import { CONNECTION_VI, ROLE_SHORT_VI, type Tone } from '../i18n/vi'
 import { useRealtime } from '../realtime/RealtimeProvider'
-import { IconAgv, IconOverview, IconSettings, IconTasks, IconWarehouse } from './icons'
+import { IconAgv, IconLog, IconOverview, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
 
 const SITE_NAME = (import.meta.env.VITE_SITE_NAME as string | undefined)?.trim()
 
@@ -20,7 +21,12 @@ const NAV = [
   { to: '/inventory', label: 'Vị trí và tồn kho', icon: <IconWarehouse /> },
 ]
 
-const NAV_SYSTEM = [{ to: '/config', label: 'Cấu hình hệ thống', icon: <IconSettings /> }]
+// Shown to Admin only. Hiding them is a convenience: the API and the routes enforce the same rule independently.
+const NAV_SYSTEM = [
+  { to: '/config', label: 'Cấu hình hệ thống', icon: <IconSettings /> },
+  { to: '/users', label: 'Quản lý tài khoản', icon: <IconUsers /> },
+  { to: '/audit', label: 'Nhật ký thao tác', icon: <IconLog /> },
+]
 
 interface LinkView { tone: Tone; text: string }
 
@@ -46,6 +52,7 @@ function rcsView(health: SystemHealth | null, agvs: Agv[] | null): LinkView {
 }
 
 function TopBar() {
+  const { user, logout } = useAuth()
   const now = useClock()
   const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
   const agvs = useApi(useCallback(() => api.agvs(), []), ['AgvStatusChanged'])
@@ -65,12 +72,21 @@ function TopBar() {
       {DEMO_MODE && <span className="sim-chip" title="Dữ liệu hiển thị là dữ liệu giả, chạy trong trình duyệt"><i />Chế độ mô phỏng</span>}
       <div className="conn" title="Kết nối tới PLC"><span className="label">PLC</span><span className={`led ${plc.tone}`} /><strong>{plc.text}</strong></div>
       <div className="conn" title="Kết nối tới RCS"><span className="label">RCS</span><span className={`led ${rcs.tone}`} /><strong>{rcs.text}</strong></div>
+      {user && (
+        <div className="whoami" title={`Đăng nhập: ${user.username}`}>
+          <span className="who-name">{user.displayName}</span>
+          <span className="who-role">{ROLE_SHORT_VI[user.role]}</span>
+        </div>
+      )}
+      <Link className="top-link" to="/account/password">Đổi mật khẩu</Link>
+      <button type="button" className="top-btn" onClick={() => void logout()}>Đăng xuất</button>
       <div className="clock"><strong>{formatTime(now.toISOString())}</strong><span>{formatDate(now)}</span></div>
     </header>
   )
 }
 
 function SideBar() {
+  const { user } = useAuth()
   const { status } = useRealtime()
   const tone = status === 'connected' || status === 'demo' ? 'ok' : status === 'disconnected' ? 'bad' : 'warn'
   return (
@@ -82,8 +98,8 @@ function SideBar() {
             {n.icon}<span>{n.label}</span>
           </NavLink>
         ))}
-        <div className="nav-title">Hệ thống</div>
-        {NAV_SYSTEM.map((n) => (
+        {hasRole(user, 'Admin') && <div className="nav-title">Hệ thống</div>}
+        {hasRole(user, 'Admin') && NAV_SYSTEM.map((n) => (
           <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
             {n.icon}<span>{n.label}</span>
           </NavLink>
@@ -98,12 +114,18 @@ function SideBar() {
 }
 
 export function Layout() {
+  const { user } = useAuth()
+  const location = useLocation()
+  const denied = (location.state as { denied?: string } | null)?.denied
   return (
     <div className="app">
       <TopBar />
       <SideBar />
-      <main className="main"><Outlet /></main>
-      {DEMO_MODE && <DemoDock />}
+      <main className="main">
+        {denied && <div className="notice notice-warn" role="alert">{denied}</div>}
+        <Outlet />
+      </main>
+      {DEMO_MODE && hasRole(user, 'Admin') && <DemoDock />}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import type { InventoryTransaction, TransportTask } from '../api/types'
 import { AgvCard } from '../components/AgvCard'
 import { IconAgv, IconClock, IconTasks, IconWarehouse } from '../components/icons'
+import { useAuth } from '../auth/AuthContext'
 import { Async, EmptyState, Kpi, PageHeader, Panel } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
@@ -16,6 +17,8 @@ const EVENTS_INV = ['InventoryChanged', 'TaskStateChanged'] as const
 interface Activity { id: string; at: string; tone: Tone; text: string; detail?: string }
 
 export function DashboardPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
   const now = useClock(5000).getTime()
   const agvs = useApi(useCallback(() => api.agvs(), []), ['TaskStateChanged', 'AgvStatusChanged'])
   const locations = useApi(useCallback(() => api.locations(), []), [...EVENTS_INV])
@@ -87,7 +90,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Tổng quan" description="Tình hình vận hành của hai AGV, nhiệm vụ vận chuyển và tồn kho rack trong thời gian thực." />
+      <PageHeader title={isAdmin ? "Tổng quan quản trị" : "Tổng quan vận hành"} description="Tình hình vận hành của hai AGV, nhiệm vụ vận chuyển và tồn kho rack trong thời gian thực." />
 
       <div className="kpi-row">
         <Kpi label="Tổng số AGV" value={agvList ? kpi.totalAgv : '—'} hint="AGV1 · AGV2" icon={<IconAgv />} />

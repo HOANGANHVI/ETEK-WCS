@@ -24,3 +24,8 @@ Use stable IDs so requirements can be traced from source to specification, code 
 - When a requirement changes, preserve its ID if its meaning remains continuous; create a new ID if it represents a distinct requirement.
 - Mark removed requirements `DEPRECATED`; never silently delete their history.
 - Do not mark REVIEW/TBD requirements as implementation-ready.
+| SEC-01 | Every API requires authentication; unauthenticated calls return 401 | CR-001 | CR-001 | WCS.Api (cookie auth, fallback policy) | TST-AUTH-001 | IMPLEMENTED |
+| SEC-02 | Admin-only: PLC/RCS and operational configuration, simulator, accounts, audit, stock changes, cancel/reconcile | CR-001 | CR-001 | WCS.Api policies | TST-AUTH-002 | IMPLEMENTED |
+| SEC-03 | Operator may create tasks and edit/delete only waiting tasks; state re-checked from the database in a transaction | CR-001 | CR-001 | TaskOrchestrator.UpdateTaskAsync / DeleteTaskAsync | TST-AUTH-DB-001..005 | IMPLEMENTED (interpretation NEEDS_CONFIRMATION) |
+| SEC-04 | Accounts: no self-registration, no self role change, last active Admin protected, passwords stored hashed | CR-001 | CR-001 | UserAdminService, PasswordService | TST-AUTH-003..008 | IMPLEMENTED |
+| SEC-05 | Audit trail of sign-in, task, configuration, account and simulator actions without secrets | CR-001 | CR-001 | IAuditLog, audit_log | TST-AUTH-009, TST-AUTH-DB-006 | IMPLEMENTED |

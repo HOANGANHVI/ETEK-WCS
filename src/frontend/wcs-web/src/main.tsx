@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { DEMO_MODE } from './config'
+import { AuthProvider } from './auth/AuthContext'
 import { RealtimeProvider } from './realtime/RealtimeProvider'
 
 if (DEMO_MODE) {
@@ -23,9 +24,11 @@ if (DEMO_MODE) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <RealtimeProvider>
-        <App />
-      </RealtimeProvider>
+      <AuthProvider>
+        <RealtimeProvider>
+          <App />
+        </RealtimeProvider>
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 )

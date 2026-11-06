@@ -1,5 +1,13 @@
 # Change Log
 
+## v1.4 – Authentication and authorization (CR-001)
+
+- Change Request: CR-001 (IMPLEMENTED; see the register for open decisions).
+- Added cookie-based sign-in, Admin/Operator roles enforced in the backend, account management, audit trail.
+- Operators may create tasks and edit/delete tasks that are still waiting (not yet accepted by an AGV).
+- New tables app_users and audit_log (migration AddAuthentication, not applied automatically).
+- No change to BP-01/02/03/05/06, BP-04 (still REVIEW), A3/A4, D1/D2, PER_AGV or the task state machine.
+
 ## v1.3 – Change-management framework
 
 **Status:** Framework release; no approved business behavior change.

@@ -89,6 +89,8 @@ export const HISTORY_EVENT_VI: Record<string, string> = {
   PICK_CONFIRMED: 'Xác nhận đã lấy rack',
   RECONCILIATION_REQUIRED: 'Cần đối soát vị trí rack',
   RECONCILED: 'Đã đối soát',
+  TASK_EDITED: 'Người dùng sửa nhiệm vụ',
+  TASK_DELETED: 'Người dùng xóa nhiệm vụ',
   WAITING_FOR_SOURCE: 'Chờ rack nguồn',
   LATE_EVENT_IGNORED: 'Bỏ qua sự kiện đến muộn',
   OUT_OF_ORDER_EVENT_IGNORED: 'Bỏ qua sự kiện sai thứ tự',
@@ -161,6 +163,24 @@ const ERROR_VI: Record<string, string> = {
   INVALID_TASK_TRANSITION: 'Không thể chuyển nhiệm vụ sang trạng thái đó.',
   CAPACITY_EXCEEDED: 'Vị trí không còn chỗ trống.',
   NO_RECONCILIATION_NEEDED: 'Nhiệm vụ không cần đối soát.',
+  UNAUTHENTICATED: 'Bạn chưa đăng nhập hoặc phiên đã hết hạn.',
+  INVALID_CREDENTIALS: 'Tên đăng nhập hoặc mật khẩu không đúng.',
+  ACCOUNT_LOCKED: 'Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau ít phút.',
+  ACCOUNT_DISABLED: 'Tài khoản đã bị vô hiệu hóa.',
+  FORBIDDEN: 'Bạn không có quyền thực hiện thao tác này.',
+  PASSWORD_CHANGE_REQUIRED: 'Bạn cần đổi mật khẩu trước khi tiếp tục.',
+  CURRENT_PASSWORD_INCORRECT: 'Mật khẩu hiện tại không đúng.',
+  PASSWORD_UNCHANGED: 'Mật khẩu mới phải khác mật khẩu hiện tại.',
+  CLIENT_HEADER_MISSING: 'Yêu cầu không hợp lệ (thiếu thông tin định danh ứng dụng).',
+  USER_NOT_FOUND: 'Không tìm thấy tài khoản.',
+  CANNOT_CHANGE_OWN_ROLE: 'Không thể tự thay đổi vai trò của chính mình.',
+  CANNOT_DISABLE_SELF: 'Không thể tự vô hiệu hóa tài khoản của chính mình.',
+  LAST_ADMIN: 'Không thể vô hiệu hóa hoặc hạ quyền Admin đang hoạt động cuối cùng.',
+  TASK_LOCKED: 'Nhiệm vụ đã được AGV tiếp nhận hoặc đã kết thúc; tài khoản Operator không có quyền sửa/xóa.',
+  TASK_NOT_EDITABLE: 'Nhiệm vụ đang thực hiện hoặc đã kết thúc nên không thể sửa/xóa trực tiếp. Hãy dùng chức năng hủy hoặc đối soát.',
+  TASK_STATE_CHANGED: 'Nhiệm vụ đã chuyển trạng thái trong lúc bạn thao tác. Dữ liệu đã được tải lại, vui lòng kiểm tra rồi thử lại.',
+  NO_SOURCE_AT_STATION: 'Trạm mới hiện không có rack phù hợp để lấy. Nhiệm vụ không bị thay đổi.',
+  REQUEST_KEY_REQUIRED: 'Thiếu mã định danh yêu cầu.',
   CONCURRENT_MODIFICATION: 'Dữ liệu vừa được thay đổi bởi thao tác khác, vui lòng thử lại.',
   INTERNAL_ERROR: 'Máy chủ gặp lỗi nội bộ. Kiểm tra nhật ký Backend.',
 }
@@ -180,3 +200,37 @@ export const CONNECTION_VI: Record<string, string> = {
 
 /** Display code of a task, derived from its id (not a stored business field). */
 export const taskCode = (id: string) => `NV-${id.replaceAll('-', '').slice(0, 8).toUpperCase()}`
+
+export const ROLE_VI: Record<string, string> = { Admin: 'Quản trị viên (Admin)', Operator: 'Vận hành viên (Operator)' }
+export const ROLE_SHORT_VI: Record<string, string> = { Admin: 'Admin', Operator: 'Operator' }
+
+export const AUDIT_RESULT_VI: Record<string, string> = { Success: 'Thành công', Denied: 'Bị từ chối', Failed: 'Thất bại' }
+export const AUDIT_RESULT_TONE: Record<string, Tone> = { Success: 'ok', Denied: 'warn', Failed: 'bad' }
+
+export const AUDIT_ACTION_VI: Record<string, string> = {
+  AUTH_LOGIN: 'Đăng nhập',
+  AUTH_LOGOUT: 'Đăng xuất',
+  AUTH_PASSWORD_CHANGE: 'Đổi mật khẩu',
+  ACCESS_DENIED: 'Truy cập bị từ chối',
+  TASK_CREATE: 'Tạo nhiệm vụ',
+  TASK_UPDATE: 'Sửa nhiệm vụ',
+  TASK_DELETE: 'Xóa nhiệm vụ',
+  TASK_CANCEL: 'Hủy nhiệm vụ',
+  TASK_RECONCILE: 'Đối soát nhiệm vụ',
+  CONFIG_PLC_UPDATE: 'Sửa cấu hình PLC',
+  CONFIG_PLC_TEST: 'Kiểm tra kết nối PLC',
+  CONFIG_RCS_UPDATE: 'Sửa cấu hình RCS',
+  CONFIG_RCS_TEST: 'Kiểm tra kết nối RCS',
+  CONFIG_AGV_UPDATE: 'Sửa cấu hình AGV',
+  CONFIG_LOCATION_CREATE: 'Thêm vị trí',
+  CONFIG_LOCATION_UPDATE: 'Sửa vị trí',
+  USER_CREATE: 'Tạo tài khoản',
+  USER_UPDATE: 'Sửa tài khoản',
+  USER_PASSWORD_RESET: 'Đặt lại mật khẩu',
+  USER_BOOTSTRAP_ADMIN: 'Khởi tạo Admin đầu tiên',
+  INVENTORY_INITIAL_STOCK: 'Khai báo tồn kho ban đầu',
+  INVENTORY_ADJUST: 'Điều chỉnh tồn kho',
+  SIMULATOR_ADVANCE: 'Giả lập: chạy bước tiếp theo',
+  SIMULATOR_RUN: 'Giả lập: chạy toàn bộ',
+  SIMULATOR_STATION_REQUEST: 'Giả lập: yêu cầu từ trạm',
+}

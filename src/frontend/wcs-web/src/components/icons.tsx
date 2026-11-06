@@ -35,3 +35,9 @@ export const IconRefresh = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><path d="
 export const IconSettings = (p: SVGProps<SVGSVGElement>) => (
   <Svg {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></Svg>
 )
+export const IconUsers = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}><circle cx="9" cy="8" r="3.2" /><path d="M3 19c0-3.2 2.7-5.2 6-5.2s6 2 6 5.2" /><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.2c1.8.7 3 2.2 3 4.8" /></Svg>
+)
+export const IconLog = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 12h7M9 16h7" /></Svg>
+)

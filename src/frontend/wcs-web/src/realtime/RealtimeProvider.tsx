@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useAuth } from '../auth/AuthContext'
 import { DEMO_MODE } from '../config'
 import { demo } from '../demo/engine'
 import { createWcsConnection, toStatus, WCS_EVENTS, type ConnectionStatus, type WcsEventName } from './signalr'
@@ -18,9 +19,13 @@ export const useRealtime = () => useContext(RealtimeContext)
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ConnectionStatus>(DEMO_MODE ? 'demo' : 'connecting')
   const listeners = useRef(new Set<Listener>())
+  const { status: authStatus, user } = useAuth()
+  // The hub requires the same session cookie as the REST API, so only connect once signed in (and not while a password change is pending).
+  const signedIn = authStatus === 'authenticated' && !user?.mustChangePassword
 
   useEffect(() => {
     // Demo Mode: events come from the in-browser engine and no SignalR connection is ever opened.
+    if (!signedIn) return
     if (DEMO_MODE) return demo.on((name, payload) => listeners.current.forEach((l) => l(name, payload)))
 
     const connection = createWcsConnection()
@@ -41,7 +46,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       disposed = true
       void connection.stop()
     }
-  }, [])
+  }, [signedIn])
 
   const subscribe = useCallback((listener: Listener) => {
     listeners.current.add(listener)

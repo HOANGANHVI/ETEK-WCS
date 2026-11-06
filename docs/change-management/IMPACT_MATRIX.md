@@ -12,6 +12,7 @@ This matrix is a starting point. Update it for every approved Change Request. â€
 | BP-05 F5 full rack | Related | Core | Core | Core | Beeper input if PLC-connected | AGV1 task | Operator/PDA | Task/inventory | BP-05 tests |
 | BP-06 F5 empty rack | Related | Core | Core | Core | Beeper input if PLC-connected | AGV2 task | Operator/PDA | Task/inventory | BP-06 tests |
 | A3/A4, D1/D2 | UNCHANGED | Legacy reference | Do not alter | Do not alter absent approved CR | Do not alter absent approved CR | Do not alter absent approved CR | Do not alter absent approved CR | Do not alter absent approved CR | Legacy regression |
+| Authentication / authorization (CR-001) | Roles Admin/Operator (new) | NOT_AFFECTED | NOT_AFFECTED (edit/delete of waiting tasks added at API level) | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED | AFFECTED (login, role menus, accounts, audit) | AFFECTED (app_users, audit_log) | AFFECTED (TST-AUTH-*) |
 | New buffer location | Assess | Likely | Assess | Likely | Assess | Assess | Likely | Likely | New + regression |
 
 ## Per-CR impact checklist

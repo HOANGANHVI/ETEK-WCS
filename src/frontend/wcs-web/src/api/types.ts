@@ -130,3 +130,10 @@ export interface SimulationStep {
   message: string
   task: TransportTask
 }
+
+/** A process flow that users may request, with the stations allowed to request it (read from the deployed configuration). */
+export interface FlowOption {
+  flow: string
+  rackKind: string
+  stations: string[]
+}

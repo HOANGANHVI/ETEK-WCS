@@ -217,6 +217,58 @@ export class DemoEngine {
     return t.pub
   }
 
+  /** Same rule as the backend: a task can be edited/deleted by a user only before an AGV has been claimed for it. */
+  private ensureUserEditable(t: DTask, expectedState: string | undefined, isAdmin: boolean) {
+    const s = t.pub.state
+    if (expectedState && expectedState !== s) throw new DemoError(409, 'TASK_STATE_CHANGED', `Nhiệm vụ đã chuyển sang trạng thái ${s}. Vui lòng tải lại dữ liệu.`)
+    if (s === 'Pending' || s === 'Validating' || s === 'Queued') return
+    throw isAdmin
+      ? new DemoError(409, 'TASK_NOT_EDITABLE', `Nhiệm vụ đang ở trạng thái ${s} nên không thể sửa/xóa trực tiếp.`)
+      : new DemoError(403, 'TASK_LOCKED', 'Nhiệm vụ đã được AGV tiếp nhận hoặc đã kết thúc; tài khoản Operator không có quyền sửa/xóa.')
+  }
+
+  updateTask(id: string, stationCode: string, expectedState: string | undefined, isAdmin: boolean): TransportTask {
+    const t = this.require(id)
+    this.ensureUserEditable(t, expectedState, isAdmin)
+    const rule = DEMO_FLOWS[t.flow]
+    const station = this.locations.find((l) => l.code === stationCode)
+    if (!station) throw new DemoError(404, 'STATION_NOT_FOUND', `Không tìm thấy trạm '${stationCode}'.`)
+    if (!rule.stations.includes(station.code)) throw new DemoError(422, 'STATION_NOT_ALLOWED', `Trạm ${station.code} không được phép yêu cầu quy trình ${t.flow}.`)
+    if (station.id === t.pub.requestLocationId) return t.pub
+    const oldCode = this.locationCode(t.pub.requestLocationId)
+    const oldReservations = this.reservations.filter((r) => r.active && r.taskId === t.pub.id)
+    const saved = { src: t.pub.sourceLocationId, rack: t.pub.rackId }
+    if (rule.srcMode === 'Request') {
+      oldReservations.forEach((r) => { r.active = false })
+      t.pub.sourceLocationId = null; t.pub.rackId = null
+    }
+    t.pub.requestLocationId = station.id; t.pub.destinationLocationId = null
+    if (rule.srcMode === 'Request' && t.pub.state === 'Queued' && !this.reserveSource(t, rule)) {
+      // Not possible: leave everything exactly as it was.
+      t.pub.requestLocationId = this.locations.find((l) => l.code === oldCode)!.id
+      t.pub.sourceLocationId = saved.src; t.pub.rackId = saved.rack
+      oldReservations.forEach((r) => { r.active = true })
+      throw new DemoError(422, 'NO_SOURCE_AT_STATION', `Trạm ${station.code} hiện không có rack phù hợp để lấy. Nhiệm vụ không bị thay đổi.`)
+    }
+    t.pub.updatedAt = nowIso()
+    this.log(t, t.pub.state, t.pub.state, 'TASK_EDITED', `station ${oldCode} -> ${station.code}`, 'operator')
+    this.schedule()
+    this.changed()
+    return t.pub
+  }
+
+  /** "Delete" keeps the record: the task becomes Cancelled and its reservations are released. */
+  deleteTask(id: string, expectedState: string | undefined, isAdmin: boolean): TransportTask {
+    const t = this.require(id)
+    this.ensureUserEditable(t, expectedState, isAdmin)
+    this.log(t, t.pub.state, t.pub.state, 'TASK_DELETED', 'deleted by user', 'operator')
+    this.move(t, 'Cancelled', 'Deleted by user before dispatch', 'operator')
+    this.releaseReservations(t)
+    this.schedule()
+    this.changed()
+    return t.pub
+  }
+
   cancelTask(id: string, reason: string): TransportTask {
     const t = this.require(id)
     const s = t.pub.state

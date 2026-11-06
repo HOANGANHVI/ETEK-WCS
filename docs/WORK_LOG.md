@@ -279,3 +279,51 @@ Executed with the password from .NET User Secrets (`Database:Password`); it was 
 - **Real API** (`http://localhost:5007`, Development): GET/PUT/test for `/api/config/plc|rcs` and GET `/api/config/operations` verified. Write calls were run
   against a scratch database (`wcs_api_check`, since dropped) to keep `wcs_db` clean. Secret never in responses or logs; check result is "Simulated".
 - Still open: the real-PostgreSQL run of the frontend against this API, authentication on `/api/config/*`, items listed in sections 6 and 9.
+
+---
+
+## 11. Update 2026-11-06 – Authentication, authorization, accounts, audit (CR-001)
+
+Everything below is **committed but NOT applied to `wcs_db`**: run `dotnet ef database update --project WCS.Infrastructure --startup-project WCS.Api` (from `src/backend`) after reviewing the migration `AddAuthentication` (CREATE TABLE app_users / audit_log + indexes only; Down() drops only those two new tables).
+
+### Architecture
+- **No ASP.NET Identity user store was present**, so no existing component was replaced. Accounts are a small `AppUser` entity (`app_users`) with the ASP.NET Core Identity `PasswordHasher` (PBKDF2, per-password salt, format v3). Passwords are never stored or logged in clear.
+- **Session**: cookie authentication (`wcs.auth`, HttpOnly, SameSite=Strict, `Secure` outside Development, sliding idle timeout 30 min, absolute 12 h; `Auth:*` config). On **every request** the account is re-read from the database: a disabled account, a role change or a password reset (security stamp) ends the session immediately.
+- **Authorization** is enforced in the backend: fallback policy = authenticated; policies `Operations` (Admin or Operator) for the whole `/api` group and the SignalR hub; `AdminOnly` for configuration, simulator, accounts, audit, stock changes, task cancel/reconcile. The frontend only hides what the API would refuse anyway.
+- **Request guards**: state-changing `/api` calls must carry `X-WCS-Client` (cross-site forms cannot add it); a session flagged "must change password" can only use `/api/auth/*`.
+- **Lockout**: 5 failed sign-ins lock the account for 5 minutes; unknown user / wrong password / disabled account return the same message (a dummy hash is computed for unknown names).
+- **Audit**: table `audit_log` (actor, role, action, target, result Success/Denied/Failed, detail, before/after JSON, IP). Written through its own DbContext; secret-looking string fields are blanked before storing; config changes record only the fact "password replaced", never the value.
+
+### Protected API
+| Area | Admin | Operator |
+|---|---|---|
+| `POST /api/auth/login` | anonymous | anonymous |
+| `/api/auth/logout, me, change-password` | yes | yes |
+| `GET /api/agvs, locations, inventory/*, tasks*, flows, system/health` | yes | yes |
+| `POST /api/tasks` | yes | yes (requester taken from the session) |
+| `PUT/DELETE /api/tasks/{id}` | waiting tasks only | waiting tasks only (403 `TASK_LOCKED` otherwise) |
+| `POST /api/tasks/{id}/cancel, /reconcile` | yes | 403 |
+| `POST /api/inventory/initial-stock, adjustments` | yes | 403 |
+| `/api/config/*`, `/api/simulator/*`, `/api/users*`, `/api/audit` | yes | 403 |
+| `/hubs/wcs` (SignalR) | yes | yes (same cookie) |
+
+Task edit/delete: the permission and the state are checked **inside the transaction on the freshly loaded task** (xmin concurrency + retry). The state the screen showed (`expectedState`) is only a hint: mismatch gives 409 `TASK_STATE_CHANGED` ("reload"); it can never grant access.
+
+### First administrator / creating operators
+- No built-in account and no default password. When **no active Admin exists** at API start, the bootstrapper creates one from configuration: `Bootstrap:Admin:Username` and `Bootstrap:Admin:Password` (user-secrets or env `Bootstrap__Admin__Username/Password`; password must satisfy the policy). It is flagged "must change password" and is audited (`USER_BOOTSTRAP_ADMIN`). Once an Admin exists the setting is ignored; remove it afterwards.
+- Admin creates Operators in the UI (`Quản lý tài khoản`) or `POST /api/users`; they must change the initial password at first sign-in.
+
+### Verified (executed)
+- Backend build 0 warnings/0 errors, no vulnerable packages. **213 tests, 213 passed, 0 skipped** (3 consecutive full runs; concurrency tests stress-run 40x without failure). New: 60 API tests with in-memory fakes through the real cookie pipeline (401/403 matrix, lockout, idle + absolute expiry via a fake TimeProvider, disabled account / role change ends the session, forced password change, last-admin and self-protection rules, audit without secrets) and 12 PostgreSQL tests (Operator create/edit/move/delete, locked after AGV accepted, forged `expectedState`, delete-vs-dispatch race, two admins demoting each other, hashed passwords + audit rows in the real DB, bootstrap).
+- Frontend: `npm run lint`, `build`, `build:demo` clean. Headless-Chrome checks: **Demo Mode 31/31**, **real mode (API + PostgreSQL scratch DB + Vite proxy) 28/28**: bootstrap admin forced to change password, cookie HttpOnly/SameSite=Strict, SignalR connects with the cookie, operator sees only 4 menus, direct URLs to admin pages redirect with a message, admin APIs return 403 for the operator, audit page shows entries and never a password.
+- Direct SQL check on the scratch DB: hashes are `AQAAAAIAAYag…` (Identity v3), 0 audit rows contain any password, API log contains no password.
+
+### Bugs found while doing this (fixed)
+- `Location.Touch` only changed a timestamp: two concurrent allocations of the last slot sharing the same clock reading issued **no UPDATE**, so the xmin conflict that serializes them never fired (seen as 3/40 failures of `Last_free_destination_slot...`; harmless with the real clock but fragile). `Touch` now always changes the value; 0/40 failures afterwards.
+- Test arrangement: the harness and the API host each own a different RCS simulator instance; tests that drive tasks through the API now use the API host's simulator.
+
+### Not done / open (see CR-001 for the decision list)
+- `wcs_db` migration `AddAuthentication` not applied (production rule: never automatic).
+- Interpretations to confirm: what "edit task" means (only the requesting station today), "delete" = soft delete to Cancelled, Operator read-only inventory, Admin handling of failed/cancelled tasks, password/lockout/session defaults.
+- Security items still open: TLS/HTTPS termination and `Secure` cookie in production, backup of the Data Protection key ring, no MFA, no e-mail password reset, no per-IP rate limiting, `X-WCS-Client` is defence in depth (not a secret).
+- Demo Mode has its own in-browser demo accounts (`demo-admin`, `demo-operator`, no passwords). They exist only in `demo/demoAuth.ts`, are reachable only when `VITE_DEMO_MODE=true`, and never touch the backend.

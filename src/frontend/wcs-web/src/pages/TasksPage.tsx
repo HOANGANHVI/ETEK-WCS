@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useAuth } from '../auth/AuthContext'
 import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
+import { CreateTaskDialog, DeleteTaskDialog, EditTaskDialog } from './TaskDialogs'
+import { USER_EDITABLE } from './taskRules'
 import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
@@ -15,7 +18,12 @@ const CANCELLABLE: TaskState[] = [
 ]
 const EVENTS = ['TaskCreated', 'TaskStateChanged'] as const
 
+type Dialog = { kind: 'create' } | { kind: 'edit'; task: TransportTask } | { kind: 'delete'; task: TransportTask } | null
+
 export function TasksPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'Admin'
+  const [dialog, setDialog] = useState<Dialog>(null)
   const [params, setParams] = useSearchParams()
   const [stateFilter, setStateFilter] = useState<TaskState | ''>('')
   const [agvFilter, setAgvFilter] = useState('')
@@ -43,6 +51,7 @@ export function TasksPage() {
       <PageHeader
         title="Quản lý nhiệm vụ"
         description="Theo dõi toàn bộ nhiệm vụ vận chuyển, vòng đời trạng thái và các sự kiện PLC/RCS liên quan."
+        actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>Tạo nhiệm vụ</Button>}
       />
       <div className={`task-layout ${selectedId ? 'with-detail' : ''}`}>
         <Panel
@@ -84,7 +93,8 @@ export function TasksPage() {
                         <td><TaskStatePill state={t.state} />{t.requiresReconciliation && <span className="flag" title="Cần đối soát vị trí rack"> ⚠</span>}</td>
                         <td className="nowrap" onClick={(e) => e.stopPropagation()}>
                           <Button size="sm" onClick={() => select(t.id)}>Chi tiết</Button>{' '}
-                          {CANCELLABLE.includes(t.state) && <Button size="sm" variant="danger" onClick={() => select(t.id, true)}>Hủy</Button>}
+                          {USER_EDITABLE.includes(t.state) && <><Button size="sm" onClick={() => setDialog({ kind: 'edit', task: t })}>Sửa</Button>{' '}<Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'delete', task: t })}>Xóa</Button>{' '}</>}
+                          {isAdmin && !USER_EDITABLE.includes(t.state) && CANCELLABLE.includes(t.state) && <Button size="sm" variant="danger" onClick={() => select(t.id, true)}>Hủy</Button>}
                         </td>
                       </tr>
                     ))}
@@ -96,10 +106,14 @@ export function TasksPage() {
         </Panel>
 
         {selectedId && (
-          <TaskDetail key={selectedId} id={selectedId} codes={codes} askCancel={cancelFor === selectedId}
-            onCancelDone={() => setCancelFor(null)} />
+          <TaskDetail key={selectedId} id={selectedId} codes={codes} askCancel={isAdmin && cancelFor === selectedId} isAdmin={isAdmin}
+            onCancelDone={() => setCancelFor(null)} onEdit={(t) => setDialog({ kind: 'edit', task: t })} onDelete={(t) => setDialog({ kind: 'delete', task: t })} />
         )}
       </div>
+
+      {dialog?.kind === 'create' && <CreateTaskDialog onClose={() => setDialog(null)} onCreated={(t) => { setDialog(null); setParams({ id: t.id }); tasks.reload() }} />}
+      {dialog?.kind === 'edit' && <EditTaskDialog task={dialog.task} stationCode={codes.loc(dialog.task.requestLocationId)} onClose={() => setDialog(null)} onChanged={() => tasks.reload()} />}
+      {dialog?.kind === 'delete' && <DeleteTaskDialog task={dialog.task} onClose={() => setDialog(null)} onChanged={() => tasks.reload()} />}
     </>
   )
 }
@@ -108,10 +122,13 @@ interface DetailProps {
   id: string
   codes: ReturnType<typeof useCodeMaps>
   askCancel: boolean
+  isAdmin: boolean
   onCancelDone: () => void
+  onEdit: (t: TransportTask) => void
+  onDelete: (t: TransportTask) => void
 }
 
-function TaskDetail({ id, codes, askCancel, onCancelDone }: DetailProps) {
+function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDelete }: DetailProps) {
   const task = useApi(useCallback(() => api.task(id), [id]), [...EVENTS])
   const history = useApi(useCallback(() => api.taskHistory(id), [id]), [...EVENTS])
   const health = useApi(useCallback(() => api.health(), []))
@@ -135,8 +152,10 @@ function TaskDetail({ id, codes, askCancel, onCancelDone }: DetailProps) {
         {(t: TransportTask) => {
           const agv = (agvs.data ?? []).find((a) => a.id === t.agvId)
           const flow = flowInfo(t.flow)
-          const canCancel = CANCELLABLE.includes(t.state)
-          const simulator = health.data?.integration.mode === 'Simulator'
+          const editable = USER_EDITABLE.includes(t.state)
+          // Cancelling a task an AGV already took, and the simulator step, are Admin-only (also enforced by the API).
+          const canCancel = isAdmin && !editable && CANCELLABLE.includes(t.state)
+          const simulator = isAdmin && health.data?.integration.mode === 'Simulator'
           const events = history.data ?? []
           const deviceEvents = events.filter((h) => h.source === 'PLC' || h.source === 'RCS' || DEVICE_EVENT_RE.test(h.event))
           return (
@@ -181,7 +200,7 @@ function TaskDetail({ id, codes, askCancel, onCancelDone }: DetailProps) {
                 </div>
               </section>
 
-              {(canCancel || (simulator && !['Completed', 'Failed', 'Cancelled'].includes(t.state))) && (
+              {(editable || canCancel || (simulator && !['Completed', 'Failed', 'Cancelled'].includes(t.state))) && (
                 <section className="detail-sec">
                   <h3>Thao tác</h3>
                   {askCancel || confirming ? (
@@ -190,12 +209,14 @@ function TaskDetail({ id, codes, askCancel, onCancelDone }: DetailProps) {
                         <input type="search" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do (bắt buộc)" />
                       </label>
                       <div className="btn-row">
-                        <Button variant="danger" disabled={busy || !reason.trim()} onClick={() => void run(() => api.cancelTask(t.id, reason.trim(), 'operator'), 'Đã gửi yêu cầu hủy. Nhiệm vụ chỉ chuyển sang “Đã hủy” sau khi RCS xác nhận.').then(() => { setReason(''); setConfirming(false); onCancelDone() })}>Xác nhận hủy</Button>
+                        <Button variant="danger" disabled={busy || !reason.trim()} onClick={() => void run(() => api.cancelTask(t.id, reason.trim()), 'Đã gửi yêu cầu hủy. Nhiệm vụ chỉ chuyển sang “Đã hủy” sau khi RCS xác nhận.').then(() => { setReason(''); setConfirming(false); onCancelDone() })}>Xác nhận hủy</Button>
                         <Button onClick={() => { setReason(''); setConfirming(false); onCancelDone() }}>Bỏ qua</Button>
                       </div>
                     </div>
                   ) : (
                     <div className="btn-row">
+                      {editable && <Button disabled={busy} onClick={() => onEdit(t)}>Sửa nhiệm vụ</Button>}
+                      {editable && <Button variant="danger" disabled={busy} onClick={() => onDelete(t)}>Xóa nhiệm vụ</Button>}
                       {canCancel && <Button variant="danger" disabled={busy} onClick={() => setConfirming(true)}>Hủy nhiệm vụ</Button>}
                       {simulator && <Button variant="primary" disabled={busy} onClick={() => void run(() => api.simulateNext(t.id))}>Chạy bước thiết bị tiếp theo (mô phỏng)</Button>}
                     </div>
