@@ -382,3 +382,28 @@ Backend: `WCS.Domain/Tasks/TransportTask.cs` (ReconfigureRequest, IsUntouchedByA
 - No UI yet to edit stock (APIs only); no warehouse operations beyond the existing two (no receive/issue/move), Rack-ID model unchanged (NEEDS_CONFIRMATION).
 - Cancel/reconcile are not delegated to Operator (not decided).
 - A deleted task cannot be restored.
+
+## 9. Update 2026-11-06 – CR-002 PLC topology and IO document baseline
+
+Approved architecture direction recorded:
+- Four physical PLCs and four independent WCS PLC connections.
+- PLC-01 `192.168.10.101`: A1/A2/A3/A4.
+- PLC-02 `192.168.10.111`: B1/B2/D1/D2.
+- PLC-03 `192.168.10.121`: X1/X2/X3/X6.
+- PLC-04 `192.168.10.131`: E1/E2/G3/G7.
+- Sixteen independent Station IO sets, each based on the common 23-signal template.
+- Reusable PLC driver and Station IO handling; one TCP connection per physical PLC, not per Station.
+
+Documents added/updated:
+- Added official working workbook `02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`.
+- Added business-rule addendum 1.8 and integration addendum 5.10.
+- Registered CR-002 and updated CHANGELOG, IMPACT_MATRIX, REQUIREMENT_TRACEABILITY and docs README.
+- Preserved prior specification text; explicitly marked only the conflicting single-PLC topology assumption as superseded.
+
+Still not confirmed:
+- Actual device addresses for each Station.
+- PLC port and MC Protocol/Ethernet parameters.
+- String encoding/length, heartbeat scope and handshake/reset rules.
+- No live PLC connection or hardware test is claimed by this documentation update.
+
+Verification: documentation/package consistency only. No source code was changed and no software tests were run as part of this document update.

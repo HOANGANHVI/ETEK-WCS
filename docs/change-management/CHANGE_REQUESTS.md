@@ -25,6 +25,7 @@
 |---|---|---|---|---|---|
 | CR-000 | Establish v1.3 change-management framework | Project owner confirmation | APPROVED | 1.3 | Framework only; no business behavior change |
 | CR-001 | Authentication, Admin/Operator authorization, account management, audit trail, Operator task edit/hard-delete, Operator inventory edit | Project owner messages (2026-11-06) | **APPROVED** (2026-11-06) | Phase 1 | Final business rules confirmed by the project owner; implemented; see docs/specification/access-control.md |
+| CR-002 | Replace single-PLC topology with 4 PLC connections and 16 independent Station IO sets using the common 23-signal template | Project owner confirmation and `ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx` (2026-11-06) | **APPROVED** (architecture direction, 2026-11-06) | Phase 1 | Specification addenda and controlled IO workbook updated; actual device addresses/protocol/handshake remain unconfirmed |
 
 ## New Change Request template
 
@@ -98,3 +99,30 @@ HTTPS/TLS and Data Protection key backup (deployment), MFA, e-mail password rese
 #### Tests
 
 TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integration: task edit/hard delete/race, inventory, accounts, bootstrap).
+
+
+### CR-002 – Four PLCs and 16 independent Station IO sets
+
+- **Status:** APPROVED (architecture direction; actual PLC commissioning parameters remain open)
+- **Approval date:** 2026-11-06
+- **Requested by:** Project owner
+- **Source:** Project owner confirmation in conversation (2026-11-06) and `ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`.
+- **Current baseline:** WCS v1.5; earlier baseline assumed one PLC connection.
+- **Problem / business reason:** Four physical PLCs each manage four Stations. Each Station needs an independent IO set so PLC programming, testing and maintenance can be performed independently without using a shared request/response block across four doors.
+- **Approved architecture:**
+  1. Four physical PLCs and four WCS PLC connections.
+  2. PLC-01 `192.168.10.101`: A1, A2, A3, A4.
+  3. PLC-02 `192.168.10.111`: B1, B2, D1, D2.
+  4. PLC-03 `192.168.10.121`: X1, X2, X3, X6.
+  5. PLC-04 `192.168.10.131`: E1, E2, G3, G7.
+  6. Each Station has an independent instance of the common 23-signal IO template; use reusable PLC/Station logic rather than four unrelated implementations.
+  7. Actual addresses for Stations on the same PLC must be separately allocated. Address reuse across different physical PLCs is allowed.
+  8. Signal identity is `PLC_ID + Station_ID + Signal_Name`.
+- **Affected specification files:** `specification/business-rules.md` (section 1.8), `specification/integration-requirements.md` (section 5.10), `README.md`.
+- **Controlled interface artifact:** `02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`.
+- **Not approved / still open:** actual per-Station M/D addresses, TCP ports, MC Protocol settings, QJ71E71-100 parameters, STRING encoding/length, PLC-wide versus Station-scoped heartbeat, handshake/reset ownership, timeout/retry values.
+- **Business flows affected:** No change to BP-01/02/03/05/06 behavior. BP-04 remains REVIEW. A3/A4 and D1/D2 process behavior remains UNCHANGED; only their PLC connection/IO architecture is covered by this CR.
+- **Database impact:** No schema change is authorized by this documentation CR. Implementation may propose a migration only after assessing the existing config model and obtaining approval if it changes persistent contracts.
+- **Acceptance criteria:** Four configurable PLC connections; 16 Station IO instances; no address collision between Stations on the same PLC; identical device addresses allowed across different PLCs; no invented address or handshake behavior; PLC simulator and real-hardware verification reported separately.
+- **Rollback:** Revert CR-002-specific config/code/document changes through Git; retain prior files/commit for traceability.
+- **Decision:** APPROVED for architecture and documentation direction. Live PLC commissioning remains blocked on PLC engineer confirmation of the open parameters.

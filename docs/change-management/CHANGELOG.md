@@ -48,3 +48,12 @@
 - Tests added/updated:
 - Approved by:
 - Date:
+
+## v1.6 – CR-002: Four PLCs and 16 independent Station IO sets (approved architecture, 2026-11-06)
+
+- Replaced the earlier single-PLC/single-connection topology assumption with four physical PLCs and four independent WCS PLC connections.
+- Defined four Stations per PLC and 16 independent Station IO sets using the common 23-signal template.
+- Added the controlled IO workbook under `02_Interface_Specification/PLC_IO_Map/`.
+- Added business-rule and integration-specification addenda; earlier text is retained and explicitly superseded only where it conflicts with CR-002.
+- Actual per-Station device addresses, TCP ports, MC Protocol parameters, data encoding and handshake/reset details remain `NEEDS_CONFIGURATION` / `NEEDS_CONFIRMATION`.
+- No process-flow, inventory, task-state-machine, RCS or database behavior is changed by this documentation update.

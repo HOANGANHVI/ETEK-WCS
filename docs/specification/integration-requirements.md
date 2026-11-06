@@ -185,3 +185,50 @@ Không ghi thông tin xác thực hoặc secret ở dạng plain text.
 - Cách RCS giữ task tại điểm chờ và hỗ trợ `continueTask`.
 - Callback network reachability và retry behavior.
 - Cơ chế xác nhận rack vật lý tại từng location.
+
+---
+
+## 5.10. Approved PLC topology and per-Station IO sets (CR-002, 2026-11-06)
+
+This section supersedes the single-PLC/single-connection assumption in section 5.1 and the corresponding single-connection statement in section 5.3. The remainder of this integration specification is preserved.
+
+### Physical topology
+
+WCS connects to four physical Mitsubishi PLCs independently:
+
+| PLC | IP address | Stations |
+|---|---|---|
+| PLC-01 | `192.168.10.101` | A1, A2, A3, A4 |
+| PLC-02 | `192.168.10.111` | B1, B2, D1, D2 |
+| PLC-03 | `192.168.10.121` | X1, X2, X3, X6 |
+| PLC-04 | `192.168.10.131` | E1, E2, G3, G7 |
+
+Each PLC has one WCS connection. Do not create a separate TCP connection per Station.
+
+### Station IO architecture
+
+- Each PLC has four independent Station IO sets.
+- Each Station IO set uses the common 23-signal template from the official workbook.
+- Use one reusable driver implementation per PLC connection and one reusable Station IO mapping/handler instantiated independently for each Station.
+- Each Station's actual device allocation must be isolated from the other Stations on the same PLC.
+- Identical device addresses are allowed on different physical PLCs.
+- The WCS identity key for a signal is `PLC_ID + Station_ID + Signal_Name`.
+- PLC-wide signals must be explicitly classified as PLC-scoped or Station-scoped; do not silently duplicate or consolidate them.
+
+### Official interface workbook
+
+`docs/02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`
+
+The workbook is the controlled working interface reference. Preserve signal names, direction, data type and descriptions. The workbook deliberately leaves actual per-Station addresses unassigned pending PLC-engineer allocation.
+
+### Configuration and commissioning
+
+The following remain `NEEDS_CONFIGURATION` / `NEEDS_CONFIRMATION` until confirmed:
+- Actual M/D device addresses for each Station.
+- TCP port and QJ71E71-100 Ethernet settings.
+- MC Protocol frame, data code, network/PC/PLC station numbers.
+- STRING length and encoding, word/bit allocation and scaling.
+- PLC-wide versus Station-scoped heartbeat.
+- Handshake set/reset ownership, transition conditions, timeout and retry policy.
+
+Do not derive actual addresses by applying offsets to the template reference addresses. Commission with read-only communication first. Enable PLC writes only after the PLC engineer approves the signal list and safe test procedure. Do not write safety/interlock or transfer-permit signals merely to test connectivity.

@@ -40,3 +40,12 @@ The project owner approves changes to business behavior. Technical implementatio
 ## Important source limitations
 
 This package does not invent missing details. In particular, BP-04 remains REVIEW; legacy A3/A4 and D1/D2 process details require the original process document; PLC addresses, RCS production configuration, workstation codes and task templates require confirmation.
+
+## PLC interface documents – updated 2026-11-06
+
+The Phase 1 PLC topology and controlled working IO interface are documented in:
+- `specification/business-rules.md` section 1.8.
+- `specification/integration-requirements.md` section 5.10.
+- `02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`.
+
+The approved direction is four physical PLCs, four WCS PLC connections, and four independent Station IO sets per PLC (16 Station IO sets total). Read the addenda and workbook together. The workbook does not yet constitute a commissioned actual-address map; actual per-Station addresses and handshake details require PLC-engineer confirmation.

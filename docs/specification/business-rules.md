@@ -101,3 +101,25 @@ Không tự gán thêm ý nghĩa cho KV1/KV2 ngoài sơ đồ nguồn nếu chư
 - Không tạo task trùng cho cùng AGV.
 - Không cho phép hai task chiếm cùng rack hoặc cùng vị trí đích nếu gây xung đột.
 - Các ưu tiên nguồn/đích chưa được xác nhận phải được cấu hình hoặc đánh dấu `NEEDS_CONFIRMATION`, không tự hard-code.
+
+---
+
+## 1.8. Addendum – PLC topology and Station IO architecture (approved 2026-11-06, CR-002)
+
+This addendum supersedes only the earlier PLC topology statements in sections 1.2 and 1.2's description of a single PLC connection. All other approved business rules remain unchanged.
+
+- Phase 1 uses **4 physical Mitsubishi PLCs** and **16 Stations**.
+- WCS maintains **4 independent PLC connections**, one connection to each physical PLC.
+- Each PLC manages exactly four Stations:
+  - PLC-01 – `192.168.10.101`: A1, A2, A3, A4.
+  - PLC-02 – `192.168.10.111`: B1, B2, D1, D2.
+  - PLC-03 – `192.168.10.121`: X1, X2, X3, X6.
+  - PLC-04 – `192.168.10.131`: E1, E2, G3, G7.
+- Each Station has an independent instance of the approved common 23-signal IO template. The same reusable signal definition and processing contract is used for all Stations.
+- Each Station must have its own register allocation within its owning PLC. Device addresses may repeat across different physical PLCs, but allocations for independent Stations on the same PLC must not overlap where that would cause data collision.
+- A signal is uniquely identified by `PLC_ID + Station_ID + Signal_Name`.
+- The official working interface workbook is `docs/02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`.
+- Actual per-Station PLC device addresses, protocol settings and handshake/reset details remain unconfirmed until approved by the PLC engineer. The workbook's `Template_Address_Reference` is not an actual per-Station address allocation.
+- Do not infer register offsets or change the 23 source signal definitions without an approved change.
+
+The four-PLC topology does not alter the protected business rules: `PER_AGV`, BP-04 `REVIEW`, WCS inventory ownership, A3/A4 and D1/D2 `UNCHANGED`, and the “Không bind rack” constraints remain in force.
