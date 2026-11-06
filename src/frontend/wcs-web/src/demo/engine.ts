@@ -48,16 +48,16 @@ const EDGES: Record<TaskState, TaskState[]> = {
   Completed: [], Failed: [], Cancelled: [],
 }
 
-interface DLocation { id: string; code: string; name: string; type: string; cap: number; allowed: 'Any' | Kind; requiresPlc: boolean; recon: boolean }
+interface DLocation { id: string; code: string; name: string; type: string; cap: number; allowed: 'Any' | Kind; requiresPlc: boolean; recon: boolean; enabled: boolean }
 interface DRack { id: string; ext: string | null; status: Rack['status']; locId: string | null; taskId: string | null; at: string }
 interface DReservation { id: string; taskId: string; kind: 'rack' | 'dest'; rackId: string | null; locId: string; active: boolean }
 interface DTask { pub: TransportTask; history: TaskHistory[]; kind: Kind; flow: string }
-interface DAgv { id: string; code: string; role: Agv['role']; kind: Kind; status: Agv['connectionStatus']; detail: string | null; at: string }
+interface DAgv { id: string; code: string; robotCode: string | null; enabled: boolean; role: Agv['role']; kind: Kind; status: Agv['connectionStatus']; detail: string | null; at: string }
 
 export type DemoEventName = 'TaskCreated' | 'TaskStateChanged' | 'InventoryChanged' | 'AgvStatusChanged'
 type Listener = (name: DemoEventName, payload: unknown) => void
 
-const LOCATION_DEFS: Omit<DLocation, 'id' | 'recon'>[] = [
+const LOCATION_DEFS: Omit<DLocation, 'id' | 'recon' | 'enabled'>[] = [
   { code: 'A1', name: 'Máy A1', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
   { code: 'A2', name: 'Máy A2', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
   { code: 'B1', name: 'Máy B1', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
@@ -72,8 +72,10 @@ const LOCATION_DEFS: Omit<DLocation, 'id' | 'recon'>[] = [
 export class DemoError extends Error {
   readonly code: string
   readonly status: number
-  constructor(status: number, code: string, message: string) {
+  readonly details?: unknown
+  constructor(status: number, code: string, message: string, details?: unknown) {
     super(message)
+    this.details = details
     this.status = status
     this.code = code
   }
@@ -118,11 +120,11 @@ export class DemoEngine {
   // ------------------------------------------------------------------ lifecycle
   reset() {
     this.stopAutoplay()
-    this.locations = LOCATION_DEFS.map((d) => ({ ...d, id: uid(), recon: false }))
+    this.locations = LOCATION_DEFS.map((d) => ({ ...d, id: uid(), recon: false, enabled: true }))
     this.racks = []; this.reservations = []; this.tasks = []; this.transactions = []
     this.agvs = [
-      { id: uid(), code: 'AGV1', role: 'FullRack', kind: 'Full', status: 'Online', detail: 'mô phỏng', at: nowIso() },
-      { id: uid(), code: 'AGV2', role: 'EmptyRack', kind: 'Empty', status: 'Online', detail: 'mô phỏng', at: nowIso() },
+      { id: uid(), code: 'AGV1', robotCode: 'DEMO-AGV1', enabled: true, role: 'FullRack', kind: 'Full', status: 'Online', detail: 'mô phỏng', at: nowIso() },
+      { id: uid(), code: 'AGV2', robotCode: 'DEMO-AGV2', enabled: true, role: 'EmptyRack', kind: 'Empty', status: 'Online', detail: 'mô phỏng', at: nowIso() },
     ]
     this.rcsCounter = 0; this.rackCounter = 0; this.keyCounter = 0
 
@@ -163,7 +165,7 @@ export class DemoEngine {
     return this.agvs.map((a) => {
       const active = this.tasks.find((t) => t.pub.agvId === a.id && OCCUPYING.includes(t.pub.state))
       return {
-        id: a.id, code: a.code, role: a.role, rcsRobotCode: `DEMO-${a.code}`, enabled: true, connectionStatus: a.status,
+        id: a.id, code: a.code, role: a.role, rcsRobotCode: a.robotCode, enabled: a.enabled, connectionStatus: a.status,
         statusDetail: a.detail, lastStatusAt: a.at, activeTaskId: active?.pub.id ?? null, busy: !!active,
       }
     })
@@ -174,7 +176,7 @@ export class DemoEngine {
       const occupied = this.racks.filter((r) => r.locId === l.id).length
       const reserved = this.reservations.filter((r) => r.active && r.kind === 'dest' && r.locId === l.id).length
       return {
-        id: l.id, code: l.code, name: l.name, type: l.type, rackCapacity: l.cap, allowedRackKind: l.allowed, enabled: true,
+        id: l.id, code: l.code, name: l.name, type: l.type, rackCapacity: l.cap, allowedRackKind: l.allowed, enabled: l.enabled,
         requiresPlcPermission: l.requiresPlc, occupied, reserved,
         occupancy: l.recon ? 'Unknown' : occupied > 0 ? 'Occupied' : reserved > 0 ? 'Reserved' : 'Empty',
       }
@@ -273,6 +275,52 @@ export class DemoEngine {
     if (!a) return
     a.status = online ? 'Online' : 'Offline'; a.detail = online ? 'mô phỏng' : 'ngắt kết nối mô phỏng'; a.at = nowIso()
     this.changed()
+  }
+
+  // ------------------------------------------------------------------ configuration data (AGV robot codes, locations)
+  configureAgv(id: string, robotCode: string | null, enabled: boolean) {
+    const a = this.agvs.find((x) => x.id === id)
+    if (!a) throw new DemoError(404, 'AGV_NOT_FOUND', 'Không tìm thấy AGV.')
+    if (robotCode && this.agvs.some((x) => x.id !== id && x.robotCode?.toLowerCase() === robotCode.toLowerCase()))
+      throw new DemoError(400, 'VALIDATION_FAILED', 'Mã robot này đã được gán cho AGV khác.', [{ field: 'rcsRobotCode', message: 'Mã robot này đã được gán cho AGV khác.' }])
+    if (!enabled && a.enabled && this.tasks.some((t) => t.pub.agvId === id && OCCUPYING.includes(t.pub.state)))
+      throw new DemoError(409, 'AGV_HAS_ACTIVE_TASK', 'AGV đang có nhiệm vụ hoạt động nên chưa thể tắt.')
+    a.robotCode = robotCode; a.enabled = enabled
+    this.changed()
+    return this.listAgvs().find((x) => x.id === id)!
+  }
+
+  saveLocation(b: { code: string; name: string; type: string; rackCapacity: number; allowedRackKind: string; enabled: boolean; requiresPlcPermission: boolean }, create: boolean) {
+    const bad = (field: string, message: string) => new DemoError(400, 'VALIDATION_FAILED', message, [{ field, message }])
+    if (!/^[A-Za-z0-9_-]{1,50}$/.test(b.code)) throw bad('code', 'Mã vị trí chỉ gồm chữ, số, gạch ngang, gạch dưới (tối đa 50 ký tự).')
+    if (!b.name.trim()) throw bad('name', 'Cần nhập tên vị trí.')
+    if (!Number.isInteger(b.rackCapacity) || b.rackCapacity < 0 || b.rackCapacity > 1000) throw bad('rackCapacity', 'Sức chứa phải nằm trong khoảng 0–1000.')
+    const existing = this.locations.find((l) => l.code === b.code)
+    if (create) {
+      if (existing) throw bad('code', 'Mã vị trí đã tồn tại.')
+      this.locations.push({ id: uid(), code: b.code, name: b.name.trim(), type: b.type, cap: b.rackCapacity, allowed: b.allowedRackKind as DLocation['allowed'], requiresPlc: b.requiresPlcPermission, recon: false, enabled: b.enabled })
+    } else {
+      if (!existing) throw new DemoError(404, 'LOCATION_NOT_FOUND', `Không tìm thấy vị trí '${b.code}'.`)
+      const used = this.racks.filter((r) => r.locId === existing.id).length + this.reservations.filter((r) => r.active && r.kind === 'dest' && r.locId === existing.id).length
+      if (b.rackCapacity < used) throw bad('rackCapacity', `Sức chứa không được nhỏ hơn số rack đang có và đang giữ chỗ (${used}).`)
+      Object.assign(existing, { name: b.name.trim(), cap: b.rackCapacity, allowed: b.allowedRackKind, enabled: b.enabled, requiresPlc: b.requiresPlcPermission })
+    }
+    this.changed()
+    return this.listLocations().find((l) => l.code === b.code)!
+  }
+
+  /** Same shape as the backend "operations" view; policy/scheduler/flows are read-only. */
+  operations() {
+    return {
+      policy: { concurrency: 'PER_AGV', concurrencyApproved: true, queueOrder: 'FIFO', queueOrderApproved: false, noSourceBehavior: 'Fail', noSourceBehaviorApproved: false },
+      scheduler: { tickIntervalMs: 1000, maxDispatchAttempts: 5, stateTimeoutsSeconds: {} as Record<string, number> },
+      flows: Object.entries(DEMO_FLOWS).map(([k, f]) => ({
+        flow: k.replace('BP', 'Bp'), rackKind: f.kind, agvRole: f.kind === 'Full' ? 'FullRack' : 'EmptyRack', stations: [...f.stations],
+        sourceMode: f.srcMode, sourceGroups: f.srcGroups, destinationMode: f.dstMode, destinationGroups: f.dstGroups, noBindDropLocations: [...f.noBind],
+      })),
+      agvs: this.listAgvs(),
+      locations: this.listLocations(),
+    }
   }
 
   /** Declares stock (PDA-style). Rack ids are anonymous: the rack model is NEEDS_CONFIRMATION. */
@@ -442,7 +490,7 @@ export class DemoEngine {
     const codes = rule.srcMode === 'Request' ? [this.locationCode(t.pub.requestLocationId)] : rule.srcGroups.flat()
     for (const code of codes) {
       const loc = this.locations.find((l) => l.code === code)
-      if (!loc || loc.recon) continue
+      if (!loc || loc.recon || !loc.enabled) continue
       const rack = this.racks.find((r) => r.locId === loc.id && r.status === t.kind && !this.reservations.some((v) => v.active && v.rackId === r.id))
       if (!rack) continue
       this.reservations.push({ id: uid(), taskId: t.pub.id, kind: 'rack', rackId: rack.id, locId: loc.id, active: true })
@@ -457,7 +505,7 @@ export class DemoEngine {
     const codes = rule.dstMode === 'Request' ? [this.locationCode(t.pub.requestLocationId)] : rule.dstGroups.flat()
     for (const code of codes) {
       const loc = this.locations.find((l) => l.code === code)
-      if (!loc || loc.recon || !(loc.allowed === 'Any' || loc.allowed === t.kind)) continue
+      if (!loc || loc.recon || !loc.enabled || !(loc.allowed === 'Any' || loc.allowed === t.kind)) continue
       const occupied = this.racks.filter((r) => r.locId === loc.id).length
       const reserved = this.reservations.filter((r) => r.active && r.kind === 'dest' && r.locId === loc.id).length
       if (occupied + reserved >= loc.cap) continue

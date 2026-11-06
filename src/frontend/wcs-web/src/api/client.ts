@@ -1,6 +1,7 @@
 import { DEMO_MODE } from '../config'
 import { demoApi } from '../demo/demoApi'
 import { ApiRequestError } from './errors'
+import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, InventoryTransaction, Location, Paged, Rack, SimulationStep, SystemHealth,
   TaskHistory, TaskState, TransportTask,
@@ -50,6 +51,19 @@ const realApi = {
   cancelTask: (id: string, reason: string, user?: string) =>
     request<TransportTask>(`/api/tasks/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason, user }) }),
   simulateNext: (id: string) => request<SimulationStep>(`/api/simulator/tasks/${id}/advance`, { method: 'POST' }),
+
+  // configuration (secrets are write-only)
+  plcConfig: () => request<PlcConfig>('/api/config/plc'),
+  savePlc: (b: SavePlcBody) => request<PlcConfig>('/api/config/plc', { method: 'PUT', body: JSON.stringify(b) }),
+  testPlc: () => request<LastTest>('/api/config/plc/test', { method: 'POST' }),
+  rcsConfig: () => request<RcsConfig>('/api/config/rcs'),
+  saveRcs: (b: SaveRcsBody) => request<RcsConfig>('/api/config/rcs', { method: 'PUT', body: JSON.stringify(b) }),
+  testRcs: () => request<LastTest>('/api/config/rcs/test', { method: 'POST' }),
+  operations: () => request<OperationsView>('/api/config/operations'),
+  saveAgv: (id: string, b: { rcsRobotCode: string | null; enabled: boolean }) =>
+    request<Agv>(`/api/config/agvs/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  createLocation: (b: SaveLocationBody) => request<Location>('/api/config/locations', { method: 'POST', body: JSON.stringify(b) }),
+  saveLocation: (b: SaveLocationBody) => request<Location>(`/api/config/locations/${encodeURIComponent(b.code)}`, { method: 'PUT', body: JSON.stringify(b) }),
 }
 
 export { ApiRequestError }

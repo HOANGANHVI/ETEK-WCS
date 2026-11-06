@@ -1,6 +1,6 @@
 # WCS Work Log – Session Handover
 
-**Last updated:** 2026-11-06 (UI redesign – see section 8). Sections 1-7 describe the state at the end of 2026-11-05.  
+**Last updated:** 2026-11-06 (UI redesign – section 8; PLC/RCS configuration module – section 9). Sections 1-7 describe the state at the end of 2026-11-05.  
 **Date of first hand-over:** 2026-11-05  
 **Baseline:** WCS Specification v1.3 (unchanged – no file under `docs/specification/` was modified)  
 **Purpose:** hand-over so the next session can continue without re-deriving context. Read `CLAUDE.md`, `README.md`, `docs/README.md`
@@ -182,3 +182,78 @@ Known limits / follow-ups:
 - The demo engine still duplicates backend rules by hand (may drift).
 - The NEEDS_CONFIRMATION list (section 5) is unchanged – the redesign resolved none of it.
 - Next step is still section 6 (DB password → migration → full test run → run API + frontend together).
+
+---
+
+## 9. Update 2026-11-06 – System configuration module (PLC / RCS connections, operational parameters)
+
+New menu **Cấu hình hệ thống** (`/config`) with 3 tabs: **Kết nối PLC**, **Kết nối RCS**, **Tham số vận hành**. All Vietnamese, same design system.
+State machine, BP flows, scheduler logic and adapters' behaviour are **unchanged**; no new business rule was introduced.
+
+### Backend (Domain → Application → Infrastructure → Api)
+- `ConnectionSetting` entity (table `connection_settings`, one row per `Plc` / `Rcs`): non-secret fields as JSON, secrets only as an **encrypted blob**
+  (ASP.NET Core Data Protection, purpose `ETEK.WCS.ConnectionSecrets.v1`), last-check result, `UpdatedAt/By`, xmin concurrency token.
+  **Migration `AddConnectionSettings`** (generated, NOT applied: still no DB password) also adds a unique filtered index on `agvs.RcsRobotCode`.
+- `ConnectionConfigService` (config only; it never drives a device): get / save / safe check. Secrets are write-only (`null` = keep, value = replace,
+  `Clear*` = remove), dropped when the auth mode no longer uses them, never returned (GET exposes only `hasPassword` / `hasToken`), never logged.
+  Validation happens before anything is changed, so a rejected save leaves the stored configuration untouched.
+- `ConnectionValidator`: strict IPv4/IPv6 (rejects shorthand such as `192.168.1`), port 1-65535, station numbers 0-255, timeouts, base-URL rules
+  (http/https, no credentials in the URL, host/port must match the fields). Enabling requires a complete configuration; a disabled one may be saved partially.
+- `OperationalConfigService`: read-only view of policy / scheduler / flows (from deployment config) + editable **AGV RCS robot code & enabled**
+  (unique code; an AGV with an active task cannot be disabled) and **locations** (create/edit; capacity cannot drop below stored + reserved racks; a
+  location with a reservation cannot be disabled).
+- Safe connectivity check (`IConnectionProbe`): default **`SimulatedConnectionProbe` – no network at all**. Only with `Integration:AllowNetworkProbe=true`
+  the `TcpReachabilityProbe` opens a TCP connection to host:port and closes it **without sending a byte** (no MC Protocol frame, no HTTP request, no
+  command). The check always uses the **saved** configuration (never half-edited form values) and is skipped (`NotExecuted`) when nothing is saved, the
+  connection is switched off, or the saved data is incomplete.
+- API (all under the unified response envelope; 400 returns `error.details = [{field,message}]`):
+  `GET|PUT /api/config/plc`, `POST /api/config/plc/test`, `GET|PUT /api/config/rcs`, `POST /api/config/rcs/test`, `GET /api/config/operations`,
+  `PUT /api/config/agvs/{id}`, `POST /api/config/locations`, `PUT /api/config/locations/{code}`.
+- Config files: `Integration:AllowNetworkProbe` (default false), optional `DataProtection:KeysPath`; `appsettings.example.json` updated (the old unused
+  `Plc`/`Rcs` sections were removed – connection settings now live in the database).
+
+### Frontend
+- `ConfigPage` + `PlcTab`, `RcsTab`, `OperationsTab`: dirty tracking, "Hoàn tác", per-field errors (client mirror of the backend validator **and** server
+  details), write-only password/token inputs, "Xóa mật khẩu/token đã lưu", last-check panel (outcome, method, message, latency, time, last error), test
+  button disabled until the form is saved and clean. Operations tab: policy/scheduler/flows read-only with "Chưa được xác nhận" badges where applicable,
+  editable robot codes and locations.
+- **Demo Mode** has its own in-memory configuration store (`demo/demoConfig.ts`): saving/testing never touches the network; checks are labelled
+  "MÔ PHỎNG (chế độ Demo)". "Khởi tạo lại" also resets the demo configuration.
+
+### Verified (executed)
+- `dotnet build WCS.sln`: 0 errors, 0 warnings; no vulnerable packages.
+- **101 xUnit tests without a database pass** (new: validator, config service with fakes, secrets/logging, probes incl. loopback TCP, Data Protection
+  round trip, and **HTTP-level API tests with `WebApplicationFactory`**: empty GET is un-prefilled, secrets never in any response, 400 with field details,
+  check never calls the probe when nothing is saved, default container wiring uses the simulated probe).
+  A real bug found by the tests and fixed: `IPAddress.TryParse` accepts `192.168.1`; validation is now strict.
+- `npm run lint`, `build`, `build:demo`: clean. A Chrome DevTools script drove the Demo UI: **30 checks pass** (menu/tabs, nothing pre-filled, field errors,
+  incomplete enable refused, save/test flow, secret never present in text/inputs/DOM, Base URL mismatch, duplicate robot code, add location, no stray
+  English, no `/api` or `/hubs` request in Demo Mode).
+- `dotnet ef migrations script`: new migration only `CREATE TABLE` + `CREATE INDEX` (no DROP of existing data).
+
+### NOT verified / limits
+- Still blocked on the PostgreSQL password: migration `AddConnectionSettings` not applied; `ConfigIntegrationTests` (real DB: encrypted blob in the table,
+  unique robot code, capacity guards) and all earlier integration tests have **never run**; the config API was exercised over HTTP only with in-memory fakes.
+- The `Enabled` switch is **stored only**: there are no real PLC/RCS adapters yet, so nothing connects because of it.
+- **No authentication/authorization exists**: the config endpoints (which accept secrets) are open. Add auth before any non-local deployment.
+- Data Protection key ring: by default stored in the Windows user profile of the account running the API. If it is lost, saved passwords/tokens become
+  unreadable and must be re-entered (the UI then shows "Chưa có mật khẩu"). Set `DataProtection:KeysPath` to a backed-up folder outside the repository.
+- Updating a configuration (not just the check) relies on the xmin token; concurrent edits by two operators end with a conflict, not a silent overwrite.
+- Scheduler / policy / timeouts are **read-only in the UI** (no approved runtime-change mechanism); they are edited in `appsettings.json`.
+
+### To confirm with the PLC engineer (Mitsubishi MELSEC-Q, QJ71E71-100)
+IP and TCP port of the Ethernet module · protocol/frame/data code (spec says "expected": MC Protocol, 3E frame, binary, TCP) · whether **Network number,
+PC number and "PLC station number"** (i.e. request-destination module I/O / station) are needed by the final adapter and their values · connection timeout ·
+polling interval · device/address mapping and handshake (not part of this form yet) · whether one connection is kept open or opened per request.
+
+### To confirm with the RCS (HIK RCS-2000) team
+Host and port (HTTP or HTTPS), **Base URL / context path** · **authentication model** (none / token / user+password / other, header or body, token lifetime) ·
+exact endpoints and payloads of `genAgvSchedulingTask`, `continueTask`, `cancelTask`, `queryTaskStatus`, `queryAgvStatus` (none were assumed) ·
+callback URL, authentication and retry behaviour (not in this form yet) · robot codes of AGV1/AGV2 (enter them on the Operations tab) · workstation codes
+and task-template codes (not modelled yet) · whether a TCP-open check is meaningful for the deployed RCS or whether it needs a dedicated health call.
+
+### Next steps for this module
+1. Provide the DB password → apply both migrations → run the whole suite (including `ConfigIntegrationTests`).
+2. Run the API and exercise `/api/config/*` against PostgreSQL (check the stored blob is not readable text).
+3. Once PLC/RCS parameters are confirmed: finalise the field list, then write the real adapters behind `IPlcAdapter` / `IRcsClient` (not before).
+4. Add authentication and role checks for `/api/config/*`.

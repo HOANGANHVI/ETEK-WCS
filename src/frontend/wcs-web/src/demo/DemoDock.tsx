@@ -3,6 +3,7 @@ import { Button, Pill } from '../components/ui'
 import { IconChevronDown, IconChevronUp, IconFlask, IconPause, IconPlay, IconReset, IconStep } from '../components/icons'
 import { flowInfo, TASK_STATE_VI } from '../i18n/vi'
 import type { TaskState } from '../api/types'
+import { resetDemoConfig } from './demoConfig'
 import { demo, DemoError } from './engine'
 
 interface Scenario { label: string; hint: string; run: () => unknown }
@@ -57,7 +58,7 @@ export function DemoDock() {
             <option value={600}>Tốc độ: nhanh</option><option value={1500}>Tốc độ: vừa</option><option value={3000}>Tốc độ: chậm</option>
           </select>
         </label>
-        <Button size="sm" variant="danger" onClick={() => act(() => demo.reset(), 'Đã khởi tạo lại dữ liệu mô phỏng ban đầu.')}><IconReset />Khởi tạo lại</Button>
+        <Button size="sm" variant="danger" onClick={() => act(() => { demo.reset(); resetDemoConfig() }, 'Đã khởi tạo lại dữ liệu mô phỏng ban đầu.')}><IconReset />Khởi tạo lại</Button>
         <span className="dock-sep" />
         <span className="dock-msg" role="status">{message}</span>
         <Button size="sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>

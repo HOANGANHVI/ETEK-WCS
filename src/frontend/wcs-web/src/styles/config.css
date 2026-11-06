@@ -1,0 +1,48 @@
+/* ---- system configuration page ---- */
+.tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--line-strong); margin-bottom: 14px; }
+.tab { height: 42px; padding: 0 20px; border: 1px solid transparent; border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: transparent; color: var(--text-2); font-size: var(--fs-md); font-weight: 600; cursor: pointer; margin-bottom: -2px; }
+.tab:hover { background: var(--navy-50); color: var(--navy-700); }
+.tab.active { background: var(--surface); color: var(--navy-800); border-color: var(--line-strong); border-bottom: 2px solid var(--surface); }
+
+.cfg-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; margin: 14px 0; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field.wide { grid-column: 1 / -1; }
+.field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+.field input:not([type='checkbox']), .field select, .inline-input { height: 38px; width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); padding: 0 10px; font-size: var(--fs-md); }
+.field input:focus, .field select:focus, .inline-input:focus { outline: 2px solid var(--navy-500); outline-offset: 0; border-color: var(--navy-500); }
+.field input:disabled, .field select:disabled { background: var(--surface-2); color: var(--text-3); }
+.field-hint { font-size: var(--fs-xs); color: var(--text-3); }
+.field-error { font-size: var(--fs-xs); color: var(--bad); font-weight: 600; }
+.field.has-error input, .field.has-error select { border-color: var(--bad); background: var(--bad-bg); }
+.check { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-2); }
+.pad { padding: 14px 16px; }
+.switches { justify-content: center; gap: 10px; }
+.inline-input { max-width: 260px; }
+
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: var(--fs-md); font-weight: 600; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { width: 40px; height: 22px; border-radius: 11px; background: #aab4c2; position: relative; transition: background .15s; flex: none; }
+.switch-track i { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.switch input:checked + .switch-track { background: var(--ok); }
+.switch input:checked + .switch-track i { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--navy-500); outline-offset: 2px; }
+
+.test-result { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.test-result.outcome-Failed { border-color: var(--bad-line); background: var(--bad-bg); }
+.test-result.outcome-Simulated { border-color: var(--info-line); background: var(--info-bg); }
+.test-result.outcome-Success { border-color: var(--ok-line); background: var(--ok-bg); }
+.test-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--fs-sm); }
+.test-result .kv2 { grid-template-columns: 110px minmax(0, 1fr); }
+
+.ops-stack { display: grid; gap: 14px; }
+.ops-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.loc-form { padding: 6px 0; }
+.muted.pad { padding: 10px 16px; }
+
+@media (max-width: 1500px) {
+  .cfg-grid { grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr); }
+}
+@media (max-width: 1100px) {
+  .cfg-grid, .ops-two, .form-grid { grid-template-columns: 1fr; }
+}

@@ -9,7 +9,7 @@ import { useClock } from '../hooks/useClock'
 import { formatDate, formatTime } from '../i18n/format'
 import { CONNECTION_VI, type Tone } from '../i18n/vi'
 import { useRealtime } from '../realtime/RealtimeProvider'
-import { IconAgv, IconOverview, IconTasks, IconWarehouse } from './icons'
+import { IconAgv, IconOverview, IconSettings, IconTasks, IconWarehouse } from './icons'
 
 const SITE_NAME = (import.meta.env.VITE_SITE_NAME as string | undefined)?.trim()
 
@@ -19,6 +19,8 @@ const NAV = [
   { to: '/tasks', label: 'Quản lý nhiệm vụ', icon: <IconTasks /> },
   { to: '/inventory', label: 'Vị trí và tồn kho', icon: <IconWarehouse /> },
 ]
+
+const NAV_SYSTEM = [{ to: '/config', label: 'Cấu hình hệ thống', icon: <IconSettings /> }]
 
 interface LinkView { tone: Tone; text: string }
 
@@ -77,6 +79,12 @@ function SideBar() {
         <div className="nav-title">Vận hành</div>
         {NAV.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
+            {n.icon}<span>{n.label}</span>
+          </NavLink>
+        ))}
+        <div className="nav-title">Hệ thống</div>
+        {NAV_SYSTEM.map((n) => (
+          <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
             {n.icon}<span>{n.label}</span>
           </NavLink>
         ))}
