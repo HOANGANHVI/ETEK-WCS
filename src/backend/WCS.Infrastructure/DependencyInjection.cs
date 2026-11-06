@@ -62,6 +62,10 @@ public static class DependencyInjection
         services.AddScoped<WcsDataSeeder>();
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
         services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
+        services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
+        services.AddSingleton<WCS.Application.Plc.ISimulatorControl>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.SimulatedPlcNetwork>());
+        services.AddSingleton<WCS.Application.Plc.IPlcEndpointFactory, WCS.Infrastructure.Plc.PlcEndpointFactory>();
+        services.AddSingleton<WCS.Application.Plc.IPlcEvents, WCS.Infrastructure.Plc.PlcEventDispatcher>();
 
         services.AddScoped<WCS.Application.Auth.IUserRepository, WCS.Infrastructure.Auth.UserRepository>();
         services.AddSingleton<WCS.Application.Auth.IPasswordService, WCS.Infrastructure.Auth.PasswordService>();

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
+using WCS.Application.Plc;
 using WCS.Application.Services;
 using WCS.Infrastructure.Seeding;
 
@@ -51,6 +52,35 @@ public sealed class AgvStatusHostedService(IServiceScopeFactory scopes, ILogger<
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+
+/// <summary>
+/// Starts the 4 PLC workers once the IO catalog exists in the database (the seed hosted service creates it), and stops them with the host.
+/// Disabled by Plc:RuntimeEnabled=false. A database that is not migrated yet only delays the start (it never crashes the host).
+/// </summary>
+public sealed class PlcRuntimeHostedService(IPlcRuntime runtime, IServiceScopeFactory scopes, ILogger<PlcRuntimeHostedService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                var any = (await scope.ServiceProvider.GetRequiredService<WCS.Application.Plc.IPlcConfigRepository>().ListConnectionsAsync(stoppingToken)).Count > 0;
+                if (any) { await runtime.StartAsync(stoppingToken); break; }
+                logger.LogInformation("PLC runtime is waiting for the PLC catalog to be seeded");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogWarning(ex, "PLC runtime could not start yet (is the database migrated?)"); }
+            await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+        }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await base.StopAsync(cancellationToken);
+        await runtime.StopAsync();
     }
 }
 

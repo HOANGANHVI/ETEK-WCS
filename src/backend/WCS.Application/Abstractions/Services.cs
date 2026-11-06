@@ -8,7 +8,8 @@ using WCS.Domain.Tasks;
 namespace WCS.Application.Abstractions;
 
 /// <summary>A realtime event emitted after a transaction commits (published through SignalR by the API layer).</summary>
-public sealed record WcsEvent(string Name, object Payload);
+/// <summary>AdminOnly events (diagnostics, logs) are delivered only to the Admin group of the realtime hub.</summary>
+public sealed record WcsEvent(string Name, object Payload, bool AdminOnly = false);
 
 public interface IWcsNotifier
 {

@@ -71,12 +71,22 @@ public static class ExceptionMapping
 [Microsoft.AspNetCore.Authorization.Authorize(Policy = AuthSetup.OperationsPolicy)]
 public sealed class WcsHub : Hub
 {
+    public const string AdminGroup = "admins";
+
+    /// <summary>Admins join a private group that receives configuration/diagnostic events (PLC logs, diagnostics). Operators never do.</summary>
+    public override async Task OnConnectedAsync()
+    {
+        if (Context.User?.IsInRole(nameof(WCS.Domain.Users.UserRole.Admin)) == true)
+            await Groups.AddToGroupAsync(Context.ConnectionId, AdminGroup);
+        await base.OnConnectedAsync();
+    }
 }
 
 public sealed class SignalRWcsNotifier(IHubContext<WcsHub> hub) : IWcsNotifier
 {
     public async Task PublishAsync(IReadOnlyCollection<WcsEvent> events, CancellationToken ct = default)
     {
-        foreach (var e in events) await hub.Clients.All.SendAsync(e.Name, e.Payload, ct);
+        foreach (var e in events)
+            await (e.AdminOnly ? hub.Clients.Group(WcsHub.AdminGroup) : hub.Clients.All).SendAsync(e.Name, e.Payload, ct);
     }
 }

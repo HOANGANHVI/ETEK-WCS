@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.AddHostedService<DatabaseSeedHostedService>();
         if (configuration.GetValue("Runtime:EnableWorkers", true))
         {
+            if (configuration.GetValue("Plc:RuntimeEnabled", true)) services.AddHostedService<PlcRuntimeHostedService>();
             services.AddHostedService<SchedulerHostedService>();
             services.AddHostedService<AgvStatusHostedService>();
         }

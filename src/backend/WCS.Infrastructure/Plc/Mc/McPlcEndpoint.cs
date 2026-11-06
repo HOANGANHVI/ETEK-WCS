@@ -5,13 +5,6 @@ using WCS.Domain.Plc;
 
 namespace WCS.Infrastructure.Plc.Mc;
 
-/// <summary>Raised when a real connection is requested while confirmed parameters are still missing.</summary>
-public sealed class NeedsConfigurationException(IReadOnlyList<string> missing)
-    : InvalidOperationException("NEEDS_CONFIGURATION: " + string.Join(", ", missing))
-{
-    public IReadOnlyList<string> Missing { get; } = missing;
-}
-
 /// <summary>
 /// The Mitsubishi MC Protocol implementation of <see cref="IPlcEndpoint"/>: turns the IO points of a station into the smallest set of
 /// batch reads over CONFIRMED, CONTIGUOUS addresses (never reading a gap), decodes BOOL/INT/STRING, and writes single points.

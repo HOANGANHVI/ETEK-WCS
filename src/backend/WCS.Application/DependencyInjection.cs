@@ -29,6 +29,7 @@ public static class DependencyInjection
 
         services.Configure<Plc.PlcRuntimeOptions>(configuration.GetSection(Plc.PlcRuntimeOptions.SectionName));
         services.AddScoped<Plc.PlcConfigService>();
+        services.AddSingleton<Plc.IPlcRuntime, Plc.PlcRuntime>();
 
         services.Configure<Auth.AuthOptions>(configuration.GetSection(Auth.AuthOptions.SectionName));
         services.AddScoped<Auth.AuthService>();

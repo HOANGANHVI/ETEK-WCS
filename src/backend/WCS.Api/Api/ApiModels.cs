@@ -89,3 +89,8 @@ public sealed record UpdatePlcConnectionRequest(string? Name, [property: Require
 public sealed record SetPointAddressRequest([property: Required, StringLength(20)] string Address, int? WordLength, [property: StringLength(40)] string? Encoding);
 
 public sealed record SetWriteAllowedRequest(bool Allowed);
+
+public sealed record TestWriteRequest(System.Text.Json.JsonElement Value);
+public sealed record SimulatorValueRequest([property: Required] string PlcId, [property: Required] string StationId, [property: Required] string Signal, System.Text.Json.JsonElement Value);
+public sealed record SimulatorOnlineRequest([property: Required] string PlcId, bool Online);
+public sealed record SimulatorStationFaultRequest([property: Required] string PlcId, [property: Required] string StationId, bool Failing);

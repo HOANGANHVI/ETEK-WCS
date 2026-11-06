@@ -131,3 +131,10 @@ public sealed class StationFlowMapping
     public string Signal { get; set; } = "";
     public string Flow { get; set; } = "";
 }
+
+/// <summary>Raised when a real connection is requested while confirmed parameters are still missing (never replaced by guessed values).</summary>
+public sealed class NeedsConfigurationException(IReadOnlyList<string> missing)
+    : InvalidOperationException("NEEDS_CONFIGURATION: " + string.Join(", ", missing))
+{
+    public IReadOnlyList<string> Missing { get; } = missing;
+}

@@ -233,7 +233,7 @@ public static class Endpoints
             .WithTags("Audit").RequireAuthorization(admin);
 
         // ---- System
-        api.MapGet("/system/health", async (HttpContext c, WcsDbContext db, ISchedulerStatus scheduler, IPlcAdapter plc,
+        api.MapGet("/system/health", async (HttpContext c, WcsDbContext db, ISchedulerStatus scheduler, IPlcAdapter plc, WCS.Application.Plc.IPlcRuntime plcRuntime,
             IOptions<IntegrationOptions> integration, IOptions<SchedulerOptions> schedulerOptions, IClock clock, CancellationToken ct) =>
         {
             var dbOk = await db.Database.CanConnectAsync(ct);
@@ -245,7 +245,15 @@ public static class Endpoints
                 time = clock.UtcNow,
                 database = new { connected = dbOk },
                 scheduler = new { lastRunAt = last, lastError = scheduler.LastError, stale },
-                integration = new { mode = integration.Value.Mode, plc = plc.GetConnectionStatus().ToString() },
+                integration = new
+                {
+                    mode = integration.Value.Mode, plc = plc.GetConnectionStatus().ToString(),
+                    plcRuntime = new
+                    {
+                        mode = plcRuntime.Info().EffectiveMode, running = plcRuntime.Running,
+                        connected = plcRuntime.Workers(false).Count(w => w.State == "Connected"), total = plcRuntime.Workers(false).Count,
+                    },
+                },
             };
             return ApiResults.Ok(c, health, dbOk ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
         }).WithTags("System");
