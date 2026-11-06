@@ -17,6 +17,7 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<TransportTask> Tasks => Set<TransportTask>();
     public DbSet<TaskHistoryEntry> TaskHistory => Set<TaskHistoryEntry>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
+    public DbSet<ConnectionSetting> ConnectionSettings => Set<ConnectionSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

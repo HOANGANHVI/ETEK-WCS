@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.SignalR;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
+using WCS.Application.Config;
 using WCS.Domain.Common;
 
 namespace WCS.Api.Api;
@@ -57,9 +58,10 @@ public static class ExceptionMapping
         if (status >= 500) logger.LogError(ex, "Unhandled exception {TraceId}", context.TraceIdentifier);
         else logger.LogInformation("Request rejected {Status} {Code}: {Message}", status, code, message);
 
+        object? details = ex is ValidationFailedException v ? v.Errors : null;
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new ApiResponse<object>(false, null, new ApiError(code, message), context.TraceIdentifier));
+        await context.Response.WriteAsJsonAsync(new ApiResponse<object>(false, null, new ApiError(code, message, details), context.TraceIdentifier));
     });
 }
 

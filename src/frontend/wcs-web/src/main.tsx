@@ -17,7 +17,7 @@ if (DEMO_MODE) {
     }
     return realFetch(input, init)
   }
-  document.title = 'ETEK WCS – Chế độ mô phỏng'
+  document.title = 'ETEK WCS'
 }
 
 createRoot(document.getElementById('root')!).render(

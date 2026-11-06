@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using WCS.Application;
 using WCS.Application.Abstractions;
+using WCS.Application.Config;
 using WCS.Application.Services;
 using WCS.Domain.Common;
 using WCS.Domain.Tasks;
@@ -63,6 +64,27 @@ public static class Endpoints
             await inv2.ReconcileTaskAsync(id, r.ActualLocationCode, r.User, r.Note, ct);
             return ApiResults.Ok(c, await q.GetTaskAsync(id, ct));
         });
+
+        // ---- Configuration (connections + operational parameters). Secrets are never returned.
+        var cfg = api.MapGroup("/config").WithTags("Configuration");
+        cfg.MapGet("plc", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetPlcAsync(ct)));
+        cfg.MapPut("plc", async (HttpContext c, PlcSettingsRequest r, ConnectionConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.UpdatePlcAsync(new UpdatePlcCommand(r.Enabled,
+                new PlcSettings(r.DeviceName, r.IpAddress, r.Port, r.Protocol, r.NetworkNumber, r.PcNumber, r.StationNumber, r.TimeoutMs, r.PollingIntervalMs), r.UpdatedBy), ct)));
+        cfg.MapPost("plc/test", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.TestAsync(ConnectionKind.Plc, ct)));
+        cfg.MapGet("rcs", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetRcsAsync(ct)));
+        cfg.MapPut("rcs", async (HttpContext c, RcsSettingsRequest r, ConnectionConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.UpdateRcsAsync(new UpdateRcsCommand(r.Enabled,
+                new RcsSettings(r.SystemName, r.Host, r.Port, r.BaseUrl, r.AuthMode ?? ConnectionOptions.AuthNone, r.Username, r.TimeoutMs),
+                r.Password, r.ClearPassword, r.Token, r.ClearToken, r.UpdatedBy), ct)));
+        cfg.MapPost("rcs/test", async (HttpContext c, ConnectionConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.TestAsync(ConnectionKind.Rcs, ct)));
+        cfg.MapGet("operations", async (HttpContext c, OperationalConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetAsync(ct)));
+        cfg.MapPut("agvs/{id:guid}", async (HttpContext c, Guid id, AgvConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.UpdateAgvAsync(id, new UpdateAgvCommand(r.RcsRobotCode, r.Enabled), ct)));
+        cfg.MapPost("locations", async (HttpContext c, LocationConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.SaveLocationAsync(new SaveLocationCommand(r.Code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), true, ct), StatusCodes.Status201Created));
+        cfg.MapPut("locations/{code}", async (HttpContext c, string code, LocationConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.SaveLocationAsync(new SaveLocationCommand(code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), false, ct)));
 
         // ---- System
         api.MapGet("/system/health", async (HttpContext c, WcsDbContext db, ISchedulerStatus scheduler, IPlcAdapter plc,

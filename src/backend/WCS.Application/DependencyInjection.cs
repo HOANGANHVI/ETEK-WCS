@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using WCS.Application.Abstractions;
+using WCS.Application.Config;
 using WCS.Application.Flows;
 using WCS.Application.Services;
 
@@ -23,6 +24,8 @@ public static class DependencyInjection
         services.AddScoped<StationRequestProcessor>();
         services.AddScoped<WcsQueries>();
         services.AddScoped<AgvStatusService>();
+        services.AddScoped<ConnectionConfigService>();
+        services.AddScoped<OperationalConfigService>();
         return services;
     }
 }

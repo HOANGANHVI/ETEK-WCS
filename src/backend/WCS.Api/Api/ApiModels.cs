@@ -40,3 +40,15 @@ public sealed record SimulatedStationRequest(
     [property: Required, StringLength(50)] string StationCode,
     [property: Required, StringLength(20)] string Flow,
     [property: Required, StringLength(200)] string RequestKey);
+
+// ---- connection / operational configuration (secrets are WRITE-ONLY: they appear in requests, never in responses) ----
+public sealed record PlcSettingsRequest(bool Enabled, string? DeviceName, string? IpAddress, int? Port, string? Protocol,
+    int? NetworkNumber, int? PcNumber, int? StationNumber, int? TimeoutMs, int? PollingIntervalMs, string? UpdatedBy);
+
+public sealed record RcsSettingsRequest(bool Enabled, string? SystemName, string? Host, int? Port, string? BaseUrl, string? AuthMode,
+    string? Username, int? TimeoutMs, string? Password, bool ClearPassword, string? Token, bool ClearToken, string? UpdatedBy);
+
+public sealed record AgvConfigRequest(string? RcsRobotCode, bool Enabled);
+
+public sealed record LocationConfigRequest(string Code, string Name, LocationType Type, int RackCapacity, AllowedRackKind AllowedRackKind,
+    bool Enabled, bool RequiresPlcPermission);

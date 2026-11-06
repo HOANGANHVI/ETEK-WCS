@@ -22,6 +22,8 @@ internal sealed class AgvConfiguration : IEntityTypeConfiguration<Agv>
         b.HasIndex(x => x.Code).IsUnique();
         // One AGV per business role (AGV1 = full racks, AGV2 = empty racks).
         b.HasIndex(x => x.Role).IsUnique();
+        // A robot code identifies one AGV in RCS.
+        b.HasIndex(x => x.RcsRobotCode).IsUnique().HasFilter("\"RcsRobotCode\" IS NOT NULL");
     }
 }
 
@@ -143,5 +145,21 @@ internal sealed class TaskHistoryConfiguration : IEntityTypeConfiguration<TaskHi
         b.Property(x => x.Detail).HasMaxLength(2000);
         b.Property(x => x.Source).HasMaxLength(50).IsRequired();
         b.HasIndex(x => new { x.TaskId, x.OccurredAt });
+    }
+}
+
+internal sealed class ConnectionSettingConfiguration : IEntityTypeConfiguration<ConnectionSetting>
+{
+    public void Configure(EntityTypeBuilder<ConnectionSetting> b)
+    {
+        b.ToTable("connection_settings");
+        b.HasKey(x => x.Kind);
+        b.Property(x => x.SettingsJson).HasColumnType("text").IsRequired();
+        b.Property(x => x.ProtectedSecrets).HasColumnType("text"); // encrypted blob, never plaintext
+        b.Property(x => x.LastTestMode).HasMaxLength(40);
+        b.Property(x => x.LastTestMessage).HasMaxLength(1000);
+        b.Property(x => x.LastError).HasMaxLength(1000);
+        b.Property(x => x.UpdatedBy).HasMaxLength(100);
+        b.Property(x => x.Version).IsRowVersion();
     }
 }

@@ -1,9 +1,12 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using WCS.Application.Abstractions;
+using WCS.Application.Config;
+using WCS.Infrastructure.Config;
 using WCS.Infrastructure.Persistence;
 using WCS.Infrastructure.Persistence.Repositories;
 using WCS.Infrastructure.Seeding;
@@ -16,6 +19,11 @@ public sealed class IntegrationOptions
     public const string SectionName = "Integration";
     /// <summary>Only "Simulator" exists in Phase 1. Real PLC/RCS adapters are not implemented (no confirmed addresses/APIs).</summary>
     public string Mode { get; set; } = "Simulator";
+    /// <summary>
+    /// When true the connection check opens (and immediately closes) a TCP connection to the configured host:port. Default false: the check is simulated
+    /// and never touches the network. Enable only after the device addresses have been confirmed.
+    /// </summary>
+    public bool AllowNetworkProbe { get; set; }
 }
 
 public static class DependencyInjection
@@ -52,6 +60,14 @@ public static class DependencyInjection
         services.AddScoped<ITransportTaskRepository, TransportTaskRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<WcsDataSeeder>();
+
+        var dp = services.AddDataProtection().SetApplicationName("ETEK.WCS");
+        var keysPath = configuration["DataProtection:KeysPath"];
+        if (!string.IsNullOrWhiteSpace(keysPath)) dp.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+        services.AddScoped<ISecretProtector, DataProtectionSecretProtector>();
+        services.AddScoped<IConnectionSettingRepository, ConnectionSettingRepository>();
+        if (configuration.GetValue<bool>($"{IntegrationOptions.SectionName}:AllowNetworkProbe")) services.AddSingleton<IConnectionProbe, TcpReachabilityProbe>();
+        else services.AddSingleton<IConnectionProbe, SimulatedConnectionProbe>();
 
         var mode = configuration[$"{IntegrationOptions.SectionName}:Mode"] ?? "Simulator";
         if (!mode.Equals("Simulator", StringComparison.OrdinalIgnoreCase))
