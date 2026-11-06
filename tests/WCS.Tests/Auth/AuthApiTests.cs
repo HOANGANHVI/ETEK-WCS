@@ -66,7 +66,7 @@ public class AuthApiTests
         var c = await As(f, "op1");
         var (status, root, _) = await c.SendJsonAsync(new HttpMethod(method), url, method == "GET" ? null : new { });
         Assert.Equal(403, status);
-        Assert.Equal(0, f.Repo.Rows.Count); // nothing was changed
+        Assert.Empty(f.Repo.Rows); // nothing was changed
         _ = root;
     }
 
