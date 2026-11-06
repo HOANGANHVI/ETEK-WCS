@@ -2,132 +2,255 @@ import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
-import { formatDateTime, formatTime } from '../components/format'
-import { Async, Badge, Card } from '../components/ui'
+import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
+import { useCodeMaps } from '../hooks/useLookups'
+import { formatDateTime, formatTime } from '../i18n/format'
+import {
+  AGV_ROLE_VI, DEVICE_EVENT_RE, describeError, flowInfo, HISTORY_EVENT_VI, LEG_VI, reasonVi, SOURCE_VI, TASK_STATE_VI, taskCode,
+} from '../i18n/vi'
 
 const CANCELLABLE: TaskState[] = [
-  'Pending', 'Validating', 'Queued', 'Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending',
+  'Pending', 'Validating', 'Queued', 'Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing',
 ]
+const EVENTS = ['TaskCreated', 'TaskStateChanged'] as const
 
 export function TasksPage() {
   const [params, setParams] = useSearchParams()
-  const [filter, setFilter] = useState<TaskState | ''>('')
-  const selectedId = params.get('id')
+  const [stateFilter, setStateFilter] = useState<TaskState | ''>('')
+  const [agvFilter, setAgvFilter] = useState('')
+  const [search, setSearch] = useState('')
+  const [cancelFor, setCancelFor] = useState<string | null>(null)
+  const urlId = params.get('id')
 
-  const tasks = useApi(useCallback(() => api.tasks(filter || undefined, 0, 100), [filter]), ['TaskCreated', 'TaskStateChanged'])
-  const locations = useApi(useCallback(() => api.locations(), []))
+  const tasks = useApi(useCallback(() => api.tasks(stateFilter || undefined, 0, 200), [stateFilter]), [...EVENTS])
   const agvs = useApi(useCallback(() => api.agvs(), []))
+  const locations = useApi(useCallback(() => api.locations(), []))
+  const codes = useCodeMaps(locations.data, agvs.data)
 
-  const locCode = useMemo(() => new Map(locations.data?.map((l) => [l.id, l.code]) ?? []), [locations.data])
-  const agvCode = useMemo(() => new Map(agvs.data?.map((a) => [a.id, a.code]) ?? []), [agvs.data])
-  const code = (id: string | null) => (id ? locCode.get(id) ?? id.slice(0, 8) : '—')
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (tasks.data?.items ?? []).filter((t) => (!agvFilter || t.agvId === agvFilter) && (!q || taskCode(t.id).toLowerCase().includes(q)))
+  }, [tasks.data, agvFilter, search])
+
+  // Nothing chosen yet: show the newest task so the detail area is never an empty void.
+  const selectedId = urlId ?? rows[0]?.id ?? null
+
+  const select = (id: string, cancel = false) => { setParams({ id }); setCancelFor(cancel ? id : null) }
 
   return (
     <>
-      <h1>Task Monitoring</h1>
-      <div className="split">
-        <Card
-          title="Tasks"
+      <PageHeader
+        title="Quản lý nhiệm vụ"
+        description="Theo dõi toàn bộ nhiệm vụ vận chuyển, vòng đời trạng thái và các sự kiện PLC/RCS liên quan."
+      />
+      <div className={`task-layout ${selectedId ? 'with-detail' : ''}`}>
+        <Panel
+          title="Danh sách nhiệm vụ"
+          subtitle={tasks.data ? `${rows.length} / ${tasks.data.total} nhiệm vụ` : undefined}
+          flush
           actions={
-            <label className="inline">
-              State{' '}
-              <select value={filter} onChange={(e) => setFilter(e.target.value as TaskState | '')}>
-                <option value="">All</option>
-                {TASK_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+            <>
+              <input type="search" placeholder="Tìm mã nhiệm vụ" aria-label="Tìm mã nhiệm vụ" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <select aria-label="Lọc theo AGV" value={agvFilter} onChange={(e) => setAgvFilter(e.target.value)}>
+                <option value="">Tất cả AGV</option>
+                {(agvs.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.code}</option>)}
               </select>
-            </label>
+              <select aria-label="Lọc theo trạng thái" value={stateFilter} onChange={(e) => setStateFilter(e.target.value as TaskState | '')}>
+                <option value="">Tất cả trạng thái</option>
+                {TASK_STATES.map((s) => <option key={s} value={s}>{TASK_STATE_VI[s]}</option>)}
+              </select>
+            </>
           }
         >
-          <Async state={tasks} isEmpty={(d) => d.items.length === 0} empty={{ title: 'No tasks', hint: filter ? 'Try another state filter.' : 'Tasks appear when a station requests a transport.' }}>
-            {(page) => (
-              <table className="selectable">
-                <thead><tr><th>Created</th><th>Flow</th><th>AGV</th><th>From → To</th><th>State</th></tr></thead>
-                <tbody>
-                  {page.items.map((t) => (
-                    <tr key={t.id} className={t.id === selectedId ? 'selected' : ''} onClick={() => setParams({ id: t.id })}>
-                      <td>{formatTime(t.createdAt)}</td>
-                      <td>{t.flow}</td>
-                      <td>{agvCode.get(t.agvId) ?? '—'}</td>
-                      <td>{code(t.sourceLocationId ?? t.requestLocationId)} → {code(t.destinationLocationId)}</td>
-                      <td><Badge value={t.state} />{t.requiresReconciliation && <span className="flag" title="Needs reconciliation"> ⚠</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <Async state={tasks} isEmpty={(d) => d.items.length === 0} empty={{ title: 'Chưa có nhiệm vụ nào', hint: stateFilter ? 'Thử chọn trạng thái khác.' : 'Nhiệm vụ xuất hiện khi trạm yêu cầu vận chuyển.' }}>
+            {() => rows.length === 0 ? (
+              <div className="state state-empty"><div><strong>Không có nhiệm vụ khớp bộ lọc</strong></div></div>
+            ) : (
+              <div className="table-wrap task-table">
+                <table className="grid clickable">
+                  <thead>
+                    <tr><th>Mã nhiệm vụ</th><th>Thời gian tạo</th><th>Quy trình</th><th>AGV</th><th>Xuất phát</th><th>Đích</th><th>Trạng thái</th><th>Thao tác</th></tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((t) => (
+                      <tr key={t.id} className={t.id === selectedId ? 'selected' : ''} onClick={() => select(t.id)}>
+                        <td className="mono nowrap">{taskCode(t.id)}</td>
+                        <td className="nowrap num">{formatTime(t.createdAt)}</td>
+                        <td className="nowrap"><strong>{flowInfo(t.flow).code}</strong></td>
+                        <td>{codes.agv(t.agvId)}</td>
+                        <td>{codes.loc(t.sourceLocationId ?? t.requestLocationId)}</td>
+                        <td>{codes.loc(t.destinationLocationId)}</td>
+                        <td><TaskStatePill state={t.state} />{t.requiresReconciliation && <span className="flag" title="Cần đối soát vị trí rack"> ⚠</span>}</td>
+                        <td className="nowrap" onClick={(e) => e.stopPropagation()}>
+                          <Button size="sm" onClick={() => select(t.id)}>Chi tiết</Button>{' '}
+                          {CANCELLABLE.includes(t.state) && <Button size="sm" variant="danger" onClick={() => select(t.id, true)}>Hủy</Button>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </Async>
-        </Card>
+        </Panel>
 
-        <Card title="Task detail">
-          {selectedId ? <TaskDetail key={selectedId} id={selectedId} code={code} /> : <div className="state state-empty"><strong>Select a task</strong><span>Its history and actions appear here.</span></div>}
-        </Card>
+        {selectedId && (
+          <TaskDetail key={selectedId} id={selectedId} codes={codes} askCancel={cancelFor === selectedId}
+            onCancelDone={() => setCancelFor(null)} />
+        )}
       </div>
     </>
   )
 }
 
-function TaskDetail({ id, code }: { id: string; code: (id: string | null) => string }) {
-  const task = useApi(useCallback(() => api.task(id), [id]), ['TaskStateChanged'])
-  const history = useApi(useCallback(() => api.taskHistory(id), [id]), ['TaskStateChanged'])
-  const health = useApi(useCallback(() => api.health(), []))
-  const [busy, setBusy] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
+interface DetailProps {
+  id: string
+  codes: ReturnType<typeof useCodeMaps>
+  askCancel: boolean
+  onCancelDone: () => void
+}
 
-  const run = async (action: () => Promise<unknown>) => {
-    setBusy(true); setActionError(null)
-    try { await action(); task.reload(); history.reload() }
-    catch (e) { setActionError(e instanceof Error ? e.message : 'Action failed') }
+function TaskDetail({ id, codes, askCancel, onCancelDone }: DetailProps) {
+  const task = useApi(useCallback(() => api.task(id), [id]), [...EVENTS])
+  const history = useApi(useCallback(() => api.taskHistory(id), [id]), [...EVENTS])
+  const health = useApi(useCallback(() => api.health(), []))
+  const agvs = useApi(useCallback(() => api.agvs(), []))
+  const [busy, setBusy] = useState(false)
+  const [reason, setReason] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionMsg, setActionMsg] = useState<string | null>(null)
+
+  const run = async (action: () => Promise<unknown>, ok?: string) => {
+    setBusy(true); setActionError(null); setActionMsg(null)
+    try { await action(); if (ok) setActionMsg(ok); task.reload(); history.reload() }
+    catch (e) { setActionError(describeError(e)) }
     finally { setBusy(false) }
   }
 
   return (
-    <Async state={task} empty={{ title: 'Task not found' }}>
-      {(t: TransportTask) => (
-        <>
-          <dl className="kv">
-            <dt>Id</dt><dd className="mono">{t.id}</dd>
-            <dt>State</dt><dd><Badge value={t.state} /> <span className="muted">{t.stateReason}</span></dd>
-            <dt>Flow / rack</dt><dd>{t.flow} · {t.rackKind}</dd>
-            <dt>Request</dt><dd>{code(t.requestLocationId)} <span className="muted">({t.requestKey})</span></dd>
-            <dt>Source → destination</dt><dd>{code(t.sourceLocationId)} → {code(t.destinationLocationId)}</dd>
-            <dt>Leg / PLC permission</dt><dd>{t.leg} · {t.plcPermissionGranted ? 'granted' : 'not granted'}</dd>
-            <dt>RCS</dt><dd className="mono">{t.rcsTaskCode ?? 'not accepted yet'}</dd>
-            <dt>Pick / drop confirmed</dt><dd>{formatDateTime(t.pickConfirmedAt)} / {formatDateTime(t.dropConfirmedAt)}</dd>
-            {t.requiresReconciliation && (<><dt>Attention</dt><dd className="text-bad">Physical outcome must be reconciled before resources are released.</dd></>)}
-          </dl>
+    <Panel title={`Chi tiết nhiệm vụ ${taskCode(id)}`} className="task-detail">
+      <Async state={task} empty={{ title: 'Không tìm thấy nhiệm vụ' }}>
+        {(t: TransportTask) => {
+          const agv = (agvs.data ?? []).find((a) => a.id === t.agvId)
+          const flow = flowInfo(t.flow)
+          const canCancel = CANCELLABLE.includes(t.state)
+          const simulator = health.data?.integration.mode === 'Simulator'
+          const events = history.data ?? []
+          const deviceEvents = events.filter((h) => h.source === 'PLC' || h.source === 'RCS' || DEVICE_EVENT_RE.test(h.event))
+          return (
+            <>
+              {t.requiresReconciliation && (
+                <div className="notice notice-warn">Cần đối soát vị trí rack thực tế trước khi giải phóng giữ chỗ và tài nguyên (tồn kho không tự điều chỉnh).</div>
+              )}
 
-          <div className="actions">
-            {CANCELLABLE.includes(t.state) && (
-              <button type="button" disabled={busy} onClick={() => {
-                const reason = window.prompt('Reason for cancelling this task?')
-                if (reason) void run(() => api.cancelTask(t.id, reason, 'operator'))
-              }}>Cancel task</button>
-            )}
-            {health.data?.integration.mode === 'Simulator' && !['Completed', 'Failed', 'Cancelled'].includes(t.state) && (
-              <button type="button" className="secondary" disabled={busy} onClick={() => void run(() => api.simulateNext(t.id))}>
-                Simulate next device step
-              </button>
-            )}
-          </div>
-          {actionError && <div className="state state-error" role="alert">{actionError}</div>}
+              <section className="detail-sec">
+                <h3>Thông tin chung</h3>
+                <dl className="kv2">
+                  <dt>Quy trình</dt><dd><strong>{flow.code}</strong> · {flow.label}</dd>
+                  <dt>Trạng thái</dt><dd><TaskStatePill state={t.state} /> <span className="muted">{reasonVi(t.stateReason)}</span></dd>
+                  <dt>Trạm yêu cầu</dt><dd>{codes.loc(t.requestLocationId)}</dd>
+                  <dt>Khóa yêu cầu</dt><dd className="mono">{t.requestKey}</dd>
+                  <dt>Thời gian tạo</dt><dd>{formatDateTime(t.createdAt)}</dd>
+                  <dt>Cập nhật gần nhất</dt><dd>{formatDateTime(t.updatedAt)}</dd>
+                  <dt>Kết thúc</dt><dd>{formatDateTime(t.finishedAt)}</dd>
+                </dl>
+              </section>
 
-          <h3>History</h3>
-          <Async state={history} isEmpty={(d) => d.length === 0} empty={{ title: 'No history' }}>
-            {(rows) => (
-              <ol className="timeline">
-                {rows.map((h) => (
-                  <li key={h.id}>
-                    <span className="muted">{formatTime(h.occurredAt)}</span>{' '}
-                    {h.fromState && h.toState && h.fromState !== h.toState ? <><Badge value={h.fromState} /> → <Badge value={h.toState} /></> : <strong>{h.event}</strong>}
-                    {h.detail && <div className="muted">{h.detail} · {h.source}</div>}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Async>
-        </>
-      )}
-    </Async>
+              <section className="detail-sec">
+                <h3>AGV thực hiện</h3>
+                <dl className="kv2">
+                  <dt>AGV</dt><dd><strong>{codes.agv(t.agvId)}</strong>{agv && <> · {AGV_ROLE_VI[agv.role]}</>}</dd>
+                  <dt>Công đoạn hiện tại</dt><dd>{LEG_VI[t.leg] ?? t.leg}</dd>
+                  <dt>PLC cho phép</dt><dd>{t.plcPermissionGranted ? <Pill tone="ok">Đã cho phép</Pill> : <Pill tone="muted">Chưa cấp</Pill>}</dd>
+                  <dt>Mã yêu cầu RCS</dt><dd className="mono">{t.rcsRequestCode}</dd>
+                  <dt>Mã nhiệm vụ RCS</dt><dd className="mono">{t.rcsTaskCode ?? 'RCS chưa tiếp nhận'}</dd>
+                </dl>
+              </section>
+
+              <section className="detail-sec">
+                <h3>Luồng xử lý</h3>
+                <FlowStepper task={t} />
+                <div className="route route-line">
+                  <div><small>Điểm xuất phát</small><strong>{codes.loc(t.sourceLocationId ?? t.requestLocationId)}</strong></div>
+                  <span className="route-arrow" aria-hidden="true">➜</span>
+                  <div><small>Điểm đích</small><strong>{codes.loc(t.destinationLocationId)}</strong></div>
+                  <div><small>Đã lấy rack</small><strong>{formatTime(t.pickConfirmedAt)}</strong></div>
+                  <div><small>Đã thả rack</small><strong>{formatTime(t.dropConfirmedAt)}</strong></div>
+                </div>
+              </section>
+
+              {(canCancel || (simulator && !['Completed', 'Failed', 'Cancelled'].includes(t.state))) && (
+                <section className="detail-sec">
+                  <h3>Thao tác</h3>
+                  {askCancel || confirming ? (
+                    <div className="cancel-box">
+                      <label>Lý do hủy nhiệm vụ
+                        <input type="search" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do (bắt buộc)" />
+                      </label>
+                      <div className="btn-row">
+                        <Button variant="danger" disabled={busy || !reason.trim()} onClick={() => void run(() => api.cancelTask(t.id, reason.trim(), 'operator'), 'Đã gửi yêu cầu hủy. Nhiệm vụ chỉ chuyển sang “Đã hủy” sau khi RCS xác nhận.').then(() => { setReason(''); setConfirming(false); onCancelDone() })}>Xác nhận hủy</Button>
+                        <Button onClick={() => { setReason(''); setConfirming(false); onCancelDone() }}>Bỏ qua</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="btn-row">
+                      {canCancel && <Button variant="danger" disabled={busy} onClick={() => setConfirming(true)}>Hủy nhiệm vụ</Button>}
+                      {simulator && <Button variant="primary" disabled={busy} onClick={() => void run(() => api.simulateNext(t.id))}>Chạy bước thiết bị tiếp theo (mô phỏng)</Button>}
+                    </div>
+                  )}
+                  {actionMsg && <div className="notice notice-info">{actionMsg}</div>}
+                  {actionError && <div className="notice notice-bad" role="alert">{actionError}</div>}
+                </section>
+              )}
+
+              <section className="detail-sec">
+                <h3>Lịch sử chuyển trạng thái</h3>
+                <Async state={history} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có lịch sử' }}>
+                  {(rows) => (
+                    <ol className="timeline">
+                      {rows.map((h) => {
+                        const change = h.fromState && h.toState && h.fromState !== h.toState
+                        return (
+                          <li key={h.id}>
+                            <span className="tl-time num">{formatTime(h.occurredAt)}</span>
+                            <span className="tl-body">
+                              {change ? (
+                                <span className="tl-change">
+                                  <TaskStatePill state={h.fromState as TaskState} /><span aria-hidden="true">➜</span><TaskStatePill state={h.toState as TaskState} />
+                                </span>
+                              ) : <strong>{HISTORY_EVENT_VI[h.event] ?? h.event}</strong>}
+                              {h.detail && <small>{reasonVi(h.detail)} <span className="muted">· {SOURCE_VI[h.source] ?? h.source}</span></small>}
+                            </span>
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  )}
+                </Async>
+              </section>
+
+              <section className="detail-sec">
+                <h3>Sự kiện PLC / RCS</h3>
+                {deviceEvents.length === 0 ? (
+                  <p className="muted">Chưa có sự kiện PLC/RCS nào cho nhiệm vụ này.</p>
+                ) : (
+                  <ul className="event-list">
+                    {deviceEvents.map((h) => (
+                      <li key={h.id}>
+                        <span className="num muted">{formatTime(h.occurredAt)}</span>
+                        <Pill tone="info" dot={false}>{SOURCE_VI[h.source] ?? h.source}</Pill>
+                        <span>{h.toState && h.fromState !== h.toState ? `→ ${TASK_STATE_VI[h.toState as TaskState] ?? h.toState}` : HISTORY_EVENT_VI[h.event] ?? h.event}{h.detail ? ` · ${reasonVi(h.detail)}` : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          )
+        }}
+      </Async>
+    </Panel>
   )
 }

@@ -43,14 +43,14 @@ npm install            # first time only
 npm run dev:demo       # same as: $env:VITE_DEMO_MODE="true"; npm run dev
 ```
 
-Open http://localhost:5173 - an orange **DEMO – DỮ LIỆU GIẢ** banner is always visible. The floating *Bảng điều khiển DEMO* lets you:
+Open http://localhost:5173. A small "Chế độ mô phỏng" chip in the header shows that the data is fake (no large banner). The **simulation dock** at the bottom of the screen (part of the layout, never floating over content) lets you:
 
-- start scenarios for **BP-01, BP-02, BP-03, BP-05, BP-06** (stock is prepared automatically), including a BP-01 case with no free destination
-  (`WAITING_FOR_DESTINATION`) and a button that frees a slot;
-- advance the simulation one step for all tasks, or let it run automatically (speed selectable); you can also use
-  *Simulate next device step* in **Task Monitoring** to step one task at a time (PLC permission, pick, continue, drop);
+- **Bắt đầu / Tạm dừng** automatic running (speed selectable), **Chạy từng bước** for all tasks, **Khởi tạo lại** to restore the initial demo data;
+- open **Tình huống và sự cố** to start scenarios for **BP-01, BP-02, BP-03, BP-05, BP-06** (stock is prepared automatically), including a BP-01 case with no free destination and a button that frees a slot;
 - inject incidents: RCS interruption, cancel (needs RCS confirmation), AGV connection loss, then reconcile the rack position;
-- reset to the initial demo data.
+- step one task at a time with *Chạy bước thiết bị tiếp theo (mô phỏng)* in **Quản lý nhiệm vụ**.
+
+The whole UI is in Vietnamese (technical codes such as AGV1, BP-01, PLC, RCS, Rack ID are kept).
 
 `npm run build:demo` produces a demo bundle. With `VITE_DEMO_MODE` unset or `false` (default, `npm run dev` / `npm run build`) the app talks to
 the real backend exactly as before. Demo Mode is a UI illustration: the authoritative business rules are those of the backend and the

@@ -1,0 +1,58 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: var(--fs-md); line-height: 1.4; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4, p { margin: 0; }
+a { color: var(--navy-500); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--navy-500); outline-offset: 2px; }
+.mono { font-family: Consolas, 'Cascadia Mono', ui-monospace, monospace; font-size: .92em; }
+.muted { color: var(--text-3); }
+.num { font-variant-numeric: tabular-nums; }
+.nowrap { white-space: nowrap; }
+.text-bad { color: var(--bad); }
+
+/* ---- buttons ---- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--navy-700); border-radius: var(--radius); font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
+.btn:hover:not(:disabled) { background: var(--navy-50); border-color: var(--navy-500); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-md { height: 36px; padding: 0 14px; font-size: var(--fs-sm); }
+.btn-sm { height: 30px; padding: 0 10px; font-size: var(--fs-xs); }
+.btn-primary { background: var(--navy-600); border-color: var(--navy-600); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--navy-700); border-color: var(--navy-700); }
+.btn-danger { color: var(--bad); border-color: var(--bad-line); }
+.btn-danger:hover:not(:disabled) { background: var(--bad-bg); border-color: var(--bad); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn svg { width: 16px; height: 16px; }
+
+select, input[type='search'] { height: 36px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); padding: 0 10px; font-size: var(--fs-sm); }
+
+/* ---- tables ---- */
+.table-wrap { overflow: auto; }
+table.grid { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+table.grid th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 9px 12px; background: var(--surface-2); color: var(--text-2); font-weight: 600; font-size: var(--fs-xs); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+table.grid td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.grid tbody tr:last-child td { border-bottom: 0; }
+table.grid.clickable tbody tr { cursor: pointer; }
+table.grid.clickable tbody tr:hover { background: var(--navy-50); }
+table.grid tbody tr.selected { background: var(--navy-100); box-shadow: inset 3px 0 0 var(--navy-600); }
+table.grid td.right, table.grid th.right { text-align: right; }
+
+/* ---- status pill ---- */
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 12px; font-size: var(--fs-xs); font-weight: 600; border: 1px solid; white-space: nowrap; }
+.pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill-ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
+.pill-warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-line); }
+.pill-bad { color: var(--bad); background: var(--bad-bg); border-color: var(--bad-line); }
+.pill-info { color: var(--info); background: var(--info-bg); border-color: var(--info-line); }
+.pill-muted { color: var(--muted); background: var(--muted-bg); border-color: var(--muted-line); }
+
+/* ---- async states ---- */
+.state { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; color: var(--text-2); font-size: var(--fs-sm); }
+.state > div { display: flex; flex-direction: column; gap: 2px; }
+.state strong { color: var(--text); }
+.state-error { background: var(--bad-bg); color: var(--bad); border-left: 4px solid var(--bad); }
+.state-error strong { color: var(--bad); }
+.state-empty { justify-content: center; text-align: center; padding: 28px 16px; color: var(--text-3); }
+.spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--navy-500); border-radius: 50%; animation: spin .8s linear infinite; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }

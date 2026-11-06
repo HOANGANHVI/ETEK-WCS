@@ -14,7 +14,7 @@ function App() {
         <Route path="agvs" element={<AgvPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="inventory" element={<InventoryPage />} />
-        <Route path="*" element={<EmptyState title="Page not found" />} />
+        <Route path="*" element={<EmptyState title="Không tìm thấy trang" />} />
       </Route>
     </Routes>
   )

@@ -1,16 +1,82 @@
-import type { ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { taskStage } from './taskStage'
 import type { ApiState } from '../hooks/useApi'
+import type { TaskState, TransportTask } from '../api/types'
+import {
+  AGV_CONNECTION_TONE, AGV_CONNECTION_VI, OCCUPANCY_TONE, OCCUPANCY_VI, RACK_STATUS_TONE, RACK_STATUS_VI, TASK_STATE_TONE,
+  TASK_STATE_VI, type Tone,
+} from '../i18n/vi'
 
-export function Loading({ label = 'Loading…' }: { label?: string }) {
-  return <div className="state state-loading" role="status"><span className="spinner" aria-hidden="true" />{label}</div>
+/* ------------------------------------------------------------------ page structure */
+export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
+  return (
+    <div className="page-header">
+      <div>
+        <h1>{title}</h1>
+        {description && <p>{description}</p>}
+      </div>
+      {actions && <div className="page-actions">{actions}</div>}
+    </div>
+  )
+}
+
+export function Panel({ title, subtitle, actions, children, flush, className = '' }: {
+  title?: string; subtitle?: string; actions?: ReactNode; children: ReactNode; flush?: boolean; className?: string
+}) {
+  return (
+    <section className={`panel ${className}`}>
+      {(title || actions) && (
+        <header className="panel-head">
+          <div>
+            {title && <h2>{title}</h2>}
+            {subtitle && <span className="panel-sub">{subtitle}</span>}
+          </div>
+          {actions && <div className="panel-actions">{actions}</div>}
+        </header>
+      )}
+      <div className={flush ? 'panel-body flush' : 'panel-body'}>{children}</div>
+    </section>
+  )
+}
+
+export function Kpi({ label, value, hint, tone = 'info', icon }: { label: string; value: ReactNode; hint?: string; tone?: Tone; icon?: ReactNode }) {
+  return (
+    <div className={`kpi kpi-${tone}`}>
+      {icon && <span className="kpi-icon">{icon}</span>}
+      <div className="kpi-text">
+        <span className="kpi-label">{label}</span>
+        <strong className="kpi-value">{value}</strong>
+        {hint && <span className="kpi-hint">{hint}</span>}
+      </div>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ status */
+export function Pill({ tone = 'muted', children, dot = true }: { tone?: Tone; children: ReactNode; dot?: boolean }) {
+  return <span className={`pill pill-${tone}`}>{dot && <i aria-hidden="true" />}{children}</span>
+}
+export const TaskStatePill = ({ state }: { state: TaskState }) => <Pill tone={TASK_STATE_TONE[state]}>{TASK_STATE_VI[state]}</Pill>
+export const ConnectionPill = ({ value }: { value: string }) => <Pill tone={AGV_CONNECTION_TONE[value] ?? 'muted'}>{AGV_CONNECTION_VI[value] ?? value}</Pill>
+export const OccupancyPill = ({ value }: { value: string }) => <Pill tone={OCCUPANCY_TONE[value] ?? 'muted'}>{OCCUPANCY_VI[value] ?? value}</Pill>
+export const RackPill = ({ value }: { value: string }) => <Pill tone={RACK_STATUS_TONE[value] ?? 'muted'}>{RACK_STATUS_VI[value] ?? value}</Pill>
+
+export function Button({ variant = 'secondary', size = 'md', className = '', ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost'; size?: 'sm' | 'md'
+}) {
+  return <button type="button" className={`btn btn-${variant} btn-${size} ${className}`} {...rest} />
+}
+
+/* ------------------------------------------------------------------ async states */
+export function Loading({ label = 'Đang tải dữ liệu…' }: { label?: string }) {
+  return <div className="state" role="status"><span className="spinner" aria-hidden="true" />{label}</div>
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="state state-error" role="alert">
-      <strong>Something went wrong</strong>
-      <span>{message}</span>
-      {onRetry && <button type="button" onClick={onRetry}>Retry</button>}
+      <div><strong>Không tải được dữ liệu</strong><span>{message}</span></div>
+      {onRetry && <Button size="sm" onClick={onRetry}>Thử lại</Button>}
     </div>
   )
 }
@@ -18,16 +84,13 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="state state-empty">
-      <strong>{title}</strong>
-      {hint && <span>{hint}</span>}
+      <div><strong>{title}</strong>{hint && <span>{hint}</span>}</div>
     </div>
   )
 }
 
-/** Renders loading / error / empty / content for an ApiState. */
-export function Async<T>({
-  state, isEmpty, empty, children,
-}: {
+/** Renders loading / error / empty / content of an ApiState; keeps the last data visible when a refresh fails. */
+export function Async<T>({ state, isEmpty, empty, children }: {
   state: ApiState<T>
   isEmpty?: (data: T) => boolean
   empty: { title: string; hint?: string }
@@ -39,28 +102,32 @@ export function Async<T>({
   if (isEmpty?.(state.data)) return <EmptyState {...empty} />
   return (
     <>
-      {state.error && <ErrorState message={`Showing last known data. ${state.error}`} onRetry={state.reload} />}
+      {state.error && <ErrorState message={`Đang hiển thị dữ liệu cũ. ${state.error}`} onRetry={state.reload} />}
       {children(state.data)}
     </>
   )
 }
 
-const TONES: Record<string, string> = {
-  Completed: 'ok', Online: 'ok', Healthy: 'ok', Empty: 'ok', Connected: 'ok',
-  Failed: 'bad', Error: 'bad', Offline: 'bad', Disconnected: 'bad', Unknown: 'warn',
-  Cancelled: 'muted', Degraded: 'warn',
-  WaitingForDestination: 'warn', WaitingForPlc: 'warn', CancelPending: 'warn', Reserved: 'warn', Queued: 'muted', Pending: 'muted',
-}
+/* ------------------------------------------------------------------ task flow stepper */
+const STEPS = ['Tiếp nhận', 'Lấy rack', 'Vận chuyển', 'Thả rack', 'Hoàn thành']
 
-export function Badge({ value }: { value: string }) {
-  return <span className={`badge badge-${TONES[value] ?? 'info'}`}>{value}</span>
-}
-
-export function Card({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
+export function FlowStepper({ task }: { task: TransportTask }) {
+  const stage = taskStage(task)
+  const failed = task.state === 'Failed'
+  const cancelled = task.state === 'Cancelled'
   return (
-    <section className="card">
-      <header className="card-header"><h2>{title}</h2>{actions}</header>
-      {children}
-    </section>
+    <ol className="stepper" aria-label="Luồng xử lý">
+      {STEPS.map((label, i) => {
+        const done = i < stage || stage === 5
+        const current = i === stage && stage < 5
+        const cls = done ? 'done' : current ? (failed ? 'fail' : cancelled ? 'stop' : 'current') : ''
+        return (
+          <li key={label} className={cls}>
+            <span className="step-dot">{done ? '✓' : failed && current ? '!' : i + 1}</span>
+            <span className="step-label">{label}</span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }

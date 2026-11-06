@@ -58,15 +58,15 @@ export type DemoEventName = 'TaskCreated' | 'TaskStateChanged' | 'InventoryChang
 type Listener = (name: DemoEventName, payload: unknown) => void
 
 const LOCATION_DEFS: Omit<DLocation, 'id' | 'recon'>[] = [
-  { code: 'A1', name: 'Machine A1', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
-  { code: 'A2', name: 'Machine A2', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
-  { code: 'B1', name: 'Machine B1', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
-  { code: 'B2', name: 'Machine B2', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
-  { code: 'F1', name: 'Full buffer F1', type: 'Buffer', cap: 3, allowed: 'Full', requiresPlc: false },
-  { code: 'F2', name: 'Full buffer F2', type: 'Buffer', cap: 3, allowed: 'Full', requiresPlc: false },
-  { code: 'F3', name: 'Empty buffer F3', type: 'Buffer', cap: 3, allowed: 'Empty', requiresPlc: false },
-  { code: 'F4', name: 'Empty buffer F4', type: 'Buffer', cap: 3, allowed: 'Empty', requiresPlc: false },
-  { code: 'F5', name: 'Manual buffer F5', type: 'ManualBuffer', cap: 3, allowed: 'Any', requiresPlc: false },
+  { code: 'A1', name: 'Máy A1', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
+  { code: 'A2', name: 'Máy A2', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
+  { code: 'B1', name: 'Máy B1', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
+  { code: 'B2', name: 'Máy B2', type: 'Station', cap: 1, allowed: 'Any', requiresPlc: true },
+  { code: 'F1', name: 'Vị trí đệm rack đầy F1', type: 'Buffer', cap: 3, allowed: 'Full', requiresPlc: false },
+  { code: 'F2', name: 'Vị trí đệm rack đầy F2', type: 'Buffer', cap: 3, allowed: 'Full', requiresPlc: false },
+  { code: 'F3', name: 'Vị trí đệm rack rỗng F3', type: 'Buffer', cap: 3, allowed: 'Empty', requiresPlc: false },
+  { code: 'F4', name: 'Vị trí đệm rack rỗng F4', type: 'Buffer', cap: 3, allowed: 'Empty', requiresPlc: false },
+  { code: 'F5', name: 'Vị trí đệm thủ công F5', type: 'ManualBuffer', cap: 3, allowed: 'Any', requiresPlc: false },
 ]
 
 export class DemoError extends Error {
@@ -121,8 +121,8 @@ export class DemoEngine {
     this.locations = LOCATION_DEFS.map((d) => ({ ...d, id: uid(), recon: false }))
     this.racks = []; this.reservations = []; this.tasks = []; this.transactions = []
     this.agvs = [
-      { id: uid(), code: 'AGV1', role: 'FullRack', kind: 'Full', status: 'Online', detail: 'demo', at: nowIso() },
-      { id: uid(), code: 'AGV2', role: 'EmptyRack', kind: 'Empty', status: 'Online', detail: 'demo', at: nowIso() },
+      { id: uid(), code: 'AGV1', role: 'FullRack', kind: 'Full', status: 'Online', detail: 'mô phỏng', at: nowIso() },
+      { id: uid(), code: 'AGV2', role: 'EmptyRack', kind: 'Empty', status: 'Online', detail: 'mô phỏng', at: nowIso() },
     ]
     this.rcsCounter = 0; this.rackCounter = 0; this.keyCounter = 0
 
@@ -147,7 +147,7 @@ export class DemoEngine {
   }
 
   stopAutoplay() {
-    if (this.timer) { clearInterval(this.timer); this.timer = null; this.storeListeners.forEach((l) => l()) }
+    if (this.timer) { clearInterval(this.timer); this.timer = null; this.version++; this.storeListeners.forEach((l) => l()) }
   }
 
   // ------------------------------------------------------------------ read API (same shapes as the real API)
@@ -210,7 +210,7 @@ export class DemoEngine {
   /** Creates a task like a station request would. Returns the task or throws a DemoError for rejected requests. */
   createTask(flow: string, stationCode: string): TransportTask {
     const t = this.startTask(flow, stationCode)
-    if (!t) throw new DemoError(422, 'FLOW_NOT_SUPPORTED', 'Flow not supported in the demo.')
+    if (!t) throw new DemoError(422, 'FLOW_NOT_SUPPORTED', 'Quy trình không được hỗ trợ trong chế độ mô phỏng.')
     this.changed(t)
     return t.pub
   }
@@ -219,7 +219,7 @@ export class DemoEngine {
     const t = this.require(id)
     const s = t.pub.state
     if (s === 'Cancelled') return t.pub
-    if (TERMINAL.includes(s)) throw new DemoError(422, 'TASK_ALREADY_FINISHED', `Task is already ${s}.`)
+    if (TERMINAL.includes(s)) throw new DemoError(422, 'TASK_ALREADY_FINISHED', `Nhiệm vụ đã kết thúc (${s}), không thể thao tác.`)
     if (s === 'Pending' || s === 'Validating' || s === 'Queued') {
       this.move(t, 'Cancelled', `Cancel requested: ${reason}`)
       this.releaseReservations(t)
@@ -246,7 +246,7 @@ export class DemoEngine {
   /** RCS reports the task interrupted -> FAILED, rack uncertain, reconciliation required. */
   interruptTask(id: string) {
     const t = this.require(id)
-    if (TERMINAL.includes(t.pub.state)) throw new DemoError(422, 'TASK_ALREADY_FINISHED', `Task is already ${t.pub.state}.`)
+    if (TERMINAL.includes(t.pub.state)) throw new DemoError(422, 'TASK_ALREADY_FINISHED', `Nhiệm vụ đã kết thúc (${t.pub.state}), không thể thao tác.`)
     this.finish(t, 'Failed', 'RCS reported the task interrupted')
     this.schedule(); this.changed()
   }
@@ -254,7 +254,7 @@ export class DemoEngine {
   reconcile(id: string, locationCode: string) {
     const t = this.require(id)
     const loc = this.locations.find((l) => l.code === locationCode)
-    if (!loc || !t.pub.requiresReconciliation) throw new DemoError(422, 'NO_RECONCILIATION_NEEDED', 'Nothing to reconcile.')
+    if (!loc || !t.pub.requiresReconciliation) throw new DemoError(422, 'NO_RECONCILIATION_NEEDED', 'Không có gì cần đối soát.')
     const rack = this.racks.find((r) => r.id === t.pub.rackId)
     if (rack) {
       const before = rack.status
@@ -271,7 +271,7 @@ export class DemoEngine {
   setAgvOnline(code: string, online: boolean) {
     const a = this.agvs.find((x) => x.code === code)
     if (!a) return
-    a.status = online ? 'Online' : 'Offline'; a.detail = online ? 'demo' : 'simulated disconnect'; a.at = nowIso()
+    a.status = online ? 'Online' : 'Offline'; a.detail = online ? 'mô phỏng' : 'ngắt kết nối mô phỏng'; a.at = nowIso()
     this.changed()
   }
 
@@ -337,8 +337,8 @@ export class DemoEngine {
     const rule = DEMO_FLOWS[flow]
     if (!rule) return null
     const station = this.locations.find((l) => l.code === stationCode)
-    if (!station) throw new DemoError(404, 'STATION_NOT_FOUND', `Station '${stationCode}' not found.`)
-    if (!rule.stations.includes(station.code)) throw new DemoError(422, 'STATION_NOT_ALLOWED', `Station ${station.code} cannot request ${flow}.`)
+    if (!station) throw new DemoError(404, 'STATION_NOT_FOUND', `Không tìm thấy trạm '${stationCode}'.`)
+    if (!rule.stations.includes(station.code)) throw new DemoError(422, 'STATION_NOT_ALLOWED', `Trạm ${station.code} không được yêu cầu quy trình ${flow}.`)
     const agv = this.agvs.find((a) => a.kind === rule.kind)!
     const id = uid()
     const at = nowIso()
@@ -389,18 +389,18 @@ export class DemoEngine {
     const p = t.pub
     const rule = DEMO_FLOWS[t.flow]
     switch (p.state) {
-      case 'Accepted': this.move(t, 'Executing', 'AGV executing', 'RCS'); return 'AGV started'
-      case 'Continuing': this.move(t, 'Executing', 'RCS continued the task', 'RCS'); return 'continueTask accepted by RCS (simulated)'
-      case 'WaitingForPlc': p.plcPermissionGranted = true; this.move(t, 'Executing', 'PLC permission granted', 'PLC'); return 'PLC granted permission'
-      case 'WaitingForDestination': return 'Still waiting: no destination has a free slot (free a slot to continue).'
-      case 'Queued': return 'Queued: the AGV is busy with another task (PER_AGV).'
-      case 'CancelPending': this.finish(t, 'Cancelled', 'Cancel confirmed by RCS'); return 'RCS confirmed the cancellation'
+      case 'Accepted': this.move(t, 'Executing', 'AGV executing', 'RCS'); return 'AGV bắt đầu thực hiện nhiệm vụ'
+      case 'Continuing': this.move(t, 'Executing', 'RCS continued the task', 'RCS'); return 'RCS chấp nhận tiếp tục nhiệm vụ (continueTask, mô phỏng)'
+      case 'WaitingForPlc': p.plcPermissionGranted = true; this.move(t, 'Executing', 'PLC permission granted', 'PLC'); return 'PLC đã cho phép'
+      case 'WaitingForDestination': return 'Vẫn đang chờ: chưa có vị trí đích còn chỗ trống (hãy giải phóng một vị trí).'
+      case 'Queued': return 'Đang chờ: AGV đang bận nhiệm vụ khác (mỗi AGV chỉ một nhiệm vụ hoạt động).'
+      case 'CancelPending': this.finish(t, 'Cancelled', 'Cancel confirmed by RCS'); return 'RCS đã xác nhận hủy nhiệm vụ'
       case 'Executing': {
         const loc = this.locations.find((l) => l.id === (p.leg === 'Pick' ? p.sourceLocationId : p.destinationLocationId))
-        if (loc?.requiresPlc && !p.plcPermissionGranted) { this.move(t, 'WaitingForPlc', `Waiting for PLC permission (${p.leg})`); return `Waiting for PLC permission at ${loc.code}` }
+        if (loc?.requiresPlc && !p.plcPermissionGranted) { this.move(t, 'WaitingForPlc', `Waiting for PLC permission (${p.leg})`); return `Đang chờ PLC cho phép tại ${loc.code}` }
         return p.leg === 'Pick' ? this.confirmPick(t, rule) : this.confirmDrop(t, rule)
       }
-      default: return `Nothing to simulate in state ${p.state}.`
+      default: return `Không có bước mô phỏng nào ở trạng thái này.`
     }
   }
 
@@ -415,10 +415,10 @@ export class DemoEngine {
     this.log(t, p.state, p.state, 'PICK_CONFIRMED', null, 'PLC')
     if (this.reserveDestination(t, rule)) {
       this.move(t, 'Continuing', `Destination assigned: ${this.locationCode(p.destinationLocationId)}`)
-      return `Pick confirmed; destination ${this.locationCode(p.destinationLocationId)} reserved`
+      return `Đã lấy rack; đã giữ chỗ vị trí đích ${this.locationCode(p.destinationLocationId)}`
     }
     this.move(t, 'WaitingForDestination', 'No destination available')
-    return 'Pick confirmed; no destination available -> WAITING_FOR_DESTINATION'
+    return 'Đã lấy rack; chưa có vị trí đích → chuyển sang chờ vị trí đích'
   }
 
   private confirmDrop(t: DTask, rule: FlowRule): string {
@@ -435,7 +435,7 @@ export class DemoEngine {
     this.reservations.filter((r) => r.active && r.taskId === p.id).forEach((r) => { r.active = false })
     p.dropConfirmedAt = nowIso(); p.plcPermissionGranted = false
     this.move(t, 'Completed', 'Drop confirmed; inventory updated', 'PLC')
-    return noBind ? `Drop confirmed at ${dest.code} - "Không bind rack" point, rack id not bound` : `Drop confirmed at ${dest.code}; rack ${scanned} bound`
+    return noBind ? `Đã thả rack tại ${dest.code} – điểm "Không bind rack", không gán Rack ID` : `Đã thả rack tại ${dest.code}; đã bind ${scanned}`
   }
 
   private reserveSource(t: DTask, rule: FlowRule): boolean {
@@ -494,7 +494,7 @@ export class DemoEngine {
   // ------------------------------------------------------------------ helpers
   private move(t: DTask, to: TaskState, reason: string, source = 'WCS') {
     const from = t.pub.state
-    if (from !== to && !EDGES[from].includes(to)) throw new DemoError(409, 'INVALID_TASK_TRANSITION', `Task transition ${from} -> ${to} is not allowed.`)
+    if (from !== to && !EDGES[from].includes(to)) throw new DemoError(409, 'INVALID_TASK_TRANSITION', `Không thể chuyển nhiệm vụ từ ${from} sang ${to}.`)
     t.pub.state = to; t.pub.stateReason = reason; t.pub.updatedAt = nowIso()
     if (TERMINAL.includes(to)) t.pub.finishedAt = nowIso()
     this.log(t, from, to, 'STATE_CHANGED', reason, source)
@@ -516,7 +516,7 @@ export class DemoEngine {
   private addStock(code: string, kind: Kind, qty: number) {
     const loc = this.loc(code)
     for (let i = 0; i < qty; i++) {
-      if (this.racks.filter((r) => r.locId === loc.id).length >= loc.cap) throw new DemoError(409, 'CAPACITY_EXCEEDED', `${code} is full.`)
+      if (this.racks.filter((r) => r.locId === loc.id).length >= loc.cap) throw new DemoError(409, 'CAPACITY_EXCEEDED', `${code} đã đầy.`)
       const r: DRack = { id: uid(), ext: null, status: kind, locId: loc.id, taskId: null, at: nowIso() }
       this.racks.push(r)
       this.tx('InitialStockDeclared', r.id, null, loc.id, null, null, kind, 'Operator', 'NotRequested', 'Initial stock declared (demo)')
@@ -525,13 +525,13 @@ export class DemoEngine {
 
   private loc(code: string) {
     const l = this.locations.find((x) => x.code === code)
-    if (!l) throw new DemoError(404, 'LOCATION_NOT_FOUND', `Location '${code}' not found.`)
+    if (!l) throw new DemoError(404, 'LOCATION_NOT_FOUND', `Không tìm thấy vị trí '${code}'.`)
     return l
   }
 
   private require(id: string) {
     const t = this.tasks.find((x) => x.pub.id === id)
-    if (!t) throw new DemoError(404, 'TASK_NOT_FOUND', 'Task not found.')
+    if (!t) throw new DemoError(404, 'TASK_NOT_FOUND', 'Không tìm thấy nhiệm vụ.')
     return t
   }
 }

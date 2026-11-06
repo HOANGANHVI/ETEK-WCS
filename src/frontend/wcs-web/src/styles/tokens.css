@@ -1,0 +1,42 @@
+/* ETEK WCS design tokens – navy / white / light grey, with green-amber-red reserved for operational status. */
+:root {
+  /* brand */
+  --navy-900: #091a30;
+  --navy-800: #0c2342;
+  --navy-700: #123560;
+  --navy-600: #1b4a85;
+  --navy-500: #2563a8;
+  --navy-100: #e3ecf7;
+  --navy-50: #f1f6fc;
+
+  /* neutrals */
+  --bg: #edf0f4;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --line: #d6dce4;
+  --line-strong: #bcc5d1;
+  --text: #17212e;
+  --text-2: #4a586a;
+  --text-3: #75839a;
+
+  /* operational status */
+  --ok: #17824f;       --ok-bg: #e2f4ea;     --ok-line: #9ed3b6;
+  --warn: #a86400;     --warn-bg: #fff1d3;   --warn-line: #f0c872;
+  --bad: #b3261e;      --bad-bg: #fbe5e3;    --bad-line: #eaa7a2;
+  --info: #1d5fa8;     --info-bg: #e3edf9;   --info-line: #a9c6e8;
+  --muted: #5b6878;    --muted-bg: #e8ecf1;  --muted-line: #cbd3dd;
+
+  /* type & space */
+  --font: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fs-xs: 12.5px;
+  --fs-sm: 14px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 22px;
+  --fs-kpi: 32px;
+  --gap-1: 6px; --gap-2: 10px; --gap-3: 14px; --gap-4: 20px;
+  --radius: 5px;
+  --header-h: 56px;
+  --sidebar-w: 224px;
+  --shadow: 0 1px 2px rgba(9, 26, 48, .08);
+}

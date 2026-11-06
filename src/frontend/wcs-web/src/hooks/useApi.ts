@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { describeError } from '../i18n/vi'
 import { useRealtime } from '../realtime/RealtimeProvider'
 import type { WcsEventName } from '../realtime/signalr'
 
@@ -30,7 +31,7 @@ export function useApi<T>(fetcher: () => Promise<T>, refreshOn: WcsEventName[] =
     fetcher()
       .then((data) => { if (!cancelled) setResult({ source: fetcher, data, error: null }) })
       .catch((e: unknown) => {
-        if (!cancelled) setResult((prev) => ({ source: fetcher, data: prev.data, error: e instanceof Error ? e.message : 'Request failed' }))
+        if (!cancelled) setResult((prev) => ({ source: fetcher, data: prev.data, error: describeError(e) }))
       })
     return () => { cancelled = true }
   }, [fetcher, nonce])
