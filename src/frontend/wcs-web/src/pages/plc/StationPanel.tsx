@@ -111,11 +111,11 @@ function AddressDialog({ point, onClose, onDone }: { point: IoPointState; onClos
     </>}>
       <p className="dialog-hint">
         Chỉ nhập địa chỉ <strong>do kỹ sư PLC cấp</strong> cho riêng trạm này. Không dùng địa chỉ tham chiếu của file mẫu (ví dụ M9000, D1500: giống nhau ở mọi trạm).
-        Địa chỉ không được trùng với tín hiệu khác trên cùng PLC; có thể trùng trên PLC khác. Thiết bị hỗ trợ: M (bit) cho BOOL, D (word) cho INT/STRING.
+        Địa chỉ không được trùng với tín hiệu khác trên cùng PLC; có thể trùng trên PLC khác. Thiết bị hỗ trợ: M, X, Y (bit) cho BOOL; D, W (word) cho INT/STRING. X là ngõ vào, chỉ dùng cho tín hiệu chiều PLC → Phần mềm. Địa chỉ X/Y/W được giữ đúng ký hiệu kỹ sư nhập; cơ số (bát phân/thập lục phân) phải được xác nhận ở tab cấu hình PLC trước.
       </p>
       {general && <div className="notice notice-bad" role="alert">{general}</div>}
       <div className="form-grid single">
-        <Field label="Địa chỉ thiết bị" error={errors.address} hint="Ví dụ M100, D2000"><input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={point.dataType === 'Bool' ? 'M…' : 'D…'} /></Field>
+        <Field label="Địa chỉ thiết bị" error={errors.address} hint="Ví dụ M100, Y10, D2000, W1A"><input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={point.dataType === 'Bool' ? 'M… / X… / Y…' : 'D… / W…'} /></Field>
         {isString && <>
           <Field label="Độ dài (word)" error={errors.wordLength} hint="Số word chiếm chỗ, 2 ký tự/word"><input value={words} onChange={(e) => setWords(e.target.value)} inputMode="numeric" /></Field>
           <Field label="Encoding" error={errors.encoding} hint="Hiện chỉ hỗ trợ ASCII"><input value={encoding} onChange={(e) => setEncoding(e.target.value)} /></Field>

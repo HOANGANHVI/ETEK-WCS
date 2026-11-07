@@ -55,7 +55,9 @@ function ConnectionSummary({ c, onEdit, realMode }: { c: PlcConnection; onEdit: 
       <dl className="kv2">
         {row('Địa chỉ IP', c.ipAddress)}{row('Cổng TCP', c.port)}{row('Giao thức', c.protocol)}
         {row('Network number', c.networkNumber)}{row('PC number', c.pcNumber)}{row('Module I/O number', c.moduleIoNumber)}{row('PLC station number', c.plcStationNumber)}
-        {row('Monitoring timer', c.monitoringTimer)}{row('Timeout (ms)', c.timeoutMs)}{row('Chu kỳ đọc (ms)', c.pollingIntervalMs)}
+        {row('Monitoring timer (×250 ms)', c.monitoringTimer)}{row('Timeout chung (ms)', c.timeoutMs)}{row('Timeout kết nối (ms)', c.connectTimeoutMs ?? (c.timeoutMs === null ? null : 'theo timeout chung'))}
+        {row('Timeout đọc (ms)', c.readTimeoutMs ?? (c.timeoutMs === null ? null : 'theo timeout chung'))}{row('Timeout ghi (ms)', c.writeTimeoutMs ?? (c.timeoutMs === null ? null : 'theo timeout chung'))}{row('Chu kỳ đọc (ms)', c.pollingIntervalMs)}
+        {row('Cơ số địa chỉ X/Y', c.xyAddressBase === 8 ? 'Bát phân (8)' : c.xyAddressBase === 16 ? 'Thập lục phân (16)' : null)}{row('Cơ số địa chỉ W', c.wAddressBase === 10 ? 'Thập phân (10)' : c.wAddressBase === 16 ? 'Thập lục phân (16)' : null)}
         <dt>Bật kết nối</dt><dd>{c.enabled ? <Pill tone="ok">Đã bật</Pill> : <Pill tone="muted">Đang tắt</Pill>}</dd>
       </dl>
       {c.missingParameters.length > 0 && (
@@ -81,6 +83,8 @@ function ConnectionForm({ c, onCancel, onSaved, realMode }: { c: PlcConnection; 
     name: c.name, ip: c.ipAddress, port: fromNum(c.port), protocol: c.protocol ?? '', net: fromNum(c.networkNumber), pc: fromNum(c.pcNumber),
     module: fromNum(c.moduleIoNumber), station: fromNum(c.plcStationNumber), timer: fromNum(c.monitoringTimer), timeout: fromNum(c.timeoutMs),
     poll: fromNum(c.pollingIntervalMs), enabled: c.enabled,
+    connectTimeout: fromNum(c.connectTimeoutMs), readTimeout: fromNum(c.readTimeoutMs), writeTimeout: fromNum(c.writeTimeoutMs),
+    xyBase: fromNum(c.xyAddressBase), wBase: fromNum(c.wAddressBase),
   })
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
@@ -92,6 +96,8 @@ function ConnectionForm({ c, onCancel, onSaved, realMode }: { c: PlcConnection; 
       await api.plcSaveConnection(c.plcId, {
         name: toStr(f.name), ipAddress: f.ip.trim(), port: toInt(f.port), protocol: toStr(f.protocol), networkNumber: toInt(f.net), pcNumber: toInt(f.pc),
         moduleIoNumber: toInt(f.module), plcStationNumber: toInt(f.station), monitoringTimer: toInt(f.timer), timeoutMs: toInt(f.timeout), pollingIntervalMs: toInt(f.poll), enabled: f.enabled,
+        connectTimeoutMs: toInt(f.connectTimeout), readTimeoutMs: toInt(f.readTimeout), writeTimeoutMs: toInt(f.writeTimeout),
+        xyAddressBase: toInt(f.xyBase), wAddressBase: toInt(f.wBase),
       })
       onSaved()
     } catch (e) { const r = fromApiError(e); setErrors(r.fields); setGeneral(r.general) } finally { setBusy(false) }
@@ -114,7 +120,16 @@ function ConnectionForm({ c, onCancel, onSaved, realMode }: { c: PlcConnection; 
         {num('Module I/O number', 'module', 'moduleIoNumber', 'Request destination module I/O')}
         {num('PLC station number', 'station', 'plcStationNumber', 'Request destination module station')}
         {num('Monitoring timer', 'timer', 'monitoringTimer', 'Đơn vị 250 ms')}
-        {num('Timeout (ms)', 'timeout', 'timeoutMs', '100–60000')}
+        {num('Timeout chung (ms)', 'timeout', 'timeoutMs', '100–60000. Dùng cho kết nối/đọc/ghi nếu không đặt riêng.')}
+        {num('Timeout kết nối (ms)', 'connectTimeout', 'connectTimeoutMs', 'Tùy chọn, 100–60000. Để trống = timeout chung.')}
+        {num('Timeout đọc (ms)', 'readTimeout', 'readTimeoutMs', 'Tùy chọn, 100–60000. Để trống = timeout chung.')}
+        {num('Timeout ghi (ms)', 'writeTimeout', 'writeTimeoutMs', 'Tùy chọn, 100–60000. Lệnh ghi không bao giờ tự gửi lại.')}
+        <Field label="Cơ số địa chỉ X/Y" error={errors.xyAddressBase} hint="NEEDS_CONFIRMATION. MELSEC-Q thường dùng thập lục phân; FX/iQ-F dùng bát phân. Không có mặc định.">
+          <select value={f.xyBase} onChange={set('xyBase')}><option value="">— Chưa xác nhận —</option><option value="8">Bát phân (X10 = 8)</option><option value="16">Thập lục phân (X10 = 16)</option></select>
+        </Field>
+        <Field label="Cơ số địa chỉ W" error={errors.wAddressBase} hint="NEEDS_CONFIRMATION. Cần cho địa chỉ thanh ghi liên kết W. Không có mặc định.">
+          <select value={f.wBase} onChange={set('wBase')}><option value="">— Chưa xác nhận —</option><option value="10">Thập phân (W10 = 10)</option><option value="16">Thập lục phân (W10 = 16)</option></select>
+        </Field>
         {num('Chu kỳ đọc (ms)', 'poll', 'pollingIntervalMs', '50–60000')}
         <div className="field switches">
           <Switch checked={f.enabled} onChange={(v) => setF((p) => ({ ...p, enabled: v }))} label="Bật kết nối PLC này" />

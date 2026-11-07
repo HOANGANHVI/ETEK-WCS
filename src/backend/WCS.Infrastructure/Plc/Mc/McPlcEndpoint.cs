@@ -12,6 +12,7 @@ namespace WCS.Infrastructure.Plc.Mc;
 public sealed class McPlcEndpoint : IPlcEndpoint
 {
     private readonly McTcpClient _client;
+    private readonly AddressBases _bases;
     public string PlcId { get; }
 
     public McPlcEndpoint(PlcEndpointConfig c)
@@ -27,9 +28,12 @@ public sealed class McPlcEndpoint : IPlcEndpoint
         if (c.TimeoutMs is null) missing.Add("timeoutMs");
         if (missing.Count > 0) throw new NeedsConfigurationException(missing);
         PlcId = c.PlcId;
+        _bases = c.Bases;
+        static TimeSpan? Ms(int? v) => v is { } x ? TimeSpan.FromMilliseconds(x) : null;
         _client = new McTcpClient(new McClientSettings(c.IpAddress, c.Port!.Value,
             new McRoute((byte)c.NetworkNumber!.Value, (byte)c.PcNumber!.Value, (ushort)c.ModuleIoNumber!.Value, (byte)c.PlcStationNumber!.Value),
-            (ushort)c.MonitoringTimer!.Value, TimeSpan.FromMilliseconds(c.TimeoutMs!.Value)));
+            (ushort)c.MonitoringTimer!.Value, TimeSpan.FromMilliseconds(c.TimeoutMs!.Value),
+            ConnectTimeout: Ms(c.ConnectTimeoutMs), ReadTimeout: Ms(c.ReadTimeoutMs), WriteTimeout: Ms(c.WriteTimeoutMs), PlcId: c.PlcId));
     }
 
     public EndpointState State => _client.State;
@@ -46,10 +50,10 @@ public sealed class McPlcEndpoint : IPlcEndpoint
         var items = new List<Item>();
         foreach (var p in points)
         {
-            if (string.IsNullOrWhiteSpace(p.Address)) { results[p.Id] = new(p.Id, null, PointQuality.NotConfigured, null); continue; }
-            var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, p.Address, p.WordLength);
-            if (AddressValidator.ValidateOne(spec) is { } issue) { results[p.Id] = new(p.Id, null, PointQuality.Bad, issue.Message); continue; }
-            DeviceAddress.TryParse(p.Address, out var a);
+            if (string.IsNullOrWhiteSpace(p.Address) || !p.Pollable) { results[p.Id] = new(p.Id, null, PointQuality.NotConfigured, null); continue; }      // no address, or not approved: no traffic
+            var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, p.Address, p.WordLength, p.Direction);
+            if (AddressValidator.ValidateOne(spec, _bases) is { } issue) { results[p.Id] = new(p.Id, null, PointQuality.Bad, issue.Message); continue; }
+            DeviceAddress.TryParse(p.Address, _bases, out var a);
             items.Add(new Item(p, a, AddressValidator.Footprint(p.DataType, a, p.WordLength)!.Value));
         }
 
@@ -60,7 +64,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
             var first = group.Items[0].Address;
             try
             {
-                if (first.Device == PlcDevice.M)
+                if (first.IsBitDevice)
                 {
                     var bits = await _client.ReadBitsAsync(first, group.Total, ct);
                     foreach (var it in group.Items) results[it.Point.Id] = new(it.Point.Id, PointValue.OfBool(bits[it.Address.Number - first.Number]), PointQuality.Good, null);
@@ -91,7 +95,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
     {
         foreach (var dev in items.GroupBy(i => i.Address.Device))
         {
-            var limit = dev.Key == PlcDevice.M ? McFrame.MaxBitPoints : McFrame.MaxWordPoints;
+            var limit = dev.Key is PlcDevice.M or PlcDevice.X or PlcDevice.Y ? McFrame.MaxReadBitPoints : McFrame.MaxWordPoints;
             Run? run = null; var end = -1;
             foreach (var it in dev.OrderBy(i => i.Address.Number))
             {
@@ -123,9 +127,11 @@ public sealed class McPlcEndpoint : IPlcEndpoint
     public async Task WritePointAsync(IoPointRef point, PointValue value, CancellationToken ct)
     {
         if (point.Direction != PlcSignalDirection.SoftwareToPlc) throw new InvalidOperationException("only Software -> PLC points can be written");
-        if (!DeviceAddress.TryParse(point.Address, out var a)) throw new InvalidOperationException("point has no confirmed address");
-        if (AddressValidator.ValidateOne(new PointSpec(point.Id, point.StationId, point.SignalName, point.DataType, point.Address, point.WordLength)) is { } issue)
+        if (!point.Pollable) throw new InvalidOperationException("the address of this point is not approved");
+        if (!DeviceAddress.TryParse(point.Address, _bases, out var a)) throw new InvalidOperationException("point has no confirmed address");
+        if (AddressValidator.ValidateOne(new PointSpec(point.Id, point.StationId, point.SignalName, point.DataType, point.Address, point.WordLength, point.Direction), _bases) is { } issue)
             throw new InvalidOperationException(issue.Message);
+        if (a.Device == PlcDevice.X) throw new InvalidOperationException("Device X (input relay) is a hardware input and can never be written.");
         if (value.Type != point.DataType) throw new ArgumentException($"value type {value.Type} does not match {point.DataType}");
         switch (point.DataType)
         {

@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { PlcOverview, PlcStationSummary, PlcWorkerStatus } from '../api/plcTypes'
+import type { PlcExchange, PlcOverview, PlcStationSummary, PlcWorkerStatus } from '../api/plcTypes'
 import { useAuth } from '../auth/AuthContext'
 import { Async, Button, EmptyState, PageHeader, Panel, Pill } from '../components/ui'
 import { DEMO_MODE } from '../config'
 import { useApi } from '../hooks/useApi'
-import { APPROVAL_VI, MISSING_PARAM_VI, MODE_TONE, MODE_VI, PHASE_TONE, PHASE_VI } from '../i18n/plc'
+import { APPROVAL_VI, EXCHANGE_OUTCOME_VI, MISSING_PARAM_VI, MODE_TONE, MODE_VI, PHASE_TONE, PHASE_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
 import { PlcConfigTab } from './plc/PlcConfigTab'
 import { PlcLogsTab } from './plc/PlcLogsTab'
@@ -123,6 +123,7 @@ function PlcCard({ w, isAdmin, simulator, onChanged }: { w: PlcWorkerStatus; isA
         {w.consecutiveFailures > 0 && <><dt>Lỗi liên tiếp</dt><dd className="text-bad">{w.consecutiveFailures}</dd></>}
         {isAdmin && d && <><dt>Yêu cầu / lỗi / timeout</dt><dd>{d.requests} / {d.failures} / {d.timeouts}</dd><dt>Độ trễ · End code</dt><dd>{d.lastLatencyMs ?? '—'} ms · {d.lastEndCode === null ? '—' : '0x' + d.lastEndCode.toString(16).toUpperCase().padStart(4, '0')}</dd></>}
       </dl>
+      {isAdmin && d && (d.lastFailedExchange || d.lastExchange) && <ExchangeBox last={d.lastExchange} failed={d.lastFailedExchange} />}
       {w.reason && <div className="notice notice-warn">{w.reason}</div>}
       {w.missingParameters.length > 0 && <div className="notice notice-warn">NEEDS_CONFIGURATION: {w.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ')}</div>}
       {isAdmin && w.lastError && <div className="notice notice-bad" role="status">Lỗi gần nhất: {w.lastError}</div>}
@@ -135,6 +136,30 @@ function PlcCard({ w, isAdmin, simulator, onChanged }: { w: PlcWorkerStatus; isA
       )}
       <QualityBar good={w.goodPoints} configured={w.configuredPoints} total={w.totalPoints} />
     </section>
+  )
+}
+
+/** Admin-only: the last request/response of a PLC connection as hex, for field diagnosis. Never shown to Operators. */
+function ExchangeBox({ last, failed }: { last: PlcExchange | null; failed: PlcExchange | null }) {
+  const one = (title: string, x: PlcExchange) => (
+    <div className="exchange">
+      <strong>{title}</strong>
+      <dl className="kv2">
+        <dt>Thời điểm</dt><dd>{fmtTime(x.at)} · {x.durationMs} ms</dd>
+        <dt>Lệnh</dt><dd>{x.operation === 'READ' ? 'Đọc' : 'Ghi'} {x.command} · {x.device}{x.startAddress} × {x.points}</dd>
+        <dt>Kết quả</dt><dd className={x.outcome === 'OK' ? '' : 'text-bad'}>{EXCHANGE_OUTCOME_VI[x.outcome] ?? x.outcome}{x.endCode ? ` · End code 0x${x.endCode.toString(16).toUpperCase().padStart(4, '0')}` : ''}{x.isAmbiguous ? ' · không tự ghi lại' : ''}</dd>
+        {x.error && <><dt>Lỗi</dt><dd>{x.error}</dd></>}
+      </dl>
+      <div className="muted small">Request</div><code className="hex">{x.requestHex}</code>
+      <div className="muted small">Response</div><code className="hex">{x.responseHex ?? '(không có phản hồi)'}</code>
+    </div>
+  )
+  return (
+    <details className="exchange-box">
+      <summary>Giao tiếp gần nhất (chẩn đoán, chỉ Admin)</summary>
+      {failed && one('Lần lỗi gần nhất', failed)}
+      {last && (!failed || last.at !== failed.at) && one('Lần gần nhất', last)}
+    </details>
   )
 }
 

@@ -419,6 +419,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<int?>("ConnectTimeoutMs")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
 
@@ -457,6 +460,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
 
+                    b.Property<int?>("ReadTimeoutMs")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("TimeoutMs")
                         .HasColumnType("integer");
 
@@ -472,6 +478,15 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
+
+                    b.Property<int?>("WAddressBase")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("WriteTimeoutMs")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("XyAddressBase")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

@@ -29,7 +29,8 @@ public static partial class PlcEndpoints
         {
             var before = (await s.ListConnectionsAsync(ct)).FirstOrDefault(x => x.PlcId == plcId);
             var cmd = new UpdatePlcConnectionCommand(r.Name, r.IpAddress, r.Port, r.Protocol, r.NetworkNumber, r.PcNumber, r.ModuleIoNumber,
-                r.PlcStationNumber, r.MonitoringTimer, r.TimeoutMs, r.PollingIntervalMs, r.Enabled);
+                r.PlcStationNumber, r.MonitoringTimer, r.TimeoutMs, r.PollingIntervalMs, r.Enabled,
+                r.ConnectTimeoutMs, r.ReadTimeoutMs, r.WriteTimeoutMs, r.XyAddressBase, r.WAddressBase);
             var view = await Audited.RunAsync(c, "PLC_CONNECTION_UPDATE", "PlcConnection", plcId, before,
                 () => s.UpdateConnectionAsync(plcId, cmd, o.Value, c.Actor().Username, ct), res => res);
             await rt.ReloadPlcAsync(plcId, ct);

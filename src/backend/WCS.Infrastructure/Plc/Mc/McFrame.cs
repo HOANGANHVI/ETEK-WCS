@@ -20,7 +20,8 @@ public sealed class McEndCodeException(ushort endCode) : McProtocolException($"P
 
 /// <summary>
 /// MELSEC MC Protocol, 3E frame, binary code, Q/L series (batch read/write 0401/1401, sub-command 0000 = word units, 0001 = bit units,
-/// devices M and D). Pure functions: no I/O, fully unit-testable. iQ-R sub-commands are not used.
+/// devices M, X, Y (bits) and D, W (words)). Pure functions: no I/O, fully unit-testable. iQ-R sub-commands are not used.
+/// Verified byte-for-byte against the proven reference library (see MC_PROTOCOL_REFERENCE_ANALYSIS.md).
 /// </summary>
 public static class McFrame
 {
@@ -28,26 +29,33 @@ public static class McFrame
     public const ushort CommandBatchWrite = 0x1401;
     public const ushort SubcommandWord = 0x0000;
     public const ushort SubcommandBit = 0x0001;
+    /// <summary>Per-request limits. These are the values proven in service by the reference library; larger manual maxima are NEEDS_CONFIRMATION.</summary>
     public const int MaxWordPoints = 960;
-    public const int MaxBitPoints = 7168;
+    public const int MaxReadBitPoints = 3584;
+    public const int MaxWriteBitPoints = 1440;
+    /// <summary>Largest legal "end code + data" length of a response (words: 2 + 960*2). Anything bigger is a framing error, never read.</summary>
+    public const int MaxResponseRemaining = 2 + 2 * MaxWordPoints;
 
     private const byte RequestSubheader0 = 0x50, ResponseSubheader0 = 0xD0;
     /// <summary>Bytes of a response before the data: subheader(2) network(1) pc(1) io(2) station(1) length(2).</summary>
     public const int ResponseHeaderLength = 9;
 
-    public static byte DeviceCode(PlcDevice d) => d switch { PlcDevice.M => 0x90, PlcDevice.D => 0xA8, _ => throw new ArgumentOutOfRangeException(nameof(d)) };
-    public static PlcDevice DeviceFromCode(byte code) => code switch { 0x90 => PlcDevice.M, 0xA8 => PlcDevice.D, _ => throw new McProtocolException($"unsupported device code 0x{code:X2}") };
+    public static byte DeviceCode(PlcDevice d) => d switch { PlcDevice.M => 0x90, PlcDevice.D => 0xA8, PlcDevice.W => 0xB4, PlcDevice.X => 0x9C, PlcDevice.Y => 0x9D, _ => throw new ArgumentOutOfRangeException(nameof(d)) };
+    public static string DeviceName(byte code) => code switch { 0x90 => "M", 0xA8 => "D", 0xB4 => "W", 0x9C => "X", 0x9D => "Y", _ => $"0x{code:X2}" };
+    public static PlcDevice DeviceFromCode(byte code) => code switch { 0x90 => PlcDevice.M, 0xA8 => PlcDevice.D, 0xB4 => PlcDevice.W, 0x9C => PlcDevice.X, 0x9D => PlcDevice.Y, _ => throw new McProtocolException($"unsupported device code 0x{code:X2}") };
 
     // ------------------------------------------------------------------------------------------------------------------ requests
     public static byte[] BuildBatchRead(McRoute route, ushort monitoringTimer, DeviceAddress head, int points, bool bitUnits)
     {
-        ValidatePoints(points, bitUnits);
+        ValidateUnits(head, bitUnits);
+        ValidatePoints(points, bitUnits, write: false);
         return Build(route, monitoringTimer, CommandBatchRead, bitUnits ? SubcommandBit : SubcommandWord, head, points, []);
     }
 
     public static byte[] BuildBatchWriteWords(McRoute route, ushort monitoringTimer, DeviceAddress head, IReadOnlyList<ushort> values)
     {
-        ValidatePoints(values.Count, bitUnits: false);
+        ValidateUnits(head, bitUnits: false);
+        ValidatePoints(values.Count, bitUnits: false, write: true);
         var data = new byte[values.Count * 2];
         for (var i = 0; i < values.Count; i++) BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(i * 2), values[i]);
         return Build(route, monitoringTimer, CommandBatchWrite, SubcommandWord, head, values.Count, data);
@@ -55,13 +63,21 @@ public static class McFrame
 
     public static byte[] BuildBatchWriteBits(McRoute route, ushort monitoringTimer, DeviceAddress head, IReadOnlyList<bool> values)
     {
-        ValidatePoints(values.Count, bitUnits: true);
+        if (head.Device == PlcDevice.X) throw new InvalidOperationException("Device X (input relay) is a hardware input and can never be written.");
+        ValidateUnits(head, bitUnits: true);
+        ValidatePoints(values.Count, bitUnits: true, write: true);
         return Build(route, monitoringTimer, CommandBatchWrite, SubcommandBit, head, values.Count, EncodeBits(values));
     }
 
-    private static void ValidatePoints(int points, bool bitUnits)
+    private static void ValidateUnits(DeviceAddress head, bool bitUnits)
     {
-        var max = bitUnits ? MaxBitPoints : MaxWordPoints;
+        if (head.IsBitDevice != bitUnits) throw new ArgumentException($"device {head.Device} is a {(head.IsBitDevice ? "bit" : "word")} device and cannot be accessed in {(bitUnits ? "bit" : "word")} units");
+        if (head.Number < 0 || head.Number > DeviceAddress.MaxNumber) throw new ArgumentOutOfRangeException(nameof(head), "device number out of the 3-byte range");
+    }
+
+    private static void ValidatePoints(int points, bool bitUnits, bool write)
+    {
+        var max = !bitUnits ? MaxWordPoints : write ? MaxWriteBitPoints : MaxReadBitPoints;
         if (points < 1 || points > max) throw new ArgumentOutOfRangeException(nameof(points), $"points must be 1..{max}");
     }
 
@@ -105,7 +121,22 @@ public static class McFrame
         if (header[0] != ResponseSubheader0 || header[1] != 0x00) throw new McProtocolException($"unexpected subheader {header[0]:X2}{header[1]:X2}");
         var len = BinaryPrimitives.ReadUInt16LittleEndian(header[7..]);
         if (len < 2) throw new McProtocolException("response length too small");
+        if (len > MaxResponseRemaining) throw new McProtocolException($"response length {len} exceeds the protocol maximum {MaxResponseRemaining}");
         return len;
+    }
+
+    /// <summary>
+    /// Number of data bytes a SUCCESSFUL response to this request must carry: reads return the points (bits: one nibble each, words: 2 bytes),
+    /// writes return none. Used to reject a well-formed but wrong-sized answer before it is decoded.
+    /// </summary>
+    public static int ExpectedDataLength(ReadOnlySpan<byte> request)
+    {
+        if (request.Length < 21) throw new McProtocolException("short request frame");
+        var command = BinaryPrimitives.ReadUInt16LittleEndian(request[11..]);
+        var sub = BinaryPrimitives.ReadUInt16LittleEndian(request[13..]);
+        var points = BinaryPrimitives.ReadUInt16LittleEndian(request[19..]);
+        if (command == CommandBatchWrite) return 0;
+        return sub == SubcommandBit ? (points + 1) / 2 : points * 2;
     }
 
     /// <summary>Parses a complete response frame (header + end code + data).</summary>
@@ -115,6 +146,23 @@ public static class McFrame
         if (f.Length != ResponseHeaderLength + remaining) throw new McProtocolException("response length mismatch");
         var route = new McRoute(f[2], f[3], BinaryPrimitives.ReadUInt16LittleEndian(f[4..]), f[6]);
         return new McResponse(route, BinaryPrimitives.ReadUInt16LittleEndian(f[9..]), f[11..].ToArray());
+    }
+
+    /// <summary>
+    /// Parses a complete response AND validates it against the request it answers: subheader, announced vs actual length, the echoed routing
+    /// (network, PC, module I/O, station) and - for a successful answer - the exact number of data bytes the request asked for.
+    /// Anything else is a <see cref="McProtocolException"/> (the answer cannot be trusted; the caller closes the connection).
+    /// </summary>
+    public static McResponse ParseAndValidateResponse(ReadOnlySpan<byte> request, ReadOnlySpan<byte> response)
+    {
+        if (request.Length < 21) throw new McProtocolException("short request frame");
+        var resp = ParseResponse(response);
+        if (resp.Route.Network != request[2] || resp.Route.Pc != request[3]
+            || resp.Route.ModuleIo != BinaryPrimitives.ReadUInt16LittleEndian(request[4..]) || resp.Route.Station != request[6])
+            throw new McProtocolException("response route (network/PC/module I/O/station) does not match the request");
+        if (resp.EndCode == 0 && resp.Data.Length != ExpectedDataLength(request))
+            throw new McProtocolException($"response carries {resp.Data.Length} data bytes, the request needs {ExpectedDataLength(request)}");
+        return resp;
     }
 
     /// <summary>Builds a response frame (used by the mock server). Error responses carry the 9-byte error information block.</summary>

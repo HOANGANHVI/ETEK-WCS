@@ -11,7 +11,8 @@ public interface IPlcEvents
     void Publish(string name, object payload, bool adminOnly = false);
 }
 
-public sealed record WriteResult(bool Success, string? Code = null, string? Message = null);
+/// <param name="IsAmbiguous">The request may have reached the PLC but no confirmation arrived (CR-003). The write was NOT retried; verify the value before acting.</param>
+public sealed record WriteResult(bool Success, string? Code = null, string? Message = null, bool IsAmbiguous = false);
 
 public sealed record PlcWorkerStatus(string PlcId, string Name, string State, string Mode, string? Reason, IReadOnlyList<string> MissingParameters, DateTimeOffset? LastPollAt,
     DateTimeOffset? LastSuccessAt, long Cycles, long Reconnects, int ConsecutiveFailures, int Stations, int TotalPoints, int ConfiguredPoints, int GoodPoints,
@@ -129,6 +130,12 @@ public sealed class PlcWorker : IAsyncDisposable
                 _events.Log(PlcLogLevel.Info, _plcId, w.Point.StationId, "WRITE", $"{w.Point.StationId}/{w.Point.SignalName} = {w.Value}");
                 w.Done.TrySetResult(new WriteResult(true));
             }
+            catch (PlcWriteAmbiguousException ex)
+            {
+                // Never retried: the PLC may already have executed it. The link was closed by the driver; the main loop reconnects.
+                _events.Log(PlcLogLevel.Error, _plcId, w.Point.StationId, "WRITE_AMBIGUOUS", $"{w.Point.StationId}/{w.Point.SignalName}: {ex.Message} KHÔNG tự động ghi lại; cần đọc lại giá trị để xác nhận.");
+                w.Done.TrySetResult(new WriteResult(false, "WRITE_AMBIGUOUS", ex.Message, IsAmbiguous: true));
+            }
             catch (OperationCanceledException) { w.Done.TrySetResult(new WriteResult(false, "CANCELLED", "Đã hủy.")); throw; }
             catch (Exception ex)
             {
@@ -209,7 +216,7 @@ public sealed class PlcWorker : IAsyncDisposable
                     catch (Exception ex)
                     {
                         // A failure inside one station must not stop the others.
-                        station.Apply(station.Points.Select(p => new PointReading(p.Id, null, p.Address is null && _mode != PlcRuntimeMode.Simulator ? PointQuality.NotConfigured : PointQuality.Bad, ex.Message)).ToList(), _clock.UtcNow, false);
+                        station.Apply(station.Points.Select(p => new PointReading(p.Id, null, (p.Address is null || !p.Pollable) && _mode != PlcRuntimeMode.Simulator ? PointQuality.NotConfigured : PointQuality.Bad, ex.Message)).ToList(), _clock.UtcNow, false);
                         LogLimited("STATION_ERROR_" + station.StationId, PlcLogLevel.Error, station.StationId, $"Lỗi xử lý trạm: {ex.Message}");
                     }
                     if (_endpoint.State != EndpointState.Connected) { linkLost = true; break; }

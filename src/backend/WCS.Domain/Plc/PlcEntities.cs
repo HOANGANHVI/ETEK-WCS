@@ -45,6 +45,14 @@ public class PlcConnection
     public int? MonitoringTimer { get; private set; }
     public int? TimeoutMs { get; private set; }
     public int? PollingIntervalMs { get; private set; }
+    /// <summary>Optional per-operation timeouts (CR-003). Null = use <see cref="TimeoutMs"/>. Never defaulted to a made-up value.</summary>
+    public int? ConnectTimeoutMs { get; private set; }
+    public int? ReadTimeoutMs { get; private set; }
+    public int? WriteTimeoutMs { get; private set; }
+    /// <summary>Numbering base of X/Y device numbers: 8 (octal) or 16 (hexadecimal). Null = NEEDS_CONFIRMATION; X/Y addresses are refused until set.</summary>
+    public int? XyAddressBase { get; private set; }
+    /// <summary>Numbering base of W device numbers: 10 or 16. Null = NEEDS_CONFIRMATION; W addresses are refused until set.</summary>
+    public int? WAddressBase { get; private set; }
     /// <summary>The Admin switch "connect this PLC". Real connections additionally need the deployment guard (see PlcRuntimeOptions).</summary>
     public bool Enabled { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -68,11 +76,14 @@ public class PlcConnection
     }
 
     public void Update(string name, string ipAddress, int? port, string? protocol, int? networkNumber, int? pcNumber, int? moduleIoNumber,
-        int? plcStationNumber, int? monitoringTimer, int? timeoutMs, int? pollingIntervalMs, bool enabled, string? by, DateTimeOffset now)
+        int? plcStationNumber, int? monitoringTimer, int? timeoutMs, int? pollingIntervalMs, bool enabled, string? by, DateTimeOffset now,
+        int? connectTimeoutMs = null, int? readTimeoutMs = null, int? writeTimeoutMs = null, int? xyAddressBase = null, int? wAddressBase = null)
     {
         Name = name; IpAddress = ipAddress; Port = port; Protocol = protocol; NetworkNumber = networkNumber; PcNumber = pcNumber;
         ModuleIoNumber = moduleIoNumber; PlcStationNumber = plcStationNumber; MonitoringTimer = monitoringTimer;
         TimeoutMs = timeoutMs; PollingIntervalMs = pollingIntervalMs; Enabled = enabled; UpdatedBy = by; UpdatedAt = now;
+        ConnectTimeoutMs = connectTimeoutMs; ReadTimeoutMs = readTimeoutMs; WriteTimeoutMs = writeTimeoutMs;
+        XyAddressBase = xyAddressBase; WAddressBase = wAddressBase;
     }
 }
 
@@ -141,6 +152,9 @@ public class StationIoPoint
     public uint Version { get; private set; }
 
     public bool HasConfirmedAddress => Status != IoConfigStatus.NeedsConfiguration && !string.IsNullOrWhiteSpace(ActualAddress);
+
+    /// <summary>CR-003: only an address that was entered AND approved (confirmed by the PLC engineer) is ever sent to a real PLC.</summary>
+    public bool IsPollable => Status == IoConfigStatus.Approved && !string.IsNullOrWhiteSpace(ActualAddress);
 
     public void ConfigureAddress(string address, int? wordLength, string? encoding, DateTimeOffset now)
     {

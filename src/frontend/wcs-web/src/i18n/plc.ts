@@ -40,6 +40,10 @@ export const APPROVAL_VI: Record<string, string> = {
   NEEDS_CONFIRMATION: 'Chờ xác nhận quy trình handshake', PARTIALLY_APPROVED: 'Đã duyệt một phần',
 }
 
+export const EXCHANGE_OUTCOME_VI: Record<string, string> = {
+  OK: 'Thành công', END_CODE: 'PLC báo lỗi (End code)', TIMEOUT: 'Hết thời gian chờ', FAILED: 'Lỗi truyền thông / phản hồi sai khung', AMBIGUOUS: 'Kết quả ghi KHÔNG XÁC ĐỊNH', CANCELLED: 'Đã hủy',
+}
+
 export const LOG_LEVEL_VI: Record<string, string> = { Info: 'Thông tin', Warning: 'Cảnh báo', Error: 'Lỗi' }
 export const LOG_LEVEL_TONE: Record<string, Tone> = { Info: 'info', Warning: 'warn', Error: 'bad' }
 
@@ -64,5 +68,8 @@ export const PLC_ERROR_VI: Record<string, string> = {
   VALUE_INVALID: 'Giá trị không hợp lệ cho kiểu dữ liệu của tín hiệu.',
   TYPE_MISMATCH: 'Giá trị không đúng kiểu dữ liệu của tín hiệu.',
   WRITE_FAILED: 'Ghi xuống PLC thất bại.',
+  WRITE_AMBIGUOUS: 'Lệnh ghi đã được gửi nhưng không nhận được xác nhận: KHÔNG được ghi lại tự động. Hãy đọc lại giá trị trên PLC để kiểm tra.',
+  RADIX_UNCONFIRMED: 'Cơ số địa chỉ X/Y/W chưa được kỹ sư PLC xác nhận (NEEDS_CONFIRMATION).',
+  X_READ_ONLY: 'Thiết bị X là ngõ vào phần cứng, không được ghi.',
   NEEDS_CONFIGURATION: 'Thiếu thông số PLC cần kỹ sư PLC xác nhận.',
 }

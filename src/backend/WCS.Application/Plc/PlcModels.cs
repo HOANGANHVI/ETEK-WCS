@@ -2,25 +2,87 @@ using WCS.Domain.Plc;
 
 namespace WCS.Application.Plc;
 
-/// <summary>PLC device kinds supported by the driver (CR-002 scope: M bit devices and D word devices only).</summary>
-public enum PlcDevice { M = 1, D = 2 }
+/// <summary>PLC device kinds supported by the driver. M/X/Y are bit devices, D/W are word devices (CR-003; CR-002 had M and D only).</summary>
+public enum PlcDevice { M = 1, D = 2, W = 3, X = 4, Y = 5 }
 
-/// <summary>A parsed device address such as M9000 or D1500.</summary>
+/// <summary>
+/// Numbering base of the devices whose notation differs between PLC families. D and M are always decimal. For X/Y and W the base is a
+/// PLC engineer decision (NEEDS_CONFIRMATION) and is never defaulted: MELSEC-Q writes X, Y and W in HEXADECIMAL, while the reference
+/// library documents X/Y as octal (FX/iQ-F convention) and W as decimal. An address using a device whose base is null is rejected.
+/// </summary>
+public sealed record AddressBases(int? Xy = null, int? W = null)
+{
+    public static readonly AddressBases None = new();
+    public static bool IsValidXy(int b) => b is 8 or 16;
+    public static bool IsValidW(int b) => b is 10 or 16;
+}
+
+public enum AddressProblem { None = 0, Format = 1, BaseUnconfirmed = 2 }
+
+public readonly record struct AddressParse(DeviceAddress? Address, AddressProblem Problem, string? Message);
+
+/// <summary>A parsed device address such as M9000, D1500, X10 or Y20 (the number is the value sent in the MC frame, always decimal here).</summary>
 public readonly record struct DeviceAddress(PlcDevice Device, int Number)
 {
     public const int MaxNumber = 0xFFFFFF; // 3 bytes in the MC 3E "head device number"
 
+    public bool IsBitDevice => Device is PlcDevice.M or PlcDevice.X or PlcDevice.Y;
+    public bool IsWordDevice => !IsBitDevice;
+
     public override string ToString() => $"{Device}{Number}";
 
-    public static bool TryParse(string? text, out DeviceAddress address)
+    public static AddressParse Parse(string? text, AddressBases? bases = null)
     {
-        address = default;
-        if (string.IsNullOrWhiteSpace(text)) return false;
+        if (string.IsNullOrWhiteSpace(text)) return new(null, AddressProblem.Format, "Địa chỉ trống.");
         var t = text.Trim().ToUpperInvariant();
-        if (t.Length < 2 || t.Length > 9 || (t[0] != 'M' && t[0] != 'D')) return false;
-        if (!t.Skip(1).All(char.IsAsciiDigit) || !int.TryParse(t.AsSpan(1), out var n) || n < 0 || n > MaxNumber) return false;
-        address = new DeviceAddress(t[0] == 'M' ? PlcDevice.M : PlcDevice.D, n);
-        return true;
+        if (t.Length < 2 || t.Length > 9) return new(null, AddressProblem.Format, $"Địa chỉ '{text}' không hợp lệ.");
+        var device = t[0] switch { 'M' => PlcDevice.M, 'D' => PlcDevice.D, 'W' => PlcDevice.W, 'X' => PlcDevice.X, 'Y' => PlcDevice.Y, _ => (PlcDevice?)null };
+        if (device is null) return new(null, AddressProblem.Format, $"Địa chỉ '{text}' không hợp lệ (thiết bị hỗ trợ: M, D, W, X, Y).");
+        int radix;
+        switch (device)
+        {
+            case PlcDevice.M or PlcDevice.D: radix = 10; break;
+            case PlcDevice.X or PlcDevice.Y:
+                if (bases?.Xy is not { } xy || !AddressBases.IsValidXy(xy))
+                    return new(null, AddressProblem.BaseUnconfirmed, $"Cơ số địa chỉ X/Y (bát phân hay thập lục phân) chưa được kỹ sư PLC xác nhận (NEEDS_CONFIRMATION) nên không thể đổi '{t}' sang số thiết bị.");
+                radix = xy; break;
+            default:
+                if (bases?.W is not { } w || !AddressBases.IsValidW(w))
+                    return new(null, AddressProblem.BaseUnconfirmed, $"Cơ số địa chỉ W (thập phân hay thập lục phân) chưa được kỹ sư PLC xác nhận (NEEDS_CONFIRMATION) nên không thể đổi '{t}' sang số thiết bị.");
+                radix = w; break;
+        }
+        long n = 0;
+        for (var i = 1; i < t.Length; i++)
+        {
+            var c = t[i];
+            var d = c is >= '0' and <= '9' ? c - '0' : c is >= 'A' and <= 'F' ? c - 'A' + 10 : -1;
+            if (d < 0 || d >= radix) return new(null, AddressProblem.Format, $"Địa chỉ '{text}' không hợp lệ: ký tự '{c}' không thuộc hệ cơ số {radix}.");
+            n = n * radix + d;
+            if (n > MaxNumber) return new(null, AddressProblem.Format, $"Địa chỉ '{text}' vượt quá phạm vi số thiết bị của khung MC (0xFFFFFF).");
+        }
+        return new(new DeviceAddress(device.Value, (int)n), AddressProblem.None, null);
+    }
+
+    /// <summary>Compatibility overload (CR-002): only M and D can be parsed without a confirmed numbering base.</summary>
+    public static bool TryParse(string? text, out DeviceAddress address) => TryParse(text, null, out address);
+
+    public static bool TryParse(string? text, AddressBases? bases, out DeviceAddress address)
+    {
+        var r = Parse(text, bases);
+        address = r.Address ?? default;
+        return r.Address is not null;
+    }
+
+    /// <summary>Canonical stored text: M/D in plain decimal, X/Y/W upper-case in the notation the engineer used (leading zeros removed, never converted).</summary>
+    public static string Normalize(string text, AddressBases? bases = null)
+    {
+        var t = text.Trim().ToUpperInvariant();
+        if (t.Length >= 2 && (t[0] is 'X' or 'Y' or 'W') && Parse(t, bases).Address is not null)
+        {
+            var digits = t[1..].TrimStart('0');
+            return t[0] + (digits.Length == 0 ? "0" : digits);
+        }
+        return TryParse(t, bases, out var a) ? a.ToString() : t;
     }
 }
 
@@ -50,9 +112,13 @@ public sealed record PointValue(PlcDataType Type, object Value)
     public override string ToString() => Value switch { bool b => b ? "1" : "0", _ => Value.ToString() ?? "" };
 }
 
-/// <summary>Immutable description of a point handed to an endpoint (no database entities cross this boundary).</summary>
+/// <summary>
+/// Immutable description of a point handed to an endpoint (no database entities cross this boundary). <c>Address</c> is the address entered
+/// by an Admin (shown in the Admin view); <c>Pollable</c> is true only when that address was also APPROVED by the PLC engineer (CR-003):
+/// a real PLC is never read or written at an address that is not approved.
+/// </summary>
 public sealed record IoPointRef(Guid Id, string PlcId, string StationId, string SignalName, PlcSignalDirection Direction, PlcDataType DataType,
-    string? Address, int? WordLength, string? Encoding, bool WriteAllowed, string Group);
+    string? Address, int? WordLength, string? Encoding, bool WriteAllowed, string Group, bool Pollable = true);
 
 /// <summary>Result of reading one point.</summary>
 public sealed record PointReading(Guid PointId, PointValue? Value, PointQuality Quality, string? Error);
@@ -61,7 +127,21 @@ public enum EndpointState { Disconnected = 0, Connecting = 1, Connected = 2, Fau
 
 /// <summary>Communication counters of one PLC connection (diagnostics; no payloads).</summary>
 public sealed record PlcDiagnostics(long Requests, long Failures, long Timeouts, long Reconnects, int? LastEndCode, string? LastError,
-    long? LastLatencyMs, DateTimeOffset? LastSuccessAt, DateTimeOffset? LastErrorAt, long BytesSent, long BytesReceived);
+    long? LastLatencyMs, DateTimeOffset? LastSuccessAt, DateTimeOffset? LastErrorAt, long BytesSent, long BytesReceived,
+    PlcExchange? LastExchange = null, PlcExchange? LastFailedExchange = null);
+
+/// <summary>
+/// Technical record of one request/response pair on a PLC connection (CR-003). Contains protocol data only (hex of the frames, no secrets).
+/// ADMIN ONLY: it is never part of an Operator view.
+/// </summary>
+public sealed record PlcExchange(DateTimeOffset At, string PlcId, string Operation, string Command, string Device, int StartAddress, int Points,
+    long DurationMs, int? EndCode, string Outcome, string? Error, string RequestHex, string? ResponseHex, bool IsAmbiguous);
+
+/// <summary>
+/// A write was (possibly) transmitted but no confirming response was received. The PLC may or may not have executed it, so the write is
+/// NEVER retried automatically; the value must be read back and checked by a person or an approved procedure.
+/// </summary>
+public sealed class PlcWriteAmbiguousException(string message, Exception? inner = null) : Exception(message, inner);
 
 /// <summary>
 /// One PLC connection as seen by the runtime: connect, read all confirmed points of a station, write one point. Implemented by the
@@ -80,7 +160,11 @@ public interface IPlcEndpoint : IAsyncDisposable
 
 /// <summary>Everything needed to build the endpoint of one PLC (copied out of the database entity).</summary>
 public sealed record PlcEndpointConfig(string PlcId, string IpAddress, int? Port, string? Protocol, int? NetworkNumber, int? PcNumber,
-    int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs);
+    int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs,
+    int? ConnectTimeoutMs = null, int? ReadTimeoutMs = null, int? WriteTimeoutMs = null, int? XyAddressBase = null, int? WAddressBase = null)
+{
+    public AddressBases Bases => new(XyAddressBase, WAddressBase);
+}
 
 public interface IPlcEndpointFactory
 {

@@ -6,6 +6,14 @@ export interface PlcDiagnostics {
   requests: number; failures: number; timeouts: number; reconnects: number
   lastEndCode: number | null; lastError: string | null; lastLatencyMs: number | null
   lastSuccessAt: string | null; lastErrorAt: string | null; bytesSent: number; bytesReceived: number
+  lastExchange: PlcExchange | null; lastFailedExchange: PlcExchange | null
+}
+
+/** Admin-only technical record of one request/response pair (protocol data, never secrets). */
+export interface PlcExchange {
+  at: string; plcId: string; operation: 'READ' | 'WRITE'; command: string; device: string; startAddress: number; points: number; durationMs: number
+  endCode: number | null; outcome: 'OK' | 'END_CODE' | 'TIMEOUT' | 'FAILED' | 'AMBIGUOUS' | 'CANCELLED'; error: string | null
+  requestHex: string; responseHex: string | null; isAmbiguous: boolean
 }
 
 export interface PlcWorkerStatus {
@@ -43,12 +51,14 @@ export interface HandshakeState {
 export interface PlcConnection {
   plcId: string; name: string; ipAddress: string; port: number | null; protocol: string | null; networkNumber: number | null; pcNumber: number | null
   moduleIoNumber: number | null; plcStationNumber: number | null; monitoringTimer: number | null; timeoutMs: number | null; pollingIntervalMs: number | null
+  connectTimeoutMs: number | null; readTimeoutMs: number | null; writeTimeoutMs: number | null; xyAddressBase: number | null; wAddressBase: number | null
   enabled: boolean; configStatus: string; missingParameters: string[]; stations: string[]; updatedAt: string; updatedBy: string | null
 }
 
 export interface SavePlcConnectionBody {
   name?: string | null; ipAddress: string; port: number | null; protocol: string | null; networkNumber: number | null; pcNumber: number | null
   moduleIoNumber: number | null; plcStationNumber: number | null; monitoringTimer: number | null; timeoutMs: number | null; pollingIntervalMs: number | null; enabled: boolean
+  connectTimeoutMs?: number | null; readTimeoutMs?: number | null; writeTimeoutMs?: number | null; xyAddressBase?: number | null; wAddressBase?: number | null
 }
 
 export interface PlcLogRow {

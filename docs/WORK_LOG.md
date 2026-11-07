@@ -420,3 +420,12 @@ Status: SOURCE CODE IMPLEMENTED yes; SIMULATOR/MOCK TESTED yes; REAL PLC TESTED 
 
 Open (NEEDS_CONFIRMATION): actual addresses, TCP port and MC parameters, INT sign, STRING encoding/length, heartbeat scope, handshake set/reset/timeouts, Pickup/Delivery to flow mapping, Transfer_Permit write path.
 
+## 11. Update 2026-11-07 – CR-003 MC Protocol reference library
+
+Read all 9 files of the reference library; documented in `02_Interface_Specification/MC_PROTOCOL_REFERENCE_ANALYSIS.md`. Key finding: the reference source performs **no** octal conversion for X/Y (documentation only) and Q-series normally uses hexadecimal, so the base is a per-PLC parameter without default.
+
+Delivered: codec parity with the reference (test oracle), devices M/X/Y/D/W, strict response validation, ambiguous writes, per-PLC timeouts and address bases (migration AddMcAddressBasesAndTimeouts, applied to the local wcs_db after a backup), Admin-only exchange diagnostics, approved-only polling, UI fields.
+
+A regression I introduced and caught with the browser E2E: gating traffic by hiding the address made the Admin view show "chưa gán" for entered-but-unapproved addresses; fixed with a separate `Pollable` flag and a test.
+
+Tests: 389 backend passed; frontend lint/tsc/builds clean; E2E 41/41 + 13/13. REAL PLC TESTED = NO.

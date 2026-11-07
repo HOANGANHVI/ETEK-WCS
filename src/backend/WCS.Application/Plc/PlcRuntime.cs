@@ -122,9 +122,10 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
 
             var handlers = stations.Where(s => s.PlcId == c.Id && s.Enabled).OrderBy(s => s.Order).Select(s => new StationIoHandler(c.Id, s.Id,
                 points.Where(p => p.StationId == s.Id).Select(p => new PointInfo(
-                    new IoPointRef(p.Id, p.PlcId, p.StationId, p.SignalName, p.Direction, p.DataType, p.HasConfirmedAddress ? p.ActualAddress : null, p.WordLength, p.Encoding, p.WriteAllowed, p.Group),
+                    new IoPointRef(p.Id, p.PlcId, p.StationId, p.SignalName, p.Direction, p.DataType, p.HasConfirmedAddress ? p.ActualAddress : null, p.WordLength, p.Encoding, p.WriteAllowed, p.Group, p.IsPollable),
                     p.Seq, p.Status)))).ToList();
-            var cfg = new PlcEndpointConfig(c.Id, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer, c.TimeoutMs, c.PollingIntervalMs);
+            var cfg = new PlcEndpointConfig(c.Id, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer, c.TimeoutMs, c.PollingIntervalMs,
+                c.ConnectTimeoutMs, c.ReadTimeoutMs, c.WriteTimeoutMs, c.XyAddressBase, c.WAddressBase);
             result.Add(new PlcWorker(c.Id, c.Name, mode, o, cfg, enabled, why, handlers, factory, events, clock));
         }
         return result;

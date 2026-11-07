@@ -26,6 +26,7 @@
 | CR-000 | Establish v1.3 change-management framework | Project owner confirmation | APPROVED | 1.3 | Framework only; no business behavior change |
 | CR-001 | Authentication, Admin/Operator authorization, account management, audit trail, Operator task edit/hard-delete, Operator inventory edit | Project owner messages (2026-11-06) | **APPROVED** (2026-11-06) | Phase 1 | Final business rules confirmed by the project owner; implemented; see docs/specification/access-control.md |
 | CR-002 | Replace single-PLC topology with 4 PLC connections and 16 independent Station IO sets using the common 23-signal template | Project owner confirmation and `ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx` (2026-11-06) | **IMPLEMENTED** (Simulator/Mock; real PLC untested) | Phases 1-7 | Specification addenda and controlled IO workbook updated; actual device addresses/protocol/handshake remain unconfirmed |
+| CR-003 | Integrate the proven MC Protocol reference library into the WCS PLC driver (frame/response parity, devices M/X/Y/D/W, strict validation, ambiguous writes, per-PLC timeouts and address bases, diagnostics) | Project owner instruction + `reference/Kết nối MCprotocol.zip` (2026-11-07) | **IMPLEMENTED** (Simulator/Mock; real PLC untested) | CR-003 | Driver hardened; X/Y/W numbering base, QJ71E71-100 settings, addresses and handshake remain unconfirmed |
 
 ## New Change Request template
 
@@ -127,3 +128,19 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Rollback:** Revert CR-002-specific config/code/document changes through Git; retain prior files/commit for traceability.
 - **Decision:** APPROVED for architecture and documentation direction. Live PLC commissioning remains blocked on PLC engineer confirmation of the open parameters.
 - **Implementation note (2026-11-06):** Full implementation approved and delivered (Phases 2-7). Migration `AddPlcTopology` (4 new tables, CREATE only) exists and is NOT applied to production. SOURCE CODE IMPLEMENTED: yes. SIMULATOR/MOCK TESTED: yes (302 backend tests). REAL PLC TESTED: no. Commissioning remains blocked on PLC engineer confirmation; see ADR-0004 and TESTING_REPORT_CR-002.md.
+
+### CR-003 – Integrate the proven MC Protocol reference library into the WCS PLC driver
+
+- **Status:** IMPLEMENTED for SIMULATOR/MOCK. REAL PLC TESTED = NO.
+- **Approval:** project owner instruction of 2026-11-07 (full task description "CR-003"), recorded here; no business rule is changed.
+- **Source:** `reference/Kết nối MCprotocol.zip` (MitsubishiMc.Client v1.1.0, used successfully on real PLCs). Full analysis: `02_Interface_Specification/MC_PROTOCOL_REFERENCE_ANALYSIS.md`.
+- **Scope:** MC 3E binary driver (frame builder, response validation, devices M/X/Y bits and D/W words, nibble/endian rules, limits, ambiguous writes), per-PLC connect/read/write timeouts, per-PLC X/Y and W numbering base, Admin-only exchange diagnostics (request/response hex), polling restricted to APPROVED addresses, UI for the new parameters.
+- **Architecture:** unchanged (4 PLC, 4 TCP connections, 16 Station, 368 IO, `PlcWorker`, write queue, `IPlcEndpoint`, SignalR Admin group, three modes).
+- **Conflicts recorded (no silent choice):**
+  1. The reference states X/Y are octal. Its source contains **no** octal conversion (documentation only), and MELSEC-Q normally writes X/Y/W in hexadecimal. The base is a per-PLC parameter with **no default**; X/Y/W addresses are refused until the PLC engineer confirms it (NEEDS_CONFIRMATION).
+  2. The reference hard-codes Module I/O 0x03FF and Station 0x00 and its default port/network/PC values. They are reference values only, not WCS defaults.
+- **Behaviour changes:** (a) a real PLC is read/written only at addresses that are entered **and approved** (previously "entered" was enough); (b) the response must echo module I/O and station and carry exactly the requested data length; (c) a write that may have reached the PLC without confirmation is reported ambiguous and never resent; (d) the bit limits are the proven 3584 (read) / 1440 (write).
+- **Database impact:** migration `AddMcAddressBasesAndTimeouts` adds five NULLABLE columns to `plc_connections` (ConnectTimeoutMs, ReadTimeoutMs, WriteTimeoutMs, XyAddressBase, WAddressBase). Additive; Down() drops only those columns.
+- **Unchanged:** PER_AGV, BP-01/02/03/05/06, BP-04 (REVIEW), A3/A4 and D1/D2 (UNCHANGED), F5, inventory ownership, Admin/Operator permissions, WCS integration (still off), no handshake rule shipped.
+- **Rollback:** revert the CR-003 commit and run the migration `Down()` (or leave the nullable columns; the previous build ignores them).
+- **Open:** see section 10 of the analysis document.

@@ -25,10 +25,12 @@ public interface IPlcConfigRepository
 // ---- DTOs (Admin sees configuration; Operator sees monitoring data without addresses or network parameters) -------------------------
 public sealed record PlcConnectionView(string PlcId, string Name, string IpAddress, int? Port, string? Protocol, int? NetworkNumber, int? PcNumber,
     int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs, bool Enabled, string ConfigStatus,
-    IReadOnlyList<string> MissingParameters, IReadOnlyList<string> Stations, DateTimeOffset UpdatedAt, string? UpdatedBy);
+    IReadOnlyList<string> MissingParameters, IReadOnlyList<string> Stations, DateTimeOffset UpdatedAt, string? UpdatedBy,
+    int? ConnectTimeoutMs = null, int? ReadTimeoutMs = null, int? WriteTimeoutMs = null, int? XyAddressBase = null, int? WAddressBase = null);
 
 public sealed record UpdatePlcConnectionCommand(string? Name, string IpAddress, int? Port, string? Protocol, int? NetworkNumber, int? PcNumber,
-    int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs, bool Enabled);
+    int? ModuleIoNumber, int? PlcStationNumber, int? MonitoringTimer, int? TimeoutMs, int? PollingIntervalMs, bool Enabled,
+    int? ConnectTimeoutMs = null, int? ReadTimeoutMs = null, int? WriteTimeoutMs = null, int? XyAddressBase = null, int? WAddressBase = null);
 
 public sealed record PlcStationView(string StationId, string PlcId, int Order, string? LocationCode, bool Enabled, string Role,
     int PointCount, int ConfiguredPoints, int ApprovedPoints);
@@ -60,7 +62,8 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     {
         var missing = c.MissingParameters();
         return new(c.Id, c.Name, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer,
-            c.TimeoutMs, c.PollingIntervalMs, c.Enabled, missing.Count == 0 ? "CONFIGURED" : "NEEDS_CONFIGURATION", missing, stations, c.UpdatedAt, c.UpdatedBy);
+            c.TimeoutMs, c.PollingIntervalMs, c.Enabled, missing.Count == 0 ? "CONFIGURED" : "NEEDS_CONFIGURATION", missing, stations, c.UpdatedAt, c.UpdatedBy,
+            c.ConnectTimeoutMs, c.ReadTimeoutMs, c.WriteTimeoutMs, c.XyAddressBase, c.WAddressBase);
     }
 
     public async Task<PlcConnectionView> UpdateConnectionAsync(string plcId, UpdatePlcConnectionCommand cmd, PlcRuntimeOptions options, string? by, CancellationToken ct = default)
@@ -75,6 +78,11 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         Range(errors, "monitoringTimer", cmd.MonitoringTimer, 0, 65535, "Monitoring timer");
         Range(errors, "timeoutMs", cmd.TimeoutMs, 100, 60_000, "Timeout (ms)");
         Range(errors, "pollingIntervalMs", cmd.PollingIntervalMs, 50, 60_000, "Chu kỳ đọc (ms)");
+        Range(errors, "connectTimeoutMs", cmd.ConnectTimeoutMs, 100, 60_000, "Timeout kết nối (ms)");
+        Range(errors, "readTimeoutMs", cmd.ReadTimeoutMs, 100, 60_000, "Timeout đọc (ms)");
+        Range(errors, "writeTimeoutMs", cmd.WriteTimeoutMs, 100, 60_000, "Timeout ghi (ms)");
+        if (cmd.XyAddressBase is { } xb && !AddressBases.IsValidXy(xb)) errors.Add(new("xyAddressBase", "Cơ số địa chỉ X/Y chỉ có thể là 8 (bát phân) hoặc 16 (thập lục phân)."));
+        if (cmd.WAddressBase is { } wb && !AddressBases.IsValidW(wb)) errors.Add(new("wAddressBase", "Cơ số địa chỉ W chỉ có thể là 10 (thập phân) hoặc 16 (thập lục phân)."));
         if (!string.IsNullOrWhiteSpace(cmd.Protocol) && !ConnectionOptions.PlcProtocols.Contains(cmd.Protocol.Trim()))
             errors.Add(new("protocol", "Giao thức không được hỗ trợ."));
         if (errors.Count > 0) throw new ValidationFailedException(errors);
@@ -84,7 +92,8 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             var c = await repo.GetConnectionAsync(plcId, t) ?? throw AppException.NotFound("PLC_NOT_FOUND", $"Không tìm thấy {plcId}.");
             var name = string.IsNullOrWhiteSpace(cmd.Name) ? c.Name : cmd.Name.Trim();
             c.Update(name, cmd.IpAddress.Trim(), cmd.Port, ConnectionValidator.Clean(cmd.Protocol), cmd.NetworkNumber, cmd.PcNumber, cmd.ModuleIoNumber,
-                cmd.PlcStationNumber, cmd.MonitoringTimer, cmd.TimeoutMs, cmd.PollingIntervalMs, cmd.Enabled, by, clock.UtcNow);
+                cmd.PlcStationNumber, cmd.MonitoringTimer, cmd.TimeoutMs, cmd.PollingIntervalMs, cmd.Enabled, by, clock.UtcNow,
+                cmd.ConnectTimeoutMs, cmd.ReadTimeoutMs, cmd.WriteTimeoutMs, cmd.XyAddressBase, cmd.WAddressBase);
             // Switching a REAL connection on needs the complete, confirmed parameter set. The simulator never needs them.
             if (cmd.Enabled && options.Mode != PlcRuntimeMode.Simulator && c.MissingParameters() is { Count: > 0 } missing)
                 throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).")).ToList());
@@ -122,15 +131,16 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         uow.ExecuteAsync(async t =>
         {
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
-            var address = DeviceAddress.TryParse(cmd.Address, out var parsed) ? parsed.ToString() : cmd.Address?.Trim();
-            var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, address, cmd.WordLength);
-            if (AddressValidator.ValidateOne(spec) is { } issue) throw new ValidationFailedException([new("address", issue.Message)]);
+            var bases = await BasesOfAsync(p.PlcId, t);
+            var address = string.IsNullOrWhiteSpace(cmd.Address) ? cmd.Address?.Trim() : DeviceAddress.Normalize(cmd.Address, bases);
+            var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, address, cmd.WordLength, p.Direction);
+            if (AddressValidator.ValidateOne(spec, bases) is { } issue) throw new ValidationFailedException([new("address", issue.Message)]);
             if (p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(cmd.Encoding))
                 throw new ValidationFailedException([new("encoding", "STRING cần encoding được xác nhận.")]);
 
             var others = (await repo.ListPointsAsync(p.PlcId, null, t)).Where(x => x.Id != p.Id)
-                .Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength));
-            var conflict = AddressValidator.Validate(others.Append(spec)).FirstOrDefault(i => i.PointId == p.Id || i.ConflictWith == p.Id);
+                .Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction));
+            var conflict = AddressValidator.Validate(others.Append(spec), bases).FirstOrDefault(i => i.PointId == p.Id || i.ConflictWith == p.Id);
             if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message)]);
 
             p.ConfigureAddress(address!, p.DataType == PlcDataType.String ? cmd.WordLength : null, p.DataType == PlcDataType.String ? cmd.Encoding!.Trim() : null, clock.UtcNow);
@@ -168,7 +178,11 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
 
     /// <summary>Address conflicts currently present on a PLC (empty list = consistent).</summary>
     public async Task<IReadOnlyList<AddressIssue>> CheckPlcAsync(string plcId, CancellationToken ct = default) =>
-        AddressValidator.Validate((await repo.ListPointsAsync(plcId, null, ct)).Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength)));
+        AddressValidator.Validate((await repo.ListPointsAsync(plcId, null, ct)).Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction)),
+            await BasesOfAsync(plcId, ct));
+
+    private async Task<AddressBases> BasesOfAsync(string plcId, CancellationToken ct) =>
+        await repo.GetConnectionAsync(plcId, ct) is { } c ? new AddressBases(c.XyAddressBase, c.WAddressBase) : AddressBases.None;
 
     public Task<IReadOnlyList<PlcCommLogEntry>> LogsAsync(string? plcId, string? stationId, PlcLogLevel? minLevel, int skip, int take, CancellationToken ct = default) =>
         repo.QueryLogsAsync(plcId, stationId, minLevel, skip, Math.Clamp(take, 1, 500), ct);
@@ -210,6 +224,7 @@ public static class WritePolicy
             default:
                 if (!p.WriteAllowed) return new(false, "WRITE_NOT_ALLOWED", "Tín hiệu chưa nằm trong danh sách được phép ghi.");
                 if (string.IsNullOrWhiteSpace(p.Address)) return new(false, "NO_ADDRESS", "Tín hiệu chưa có địa chỉ được xác nhận.");
+                if (!p.Pollable) return new(false, "ADDRESS_NOT_APPROVED", "Địa chỉ của tín hiệu chưa được kỹ sư PLC xác nhận (duyệt).");
                 return new(true);
         }
     }

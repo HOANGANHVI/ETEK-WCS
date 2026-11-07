@@ -8,10 +8,11 @@ using WCS.Infrastructure.Plc.Mc;
 namespace WCS.Infrastructure.Simulation;
 
 /// <summary>
-/// A TCP server that speaks the MC 3E binary subset the driver uses (batch read/write of M bits and D words) over a real socket.
+/// A TCP server that speaks the MC 3E binary subset the driver uses (batch read/write of M/X/Y bits and D/W words) over a real socket.
 /// It exists so the driver's framing, timeouts and reconnect logic are exercised against real TCP, never against a stubbed class.
-/// It is a protocol mock, not a model of a PLC program: memory is plain M/D arrays that tests read and write directly.
-/// Fault injection: delayed/absent answers, forced end codes, dropped connections. Frames received are recorded for byte-level assertions.
+/// It is a protocol mock, not a model of a PLC program: memory is plain per-device arrays that tests read and write directly.
+/// Fault injection: delayed/absent answers, forced end codes, dropped connections, and a response filter that can corrupt, shorten or
+/// replace any answer (wrong subheader, wrong length, wrong routing echo, partial frame). Frames received are recorded for byte-level assertions.
 /// </summary>
 public sealed class MelsecMcMockServer : IAsyncDisposable
 {
@@ -22,8 +23,10 @@ public sealed class MelsecMcMockServer : IAsyncDisposable
     public const ushort EndCodeLengthMismatch = 0xC061;
 
     private readonly object _mem = new();
-    private readonly Dictionary<int, bool> _m = [];
-    private readonly Dictionary<int, ushort> _d = [];
+    private readonly Dictionary<int, bool> _m = [], _x = [], _y = [];
+    private readonly Dictionary<int, ushort> _d = [], _w = [];
+    private Dictionary<int, bool> Bits(PlcDevice d) => d switch { PlcDevice.X => _x, PlcDevice.Y => _y, _ => _m };
+    private Dictionary<int, ushort> Words(PlcDevice d) => d == PlcDevice.W ? _w : _d;
     private readonly ConcurrentQueue<byte[]> _frames = new();
     private readonly List<TcpClient> _clients = [];
     private TcpListener? _listener;
@@ -40,6 +43,13 @@ public sealed class MelsecMcMockServer : IAsyncDisposable
     public TimeSpan ResponseDelay { get; set; }
     /// <summary>When true the server reads requests but never answers.</summary>
     public bool Mute { get; set; }
+    /// <summary>
+    /// Optional hook applied to every answer: (request, answer) -> bytes to send (null = send nothing). Used to corrupt a header field,
+    /// announce a wrong length, echo a wrong route or send only part of the frame.
+    /// </summary>
+    public Func<byte[], byte[], byte[]?>? ResponseFilter { get; set; }
+    /// <summary>Close the connection right after the (possibly partial) answer was written.</summary>
+    public bool CloseAfterResponse { get; set; }
 
     public int Port { get; private set; }
     public int RequestCount => _requests;
@@ -74,6 +84,11 @@ public sealed class MelsecMcMockServer : IAsyncDisposable
     public bool GetBit(int number) { lock (_mem) return _m.GetValueOrDefault(number); }
     public void SetWord(int number, ushort value) { lock (_mem) _d[number] = value; }
     public ushort GetWord(int number) { lock (_mem) return _d.GetValueOrDefault(number); }
+    /// <summary>Device-aware accessors (M, X, Y bits; D, W words). Numbers are the decimal values carried in the frame.</summary>
+    public void SetBit(PlcDevice device, int number, bool value) { lock (_mem) Bits(device)[number] = value; }
+    public bool GetBit(PlcDevice device, int number) { lock (_mem) return Bits(device).GetValueOrDefault(number); }
+    public void SetWord(PlcDevice device, int number, ushort value) { lock (_mem) Words(device)[number] = value; }
+    public ushort GetWord(PlcDevice device, int number) { lock (_mem) return Words(device).GetValueOrDefault(number); }
     public void SetAscii(int number, int words, string text)
     {
         var buf = new byte[words * 2]; System.Text.Encoding.ASCII.GetBytes(text).CopyTo(buf, 0);
@@ -118,7 +133,9 @@ public sealed class MelsecMcMockServer : IAsyncDisposable
 
                 var response = Process(frame);
                 if (response is null) continue;
+                if (ResponseFilter is { } filter) { response = filter(frame, response); if (response is null) continue; }
                 await stream.WriteAsync(response, ct);
+                if (CloseAfterResponse) { client.Dispose(); return; }
             }
         }
         catch { /* connection closed / server stopped */ }
@@ -136,31 +153,36 @@ public sealed class MelsecMcMockServer : IAsyncDisposable
         var bit = req.Subcommand == McFrame.SubcommandBit;
         if (req.Command is not (McFrame.CommandBatchRead or McFrame.CommandBatchWrite) || (req.Subcommand is not (McFrame.SubcommandBit or McFrame.SubcommandWord)))
             return McFrame.BuildResponse(req.Route, EndCodeCommandUnsupported, new byte[9]);
-        if (req.Points < 1 || req.Points > (bit ? McFrame.MaxBitPoints : McFrame.MaxWordPoints))
+        if (req.Points < 1 || req.Points > (!bit ? McFrame.MaxWordPoints : req.Command == McFrame.CommandBatchRead ? McFrame.MaxReadBitPoints : McFrame.MaxWriteBitPoints))
             return McFrame.BuildResponse(req.Route, EndCodePointsOutOfRange, new byte[9]);
         if (MaxDeviceNumber is { } max && req.Head.Number + req.Points - 1 > max)
             return McFrame.BuildResponse(req.Route, EndCodeDeviceOutOfRange, new byte[9]);
-        if (bit != (req.Head.Device == PlcDevice.M))       // this mock only models M as bits and D as words
+        if (bit != req.Head.IsBitDevice)       // M/X/Y are bit devices, D/W are word devices
+            return McFrame.BuildResponse(req.Route, EndCodeCommandUnsupported, new byte[9]);
+        if (req.Command == McFrame.CommandBatchWrite && req.Head.Device == PlcDevice.X)    // input relays are read-only
             return McFrame.BuildResponse(req.Route, EndCodeCommandUnsupported, new byte[9]);
 
         lock (_mem)
         {
             if (req.Command == McFrame.CommandBatchRead)
             {
-                if (bit) return McFrame.BuildResponse(req.Route, EndCodeOk, McFrame.EncodeBits(Enumerable.Range(req.Head.Number, req.Points).Select(n => _m.GetValueOrDefault(n)).ToList()));
-                return McFrame.BuildResponse(req.Route, EndCodeOk, McFrame.EncodeWords(Enumerable.Range(req.Head.Number, req.Points).Select(n => _d.GetValueOrDefault(n)).ToList()));
+                if (bit) { var bm = Bits(req.Head.Device); return McFrame.BuildResponse(req.Route, EndCodeOk, McFrame.EncodeBits(Enumerable.Range(req.Head.Number, req.Points).Select(n => bm.GetValueOrDefault(n)).ToList())); }
+                var wm = Words(req.Head.Device);
+                return McFrame.BuildResponse(req.Route, EndCodeOk, McFrame.EncodeWords(Enumerable.Range(req.Head.Number, req.Points).Select(n => wm.GetValueOrDefault(n)).ToList()));
             }
             if (bit)
             {
                 if (req.Data.Length != (req.Points + 1) / 2) return McFrame.BuildResponse(req.Route, EndCodeLengthMismatch, new byte[9]);
                 var bits = McFrame.DecodeBits(req.Data, req.Points);
-                for (var i = 0; i < bits.Length; i++) _m[req.Head.Number + i] = bits[i];
+                var bw = Bits(req.Head.Device);
+                for (var i = 0; i < bits.Length; i++) bw[req.Head.Number + i] = bits[i];
             }
             else
             {
                 if (req.Data.Length != req.Points * 2) return McFrame.BuildResponse(req.Route, EndCodeLengthMismatch, new byte[9]);
                 var words = McFrame.DecodeWords(req.Data, req.Points);
-                for (var i = 0; i < words.Length; i++) _d[req.Head.Number + i] = words[i];
+                var ww = Words(req.Head.Device);
+                for (var i = 0; i < words.Length; i++) ww[req.Head.Number + i] = words[i];
             }
             return McFrame.BuildResponse(req.Route, EndCodeOk, []);
         }
