@@ -1,0 +1,3 @@
+# Files consumed by Linux containers must keep LF line endings even when checked out on Windows (a CR breaks Dockerfile line continuations and nginx/shell snippets)
+deployment/docker/** text eol=lf
+deployment/docker-compose.yml text eol=lf
