@@ -1,0 +1,16 @@
+# Keep the Docker build context small and free of local state / secrets
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+.git/
+.vs/
+.vscode/
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+reference/
+docs/
+tests/
+deployment/.env

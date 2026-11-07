@@ -1,0 +1,109 @@
+# ETEK WCS - production stack for one Windows 11 machine (Docker Desktop + WSL2).
+# Run through deployment/scripts/*.ps1 (they pass --env-file <config dir>/.env and the project name). Never use "down -v": it deletes the database.
+#
+#   edge_net (bridge)    : frontend (the ONLY published port) <-> backend. The backend also reaches the PLC LAN through this network (outbound NAT).
+#   db_net   (internal)  : postgres <-> migrator <-> backend. No route to the LAN or the host: PostgreSQL is never exposed.
+name: etek-wcs
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wcs_db}
+      POSTGRES_USER: ${POSTGRES_USER:-wcs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set it in the .env of this machine)}
+    volumes:
+      - wcs_pgdata:/var/lib/postgresql/data
+    networks: [db_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+    deploy: { resources: { limits: { cpus: "${WCS_DB_CPUS:-2}", memory: "${WCS_DB_MEMORY:-2g}" } } }
+
+  # One-shot migration runner: applies the existing EF Core migrations (forward only) before the backend starts. Single instance, so no concurrent migrations.
+  migrator:
+    build:
+      context: ..
+      dockerfile: deployment/docker/backend/Dockerfile
+      target: migrator
+    image: etek-wcs-migrator:${WCS_VERSION:-local}
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      ConnectionStrings__WcsDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-wcs_db};Username=${POSTGRES_USER:-wcs}
+      Database__Password: ${POSTGRES_PASSWORD}
+      ASPNETCORE_ENVIRONMENT: Production
+    networks: [db_net]
+    logging: *logging
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deployment/docker/backend/Dockerfile
+      target: runtime
+    image: etek-wcs-backend:${WCS_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      migrator: { condition: service_completed_successfully }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__WcsDatabase: Host=postgres;Port=5432;Database=${POSTGRES_DB:-wcs_db};Username=${POSTGRES_USER:-wcs}
+      Database__Password: ${POSTGRES_PASSWORD}
+      DataProtection__KeysPath: /keys
+      # first administrator (Production never creates admin/admin). Used only when no account exists yet.
+      Bootstrap__Admin__Password: ${WCS_ADMIN_BOOTSTRAP_PASSWORD:-}
+      Bootstrap__Admin__Username: ${WCS_ADMIN_USERNAME:-admin}
+      # "Always" (HTTPS) or "SameAsRequest" (deliberate plain-HTTP deployment on a trusted test LAN only)
+      Auth__CookieSecure: ${WCS_COOKIE_SECURE:-Always}
+      Deployment__TrustForwardedHeaders: "true"
+      # PLC safety (CR-002/CR-006). Defaults: no simulator, no socket to a physical PLC, no writes.
+      Plc__Mode: ${PLC_MODE:-RealReadOnly}
+      Plc__AllowLiveConnection: ${PLC_ALLOW_LIVE_CONNECTION:-false}
+      Plc__AllowSimulatorInProduction: ${PLC_ALLOW_SIMULATOR_IN_PRODUCTION:-false}
+      # RCS has only a simulator adapter (project baseline): Integration:Mode must stay "Simulator"; no network probe unless enabled.
+      Integration__Mode: Simulator
+      Integration__AllowNetworkProbe: ${WCS_ALLOW_NETWORK_PROBE:-false}
+      Serilog__MinimumLevel__Default: ${WCS_LOG_LEVEL:-Information}
+      TZ: ${WCS_TIMEZONE:-Asia/Ho_Chi_Minh}
+    volumes:
+      - wcs_keys:/keys
+    networks: [db_net, edge_net]
+    logging: *logging
+    deploy: { resources: { limits: { cpus: "${WCS_BACKEND_CPUS:-3}", memory: "${WCS_BACKEND_MEMORY:-3g}" } } }
+    # no published port: only the frontend (Nginx) container can reach the backend
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deployment/docker/frontend/Dockerfile
+    image: etek-wcs-frontend:${WCS_VERSION:-local}
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "${WCS_HTTP_PORT:-80}:80"
+    networks: [edge_net]
+    logging: *logging
+
+networks:
+  db_net:
+    internal: true
+  edge_net: {}
+
+volumes:
+  wcs_pgdata:
+    name: etek_wcs_pgdata
+  wcs_keys:
+    name: etek_wcs_keys

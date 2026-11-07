@@ -35,3 +35,4 @@ appsettings.*.local.json
 
 # Third-party reference archives (the extracted sources under reference/ are tracked)
 reference/*.zip
+backups/

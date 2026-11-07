@@ -1,0 +1,166 @@
+# ETEK WCS – Triển khai bằng Docker trên Windows 11
+
+Tài liệu này hướng dẫn cài ETEK WCS trên **một máy Windows 11** bằng Docker Desktop + WSL2 + Docker Compose, lấy mã nguồn từ GitHub (nhánh `main`).
+
+> **Trạng thái kiểm thử (CR-006):** Dockerfile, Compose và script đã được kiểm tra tĩnh và logic ứng dụng đã được kiểm thử, nhưng **chưa được chạy trên Docker thật** (máy lập trình không có Docker). Hãy chạy checklist `docs/DEPLOYMENT_TEST_CHECKLIST.md` trên máy triển khai trước khi dùng. **Chưa kiểm thử với PLC thật. RCS chỉ có adapter mô phỏng.**
+
+## 1. Kiến trúc
+
+```
+Trình duyệt ──:80──► frontend (Nginx: giao diện + proxy /api, /hubs WebSocket)
+                              │  edge_net
+                              ▼
+                         backend (ASP.NET Core .NET 10, 8080 – không publish) ──TCP──► 4 PLC trong LAN
+                              │  db_net (internal, không có đường ra LAN)
+                              ▼
+   migrator (chạy 1 lần, áp migration)      postgres (PostgreSQL 16 – không publish)
+```
+
+| Container | Vai trò | Cổng ra ngoài |
+|---|---|---|
+| `frontend` | Nginx: phục vụ bản build React, reverse proxy API và SignalR | `WCS_HTTP_PORT` (mặc định 80) – **cổng duy nhất** |
+| `backend` | API, SignalR, scheduler, PLC runtime | không |
+| `postgres` | PostgreSQL 16, volume `etek_wcs_pgdata` | không |
+| `migrator` | EF Core migration bundle, chạy một lần trước backend | không |
+
+Volume (không bao giờ bị script xóa): `etek_wcs_pgdata` (database), `etek_wcs_keys` (khóa mã hóa mật khẩu/token PLC-RCS).
+**Không có MQTT** (source không dùng). **Không có Redis/khác.** Chỉ chạy **một** backend (scheduler và PLC worker nằm trong process).
+
+## 2. Chuẩn bị Windows 11
+
+1. Bật ảo hóa trong BIOS (Intel VT-x / AMD-V).
+2. Cài WSL2 (PowerShell **Administrator**): `wsl --install` rồi khởi động lại máy.
+3. Cài **Docker Desktop** (https://www.docker.com/products/docker-desktop), chọn *Use WSL 2 based engine*. Bật *Start Docker Desktop when you sign in*.
+4. Cài **Git for Windows**.
+5. Khởi điểm tài nguyên (Docker Desktop → Settings → Resources, hoặc `%UserProfile%\.wslconfig`):
+   ```
+   [wsl2]
+   processors=6
+   memory=8GB
+   swap=2GB
+   ```
+   Disk image của Docker dự kiến 100 GB (Settings → Resources → Disk image size). Có thể chỉnh sau; giới hạn từng container nằm trong `.env`.
+6. Mở cổng trên Windows Firewall nếu máy khác trong LAN cần truy cập (ví dụ TCP 80).
+
+## 3. Cài đặt lần đầu
+
+```powershell
+# 1) Lấy mã nguồn (nhánh main)
+git clone https://github.com/HOANGANHVI/ETEK-WCS.git C:\ETEK-WCS\src
+cd C:\ETEK-WCS\src
+git checkout main
+
+# 2) Tạo cấu hình riêng của máy (NGOÀI repository, không bị git pull ghi đè)
+mkdir C:\ETEK-WCS\config
+copy deployment\.env.example C:\ETEK-WCS\config\.env
+notepad C:\ETEK-WCS\config\.env
+```
+
+Trong `.env` **bắt buộc** đặt: `POSTGRES_PASSWORD` (chuỗi ngẫu nhiên dài) và `WCS_ADMIN_BOOTSTRAP_PASSWORD` (mật khẩu admin đầu tiên, sẽ buộc đổi ở lần đăng nhập đầu). Giải thích các biến ở mục 4.
+
+```powershell
+# 3) Cài đặt và khởi động (lần đầu build image mất vài phút)
+powershell -ExecutionPolicy Bypass -File deployment\scripts\deploy.ps1
+
+# 4) Kiểm tra
+powershell -ExecutionPolicy Bypass -File deployment\scripts\status.ps1
+```
+Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + mật khẩu bootstrap, đổi mật khẩu.
+
+> Nếu truy cập bằng **HTTP** trong LAN thử nghiệm thì phải đặt `WCS_COOKIE_SECURE=SameAsRequest`, nếu không trình duyệt không gửi cookie đăng nhập. Với HTTPS dùng `Always` (mặc định). Không dùng `SameAsRequest` qua Internet.
+
+## 4. Cấu hình `.env`
+
+| Biến | Ý nghĩa | Mặc định |
+|---|---|---|
+| `POSTGRES_DB`, `POSTGRES_USER` | Tên database / user | `wcs_db`, `wcs` |
+| `POSTGRES_PASSWORD` | **Bắt buộc.** Chỉ có hiệu lực khi tạo database lần đầu | – |
+| `WCS_ADMIN_USERNAME`, `WCS_ADMIN_BOOTSTRAP_PASSWORD` | Admin đầu tiên (Production không tạo `admin/admin`) | `admin`, – |
+| `WCS_HTTP_PORT` | Cổng Nginx | `80` |
+| `WCS_COOKIE_SECURE` | `Always` (HTTPS) hoặc `SameAsRequest` (HTTP LAN thử nghiệm) | `Always` |
+| `PLC_MODE` | `RealReadOnly` (mặc định) hoặc `RealReadWrite` | `RealReadOnly` |
+| `PLC_ALLOW_LIVE_CONNECTION` | `false`: **không mở socket tới PLC thật** | `false` |
+| `PLC_ALLOW_SIMULATOR_IN_PRODUCTION` | Production từ chối `Plc:Mode=Simulator` trừ khi `true` (chỉ để khởi động có giám sát khi chưa có PLC) | `false` |
+| `WCS_ALLOW_NETWORK_PROBE` | Cho phép phép thử TCP của "Kiểm tra kết nối" (chỉ mở/đóng cổng) | `false` |
+| `WCS_LOG_LEVEL`, `WCS_TIMEZONE`, `WCS_VERSION` | Log, múi giờ, nhãn image | `Information`, `Asia/Ho_Chi_Minh`, commit |
+| `WCS_*_CPUS`, `WCS_*_MEMORY` | Giới hạn tài nguyên container | DB 2 CPU/2g, backend 3 CPU/3g |
+
+Thư mục cấu hình và backup có thể đổi bằng biến môi trường của Windows `WCS_CONFIG_DIR` (mặc định `C:\ETEK-WCS\config`) và `WCS_BACKUP_DIR` (mặc định `C:\ETEK-WCS\backups`).
+
+**Địa chỉ PLC, cổng, tham số MC và địa chỉ IO không nằm trong `.env`.** Chúng được Admin nhập trong giao diện (*Kết nối PLC*, *Cấu hình địa chỉ IO*) sau khi kỹ sư PLC xác nhận, và lưu trong database nên được giữ qua mọi lần cập nhật.
+
+## 5. Vận hành hằng ngày
+
+| Việc | Lệnh (thư mục repo) |
+|---|---|
+| Khởi động | `deployment\scripts\start.ps1` |
+| Dừng an toàn (không mất dữ liệu) | `deployment\scripts\stop.ps1` (`-Remove` để xóa thêm container, vẫn giữ volume) |
+| Trạng thái | `deployment\scripts\status.ps1` |
+| Backup | `deployment\scripts\backup.ps1` |
+| Cập nhật phiên bản | `deployment\scripts\deploy.ps1` |
+
+Container có `restart: unless-stopped`: sau khi Windows/Docker khởi động lại, hệ thống tự chạy lại (Docker Desktop phải tự khởi động cùng Windows).
+**Tuyệt đối không chạy `docker compose down -v` hoặc `docker volume rm etek_wcs_pgdata`**: đó là xóa database.
+
+## 6. Cập nhật từ GitHub
+
+Quy trình: phát triển trên `develop` → kiểm thử → merge vào `main` → trên máy triển khai chạy:
+
+```powershell
+cd C:\ETEK-WCS\src
+powershell -ExecutionPolicy Bypass -File deployment\scripts\deploy.ps1
+```
+`deploy.ps1` lần lượt: kiểm tra Docker/Git/`.env` → yêu cầu đang ở nhánh `main` → **dừng nếu có thay đổi local hoặc lịch sử lệch** → `git pull --ff-only` → **backup tự động** → build image → áp migration → khởi động → kiểm tra health. Nó không bao giờ triển khai từ `develop`, không xóa volume, và không ghi đè `.env` (nằm ngoài repo). Mỗi lần triển khai được ghi vào `C:\ETEK-WCS\config\deployments.log` (commit trước/sau).
+
+### Rollback
+1. Xem commit trước: `type C:\ETEK-WCS\config\deployments.log`.
+2. `git checkout <commit-trước>` rồi `deploy.ps1 -NoPull` (tự backup trước khi chạy).
+3. Migration chỉ đi **tiến**. Nếu bản mới đã thêm migration và cần quay lại hoàn toàn: sau khi checkout commit cũ, khôi phục database từ backup trước đó (`restore.ps1 -BackupFile ...\wcs-db-...-pre-<commit>.dump`). Backup `pre-<commit>` được tạo tự động ngay trước mỗi lần update.
+4. Sau rollback chạy lại `git checkout main` khi sẵn sàng đi tiếp.
+
+## 7. Backup và Restore
+
+`backup.ps1` tạo (ngoài repo, trong `C:\ETEK-WCS\backups`): `wcs-db-<thời gian>-<nhãn>.dump` (pg_dump định dạng custom, đã kiểm tra bằng `pg_restore --list`) và `wcs-keys-<thời gian>-<nhãn>.tgz` (khóa mã hóa). Giữ 14 bản gần nhất. **File `.env` không nằm trong backup** (chứa mật khẩu): hãy cất một bản riêng, an toàn. Nên chép thư mục backup sang ổ/ máy khác định kỳ.
+
+```powershell
+deployment\scripts\restore.ps1 -BackupFile C:\ETEK-WCS\backups\wcs-db-20261107-100000-manual.dump
+# kèm khóa nếu khôi phục sang máy mới hoặc mật khẩu PLC/RCS không giải mã được:
+deployment\scripts\restore.ps1 -BackupFile ...dump -KeysFile ...\wcs-keys-20261107-100000-manual.tgz
+```
+`restore.ps1` hiển thị cảnh báo, yêu cầu gõ `RESTORE`, tự tạo backup an toàn `pre-restore`, kiểm tra file, thay database, áp migration mới (nếu có) rồi khởi động lại. **Sau restore:** đăng nhập Admin; kiểm tra nhiệm vụ, tồn kho, *Kết nối PLC*, *Cấu hình địa chỉ IO*; chạy `status.ps1`.
+
+## 8. Kết nối PLC (chỉ làm sau khi kỹ sư PLC xác nhận)
+
+Địa chỉ PLC hiện được cấp: PLC-01 `192.168.10.101`, PLC-02 `.111`, PLC-03 `.121`, PLC-04 `.131`; IP đề xuất của máy triển khai `192.168.10.50` (**chưa được xác nhận**). Backend dùng IP LAN thật (không `localhost`); lưu lượng ra LAN đi qua NAT của Docker Desktop nên **PLC thấy địa chỉ IP của máy Windows**.
+
+Trình tự an toàn (mỗi bước cần kỹ sư PLC):
+1. Admin nhập tham số kết nối (cổng, giao thức, Network/PC/Module I/O/Station, timeout…) trong giao diện.
+2. Kiểm tra đường mạng từ container (chỉ mở/đóng TCP, **không gửi byte nào**):
+   `deployment\scripts\plc-route-test.ps1 -Port <cổng đã xác nhận>` — tham số `-Port` bắt buộc, dự án không giả định cổng.
+3. Đặt `PLC_ALLOW_LIVE_CONNECTION=true`, chạy lại `deploy.ps1`/`start.ps1`; Admin bật kết nối từng PLC; **bắt đầu chỉ đọc** (`PLC_MODE=RealReadOnly`).
+4. Chỉ các IO đã được kỹ sư phê duyệt mới được đọc. Không bật `RealReadWrite` khi chưa có phê duyệt bằng văn bản.
+
+Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.10.x, đúng cổng, Windows Firewall, và danh sách IP được phép trên PLC (dùng IP máy Windows).
+
+## 9. An toàn Production
+
+- Backend **từ chối khởi động** nếu Production chạy `Plc:Mode=Simulator` (trừ khi `PLC_ALLOW_SIMULATOR_IN_PRODUCTION=true`, có cảnh báo trong log). Khi ngoại lệ bật, giao diện vẫn ghi rõ "Chưa kết nối PLC thật", không có handshake tự động.
+- API mô phỏng và ghi thử (`/api/plc/simulator/*`, `test-write`) bị chặn ở Production; giao diện bản build không hiển thị công cụ kỹ thuật.
+- **RCS hiện chỉ có adapter mô phỏng**: nhiệm vụ **không** được gửi tới AGV/RCS thật; giao diện hiển thị thông báo này trên mọi màn hình.
+- PostgreSQL không publish ra LAN; backend không publish; không dùng privileged hay host network; backend chạy bằng user không phải root.
+- Thư mục khóa (`/keys`) nằm trong volume; ASP.NET ghi cảnh báo "No XML encryptor configured" vì khóa không được mã hóa thêm bằng chứng chỉ — hãy bảo vệ quyền truy cập máy và backup.
+
+## 10. Xử lý sự cố
+
+| Triệu chứng | Cách xử lý |
+|---|---|
+| `Docker engine is not running` | Mở Docker Desktop, chờ "Engine running". |
+| `POSTGRES_PASSWORD is required` / `.env not found` | Tạo `C:\ETEK-WCS\config\.env` từ `.env.example`. |
+| Đăng nhập được nhưng lập tức bị đăng xuất (HTTP) | Đặt `WCS_COOKIE_SECURE=SameAsRequest` (chỉ HTTP LAN thử nghiệm), `start.ps1`. |
+| Backend `unhealthy` | `docker compose -p etek-wcs logs backend`; kiểm tra `PLC_MODE`/`PLC_ALLOW_SIMULATOR_IN_PRODUCTION` (xem mục 9) và `/healthz` trong `status.ps1`. |
+| `migrator` exit khác 0 | `docker compose -p etek-wcs logs migrator`; backend không chạy cho tới khi sửa xong. Không xóa volume. |
+| Cổng 80 bị chiếm | Đổi `WCS_HTTP_PORT` (vd 8080), `start.ps1`. |
+| Quá chậm/thiếu RAM | Tăng `memory` trong `.wslconfig`, giảm/tăng `WCS_*_MEMORY`. |
+| Mất kết nối giữa chừng sau khi Windows ngủ | `status.ps1`; nếu cần `stop.ps1` rồi `start.ps1`. |
+
+Đã chạy `docker compose -p etek-wcs ...` thủ công thì luôn kèm `--env-file C:\ETEK-WCS\config\.env`.
