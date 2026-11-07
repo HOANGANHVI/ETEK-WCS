@@ -85,3 +85,24 @@ Behaviour of the QJ71E71-100, real timing and End Codes, the real X/Y/W numberin
 - Browser (Chrome, scratch DB, headless): cleanup suite 10/10 (header status, monitoring "Chưa kết nối", engineering buttons present only in the dev server for Admin, Operator and production-build Admin sweeps of 12 routes free of demo/simulation wording and tool buttons, 368 IO rows, operator API 403); CR-004 regression 44 PASS / 0 FAIL.
 - Visual: screenshots of Operator monitoring, Admin monitoring and IO mapping (production build) reviewed.
 - Excluded from the wording sweep by design: audit trail and PLC communication log (recorded history).
+
+---
+
+# CR-006 – Dockerization and Windows deployment (2026-11-07)
+
+| Item | Status |
+|---|---|
+| SOURCE CODE IMPLEMENTED | YES |
+| SIMULATOR / MOCK TESTED (backend logic) | YES |
+| DOCKER IMAGE BUILD | **NOT RUN** (no Docker on the development machine) |
+| CONTAINER RUNTIME / PERSISTENCE / BACKUP-RESTORE / SIGNALR VIA NGINX | **NOT RUN** |
+| REAL PLC TESTED | **NO** |
+
+## Executed
+- Backend: **409 passed, 0 failed** (398 + 11 new in `Cr006DeploymentTests`: cookie policy resolution and refusal of None/invalid; Production start-up guard matrix; Production host refuses the simulator by default and starts with the explicit exception; `/healthz` anonymous with application/database fields). Three existing tests that use the Production environment (`AuthIntegrationTests.Default_admin_is_not_created_in_Production...`, `PlcCr004Tests.Engineering_tools...`) now set the explicit simulator exception in their set-up; no assertion changed.
+- Frontend: eslint, `tsc -b`, `npm run build` clean.
+- Static checks: all 8 PowerShell scripts parse without errors and are ASCII-only (Windows PowerShell 5.1 safe); compose YAML parsed - 4 services, only the frontend publishes a port, `db_net` internal, no privileged/host network, every variable used exists in `.env.example`; env validation logic of the scripts exercised with 6 cases (empty password, Simulator refused/allowed, bad cookie value, defaults, missing file).
+- Outside containers, with the production-like environment of the compose file: an EF migration bundle built (`dotnet ef migrations bundle`) and applied all 5 migrations to an empty PostgreSQL database in Production environment; the published API started in Production with `Plc:Mode=RealReadOnly`, `AllowLiveConnection=false`: `/healthz` 200 anonymous, `/api/system/health` 401 anonymous, login with the bootstrap password (default `admin/admin` rejected), cookie not Secure with `SameAsRequest`, PLC runtime `RealReadOnly` with all 4 PLC `Disabled` (no socket, no simulator), simulator endpoint 409 in Production, forwarded client IP recorded in the audit trail.
+
+## Not executed (needs Windows 11 + Docker Desktop)
+Everything in `docs/DEPLOYMENT_TEST_CHECKLIST.md` (A1-F2): image builds, compose config, container health, Nginx SPA refresh, SignalR WebSocket through Nginx, restart persistence, backup/restore, Git-based deploy/update/rollback, network isolation, route from the backend container to the PLCs (needs the confirmed TCP port), real PLC communication.

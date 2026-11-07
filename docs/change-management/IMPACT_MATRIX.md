@@ -32,3 +32,4 @@ For every CR, explicitly mark each area `AFFECTED`, `NOT_AFFECTED`, or `UNKNOWN`
 - Automated tests and regression tests
 - Deployment/configuration/rollback
 | PLC configuration reorganization (CR-004) | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED (driver untouched) | NOT_AFFECTED | AFFECTED (API: pollable field, X/Y rejected) | AFFECTED (menu, 2 new screens, monitoring read-only) | NOT_AFFECTED (no migration) | NOT_AFFECTED | AFFECTED (+8 tests) | NOT_AFFECTED |
+| Dockerization and Windows deployment (CR-006) | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED (driver untouched) | NOT_AFFECTED | AFFECTED (/healthz, cookie flag, Production guard) | AFFECTED (notice only) | NOT_AFFECTED (no migration; migrator runs existing ones) | NOT_AFFECTED | AFFECTED (+11 tests; Docker tests pending) | NOT_AFFECTED |
