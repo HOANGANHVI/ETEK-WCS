@@ -36,3 +36,7 @@ Trạng thái tại thời điểm viết CR-006: tất cả mục dưới đây
 | E5 | Phân quyền | Operator: `/plc/connections` bị chặn; API cấu hình 403; Admin đầy đủ | đúng | |
 | F1 | Route container → PLC | `plc-route-test.ps1 -Port <cổng đã xác nhận>` (chỉ khi có PLC + cổng) | TCP connect OK | **không giả lập kết quả** |
 | F2 | Giao tiếp PLC thật (đọc) | kỹ sư PLC commissioning chỉ-đọc | – | **REAL PLC TESTED = NO** cho tới khi làm |
+| G1 | Chỉ tin Nginx cho X-Forwarded-* | từ máy khác gọi API có header `X-Forwarded-For: 1.2.3.4`; xem Nhật ký thao tác | IP ghi là IP máy gọi (do Nginx ghi đè), không phải 1.2.3.4 | |
+| G2 | Backend không truy cập trực tiếp | `docker compose ... ps`: backend không có cổng publish; `Test-NetConnection <ip> -Port 8080` thất bại | không có cổng | |
+| G3 | Bảo vệ key ring | máy triển khai có BitLocker/khóa màn hình; `wcs-keys-*.tgz` và `.env` được lưu hạn chế quyền | đã làm | |
+| G4 | HTTPS vận hành | (khi có TLS) `WCS_COOKIE_SECURE=Always` và đăng nhập qua https | OK | |

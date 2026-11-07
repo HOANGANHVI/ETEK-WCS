@@ -6,7 +6,8 @@
 - New `deployment/` package: `docker-compose.yml` (postgres 16, one-shot EF migrator, backend, Nginx frontend), Dockerfiles (multi-stage, non-root runtime, healthcheck), `nginx.conf` (SPA fallback, /api and SignalR WebSocket proxy), `.env.example`, PowerShell scripts (deploy, start, stop, status, backup, restore, plc-route-test) and `README.md`.
 - Backend (approved): `Auth:CookieSecure` (Always | SameAsRequest; unset keeps the previous rule); anonymous `GET /healthz` (application and database reported separately, no sensitive data); Production start-up guard - `Plc:Mode=Simulator` is refused unless `Plc:AllowSimulatorInProduction=true` (and never together with `Plc:Integration:Enabled`); optional trusted `X-Forwarded-*` (`Deployment:TrustForwardedHeaders`, enabled only inside the compose network).
 - Frontend: a notice on every screen while RCS/PLC are simulator-only ("chua ket noi RCS va PLC that").
-- Tests: backend 409/409 (398 + 11 new). Three existing Production-environment tests received the explicit simulator exception in their set-up (no assertion weakened).
+- Forwarded headers are trusted only from the configured proxy (`Deployment:TrustedProxyNetworks`; compose pins Nginx to a fixed address; no "trust all" mode). Production logs a warning when `Auth:CookieSecure=SameAsRequest`. Documentation: key-ring protection and HTTPS + Always recommendation.
+- Tests: backend 410/410 (398 + 12 new). Three existing Production-environment tests received the explicit simulator exception in their set-up (no assertion weakened).
 - No database migration. No change to TaskStateMachine, FlowOptions, InventoryService, Scheduler, RCS client, MC driver, StationIoHandler or business rules. MQTT is not used by the source and has no container.
 
 ## v1.9 – CR-004 acceptance decisions and production UI cleanup (2026-11-07)

@@ -67,7 +67,8 @@ powershell -ExecutionPolicy Bypass -File deployment\scripts\status.ps1
 ```
 Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + mật khẩu bootstrap, đổi mật khẩu.
 
-> Nếu truy cập bằng **HTTP** trong LAN thử nghiệm thì phải đặt `WCS_COOKIE_SECURE=SameAsRequest`, nếu không trình duyệt không gửi cookie đăng nhập. Với HTTPS dùng `Always` (mặc định). Không dùng `SameAsRequest` qua Internet.
+> **Khuyến nghị cho vận hành chính thức: HTTPS + `WCS_COOKIE_SECURE=Always`.** Bản này chưa tích hợp chứng chỉ TLS (cần CR riêng hoặc một bộ chấm dứt TLS phía trước Nginx).
+> **HTTP + `WCS_COOKIE_SECURE=SameAsRequest` chỉ dành cho LAN thử nghiệm đáng tin cậy**: cookie phiên đi qua mạng không mã hóa, ai nghe được mạng có thể chiếm phiên. Nếu dùng HTTP thì phải đặt `SameAsRequest`, nếu không trình duyệt không gửi cookie đăng nhập. Không dùng `SameAsRequest` cho vận hành hoặc qua Internet. Backend ghi cảnh báo trong log khi Production chạy với `SameAsRequest`.
 
 ## 4. Cấu hình `.env`
 
@@ -77,7 +78,8 @@ Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + m�
 | `POSTGRES_PASSWORD` | **Bắt buộc.** Chỉ có hiệu lực khi tạo database lần đầu | – |
 | `WCS_ADMIN_USERNAME`, `WCS_ADMIN_BOOTSTRAP_PASSWORD` | Admin đầu tiên (Production không tạo `admin/admin`) | `admin`, – |
 | `WCS_HTTP_PORT` | Cổng Nginx | `80` |
-| `WCS_COOKIE_SECURE` | `Always` (HTTPS) hoặc `SameAsRequest` (HTTP LAN thử nghiệm) | `Always` |
+| `WCS_COOKIE_SECURE` | `Always` (HTTPS, **khuyến nghị vận hành**) hoặc `SameAsRequest` (chỉ HTTP LAN thử nghiệm) | `Always` |
+| `WCS_EDGE_SUBNET`, `WCS_NGINX_IP` | Mạng nội bộ Docker và địa chỉ cố định của Nginx; backend chỉ tin `X-Forwarded-*` từ đúng địa chỉ này | `172.30.0.0/24`, `172.30.0.10` |
 | `PLC_MODE` | `RealReadOnly` (mặc định) hoặc `RealReadWrite` | `RealReadOnly` |
 | `PLC_ALLOW_LIVE_CONNECTION` | `false`: **không mở socket tới PLC thật** | `false` |
 | `PLC_ALLOW_SIMULATOR_IN_PRODUCTION` | Production từ chối `Plc:Mode=Simulator` trừ khi `true` (chỉ để khởi động có giám sát khi chưa có PLC) | `false` |
@@ -148,7 +150,8 @@ Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.1
 - API mô phỏng và ghi thử (`/api/plc/simulator/*`, `test-write`) bị chặn ở Production; giao diện bản build không hiển thị công cụ kỹ thuật.
 - **RCS hiện chỉ có adapter mô phỏng**: nhiệm vụ **không** được gửi tới AGV/RCS thật; giao diện hiển thị thông báo này trên mọi màn hình.
 - PostgreSQL không publish ra LAN; backend không publish; không dùng privileged hay host network; backend chạy bằng user không phải root.
-- Thư mục khóa (`/keys`) nằm trong volume; ASP.NET ghi cảnh báo "No XML encryptor configured" vì khóa không được mã hóa thêm bằng chứng chỉ — hãy bảo vệ quyền truy cập máy và backup.
+- **Forwarded headers:** backend chỉ chấp nhận `X-Forwarded-For/Proto` từ địa chỉ Nginx được chỉ định (`Deployment:TrustedProxyNetworks`, mặc định `172.30.0.10/32`); từ nguồn khác header bị bỏ qua. Nginx ghi đè `X-Forwarded-For` bằng địa chỉ thật của client (không nối thêm giá trị client gửi). Bật tin cậy mà không có danh sách proxy, hoặc dùng `0.0.0.0/0`, thì backend từ chối khởi động. Backend không được publish ra LAN: **không bao giờ thêm `ports:` cho `backend`/`postgres` trong Compose.**
+- **Khóa mã hóa (Data Protection key ring):** nằm trong volume `etek_wcs_keys` (`/keys`) và dùng để giải mã mật khẩu/token PLC–RCS đã lưu trong database. ASP.NET ghi cảnh báo "No XML encryptor configured": các file khóa **không được mã hóa thêm** khi lưu trên volume. Vì vậy: (1) bảo vệ máy triển khai (tài khoản Windows riêng, khóa màn hình, BitLocker cho ổ đĩa, giới hạn người có quyền Docker/Administrator); (2) coi `wcs-keys-*.tgz` và `.env` là **bí mật**: lưu ở nơi hạn chế quyền, không đưa vào Git/email; (3) luôn giữ backup khóa cùng bản backup database tương ứng, vì mất khóa = không giải mã được mật khẩu/token đã lưu (phải nhập lại). Cơ chế mã hóa hiện tại **chưa được thay đổi**; việc mã hóa key ring (chứng chỉ/DPAPI) cần đánh giá ảnh hưởng tới khả năng giải mã dữ liệu cũ trước khi làm.
 
 ## 10. Xử lý sự cố
 

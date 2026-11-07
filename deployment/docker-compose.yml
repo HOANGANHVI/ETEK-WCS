@@ -67,7 +67,9 @@ services:
       Bootstrap__Admin__Username: ${WCS_ADMIN_USERNAME:-admin}
       # "Always" (HTTPS) or "SameAsRequest" (deliberate plain-HTTP deployment on a trusted test LAN only)
       Auth__CookieSecure: ${WCS_COOKIE_SECURE:-Always}
+      # X-Forwarded-* is honoured ONLY from the Nginx container (fixed address on edge_net); from any other sender it is ignored.
       Deployment__TrustForwardedHeaders: "true"
+      Deployment__TrustedProxyNetworks__0: ${WCS_NGINX_IP:-172.30.0.10}/32
       # PLC safety (CR-002/CR-006). Defaults: no simulator, no socket to a physical PLC, no writes.
       Plc__Mode: ${PLC_MODE:-RealReadOnly}
       Plc__AllowLiveConnection: ${PLC_ALLOW_LIVE_CONNECTION:-false}
@@ -94,13 +96,18 @@ services:
       backend: { condition: service_healthy }
     ports:
       - "${WCS_HTTP_PORT:-80}:80"
-    networks: [edge_net]
+    networks:
+      edge_net:
+        ipv4_address: ${WCS_NGINX_IP:-172.30.0.10}
     logging: *logging
 
 networks:
   db_net:
     internal: true
-  edge_net: {}
+  edge_net:
+    ipam:
+      config:
+        - subnet: ${WCS_EDGE_SUBNET:-172.30.0.0/24}
 
 volumes:
   wcs_pgdata:

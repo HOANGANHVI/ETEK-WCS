@@ -65,6 +65,21 @@ public class Cr006DeploymentTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public void Forwarded_headers_are_trusted_only_from_the_configured_proxy_and_never_open_to_everybody()
+    {
+        Assert.Null(ForwardedHeadersSetup.Build(Cfg()));                                                                                      // off by default
+        Assert.Null(ForwardedHeadersSetup.Build(Cfg(("Deployment:TrustForwardedHeaders", "false"), ("Deployment:TrustedProxyNetworks:0", "10.0.0.1/32"))));
+        Assert.Throws<InvalidOperationException>(() => ForwardedHeadersSetup.Build(Cfg(("Deployment:TrustForwardedHeaders", "true"))));       // enabled without a proxy list: refused
+        Assert.Throws<InvalidOperationException>(() => ForwardedHeadersSetup.Build(Cfg(("Deployment:TrustForwardedHeaders", "true"), ("Deployment:TrustedProxyNetworks:0", "0.0.0.0/0"))));
+        Assert.Throws<InvalidOperationException>(() => ForwardedHeadersSetup.Build(Cfg(("Deployment:TrustForwardedHeaders", "true"), ("Deployment:TrustedProxyNetworks:0", "::/0"))));
+        Assert.Throws<InvalidOperationException>(() => ForwardedHeadersSetup.Build(Cfg(("Deployment:TrustForwardedHeaders", "true"), ("Deployment:TrustedProxyNetworks:0", "not-an-ip"))));
+        var o = ForwardedHeadersSetup.Build(Cfg(("Deployment:TrustForwardedHeaders", "true"), ("Deployment:TrustedProxyNetworks:0", "172.30.0.10/32"), ("Deployment:TrustedProxyNetworks:1", "10.1.1.1")))!;
+        Assert.Single(o.KnownIPNetworks); Assert.Single(o.KnownProxies);
+        Assert.Equal(1, o.ForwardLimit);
+        Assert.Equal(Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto, o.ForwardedHeaders);
+    }
+
+    [Fact]
     public async Task Healthz_is_anonymous_reveals_nothing_sensitive_and_reports_application_and_database_separately()
     {
         await using var h = await Harness.CreateAsync(fixture);

@@ -36,14 +36,12 @@ var simulatorInProduction = ProductionSafety.Validate(app.Configuration, app.Env
 // Fail fast on an invalid flow configuration (e.g. a Bp04 entry).
 _ = app.Services.GetRequiredService<IFlowCatalog>();
 
-// CR-006: behind the Nginx container the real client IP/scheme arrive in X-Forwarded-*. Trusted ONLY when Deployment:TrustForwardedHeaders=true, which is
-// safe solely because the backend port is not published (only the Nginx container can reach it).
-if (app.Configuration.GetValue("Deployment:TrustForwardedHeaders", false))
-{
-    var fh = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions { ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto, ForwardLimit = 1 };
-    fh.KnownIPNetworks.Clear(); fh.KnownProxies.Clear();
-    app.UseForwardedHeaders(fh);
-}
+// CR-006: behind the Nginx container the real client IP/scheme arrive in X-Forwarded-*. They are honoured ONLY from the configured proxy address(es)
+// (Deployment:TrustedProxyNetworks); the backend port is additionally not published, so only that container can reach it.
+if (ForwardedHeadersSetup.Build(app.Configuration) is { } forwarded) app.UseForwardedHeaders(forwarded);
+
+if (app.Environment.IsProduction() && string.Equals(app.Configuration["Auth:CookieSecure"], "SameAsRequest", StringComparison.OrdinalIgnoreCase))
+    app.Logger.LogWarning("Auth:CookieSecure=SameAsRequest in Production: session cookies are sent over plain HTTP. Acceptable only on a trusted test LAN; use HTTPS with Auth:CookieSecure=Always for operation.");
 
 app.UseExceptionHandler(ExceptionMapping.Configure);
 app.UseSerilogRequestLogging();

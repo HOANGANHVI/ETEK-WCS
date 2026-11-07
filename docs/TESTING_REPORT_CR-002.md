@@ -106,3 +106,8 @@ Behaviour of the QJ71E71-100, real timing and End Codes, the real X/Y/W numberin
 
 ## Not executed (needs Windows 11 + Docker Desktop)
 Everything in `docs/DEPLOYMENT_TEST_CHECKLIST.md` (A1-F2): image builds, compose config, container health, Nginx SPA refresh, SignalR WebSocket through Nginx, restart persistence, backup/restore, Git-based deploy/update/rollback, network isolation, route from the backend container to the PLCs (needs the confirmed TCP port), real PLC communication.
+
+## CR-006 completion checks (2026-11-07)
+- Backend **410 passed, 0 failed** (adds the forwarded-header trust test).
+- Outside containers (published app, Production environment, scratch DB, dropped afterwards): trust enabled without a proxy list -> process refuses to start; request with `X-Forwarded-For: 10.9.8.7` from a sender NOT in the trusted list -> audit IP stays the real peer (::1); from a trusted sender -> 10.9.8.7 recorded.
+- Still NOT run: Docker build/runtime, Nginx header overwrite, network isolation, persistence, backup/restore (checklist A-G).
