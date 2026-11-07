@@ -19,7 +19,13 @@ const NAV = [
   { to: '/agvs', label: 'Giám sát AGV', icon: <IconAgv /> },
   { to: '/tasks', label: 'Quản lý nhiệm vụ', icon: <IconTasks /> },
   { to: '/inventory', label: 'Vị trí và tồn kho', icon: <IconWarehouse /> },
-  { to: '/plc', label: 'Giám sát PLC', icon: <IconPlc /> },
+  { to: '/plc', label: 'Giám sát PLC', end: true, icon: <IconPlc /> },
+]
+
+// PLC configuration (CR-004). Admin only; the API enforces the same rule.
+const NAV_PLC = [
+  { to: '/plc/connections', label: 'Kết nối PLC', icon: <IconSettings /> },
+  { to: '/plc/io-mapping', label: 'Cấu hình địa chỉ IO', icon: <IconPlc /> },
 ]
 
 // Shown to Admin only. Hiding them is a convenience: the API and the routes enforce the same rule independently.
@@ -103,6 +109,12 @@ function SideBar() {
         <div className="nav-title">Vận hành</div>
         {NAV.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
+            {n.icon}<span>{n.label}</span>
+          </NavLink>
+        ))}
+        {hasRole(user, 'Admin') && <div className="nav-title">Cấu hình PLC</div>}
+        {hasRole(user, 'Admin') && NAV_PLC.map((n) => (
+          <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
             {n.icon}<span>{n.label}</span>
           </NavLink>
         ))}

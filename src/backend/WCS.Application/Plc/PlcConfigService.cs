@@ -37,7 +37,7 @@ public sealed record PlcStationView(string StationId, string PlcId, int Order, s
 
 public sealed record IoPointView(Guid Id, string PlcId, string StationId, int Seq, string Group, string SignalName, string Direction, string DataType,
     string Description, string ConfigStatus, string? TemplateAddressReference, string? ActualAddress, int? WordLength, string? Encoding,
-    bool? WriteAllowed, string? ApprovedBy, DateTimeOffset? ApprovedAt);
+    bool? WriteAllowed, string? ApprovedBy, DateTimeOffset? ApprovedAt, bool? Pollable = null);
 
 public sealed record SetPointAddressCommand(string Address, int? WordLength, string? Encoding);
 
@@ -124,13 +124,16 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     public static IoPointView ToView(StationIoPoint p, bool includeConfiguration) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
         p.Direction.ToString(), p.DataType.ToString(), p.Description, PlcLabels.Status(p.Status),
         includeConfiguration ? p.TemplateAddressReference : null, includeConfiguration ? p.ActualAddress : null, includeConfiguration ? p.WordLength : null,
-        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null);
+        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? p.IsPollable : null);
 
     /// <summary>Records an address confirmed by the PLC engineer. Conflicts with other points of the SAME PLC are rejected; other PLCs are independent.</summary>
     public Task<IoPointView> SetAddressAsync(Guid pointId, SetPointAddressCommand cmd, CancellationToken ct = default) =>
         uow.ExecuteAsync(async t =>
         {
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            // CR-004: X/Y are OUT_OF_SCOPE for IO mapping (radix NEEDS_CONFIRMATION). Only D, W, M may be entered. The driver is unchanged.
+            if (!string.IsNullOrWhiteSpace(cmd.Address) && char.ToUpperInvariant(cmd.Address.Trim()[0]) is 'X' or 'Y')
+                throw new ValidationFailedException([new("address", "Thiết bị X/Y chưa được hỗ trợ trong cấu hình địa chỉ IO (OUT_OF_SCOPE, NEEDS_CONFIRMATION: cần xác nhận cơ số với kỹ sư PLC). Chỉ dùng M, D hoặc W.")]);
             var bases = await BasesOfAsync(p.PlcId, t);
             var address = string.IsNullOrWhiteSpace(cmd.Address) ? cmd.Address?.Trim() : DeviceAddress.Normalize(cmd.Address, bases);
             var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, address, cmd.WordLength, p.Direction);

@@ -1,19 +1,33 @@
 import { useCallback, useState } from 'react'
-import { api } from '../../api/client'
-import type { AddressIssue, PlcConnection, ProbeResultView } from '../../api/plcTypes'
-import { Async, Button, Panel, Pill } from '../../components/ui'
-import { useApi } from '../../hooks/useApi'
-import { MISSING_PARAM_VI } from '../../i18n/plc'
-import { describeError } from '../../i18n/vi'
-import { Field, Switch } from '../config/FormKit'
-import { fromApiError, fromNum, toInt, toStr, type Errors } from '../config/formUtils'
-import { fmtTime } from './plcFormat'
-import { ConfigPill } from './plcUi'
+import { api } from '../api/client'
+import type { PlcConnection, ProbeResultView } from '../api/plcTypes'
+import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
+import { useApi } from '../hooks/useApi'
+import { MISSING_PARAM_VI } from '../i18n/plc'
+import { describeError } from '../i18n/vi'
+import { Field, Switch } from './config/FormKit'
+import { fromApiError, fromNum, toInt, toStr, type Errors } from './config/formUtils'
+import { fmtTime } from './plc/plcFormat'
+import { ConfigPill } from './plc/plcUi'
 
 const PROTOCOLS = [{ value: 'McProtocol3EBinaryTcp', label: 'MC Protocol – 3E, Binary, TCP (dự kiến, cần xác nhận)' }]
 
-/** Admin-only: the four PLC connections. Nothing is pre-filled except what the catalog knows (name and IP); every other parameter is entered by the PLC engineer. */
-export function PlcConfigTab({ realMode }: { realMode: boolean }) {
+/**
+ * CR-004: the ONLY place where PLC connection parameters are edited (4 PLCs, one form each). Admin-only (also enforced by the API).
+ * Nothing is pre-filled except what the catalog knows (name and IP); every other parameter is entered by the PLC engineer. IO addresses are NOT edited here.
+ */
+export function PlcConnectionsPage() {
+  const overview = useApi(useCallback(() => api.plcOverview(), []))
+  const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
+  return (
+    <>
+      <PageHeader title="Kết nối PLC" description="Thông số kết nối của 4 PLC vật lý. Địa chỉ từng tín hiệu IO được cấu hình ở màn hình 'Cấu hình địa chỉ IO'; trạng thái và giá trị ở màn hình 'Giám sát PLC'." />
+      <PlcConnectionsBody realMode={mode !== 'Simulator'} simulator={mode === 'Simulator'} />
+    </>
+  )
+}
+
+function PlcConnectionsBody({ realMode, simulator }: { realMode: boolean; simulator: boolean }) {
   const list = useApi(useCallback(() => api.plcConnections(), []))
   const [editing, setEditing] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -33,7 +47,7 @@ export function PlcConfigTab({ realMode }: { realMode: boolean }) {
                 actions={<ConfigPill status={c.configStatus} />}>
                 {editing === c.plcId
                   ? <ConnectionForm c={c} realMode={realMode} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setMessage(`Đã lưu cấu hình ${c.plcId}.`); list.reload() }} />
-                  : <ConnectionSummary c={c} realMode={realMode} onEdit={() => setEditing(c.plcId)} />}
+                  : <ConnectionSummary c={c} realMode={realMode} simulator={simulator} onEdit={() => setEditing(c.plcId)} />}
               </Panel>
             ))}
           </div>
@@ -43,10 +57,9 @@ export function PlcConfigTab({ realMode }: { realMode: boolean }) {
   )
 }
 
-function ConnectionSummary({ c, onEdit, realMode }: { c: PlcConnection; onEdit: () => void; realMode: boolean }) {
+function ConnectionSummary({ c, onEdit, realMode, simulator }: { c: PlcConnection; onEdit: () => void; realMode: boolean; simulator: boolean }) {
   const [busy, setBusy] = useState(false)
   const [probe, setProbe] = useState<ProbeResultView | null>(null)
-  const [issues, setIssues] = useState<AddressIssue[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(describeError(e)) } finally { setBusy(false) } }
   const row = (k: string, v: string | number | null) => <><dt>{k}</dt><dd>{v === null || v === '' ? <span className="muted">chưa cấu hình</span> : v}</dd></>
@@ -65,13 +78,11 @@ function ConnectionSummary({ c, onEdit, realMode }: { c: PlcConnection; onEdit: 
       )}
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
       {probe && <div className={`notice ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>Kiểm tra ({probe.mode}): {probe.message}{probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : ''}</div>}
-      {issues && (issues.length === 0
-        ? <div className="notice notice-ok">Không có xung đột địa chỉ trên {c.plcId}.</div>
-        : <div className="notice notice-bad"><strong>Xung đột địa chỉ:</strong><ul>{issues.map((i) => <li key={i.pointId + i.code}>{i.stationId}/{i.signal}: {i.message}</li>)}</ul></div>)}
       <div className="btn-row">
         <Button variant="primary" onClick={onEdit}>Sửa cấu hình</Button>
         <Button disabled={busy} onClick={() => void run(async () => setProbe(await api.plcTestConnection(c.plcId)))}>Kiểm tra kết nối</Button>
-        <Button disabled={busy} onClick={() => void run(async () => setIssues(await api.plcAddressCheck(c.plcId)))}>Kiểm tra xung đột địa chỉ</Button>
+        {simulator && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, false) })}>Mô phỏng mất kết nối</Button>}
+        {simulator && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, true) })}>Khôi phục</Button>}
       </div>
       <p className="muted small">{realMode ? 'Kiểm tra kết nối chỉ mở/đóng cổng TCP, không gửi lệnh PLC.' : 'Chế độ mô phỏng: kiểm tra không dùng mạng.'}</p>
     </>

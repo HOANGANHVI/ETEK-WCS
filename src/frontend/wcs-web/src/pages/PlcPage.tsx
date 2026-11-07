@@ -1,30 +1,27 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { PlcExchange, PlcOverview, PlcStationSummary, PlcWorkerStatus } from '../api/plcTypes'
 import { useAuth } from '../auth/AuthContext'
-import { Async, Button, EmptyState, PageHeader, Panel, Pill } from '../components/ui'
+import { Async, EmptyState, PageHeader, Panel, Pill } from '../components/ui'
 import { DEMO_MODE } from '../config'
 import { useApi } from '../hooks/useApi'
 import { APPROVAL_VI, EXCHANGE_OUTCOME_VI, MISSING_PARAM_VI, MODE_TONE, MODE_VI, PHASE_TONE, PHASE_VI } from '../i18n/plc'
-import { describeError } from '../i18n/vi'
-import { PlcConfigTab } from './plc/PlcConfigTab'
 import { PlcLogsTab } from './plc/PlcLogsTab'
 import { fmtTime, qualitySummary } from './plc/plcFormat'
 import { QualityBar, StatePill } from './plc/plcUi'
 import { StationPanel } from './plc/StationPanel'
 
 const TABS = [
-  { key: 'overview', label: 'Giám sát', admin: false },
-  { key: 'config', label: 'Cấu hình kết nối và địa chỉ', admin: true },
+  { key: 'overview', label: 'Tổng quan giám sát', admin: false },
   { key: 'logs', label: 'Nhật ký giao tiếp', admin: true },
 ] as const
 
 const EVENTS = ['PlcStatusChanged', 'StationIoChanged', 'HandshakePhaseChanged'] as const
 
 /**
- * PLC monitoring (4 PLC, 16 Station, 23 IO per Station). Operators see status, values and quality; Admins additionally see addresses,
- * network details, diagnostics, logs and the configuration. The real-mode safety state is always shown at the top.
+ * PLC monitoring (4 PLC, 16 Station, 23 IO per Station) - strictly READ-ONLY (CR-004). Operators see status, values and quality; Admins additionally see
+ * network details, diagnostics and logs. Connections and IO addresses are edited in the "Cấu hình PLC" screens. The real-mode safety state is always shown.
  */
 export function PlcPage() {
   const { user } = useAuth()
@@ -50,15 +47,9 @@ export function PlcPage() {
         ))}
       </div>
       {tab === 'overview' && <Overview isAdmin={isAdmin} />}
-      {tab === 'config' && isAdmin && <ConfigWrapper />}
       {tab === 'logs' && isAdmin && <PlcLogsTab />}
     </>
   )
-}
-
-function ConfigWrapper() {
-  const o = useApi(useCallback(() => api.plcOverview(), []))
-  return <PlcConfigTab realMode={(o.data?.runtime.effectiveMode ?? 'Simulator') !== 'Simulator'} />
 }
 
 function RuntimeBanner({ rt }: { rt: PlcOverview['runtime'] }) {
@@ -85,7 +76,7 @@ function Overview({ isAdmin }: { isAdmin: boolean }) {
         <>
           <RuntimeBanner rt={o.runtime} />
           <div className="plc-cards">
-            {o.plcs.map((w) => <PlcCard key={w.plcId} w={w} isAdmin={isAdmin} simulator={o.runtime.effectiveMode === 'Simulator'} onChanged={overview.reload} />)}
+            {o.plcs.map((w) => <PlcCard key={w.plcId} w={w} isAdmin={isAdmin} />)}
           </div>
           <Panel title="16 trạm" subtitle="Chọn một trạm để xem 23 tín hiệu IO. Trạm chưa có quy trình WCS được duyệt chỉ để giám sát, không tạo nhiệm vụ.">
             <div className="station-grid">
@@ -95,20 +86,14 @@ function Overview({ isAdmin }: { isAdmin: boolean }) {
               })}
             </div>
           </Panel>
-          {selected && <StationPanel key={selected} stationId={selected} isAdmin={isAdmin} runtime={o.runtime} handshake={hs.data?.find((h) => h.stationId === selected)} onClose={() => select(null)} />}
+          {selected && <StationPanel key={selected} stationId={selected} isAdmin={isAdmin} handshake={hs.data?.find((h) => h.stationId === selected)} onClose={() => select(null)} />}
         </>
       )}
     </Async>
   )
 }
 
-function PlcCard({ w, isAdmin, simulator, onChanged }: { w: PlcWorkerStatus; isAdmin: boolean; simulator: boolean; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const toggle = async (online: boolean) => {
-    setBusy(true); setError(null)
-    try { await api.plcSimOnline(w.plcId, online); onChanged() } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
-  }
+function PlcCard({ w, isAdmin }: { w: PlcWorkerStatus; isAdmin: boolean }) {
   const d = w.diagnostics
   return (
     <section className={`plc-card state-${w.state}`} aria-label={w.plcId}>
@@ -127,13 +112,6 @@ function PlcCard({ w, isAdmin, simulator, onChanged }: { w: PlcWorkerStatus; isA
       {w.reason && <div className="notice notice-warn">{w.reason}</div>}
       {w.missingParameters.length > 0 && <div className="notice notice-warn">NEEDS_CONFIGURATION: {w.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ')}</div>}
       {isAdmin && w.lastError && <div className="notice notice-bad" role="status">Lỗi gần nhất: {w.lastError}</div>}
-      {error && <div className="notice notice-bad" role="alert">{error}</div>}
-      {isAdmin && simulator && (
-        <div className="btn-row">
-          <Button size="sm" disabled={busy} onClick={() => void toggle(false)}>Mô phỏng mất kết nối</Button>
-          <Button size="sm" disabled={busy} onClick={() => void toggle(true)}>Khôi phục</Button>
-        </div>
-      )}
       <QualityBar good={w.goodPoints} configured={w.configuredPoints} total={w.totalPoints} />
     </section>
   )

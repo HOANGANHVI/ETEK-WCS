@@ -68,3 +68,10 @@ export interface PlcLogRow {
 export interface AddressIssue { pointId: string; stationId: string; signal: string; code: string; message: string }
 
 export interface ProbeResultView { outcome: string; mode: string; message: string; error: string | null; latencyMs: number | null }
+
+/** CR-004: one row of the IO-mapping table (Admin-only API). `pollable` = approved AND address present - the only points ever read from a real PLC. */
+export interface IoPointConfig {
+  id: string; plcId: string; stationId: string; seq: number; group: string; signalName: string; direction: 'PlcToSoftware' | 'SoftwareToPlc'
+  dataType: 'Bool' | 'Int' | 'String'; description: string; configStatus: string; templateAddressReference: string | null; actualAddress: string | null
+  wordLength: number | null; encoding: string | null; writeAllowed: boolean | null; approvedBy: string | null; approvedAt: string | null; pollable: boolean | null
+}

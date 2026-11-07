@@ -55,3 +55,19 @@ Real PLC wire behaviour, QJ71E71-100 settings, real timing, INT sign / STRING en
 
 ## Not covered (needs the physical PLC)
 Behaviour of the QJ71E71-100, real timing and End Codes, the real X/Y/W numbering base, per-request limits above the proven ones, real addresses, handshake.
+
+---
+
+# CR-004 – PLC configuration reorganization (2026-11-07)
+
+## Status (reported separately)
+| Item | Status |
+|---|---|
+| SOURCE CODE IMPLEMENTED | YES |
+| SIMULATOR / MOCK TESTED | YES |
+| REAL PLC TESTED | **NO** – no PLC involved |
+
+## Results
+- Backend: **397 passed, 0 failed** (389 + 8 new in `PlcCr004Tests`). One CR-003 test (`PlcMcIntegrationTests`) was deliberately changed: it used X addresses through the API, which CR-004 now rejects; its X/Y-base-gate part now asserts the rejection and exercises the same storage/overlap rules with W.
+- Frontend: eslint, `tsc -b`, `npm run build`, `npm run build:demo` clean.
+- Browser E2E (Chrome, Simulator, scratch DB): 46/46 – menu groups, system config without PLC tab, read-only monitoring, 4 PLC connection forms (PLC-01 edit leaves PLC-02/03/04 unchanged), 368-row IO mapping, PLC/Station/status/search filters, X10/Y10 rejected, M100/D2000 saved, entered is not pollable, approval makes it pollable, same-PLC duplicate refused, other-PLC duplicate accepted, conflict check, Operator denied (routes and API 403).

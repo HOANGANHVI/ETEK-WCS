@@ -31,3 +31,4 @@ For every CR, explicitly mark each area `AFFECTED`, `NOT_AFFECTED`, or `UNKNOWN`
 - Logging/monitoring/security
 - Automated tests and regression tests
 - Deployment/configuration/rollback
+| PLC configuration reorganization (CR-004) | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED | NOT_AFFECTED (driver untouched) | NOT_AFFECTED | AFFECTED (API: pollable field, X/Y rejected) | AFFECTED (menu, 2 new screens, monitoring read-only) | NOT_AFFECTED (no migration) | NOT_AFFECTED | AFFECTED (+8 tests) | NOT_AFFECTED |

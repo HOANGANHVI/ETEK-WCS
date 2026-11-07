@@ -35,3 +35,10 @@ Migration `AddPlcTopology` adds four tables (CREATE only) and is not auto-applie
 17. **Approved-only traffic:** a real PLC is read/written only at addresses that are entered and approved (`IoPointRef.Pollable`). The Admin still sees an entered but unapproved address.
 18. **Diagnostics:** `PlcExchange` (command, device, start, points, duration, end code, request/response hex, ambiguity) per connection, Admin-only, hex capped at 96 bytes.
 19. **Not ported:** `PingAsync` (reads D0 – an unapproved address), `IsHealthy`, DNS resolution, the reference's hard-coded module I/O/station, and its End Code descriptions (unverified).
+
+## Amendment 2026-11-07 – CR-004 (configuration split)
+
+20. **Three screens, one data source.** Connection parameters (`plc_connections`) are edited only in *Kết nối PLC*; IO addresses (`station_io_points`) only in *Cấu hình địa chỉ IO*; *Giám sát PLC* is strictly read-only. The legacy single-PLC endpoint `/api/config/plc` is retained but unused.
+21. **IO mapping supports D, W (word) and M (bit) only.** X/Y are rejected at the API (`SetAddressAsync`) with `OUT_OF_SCOPE / NEEDS_CONFIRMATION`; the driver, validator and CR-003 parameters (X/Y base) are left as they are. Status of X/Y: OUT_OF_SCOPE / NEEDS_CONFIRMATION – not supported.
+22. **Future X/Y support** requires: engineer-confirmed base per PLC (or an approved convention), an explicit Octal/Hexadecimal setting, base-aware validation, conversion only when the MC frame is built (never repeated in UI/API/DB), unit tests for X7/X10/X20 and boundaries, and frame-level tests before any real communication.
+23. **Pollable is derived, never set by input.** Entering or changing an address leaves a point CONFIGURED and not pollable; only the existing approval step makes it APPROVED (pollable). `IoPointView.Pollable` exposes this to the Admin UI.

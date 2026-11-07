@@ -3,7 +3,7 @@ import { demoDataApi } from '../demo/demoApi'
 import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Role, UserRow } from './authTypes'
-import type { AddressIssue, HandshakeState, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
+import type { AddressIssue, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, SimulationStep, SystemHealth,
@@ -89,6 +89,7 @@ const realApi = {
   plcOverview: () => request<PlcOverview>('/api/plc/overview'),
   plcStationIo: (stationId: string) => request<StationSnapshot>(`/api/plc/stations/${encodeURIComponent(stationId)}/io`),
   plcHandshake: () => request<HandshakeState[]>('/api/plc/handshake'),
+  plcPoints: (f: { plcId?: string; stationId?: string }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId })}`),
   plcConnections: () => request<PlcConnection[]>('/api/plc/connections'),
   plcSaveConnection: (plcId: string, b: SavePlcConnectionBody) => request<PlcConnection>(`/api/plc/connections/${plcId}`, { method: 'PUT', body: JSON.stringify(b) }),
   plcTestConnection: (plcId: string) => request<ProbeResultView>(`/api/plc/connections/${plcId}/test`, { method: 'POST' }),

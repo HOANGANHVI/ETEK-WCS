@@ -144,3 +144,19 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Unchanged:** PER_AGV, BP-01/02/03/05/06, BP-04 (REVIEW), A3/A4 and D1/D2 (UNCHANGED), F5, inventory ownership, Admin/Operator permissions, WCS integration (still off), no handshake rule shipped.
 - **Rollback:** revert the CR-003 commit and run the migration `Down()` (or leave the nullable columns; the previous build ignores them).
 - **Open:** see section 10 of the analysis document.
+
+### CR-004 – Reorganize PLC configuration, PLC monitoring and IO mapping
+
+- **Status:** IMPLEMENTED (UI/API organization). REAL PLC TESTED = NO (none involved).
+- **Approval:** project owner instruction of 2026-11-07 (full task description "CR-004"), recorded here. No business rule or PLC technical parameter is changed.
+- **Problem:** two screens edited PLC connections inconsistently (*Cấu hình hệ thống → Kết nối PLC*: one PLC, legacy `/api/config/plc`; *Giám sát PLC → Cấu hình*: 4 PLC, `/api/plc/connections`), and there was no IO-mapping screen (addresses were edited inside the station monitoring table).
+- **Result:** (1) **Kết nối PLC** – 4 PLC, one edit form each, per-PLC connection test; (2) **Giám sát PLC** – read-only; (3) **Cấu hình địa chỉ IO** – 368 IO, filters (PLC, Station, status, signal search), Pollable and approval columns, address dialog, conflict check. Menu: *Giám sát PLC* under Vận hành; *Cấu hình PLC* (Kết nối PLC, Cấu hình địa chỉ IO) Admin-only.
+- **Data source:** one only – `plc_connections` / `station_io_points`. The legacy `/api/config/plc` endpoint and its data are RETAINED but no screen uses them any more (candidate for a later deprecation CR).
+- **Decisions / conflicts recorded (no silent choice):**
+  1. *Operator "chỉ được xem cấu hình"* vs the CR-002 rule that Operators never see IPs/addresses: the stricter CR-002 rule is kept. Operators monitor only; connection/IO configuration APIs return 403. **Needs owner confirmation** if a read-only configuration view (without IP/addresses) is wanted.
+  2. The simulator controls (offline/restore, value injection) and the guarded test-write were removed from the monitoring screens (read-only requirement) and moved to *Kết nối PLC* (offline/restore) and *Cấu hình địa chỉ IO* (Giả lập / Ghi thử). Their rules are unchanged.
+  3. W (word) stays supported as the CR-003 driver feature (needs the W base confirmed per PLC); the owner's list "D, W, M" is applied literally.
+- **X/Y – OUT_OF_SCOPE / NEEDS_CONFIRMATION:** not supported by IO mapping (API rejects them; UI does not offer them). No default octal/hexadecimal is assumed and none is taken from the reference library. The CR-003 driver/validator X/Y code is left untouched but unreachable from the UI/API for IO addresses. **If X/Y is added later it MUST:** (1) have the base confirmed with the PLC engineer per PLC (or one approved convention); (2) have an explicit Octal/Hexadecimal setting; (3) validate addresses per the chosen base; (4) convert only where the MC frame is built; (5) never convert again in UI, API or database; (6) have unit tests for X7, X10, X20 and boundaries (octal X10=8, X20=16; hex X10=16, X20=32); (7) have frame-level tests before any real PLC communication.
+- **Database impact:** none (no migration). **API impact:** `GET/PUT /api/plc/points…` returns `pollable`; `PUT …/address` rejects X/Y; all other APIs unchanged.
+- **Unchanged:** PlcWorker, StationIoHandler, polling, MC driver, TaskStateMachine, FlowOptions, InventoryService, Scheduler, RCS client, PER_AGV, BP-04 (REVIEW), A3/A4, D1/D2, F5, roles.
+- **Rollback:** revert the CR-004 commit (no data change to undo).

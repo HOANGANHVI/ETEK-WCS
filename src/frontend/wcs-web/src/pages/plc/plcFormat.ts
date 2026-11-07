@@ -26,3 +26,6 @@ export function parseTyped(type: IoPointState['dataType'], text: string): { ok: 
 
 /** Signals that can never be written by the test facility (mirrors the backend rule; the backend enforces it). */
 export const BLOCKED_SIGNALS = ['Safety_Ready', 'Transfer_Permit', 'AGV_Departure_Permit']
+
+/** The device letter of an address (D / W / M), or null when none is assigned. X/Y are not supported by IO mapping (CR-004). */
+export const deviceOf = (address: string | null): string | null => (address ? address.trim().charAt(0).toUpperCase() : null)

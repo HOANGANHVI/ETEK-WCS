@@ -102,16 +102,20 @@ public class PlcMcIntegrationTests(DatabaseFixture fixture)
         var d = full.Root.GetProperty("data");
         Assert.Equal(500, d.GetProperty("connectTimeoutMs").GetInt32()); Assert.Equal(400, d.GetProperty("readTimeoutMs").GetInt32()); Assert.Equal(600, d.GetProperty("writeTimeoutMs").GetInt32());
         Assert.Equal(8, d.GetProperty("xyAddressBase").GetInt32()); Assert.Equal(16, d.GetProperty("wAddressBase").GetInt32());
-        var accepted = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{online}/address", new { address = " x010 " });
+        // CR-004: X/Y are OUT_OF_SCOPE for IO mapping even with a confirmed base - rejected by the API, nothing stored
+        var xOnline = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{online}/address", new { address = " x010 " });
+        Assert.Equal(400, xOnline.Status); Assert.Contains("X/Y", xOnline.Raw);
+        Assert.Null(await h.Db(db => db.StationIoPoints.AsNoTracking().Where(p => p.Id == online).Select(p => p.ActualAddress).SingleAsync()));
+        Assert.Equal(400, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{online}/address", new { address = "Y10" })).Status);
+        // W (word) with a confirmed base is accepted and stored in the engineer's notation (NOT converted)
+        var reqId = await Id(h, "A1", "Request_ID");
+        var accepted = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{reqId}/address", new { address = " w01a ", wordLength = 8, encoding = "ASCII" });
         Assert.Equal(200, accepted.Status);
-        Assert.Equal("X10", accepted.Root.GetProperty("data").GetProperty("actualAddress").GetString());
-        Assert.Equal("X10", await h.Db(db => db.StationIoPoints.AsNoTracking().Where(p => p.Id == online).Select(p => p.ActualAddress).SingleAsync()));
-
-        // X is an input: a Software -> PLC signal cannot be put on it
-        var ack = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{await Id(h, "A1", "Request_Ack")}/address", new { address = "X20" });
-        Assert.Equal(400, ack.Status);
-        // an overlap is judged on the resolved device number: A2 may not use the same octal X10 on the SAME PLC
-        var dup = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{await Id(h, "A2", "Station_Online")}/address", new { address = "X010" });
+        var stored = accepted.Root.GetProperty("data").GetProperty("actualAddress").GetString();
+        Assert.Equal("W1A", stored);
+        Assert.Equal("W1A", await h.Db(db => db.StationIoPoints.AsNoTracking().Where(p => p.Id == reqId).Select(p => p.ActualAddress).SingleAsync()));
+        // an overlap is judged on the resolved device number: A2 may not use the same W1A on the SAME PLC
+        var dup = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{await Id(h, "A2", "Request_ID")}/address", new { address = "W01A", wordLength = 8, encoding = "ASCII" });
         Assert.Equal(400, dup.Status); Assert.Contains("trùng", dup.Raw);
         // persisted in the table
         var row = await h.Db(db => db.PlcConnections.AsNoTracking().Where(c => c.Id == "PLC-01").Select(c => new { c.ConnectTimeoutMs, c.XyAddressBase, c.WAddressBase }).SingleAsync());
