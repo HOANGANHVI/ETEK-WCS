@@ -6,6 +6,7 @@ import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
 import { CreateTaskDialog, DeleteTaskDialog, EditTaskDialog } from './TaskDialogs'
 import { USER_EDITABLE } from './taskRules'
 import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
+import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
 import { formatDateTime, formatTime } from '../i18n/format'
@@ -155,7 +156,7 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
           const editable = USER_EDITABLE.includes(t.state)
           // Cancelling a task an AGV already took, and the simulator step, are Admin-only (also enforced by the API).
           const canCancel = isAdmin && !editable && CANCELLABLE.includes(t.state)
-          const simulator = isAdmin && health.data?.integration.mode === 'Simulator'
+          const simulator = ENGINEERING_TOOLS && isAdmin && health.data?.integration.mode === 'Simulator'
           const events = history.data ?? []
           const deviceEvents = events.filter((h) => h.source === 'PLC' || h.source === 'RCS' || DEVICE_EVENT_RE.test(h.event))
           return (

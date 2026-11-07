@@ -160,3 +160,9 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Database impact:** none (no migration). **API impact:** `GET/PUT /api/plc/points…` returns `pollable`; `PUT …/address` rejects X/Y; all other APIs unchanged.
 - **Unchanged:** PlcWorker, StationIoHandler, polling, MC driver, TaskStateMachine, FlowOptions, InventoryService, Scheduler, RCS client, PER_AGV, BP-04 (REVIEW), A3/A4, D1/D2, F5, roles.
 - **Rollback:** revert the CR-004 commit (no data change to undo).
+
+#### CR-004 acceptance addendum (2026-11-07)
+- **Decisions confirmed by the project owner:** (1) Operator keeps the CR-002 rule: monitoring only, no IP/port/address/configuration, configuration APIs 403. (2) `/api/config/plc` is deprecated: kept, unused, no further development; removal by a separate CR. (3) Device W stays architecturally supported; address base NEEDS_CONFIRMATION; no polling, read or write of W until the PLC engineer confirms.
+- **Production UI cleanup (in scope of this acceptance):** engineering tools hidden from operating UI outside Development; device/link status wording made truthful; Production API guard for simulator controls and test-write. Recorded history (audit trail action names, PLC communication log text, transaction "source" label) keeps its original wording because it documents what actually happened.
+- **Not changed:** business rules, driver, polling, DB schema/data, LoginPage.tsx, Demo build (`npm run build:demo`, a separate non-production build whose own banner says it is local data).
+- **Rollback:** revert the follow-up commit; no data to undo.

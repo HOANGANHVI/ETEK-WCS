@@ -32,3 +32,6 @@ appsettings.*.local.json
 *.pfx
 *.pem
 *.key
+
+# Third-party reference archives (the extracted sources under reference/ are tracked)
+reference/*.zip

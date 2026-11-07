@@ -123,8 +123,9 @@ public static partial class PlcEndpoints
         }).RequireAuthorization(admin);
 
         // ---------------------------------------------------------------------------------------------- guarded test write (Admin)
-        plc.MapPost("stations/{stationId}/signals/{signal}/test-write", async (HttpContext c, string stationId, string signal, TestWriteRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
+        plc.MapPost("stations/{stationId}/signals/{signal}/test-write", async (HttpContext c, string stationId, string signal, TestWriteRequest r, PlcConfigService s, IPlcRuntime rt, IWebHostEnvironment env, CancellationToken ct) =>
         {
+            RequireNotProduction(env);
             var point = (await s.ListPointsAsync(null, stationId, true, ct)).FirstOrDefault(p => p.SignalName == signal) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             var type = Enum.Parse<PlcDataType>(point.DataType);
             var value = ParseValue(type, r.Value);
@@ -140,29 +141,35 @@ public static partial class PlcEndpoints
 
         // ---------------------------------------------------------------------------------------------- simulator controls (Admin, Simulator mode only)
         var sim = plc.MapGroup("/simulator").RequireAuthorization(admin);
-        sim.MapPost("value", async (HttpContext c, SimulatorValueRequest r, PlcConfigService s, ISimulatorControl ctl, IOptions<PlcRuntimeOptions> o, CancellationToken ct) =>
+        sim.MapPost("value", async (HttpContext c, SimulatorValueRequest r, PlcConfigService s, ISimulatorControl ctl, IOptions<PlcRuntimeOptions> o, IWebHostEnvironment env, CancellationToken ct) =>
         {
-            RequireSimulator(o.Value);
+            RequireNotProduction(env); RequireSimulator(o.Value);
             var point = (await s.ListPointsAsync(r.PlcId, r.StationId, true, ct)).FirstOrDefault(p => p.SignalName == r.Signal) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             var value = ParseValue(Enum.Parse<PlcDataType>(point.DataType), r.Value);
             ctl.SetValue(r.PlcId, r.StationId, r.Signal, value);
             await Audited.WriteAsync(c, "PLC_SIMULATOR_SET_VALUE", "StationIoPoint", point.Id.ToString(), $"{r.StationId}/{r.Signal} = {value}");
             return ApiResults.Ok(c, new { r.PlcId, r.StationId, r.Signal, value = value.ToString() });
         });
-        sim.MapPost("plc-online", async (HttpContext c, SimulatorOnlineRequest r, ISimulatorControl ctl, IOptions<PlcRuntimeOptions> o) =>
+        sim.MapPost("plc-online", async (HttpContext c, SimulatorOnlineRequest r, ISimulatorControl ctl, IOptions<PlcRuntimeOptions> o, IWebHostEnvironment env) =>
         {
-            RequireSimulator(o.Value);
+            RequireNotProduction(env); RequireSimulator(o.Value);
             ctl.SetPlcOnline(r.PlcId, r.Online);
             await Audited.WriteAsync(c, "PLC_SIMULATOR_ONLINE", "PlcConnection", r.PlcId, r.Online ? "online" : "offline");
             return ApiResults.Ok(c, new { r.PlcId, r.Online });
         });
-        sim.MapPost("station-fault", async (HttpContext c, SimulatorStationFaultRequest r, ISimulatorControl ctl, IOptions<PlcRuntimeOptions> o) =>
+        sim.MapPost("station-fault", async (HttpContext c, SimulatorStationFaultRequest r, ISimulatorControl ctl, IOptions<PlcRuntimeOptions> o, IWebHostEnvironment env) =>
         {
-            RequireSimulator(o.Value);
+            RequireNotProduction(env); RequireSimulator(o.Value);
             ctl.SetStationFault(r.PlcId, r.StationId, r.Failing);
             await Audited.WriteAsync(c, "PLC_SIMULATOR_STATION_FAULT", "PlcStation", r.StationId, r.Failing ? "failing" : "healthy");
             return ApiResults.Ok(c, new { r.PlcId, r.StationId, r.Failing });
         });
+    }
+
+    /// <summary>Test-write and simulator controls are engineering tools: refused in the Production environment (UI cleanup follow-up to CR-004).</summary>
+    private static void RequireNotProduction(IWebHostEnvironment env)
+    {
+        if (env.IsProduction()) throw AppException.Conflict("NOT_AVAILABLE_IN_PRODUCTION", "Chức năng kỹ thuật này không khả dụng trong môi trường vận hành.");
     }
 
     private static void RequireSimulator(PlcRuntimeOptions o)

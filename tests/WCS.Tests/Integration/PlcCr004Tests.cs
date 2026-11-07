@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using WCS.Application.Plc;
@@ -100,6 +101,24 @@ public class PlcCr004Tests(DatabaseFixture fixture)
         Assert.Equal(400, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{a2}/address", new { address = "Z5" })).Status);
         var str = await Id(h, "PLC-01", "A1", "Request_ID");
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{str}/address", new { address = "D2000", wordLength = 8, encoding = "ASCII" })).Status);
+    }
+
+    [Fact]
+    public async Task Engineering_tools_work_in_Development_and_are_refused_in_Production()
+    {
+        var (h, f) = await ArrangeAsync(); await using var _h = h; await using var _f = f;
+        var dev = await As(f, "admin1");
+        var body = new { plcId = "PLC-01", online = false };
+        Assert.Equal(200, (await dev.SendJsonAsync(HttpMethod.Post, "/api/plc/simulator/plc-online", body)).Status);
+
+        await using var prod = new DbApiFactory(fixture).WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        var admin = prod.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") }).WithClientHeader();   // Production cookies are Secure
+        Assert.Equal(200, await admin.LoginAsync("admin1"));
+        var r = await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/simulator/plc-online", body);
+        Assert.Equal(409, r.Status); Assert.Contains("NOT_AVAILABLE_IN_PRODUCTION", r.Raw);
+        Assert.Equal(409, (await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/simulator/value", new { plcId = "PLC-01", stationId = "A1", signal = "Station_Online", value = true })).Status);
+        Assert.Equal(409, (await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/stations/A1/signals/Request_ID/test-write", new { value = "X" })).Status);
+        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/connections")).Status);   // configuration itself stays available to Admin
     }
 
     [Fact]

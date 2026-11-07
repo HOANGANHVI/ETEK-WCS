@@ -71,3 +71,17 @@ Behaviour of the QJ71E71-100, real timing and End Codes, the real X/Y/W numberin
 - Backend: **397 passed, 0 failed** (389 + 8 new in `PlcCr004Tests`). One CR-003 test (`PlcMcIntegrationTests`) was deliberately changed: it used X addresses through the API, which CR-004 now rejects; its X/Y-base-gate part now asserts the rejection and exercises the same storage/overlap rules with W.
 - Frontend: eslint, `tsc -b`, `npm run build`, `npm run build:demo` clean.
 - Browser E2E (Chrome, Simulator, scratch DB): 46/46 – menu groups, system config without PLC tab, read-only monitoring, 4 PLC connection forms (PLC-01 edit leaves PLC-02/03/04 unchanged), 368-row IO mapping, PLC/Station/status/search filters, X10/Y10 rejected, M100/D2000 saved, entered is not pollable, approval makes it pollable, same-PLC duplicate refused, other-PLC duplicate accepted, conflict check, Operator denied (routes and API 403).
+
+## CR-004 acceptance and production UI cleanup (2026-11-07)
+
+| Item | Status |
+|---|---|
+| SOURCE CODE IMPLEMENTED | YES |
+| SIMULATOR / MOCK TESTED | YES |
+| REAL PLC TESTED | **NO** |
+
+- Backend: **398 passed, 0 failed** (397 + 1 new: engineering tools allowed in Development, refused with 409 in Production, configuration still available to Admin).
+- Frontend: eslint, `tsc -b`, `npm run build`, `npm run build:demo` clean.
+- Browser (Chrome, scratch DB, headless): cleanup suite 10/10 (header status, monitoring "Chưa kết nối", engineering buttons present only in the dev server for Admin, Operator and production-build Admin sweeps of 12 routes free of demo/simulation wording and tool buttons, 368 IO rows, operator API 403); CR-004 regression 44 PASS / 0 FAIL.
+- Visual: screenshots of Operator monitoring, Admin monitoring and IO mapping (production build) reviewed.
+- Excluded from the wording sweep by design: audit trail and PLC communication log (recorded history).

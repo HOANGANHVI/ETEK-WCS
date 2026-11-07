@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { api } from '../api/client'
 import type { PlcConnection, ProbeResultView } from '../api/plcTypes'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
+import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { MISSING_PARAM_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
@@ -36,7 +37,7 @@ function PlcConnectionsBody({ realMode, simulator }: { realMode: boolean; simula
       <div className="notice notice-info">
         Thông số kết nối thật (cổng, giao thức, Network/PC/Module I/O/Station number, Monitoring timer, timeout, chu kỳ đọc) <strong>chưa được xác nhận</strong> và không có giá trị mặc định.
         Chỉ nhập khi kỹ sư PLC đã cung cấp. Lần kết nối thật đầu tiên chỉ đọc.
-        {!realMode && ' Hệ thống đang ở chế độ mô phỏng nên các thông số này chưa được sử dụng.'}
+        {!realMode && ' Hệ thống chưa kết nối PLC thật nên các thông số này chưa được sử dụng.'}
       </div>
       {message && <div className="notice notice-ok" role="status">{message}</div>}
       <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có PLC nào', hint: 'Danh mục IO chưa được nạp (kiểm tra migration và seeder).' }}>
@@ -81,10 +82,10 @@ function ConnectionSummary({ c, onEdit, realMode, simulator }: { c: PlcConnectio
       <div className="btn-row">
         <Button variant="primary" onClick={onEdit}>Sửa cấu hình</Button>
         <Button disabled={busy} onClick={() => void run(async () => setProbe(await api.plcTestConnection(c.plcId)))}>Kiểm tra kết nối</Button>
-        {simulator && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, false) })}>Mô phỏng mất kết nối</Button>}
-        {simulator && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, true) })}>Khôi phục</Button>}
+        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, false) })}>Mô phỏng mất kết nối</Button>}
+        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, true) })}>Khôi phục</Button>}
       </div>
-      <p className="muted small">{realMode ? 'Kiểm tra kết nối chỉ mở/đóng cổng TCP, không gửi lệnh PLC.' : 'Chế độ mô phỏng: kiểm tra không dùng mạng.'}</p>
+      <p className="muted small">{realMode ? 'Kiểm tra kết nối chỉ mở/đóng cổng TCP, không gửi lệnh PLC.' : 'Chưa kết nối PLC thật: phép kiểm tra không gửi dữ liệu qua mạng.'}</p>
     </>
   )
 }
@@ -144,7 +145,7 @@ function ConnectionForm({ c, onCancel, onSaved, realMode }: { c: PlcConnection; 
         {num('Chu kỳ đọc (ms)', 'poll', 'pollingIntervalMs', '50–60000')}
         <div className="field switches">
           <Switch checked={f.enabled} onChange={(v) => setF((p) => ({ ...p, enabled: v }))} label="Bật kết nối PLC này" />
-          <span className="field-hint">{realMode ? 'Chỉ bật được khi đủ thông số. Kết nối thật còn cần khóa triển khai Plc:AllowLiveConnection.' : 'Chế độ mô phỏng: công tắc này chưa được sử dụng.'}</span>
+          <span className="field-hint">{realMode ? 'Chỉ bật được khi đủ thông số. Kết nối thật còn cần khóa triển khai Plc:AllowLiveConnection.' : 'Chưa kết nối PLC thật: công tắc này chưa được sử dụng.'}</span>
           {errors.enabled && <span className="field-error">{errors.enabled}</span>}
         </div>
       </div>

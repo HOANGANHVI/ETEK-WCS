@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { AddressIssue, IoPointConfig } from '../api/plcTypes'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
+import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { CONFIG_STATUS_VI, DATATYPE_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
@@ -40,7 +41,8 @@ export function PlcIoMappingPage() {
 
   const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
   const simulator = mode === 'Simulator'
-  const canWrite = simulator || mode === 'RealReadWrite'
+  // Engineering tools (value injection, test-write) are hidden in production builds; the API refuses them in the Production environment as well.
+  const canWrite = ENGINEERING_TOOLS && (simulator || mode === 'RealReadWrite')
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -119,9 +121,9 @@ export function PlcIoMappingPage() {
                         <td><ConfigPill status={p.configStatus} />{p.approvedBy && <small className="muted"> {p.approvedBy}</small>}</td>
                         <td className="nowrap">
                           <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>Địa chỉ</Button>{' '}
-                          {simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>Giả lập</Button>{' '}</>}
+                          {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>Giả lập</Button>{' '}</>}
                           {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'write', point: p })}>Ghi thử</Button>}
-                          {!inbound && blocked && <small className="muted" title="Safety/Interlock và Transfer/Departure Permit không bao giờ được ghi thử">🔒 chặn ghi</small>}
+                          {ENGINEERING_TOOLS && !inbound && blocked && <small className="muted" title="Safety/Interlock và Transfer/Departure Permit không bao giờ được ghi thử">🔒 chặn ghi</small>}
                         </td>
                       </tr>
                     )

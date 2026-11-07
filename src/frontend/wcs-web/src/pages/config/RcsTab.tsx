@@ -119,7 +119,7 @@ function RcsForm({ initial, onChanged }: { initial: RcsConfig; onChanged: () => 
 
       <Panel title="Kiểm tra kết nối" subtitle="Dùng cấu hình đã lưu">
         <p className="muted">
-          Phép kiểm tra an toàn: không gọi API RCS, không gửi hay tiếp tục nhiệm vụ vận chuyển. Mặc định là kiểm tra mô phỏng và không dùng mạng;
+          Phép kiểm tra an toàn: không gọi API RCS, không gửi hay tiếp tục nhiệm vụ vận chuyển. Mặc định không dùng mạng và chưa kiểm tra thiết bị thật;
           kiểm tra cổng TCP thật chỉ chạy khi Backend được bật tùy chọn riêng.
         </p>
         <div className="btn-row">

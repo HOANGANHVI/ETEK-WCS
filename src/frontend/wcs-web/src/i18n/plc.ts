@@ -9,15 +9,15 @@ export const ENDPOINT_STATE_TONE: Record<string, Tone> = {
 }
 
 export const MODE_VI: Record<string, string> = {
-  Simulator: 'MÔ PHỎNG (SIMULATOR)', RealReadOnly: 'PLC THẬT – CHỈ ĐỌC (REAL_READ_ONLY)', RealReadWrite: 'PLC THẬT – ĐỌC/GHI (REAL_READ_WRITE)',
+  Simulator: 'CHƯA KẾT NỐI PLC THẬT', RealReadOnly: 'PLC THẬT – CHỈ ĐỌC (REAL_READ_ONLY)', RealReadWrite: 'PLC THẬT – ĐỌC/GHI (REAL_READ_WRITE)',
 }
-export const MODE_TONE: Record<string, Tone> = { Simulator: 'info', RealReadOnly: 'warn', RealReadWrite: 'bad' }
+export const MODE_TONE: Record<string, Tone> = { Simulator: 'warn', RealReadOnly: 'warn', RealReadWrite: 'bad' }
 
 export const QUALITY_VI: Record<string, string> = {
-  Unknown: 'Chưa đọc', NotConfigured: 'Chưa cấu hình', Good: 'Tốt', Bad: 'Lỗi đọc', Disconnected: 'Mất kết nối', Simulated: 'Mô phỏng',
+  Unknown: 'Chưa đọc', NotConfigured: 'Chưa cấu hình', Good: 'Tốt', Bad: 'Lỗi đọc', Disconnected: 'Mất kết nối', Simulated: 'Không từ thiết bị thật',
 }
 export const QUALITY_TONE: Record<string, Tone> = {
-  Unknown: 'muted', NotConfigured: 'muted', Good: 'ok', Bad: 'bad', Disconnected: 'warn', Simulated: 'info',
+  Unknown: 'muted', NotConfigured: 'muted', Good: 'ok', Bad: 'bad', Disconnected: 'warn', Simulated: 'warn',
 }
 
 export const DIRECTION_VI: Record<string, string> = { PlcToSoftware: 'PLC → Phần mềm', SoftwareToPlc: 'Phần mềm → PLC' }
@@ -64,7 +64,8 @@ export const PLC_ERROR_VI: Record<string, string> = {
   WRITE_NOT_ALLOWED: 'Tín hiệu chưa nằm trong danh sách được phép ghi.',
   NO_ADDRESS: 'Tín hiệu chưa có địa chỉ được xác nhận.',
   NOT_CONNECTED: 'PLC chưa kết nối.',
-  NOT_SIMULATOR_MODE: 'Chức năng này chỉ dùng ở chế độ mô phỏng.',
+  NOT_SIMULATOR_MODE: 'Chức năng này không khả dụng.',
+  NOT_AVAILABLE_IN_PRODUCTION: 'Chức năng kỹ thuật này không khả dụng trong môi trường vận hành.',
   VALUE_INVALID: 'Giá trị không hợp lệ cho kiểu dữ liệu của tín hiệu.',
   TYPE_MISMATCH: 'Giá trị không đúng kiểu dữ liệu của tín hiệu.',
   WRITE_FAILED: 'Ghi xuống PLC thất bại.',

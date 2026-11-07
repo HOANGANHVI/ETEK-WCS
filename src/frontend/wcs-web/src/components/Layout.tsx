@@ -37,17 +37,17 @@ const NAV_SYSTEM = [
 
 interface LinkView { tone: Tone; text: string }
 
-/** PLC link, from the API health. In simulator mode we say so instead of pretending to see a real controller. */
+/** PLC link, from the API health. With no real controller attached the label is "Chưa kết nối" - never a healthy-looking state. */
 function plcView(health: SystemHealth | null): LinkView {
   if (!health) return { tone: 'bad', text: 'Không có dữ liệu' }
   const rt = health.integration.plcRuntime
   if (rt) {
-    if (rt.mode === 'Simulator') return { tone: 'info', text: 'Mô phỏng' }
+    if (rt.mode === 'Simulator') return { tone: 'warn', text: 'Chưa kết nối' }
     if (!rt.running) return { tone: 'warn', text: 'Chưa chạy' }
     if (rt.connected === 0) return { tone: 'bad', text: `0/${rt.total} PLC` }
     return { tone: rt.connected === rt.total ? 'ok' : 'warn', text: `${rt.connected}/${rt.total} PLC` }
   }
-  if (health.integration.mode === 'Simulator') return { tone: 'info', text: 'Mô phỏng' }
+  if (health.integration.mode === 'Simulator') return { tone: 'warn', text: 'Chưa kết nối' }
   switch (health.integration.plc) {
     case 'Connected': return { tone: 'ok', text: 'Đã kết nối' }
     case 'Connecting': return { tone: 'warn', text: 'Đang kết nối' }
@@ -59,7 +59,7 @@ function plcView(health: SystemHealth | null): LinkView {
 /** RCS link: there is no dedicated RCS health yet, so it is derived from AGV statuses reported through RCS. */
 function rcsView(health: SystemHealth | null, agvs: Agv[] | null): LinkView {
   if (!health) return { tone: 'bad', text: 'Không có dữ liệu' }
-  if (health.integration.mode === 'Simulator') return { tone: 'info', text: 'Mô phỏng' }
+  if (health.integration.mode === 'Simulator') return { tone: 'warn', text: 'Chưa kết nối' }
   const withRobot = (agvs ?? []).filter((a) => a.rcsRobotCode)
   if (withRobot.length === 0) return { tone: 'warn', text: 'Chưa cấu hình' }
   return withRobot.some((a) => a.connectionStatus === 'Online') ? { tone: 'ok', text: 'Đã kết nối' } : { tone: 'bad', text: 'Mất kết nối' }
