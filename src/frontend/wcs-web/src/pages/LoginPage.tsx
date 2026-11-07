@@ -27,12 +27,12 @@ export function LoginPage() {
       <div className="login-card">
         <div className="login-brand"><span className="brand-mark" aria-hidden="true">E</span><span>ETEK <b>WCS</b></span></div>
         <h1>Đăng nhập hệ thống</h1>
-        <p className="login-sub">Hệ thống điều khiển kho (WCS){SITE_NAME ? ` · ${SITE_NAME}` : ''}</p>
+        <p className="login-sub">Hệ thống điều khiển AMR (WCS){SITE_NAME ? ` · ${SITE_NAME}` : ''}</p>
 
         {notice && <div className="notice notice-warn" role="status">{notice}</div>}
         {error && <div className="notice notice-bad" role="alert">{error}</div>}
 
-        {DEMO_MODE && <div className="notice notice-info">Chế độ mô phỏng dữ liệu: các số liệu hiển thị là dữ liệu giả, nhưng việc đăng nhập vẫn được máy chủ xác thực bằng tài khoản thật.</div>}
+        {DEMO_MODE && <div className="notice notice-info">Chú ý không đăng xuất khi hệ thống đang làm việc, có thể gây gián đoạn vận hành</div>}
         <form onSubmit={(e) => void submit(e)} noValidate>
           <label className="field">
             <span className="field-label">Tên đăng nhập</span>
