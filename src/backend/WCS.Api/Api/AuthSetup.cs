@@ -33,7 +33,7 @@ public static class AuthSetup
             o.Cookie.Name = "wcs.auth";
             o.Cookie.HttpOnly = true;
             o.Cookie.SameSite = SameSiteMode.Strict;
-            o.Cookie.SecurePolicy = env.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+            o.Cookie.SecurePolicy = ResolveSecurePolicy(opts.CookieSecure, env.IsDevelopment());
             o.ExpireTimeSpan = TimeSpan.FromMinutes(Math.Max(1, opts.IdleTimeoutMinutes));
             o.SlidingExpiration = true;
             o.Events = new CookieAuthenticationEvents
@@ -50,6 +50,18 @@ public static class AuthSetup
             // Anything not explicitly opened (login) needs a signed-in user.
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
         return services;
+    }
+
+    /// <summary>Auth:CookieSecure = Always | SameAsRequest. Unset keeps the original rule. Any other value (including None) fails fast at start-up.</summary>
+    public static CookieSecurePolicy ResolveSecurePolicy(string? configured, bool isDevelopment)
+    {
+        if (string.IsNullOrWhiteSpace(configured)) return isDevelopment ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
+        return configured.Trim().ToLowerInvariant() switch
+        {
+            "always" => CookieSecurePolicy.Always,
+            "sameasrequest" => CookieSecurePolicy.SameAsRequest,
+            _ => throw new InvalidOperationException($"Auth:CookieSecure '{configured}' is not valid. Use 'Always' or 'SameAsRequest'."),
+        };
     }
 
     private static async Task ValidateAsync(CookieValidatePrincipalContext ctx)

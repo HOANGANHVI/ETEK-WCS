@@ -50,6 +50,11 @@ public sealed class AuthOptions
     public int AbsoluteTimeoutHours { get; set; } = 12;
     public int MaxFailedLogins { get; set; } = 5;
     public int LockoutMinutes { get; set; } = 5;
+    /// <summary>
+    /// Cookie "Secure" policy: "Always" or "SameAsRequest". Not set = the built-in rule (SameAsRequest in Development, Always elsewhere).
+    /// SameAsRequest outside Development is only for a deliberate plain-HTTP deployment on a trusted test LAN; use Always with HTTPS.
+    /// </summary>
+    public string? CookieSecure { get; set; }
 }
 
 /// <summary>The authenticated caller, taken from the validated session (never from the request body).</summary>

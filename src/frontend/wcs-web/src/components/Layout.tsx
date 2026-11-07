@@ -133,6 +133,13 @@ function SideBar() {
   )
 }
 
+/** RCS has only a simulator adapter (project baseline): say so on every screen, so nothing looks like a real AGV/RCS link. */
+function IntegrationNotice() {
+  const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
+  if (health.data?.integration.mode !== 'Simulator') return null
+  return <div className="notice notice-warn" role="status">Hệ thống chưa kết nối RCS và PLC thật: nhiệm vụ không được gửi tới AGV thật và dữ liệu PLC không lấy từ thiết bị.</div>
+}
+
 export function Layout() {
   const { user } = useAuth()
   const location = useLocation()
@@ -143,6 +150,7 @@ export function Layout() {
       <SideBar />
       <main className="main">
         {denied && <div className="notice notice-warn" role="alert">{denied}</div>}
+        {!DEMO_MODE && <IntegrationNotice />}
         <Outlet />
       </main>
       {DEMO_MODE && hasRole(user, 'Admin') && <DemoDock />}

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using WCS.Application.Plc;
@@ -111,7 +112,7 @@ public class PlcCr004Tests(DatabaseFixture fixture)
         var body = new { plcId = "PLC-01", online = false };
         Assert.Equal(200, (await dev.SendJsonAsync(HttpMethod.Post, "/api/plc/simulator/plc-online", body)).Status);
 
-        await using var prod = new DbApiFactory(fixture).WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        await using var prod = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Plc:AllowSimulatorInProduction"] = "true" })); });   // CR-006 explicit exception
         var admin = prod.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") }).WithClientHeader();   // Production cookies are Secure
         Assert.Equal(200, await admin.LoginAsync("admin1"));
         var r = await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/simulator/plc-online", body);
