@@ -93,7 +93,14 @@ public sealed class PlcEventDispatcher : IPlcEvents, IDisposable
     private sealed record LogItem(PlcCommLogEntry Entry) : Item;
     private sealed record EventItem(string Name, object Payload, bool AdminOnly) : Item;
 
-    private readonly Channel<Item> _channel = Channel.CreateBounded<Item>(new BoundedChannelOptions(5000) { FullMode = BoundedChannelFullMode.DropOldest });
+    private readonly Channel<Item> _channel;
+    // CR-007: connection facts for log context (refreshed off the worker threads), last known state per PLC, and drop accounting
+    private readonly ConcurrentDictionary<string, (string? Ip, int? Port)> _connections = new();
+    private readonly ConcurrentDictionary<string, string> _lastState = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _faultedSince = new();
+    private long _dropped, _reportedDropped;
+    private DateTimeOffset _connectionsLoadedAt = DateTimeOffset.MinValue, _lastDropReport = DateTimeOffset.MinValue;
+    private int _loadingConnections;
     private readonly IServiceProvider _sp;
     private readonly IClock _clock;
     private readonly ILogger<PlcEventDispatcher> _logger;
@@ -103,11 +110,68 @@ public sealed class PlcEventDispatcher : IPlcEvents, IDisposable
     public PlcEventDispatcher(IServiceProvider sp, IClock clock, ILogger<PlcEventDispatcher> logger)
     {
         _sp = sp; _clock = clock; _logger = logger;
+        _channel = Channel.CreateBounded<Item>(new BoundedChannelOptions(5000) { FullMode = BoundedChannelFullMode.DropOldest }, _ => Interlocked.Increment(ref _dropped));
         _loop = Task.Run(RunAsync);
     }
 
-    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message) =>
+    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message)
+    {
+        // CR-007: every PLC event is ALSO written to the application log (stdout), so it is visible in "docker compose logs" and survives a database outage.
+        // The sources already rate-limit these events (state changes, LogLimited), so this adds only a few lines per minute and never one per polling cycle.
+        try { WriteToApplicationLog(level, plcId, stationId, eventName, message, BuildDetails(plcId, eventName, message)); }
+        catch (Exception) { /* logging must never disturb the PLC worker */ }
+
         _channel.Writer.TryWrite(new LogItem(new PlcCommLogEntry(_clock.UtcNow, plcId, stationId, level, eventName, message)));
+    }
+
+    private PlcEventDetails BuildDetails(string? plcId, string eventName, string message)
+    {
+        string? previous = null; double? faultedFor = null;
+        if (eventName == "STATE" && plcId is not null)
+        {
+            _lastState.TryGetValue(plcId, out previous);
+            var probe = PlcEventEnricher.Build(plcId, eventName, message, null, null, previous, null);
+            if (probe.NewState is { } now)
+            {
+                if (now == "Faulted") _faultedSince.TryAdd(plcId, _clock.UtcNow);
+                else if (now == "Connected" && _faultedSince.TryRemove(plcId, out var since)) faultedFor = (_clock.UtcNow - since).TotalSeconds;
+                else if (now != "Connecting") _faultedSince.TryRemove(plcId, out _);
+                _lastState[plcId] = now;
+            }
+        }
+        (string? Ip, int? Port) conn = default;
+        if (plcId is not null) { EnsureConnectionsLoaded(); _connections.TryGetValue(plcId, out conn); }
+        return PlcEventEnricher.Build(plcId, eventName, message, conn.Ip, conn.Port, previous, faultedFor);
+    }
+
+    private void WriteToApplicationLog(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message, PlcEventDetails d)
+    {
+        var lvl = level switch { PlcLogLevel.Error => LogLevel.Error, PlcLogLevel.Warning => LogLevel.Warning, _ => LogLevel.Information };
+        using (_logger.BeginScope(new Dictionary<string, object?>
+        {
+            ["Category"] = "PLC", ["Device"] = plcId, ["PlcId"] = plcId, ["Station"] = stationId, ["EventCode"] = eventName,
+            ["PlcIp"] = d.Ip, ["PlcPort"] = d.Port, ["PreviousState"] = d.PreviousState, ["NewState"] = d.NewState, ["Kind"] = d.Kind, ["EndCode"] = d.EndCode,
+        }))
+            _logger.Log(lvl, "PLC {PlcId}{StationSuffix} {EventCode}: {Message}{Context}", plcId ?? "-", stationId is null ? "" : "/" + stationId, eventName, message, d.Context());
+    }
+
+    /// <summary>Loads IP/port of the 4 connections at most every 5 minutes, in the background (never on a worker thread, never fatal).</summary>
+    private void EnsureConnectionsLoaded()
+    {
+        if (_clock.UtcNow - _connectionsLoadedAt < TimeSpan.FromMinutes(5) || Interlocked.CompareExchange(ref _loadingConnections, 1, 0) != 0) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var scope = _sp.CreateAsyncScope();
+                foreach (var c in await scope.ServiceProvider.GetRequiredService<IPlcConfigRepository>().ListConnectionsAsync())
+                    _connections[c.Id] = (c.IpAddress, c.Port);
+                _connectionsLoadedAt = _clock.UtcNow;
+            }
+            catch (Exception) { _connectionsLoadedAt = _clock.UtcNow.AddMinutes(-4); /* try again in a minute */ }
+            finally { Interlocked.Exchange(ref _loadingConnections, 0); }
+        });
+    }
 
     public void Publish(string name, object payload, bool adminOnly = false) => _channel.Writer.TryWrite(new EventItem(name, payload, adminOnly));
 
@@ -130,10 +194,24 @@ public sealed class PlcEventDispatcher : IPlcEvents, IDisposable
                     if (events.Count > 0) await _sp.GetRequiredService<IWcsNotifier>().PublishAsync(events, _cts.Token);
                     if (_clock.UtcNow - lastPurge > TimeSpan.FromHours(6)) { lastPurge = _clock.UtcNow; await PurgeAsync(); }
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogWarning(ex, "PLC event delivery failed"); }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // the entries were already written to the application log by Log(); only the database copy / realtime push of this batch is lost
+                    _logger.LogWarning(ex, "PLC event delivery failed: {Lost} PLC log entries of this batch were not stored in the database (they remain in the application log). {EventCode}", batch.OfType<LogItem>().Count(), "PLC_LOG_PERSIST_FAILED");
+                }
+                ReportDrops();
             }
         }
         catch (OperationCanceledException) { /* stopping */ }
+    }
+
+    /// <summary>At most one warning per minute when the bounded queue had to drop events (a slow database, an event storm).</summary>
+    private void ReportDrops()
+    {
+        var dropped = Interlocked.Read(ref _dropped);
+        if (dropped == _reportedDropped || _clock.UtcNow - _lastDropReport < TimeSpan.FromMinutes(1)) return;
+        var newly = dropped - _reportedDropped; _reportedDropped = dropped; _lastDropReport = _clock.UtcNow;
+        _logger.LogWarning("PLC event queue overflow: {Dropped} events were dropped (total {Total}). The database copy is incomplete. {EventCode}", newly, dropped, "PLC_LOG_QUEUE_OVERFLOW");
     }
 
     private async Task PersistAsync(List<PlcCommLogEntry> logs)
