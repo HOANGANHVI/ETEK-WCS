@@ -33,6 +33,7 @@ const NAV_SYSTEM = [
   { to: '/config', label: 'Cấu hình hệ thống', icon: <IconSettings /> },
   { to: '/users', label: 'Quản lý tài khoản', icon: <IconUsers /> },
   { to: '/audit', label: 'Nhật ký thao tác', icon: <IconLog /> },
+  { to: '/logs', label: 'Logging & Diagnostics', icon: <IconLog /> },
 ]
 
 interface LinkView { tone: Tone; text: string }

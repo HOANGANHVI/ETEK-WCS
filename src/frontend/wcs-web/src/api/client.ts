@@ -3,6 +3,7 @@ import { demoDataApi } from '../demo/demoApi'
 import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Role, UserRow } from './authTypes'
+import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
 import type { AddressIssue, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
@@ -99,6 +100,11 @@ const realApi = {
   plcClearAddress: (id: string) => request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'DELETE' }),
   plcApprovePoint: (id: string) => request<IoPointState>(`/api/plc/points/${id}/approve`, { method: 'POST' }),
   plcWriteAllowed: (id: string, allowed: boolean) => request<IoPointState>(`/api/plc/points/${id}/write-allowed`, { method: 'PUT', body: JSON.stringify({ allowed }) }),
+  // CR-007 Logging & Diagnostics (Admin only; the API enforces it)
+  logsStats: (from?: string, to?: string) => request<LogStats>(`/api/logs/stats${qs({ from, to })}`),
+  logsSearch: (f: LogFilter) =>
+    request<LogPage>(`/api/logs${qs({ from: f.from, to: f.to, category: f.category, level: f.level, device: f.device, source: f.source, eventCode: f.eventCode, keyword: f.keyword, page: f.page ?? 1, pageSize: f.pageSize ?? 50 })}`),
+  logDetail: (id: string) => request<LogDetail>(`/api/logs/${encodeURIComponent(id)}`),
   plcLogs: (f: { plcId?: string; stationId?: string; minLevel?: string; take?: number }) =>
     request<PlcLogRow[]>(`/api/plc/logs${qs({ plcId: f.plcId, stationId: f.stationId, minLevel: f.minLevel, take: f.take ?? 100 })}`),
   plcTestWrite: (stationId: string, signal: string, value: boolean | number | string) =>

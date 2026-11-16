@@ -6,6 +6,7 @@ import { Layout } from './components/Layout'
 import { EmptyState, Loading } from './components/ui'
 import { AgvPage } from './pages/AgvPage'
 import { AuditPage } from './pages/AuditPage'
+import { LogsPage } from './pages/LogsPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ConfigPage } from './pages/ConfigPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -49,6 +50,7 @@ function App() {
         <Route path="config" element={<RequireRole roles={['Admin']}><ConfigPage /></RequireRole>} />
         <Route path="users" element={<RequireRole roles={['Admin']}><UsersPage /></RequireRole>} />
         <Route path="audit" element={<RequireRole roles={['Admin']}><AuditPage /></RequireRole>} />
+        <Route path="logs" element={<RequireRole roles={['Admin']}><LogsPage /></RequireRole>} />
         <Route path="*" element={<EmptyState title="Không tìm thấy trang" />} />
       </Route>
     </Routes>
