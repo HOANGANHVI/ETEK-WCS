@@ -142,12 +142,12 @@ public class LoggingCoreTests
         public IDisposable BeginScope<TState>(TState state) where TState : notnull
         {
             _scope = state is IEnumerable<KeyValuePair<string, object?>> kv ? kv.ToDictionary(x => x.Key, x => x.Value) : [];
-            return new Noop();
+            return new Noop(() => _scope = []);
         }
         public bool IsEnabled(LogLevel logLevel) => true;
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
             Lines.Add((logLevel, formatter(state, exception), _scope));
-        private sealed class Noop : IDisposable { public void Dispose() { } }
+        private sealed class Noop(Action onDispose) : IDisposable { public void Dispose() => onDispose(); }
     }
 
     private sealed class FixedClock : IClock { public DateTimeOffset UtcNow { get; set; } = DateTimeOffset.Parse("2026-01-01T00:00:00Z"); }
@@ -166,13 +166,15 @@ public class LoggingCoreTests
         d.Log(PlcLogLevel.Info, "PLC-01", null, "STATE", "PLC-01: Connected");
         d.Log(PlcLogLevel.Error, "PLC-02", "B1", "WRITE_AMBIGUOUS", "B1/Request_Ack: khong nhan duoc xac nhan");
 
-        Assert.Equal(5, logger.Lines.Count);
-        Assert.All(logger.Lines, l => Assert.Equal("PLC", l.Scope["Category"]));
-        var fault = logger.Lines[1];
+        // the dispatcher may also report that it could not store the batch (this test has no database): only the PLC lines are asserted
+        var lines = logger.Lines.Where(l => l.Scope.ContainsKey("Category")).ToList();
+        Assert.Equal(5, lines.Count);
+        Assert.All(lines, l => Assert.Equal("PLC", l.Scope["Category"]));
+        var fault = lines[1];
         Assert.Equal(LogLevel.Warning, fault.Level); Assert.Contains("Connected -> Faulted", fault.Text); Assert.Equal("Connected", fault.Scope["PreviousState"]); Assert.Equal("Faulted", fault.Scope["NewState"]);
-        Assert.Equal("TIMEOUT", logger.Lines[2].Scope["Kind"]); Assert.Equal("A1", logger.Lines[2].Scope["Station"]);
-        Assert.Contains("RECONNECTED", logger.Lines[3].Text); Assert.Contains("12 s", logger.Lines[3].Text);
-        Assert.Equal(LogLevel.Error, logger.Lines[4].Level); Assert.Equal("WRITE_AMBIGUOUS", logger.Lines[4].Scope["EventCode"]);
+        Assert.Equal("TIMEOUT", lines[2].Scope["Kind"]); Assert.Equal("A1", lines[2].Scope["Station"]);
+        Assert.Contains("RECONNECTED", lines[3].Text); Assert.Contains("12 s", lines[3].Text);
+        Assert.Equal(LogLevel.Error, lines[4].Level); Assert.Equal("WRITE_AMBIGUOUS", lines[4].Scope["EventCode"]);
     }
 
     [Fact]

@@ -118,10 +118,13 @@ public sealed class PlcEventDispatcher : IPlcEvents, IDisposable
     {
         // CR-007: every PLC event is ALSO written to the application log (stdout), so it is visible in "docker compose logs" and survives a database outage.
         // The sources already rate-limit these events (state changes, LogLimited), so this adds only a few lines per minute and never one per polling cycle.
-        try { WriteToApplicationLog(level, plcId, stationId, eventName, message, BuildDetails(plcId, eventName, message)); }
+        PlcEventDetails? details = null;
+        try { details = BuildDetails(plcId, eventName, message); WriteToApplicationLog(level, plcId, stationId, eventName, message, details); }
         catch (Exception) { /* logging must never disturb the PLC worker */ }
 
-        _channel.Writer.TryWrite(new LogItem(new PlcCommLogEntry(_clock.UtcNow, plcId, stationId, level, eventName, message)));
+        var entry = new PlcCommLogEntry(_clock.UtcNow, plcId, stationId, level, eventName, message);
+        if (details is { IsEmpty: false }) entry.WithDetails(details.ToJson());
+        _channel.Writer.TryWrite(new LogItem(entry));
     }
 
     private PlcEventDetails BuildDetails(string? plcId, string eventName, string message)

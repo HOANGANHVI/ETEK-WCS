@@ -200,4 +200,8 @@ public class PlcCommLogEntry
     public PlcLogLevel Level { get; private set; }
     public string Event { get; private set; } = default!;
     public string Message { get; private set; } = default!;
+    /// <summary>CR-007: structured facts (ip, port, previousState, newState, kind, endCode, reason) as JSON; null for events without such context.</summary>
+    public string? DetailsJson { get; private set; }
+
+    public PlcCommLogEntry WithDetails(string? json) { DetailsJson = json is { Length: > 4000 } j ? j[..4000] : json; return this; }
 }

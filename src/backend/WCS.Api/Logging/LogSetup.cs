@@ -31,6 +31,9 @@ public static class LogSetup
             catch (Exception ex) { Console.Error.WriteLine($"Logging:File:Path '{filePath}' could not be opened: {ex.Message}"); }
         }
 
+        // CR-007: searchable copy of SYSTEM / DATABASE / RCS_AGV events (best effort; stdout above is always written)
+        if (configuration.GetValue("Logging:SystemLog:Enabled", true)) sinks.Add(new SystemLogSink(services));
+
         var window = TimeSpan.FromSeconds(Math.Max(0, configuration.GetValue("Logging:ThrottleSeconds", 60)));
         cfg.WriteTo.Sink(new ThrottlingSink(new CompositeSink(sinks), window));
     }

@@ -71,6 +71,7 @@ try
     if (app.Environment.IsDevelopment()) app.MapOpenApi().AllowAnonymous();
 
     app.MapWcsApi();
+    app.MapLogApi();   // CR-007 (Admin only)
     if (app.Configuration["Integration:Mode"] is null or "Simulator" && app.Configuration.GetValue("Simulator:ExposeApi", app.Environment.IsDevelopment()))
         app.MapSimulatorApi();
     app.MapHub<WcsHub>("/hubs/wcs");

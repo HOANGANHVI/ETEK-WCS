@@ -373,10 +373,86 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WCS.Domain.Logging.SystemLogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Device")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("EventCode")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("Exception")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Host")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventCode");
+
+                    b.HasIndex("ExternalId")
+                        .IsUnique()
+                        .HasFilter("\"ExternalId\" IS NOT NULL");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("Category", "OccurredAt");
+
+                    b.HasIndex("Device", "OccurredAt");
+
+                    b.HasIndex("Level", "OccurredAt");
+
+                    b.ToTable("system_log", (string)null);
+                });
+
             modelBuilder.Entity("WCS.Domain.Plc.PlcCommLogEntry", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("text");
 
                     b.Property<string>("Event")
                         .IsRequired()
@@ -918,6 +994,45 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Actor", "OccurredAt");
 
                     b.ToTable("audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("WCS.Infrastructure.Logging.LogRow", b =>
+                {
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Device")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EntryId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Event")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("LevelRank")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("v_log_entries", (string)null);
                 });
 
             modelBuilder.Entity("WCS.Domain.Inventory.Rack", b =>

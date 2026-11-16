@@ -60,6 +60,8 @@ public static class DependencyInjection
         services.AddScoped<ITransportTaskRepository, TransportTaskRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         services.AddScoped<WcsDataSeeder>();
+        services.AddScoped<WCS.Application.Logging.ILogQueryService, WCS.Infrastructure.Logging.LogQueryService>();   // CR-007
+        services.AddScoped<WCS.Infrastructure.Logging.DeploymentLogImporter>();
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
         services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
         services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
