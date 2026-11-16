@@ -40,3 +40,9 @@ Trạng thái tại thời điểm viết CR-006: tất cả mục dưới đây
 | G2 | Backend không truy cập trực tiếp | `docker compose ... ps`: backend không có cổng publish; `Test-NetConnection <ip> -Port 8080` thất bại | không có cổng | |
 | G3 | Bảo vệ key ring | máy triển khai có BitLocker/khóa màn hình; `wcs-keys-*.tgz` và `.env` được lưu hạn chế quyền | đã làm | |
 | G4 | HTTPS vận hành | (khi có TLS) `WCS_COOKIE_SECURE=Always` và đăng nhập qua https | OK | |
+| H1 | Log script | chạy `deploy.ps1`; xem `C:\ETEK-WCS\logs` | có deploy-*.log và deployment-events-*.jsonl, có bước/kết quả/exit code, không có mật khẩu | |
+| H2 | Nhập sự kiện triển khai | sau H1 mở `/logs` → nhóm *Triển khai* (chờ ≤ 1 phút) | thấy các sự kiện của lần chạy | |
+| H3 | Lưu log khi lỗi | làm hỏng cố ý một bước (vd sai POSTGRES_PASSWORD rồi `start.ps1`) | có failure-<run>-*.log (migrator/backend) và sự kiện FAIL trên màn hình | |
+| H4 | Thư mục log chỉ-đọc | `docker exec etek-wcs-backend-1 sh -c "touch /deploy-logs/x"` | bị từ chối (read-only) | |
+| H5 | Log PLC trong Docker | `docker compose -p etek-wcs logs backend` khi bật/tắt kết nối PLC thử | thấy dòng `PLC PLC-0x STATE` kèm IP/cổng và trạng thái trước→sau | |
+| H6 | Database mất kết nối | `docker stop etek-wcs-postgres-1` 2 phút rồi `start` | 1 dòng DB_LOST, throttle, DB_RESTORED trên màn hình sau khi khôi phục | |

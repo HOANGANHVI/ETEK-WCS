@@ -1,5 +1,17 @@
 # Change Log
 
+## v2.1 – CR-007 Centralized logging and diagnostics (2026-11-16)
+
+- Change Request: CR-007 (IMPLEMENTED on `develop`; Docker runtime, real PLC and real RCS NOT VERIFIED).
+- **Screen:** *Logging & Diagnostics / Nhật ký hệ thống* (`/logs`, Admin only): dashboard (total, Information/Warning/Error/Critical, six groups, latest errors, devices with problems), filters (time, group, level, device, source, event code, keyword), backend-paged table and detail dialog (exception/stack trace, correlation id, PLC IP/port and previous/new state, audit before/after).
+- **API (Admin only, read-only):** `GET /api/logs`, `GET /api/logs/stats`, `GET /api/logs/{id}`.
+- **Database (migration `AddSystemLog`, additive):** table `system_log` (SYSTEM, DATABASE, DEPLOYMENT, RCS_AGV events), nullable `plc_comm_log.DetailsJson`, read-only view `v_log_entries` over `system_log` + `plc_comm_log` + `audit_log` (no data copied). Retention of `system_log` 90 days (floor 7); `audit_log` and `plc_comm_log` retention unchanged.
+- **Logging core:** bootstrap logger + structured `STARTUP_FATAL`, `STARTUP_SUMMARY` (no secrets), `SHUTDOWN`, correlation id (`X-Correlation-Id`); request log written before the exception handler (handled 4xx are no longer logged as 500; `/healthz` is Debug); repeated Warning+ failures throttled (60 s) with a suppressed count; secret masking (`LogSanitizer`) on write and on read; database monitor (`DB_LOST` / `DB_RESTORED`, pending migrations).
+- **PLC:** every PLC event also goes to the application log (stdout) with PLC id, station, IP/port, previous/new state, timeout / MC end-code classification and reconnect duration; overflow and persist-failure warnings. Implemented in `PlcEventDispatcher`; `PlcWorker`, MC driver, polling, timeout, retry and reconnect are unchanged.
+- **Deployment logging:** scripts write `deploy-YYYYMMDD.log` and `deployment-events-YYYYMMDD.jsonl` to `C:\ETEK-WCS\logs`, save last-command and container logs on failure, mask secrets, never fail a deployment because of logging; the folder is mounted read-only into the backend, which imports the events (no network endpoint). `prune-logs.ps1` is manual and dry-run by default.
+- Tests: backend 438/438 (410 + 28); `tests/deployment/Test-DeploymentLogging.ps1` 20/20; frontend lint/tsc/build/build:demo clean.
+- Not changed: TaskStateMachine, TaskOrchestrator, InventoryService, TaskScheduler, FlowOptions, RCS client, PlcWorker, McPlcEndpoint/McTcpClient, StationIoHandler, HandshakeCoordinator, `HostedServices.cs`.
+
 ## v2.0 – CR-006 Dockerization and Windows 11 deployment (2026-11-07)
 
 - Change Request: CR-006 (IMPLEMENTED as source; Docker build/runtime NOT yet executed - no Docker on the development machine; REAL PLC TESTED = NO).
