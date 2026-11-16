@@ -132,6 +132,9 @@ public class LoggingCoreTests
         Assert.Equal("WRITE_AMBIGUOUS", PlcEventEnricher.Build("PLC-03", "WRITE_AMBIGUOUS", "X1/Request_Ack: ...", null, null, null, null).Kind);
         Assert.Equal("CONNECTION", PlcEventEnricher.Build("PLC-04", "LINK_LOST", "Mat ket noi: reset", null, null, null, null).Kind);
         Assert.True(PlcEventEnricher.Build("PLC-04", "RELOAD", "reloaded", null, null, null, null).IsEmpty);
+        var json = down.ToJson();
+        Assert.DoesNotContain("isEmpty", json, StringComparison.OrdinalIgnoreCase);                                   // helper properties never leak into the stored JSON
+        Assert.Contains("\"previousState\":\"Connected\"", json); Assert.DoesNotContain("endCode", json);
     }
 
     // ------------------------------------------------------------------------------------------------------------- PLC -> application log bridge

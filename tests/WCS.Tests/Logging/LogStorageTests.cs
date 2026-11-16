@@ -234,7 +234,7 @@ public class LogStorageTests(DatabaseFixture fixture)
 
     // ------------------------------------------------------------------------------------------------------------- sink
     private static LogEvent Ev(LogEventLevel level, string template, Exception? ex = null, params (string, object)[] props) =>
-        new(DateTimeOffset.UtcNow, level, ex, new MessageTemplateParser().Parse(template), props.Select(p => new LogEventProperty(p.Item1, new ScalarValue(p.Item2))));
+        new(DateTimeOffset.Now, level, ex, new MessageTemplateParser().Parse(template), props.Select(p => new LogEventProperty(p.Item1, new ScalarValue(p.Item2))));   // local offset, like Serilog
 
     [Fact]
     public async Task Sink_stores_warnings_and_tagged_events_classifies_them_masks_secrets_and_skips_plc_and_its_own_driver_events()
@@ -250,10 +250,13 @@ public class LogStorageTests(DatabaseFixture fixture)
         sink.Emit(Ev(LogEventLevel.Warning, "PLC {PlcId} STATE", null, ("Category", "PLC"), ("PlcId", "PLC-01")));                    // lives in plc_comm_log
         sink.Emit(Ev(LogEventLevel.Error, "ef failure", null, ("SourceContext", "Microsoft.EntityFrameworkCore.Update")));          // the logger's own storage
         sink.Emit(Ev(LogEventLevel.Warning, "Database connection lost. {EventCode}", null, ("EventCode", "DB_LOST"), ("Device", "postgres")));
+        sink.Emit(Ev(LogEventLevel.Error, "text with a NUL\u0000 character"));                                                        // PostgreSQL cannot store NUL: it is removed, not fatal
 
         Assert.True(await sink.FlushAsync(CancellationToken.None));
         var rows = await h.Db(db => db.SystemLog.AsNoTracking().OrderBy(x => x.OccurredAt).ToListAsync());
-        Assert.Equal(6, rows.Count);
+        Assert.Equal(7, rows.Count);
+        Assert.Contains(rows, r => r.Message == "text with a NUL character");
+        Assert.All(rows, r => Assert.Equal(TimeSpan.Zero, r.OccurredAt.Offset));
         Assert.Equal("SYSTEM", rows.Single(r => r.EventCode == "STARTUP_SUMMARY").Category);
         Assert.Equal("RCS_AGV", rows.Single(r => r.Message.StartsWith("RCS create")).Category);
         Assert.Equal("SECURITY_AUDIT", rows.Single(r => r.Message.StartsWith("Audit write")).Category);
@@ -293,6 +296,25 @@ public class LogStorageTests(DatabaseFixture fixture)
         small.Dispose();
     }
 
+    [Fact]
+    public async Task A_poison_entry_is_dropped_alone_when_the_database_is_reachable_and_nothing_is_dropped_when_it_is_not()
+    {
+        var stored = new List<string>(); var up = true;
+        var sink = new SystemLogSink(new BrokenProvider(), 100,
+            store: (batch, _) => { if (batch.Any(e => e.Message == "poison")) throw new InvalidOperationException("cannot be stored"); lock (stored) stored.AddRange(batch.Select(e => e.Message)); return Task.CompletedTask; },
+            databaseUp: _ => Task.FromResult(up));
+        sink.Emit(Ev(LogEventLevel.Error, "first")); sink.Emit(Ev(LogEventLevel.Error, "poison")); sink.Emit(Ev(LogEventLevel.Error, "last"));
+        Assert.True(await sink.FlushAsync(CancellationToken.None));
+        lock (stored) Assert.Equal(new[] { "first", "last" }, stored.Order().ToArray());
+        Assert.Equal(0, sink.Pending); Assert.Equal(1, sink.Dropped);
+
+        up = false;                                                                  // database unreachable: the same failure must NOT drop anything
+        sink.Emit(Ev(LogEventLevel.Error, "poison"));
+        Assert.False(await sink.FlushAsync(CancellationToken.None));
+        Assert.Equal(1, sink.Pending); Assert.Equal(1, sink.Dropped);
+        sink.Dispose();
+    }
+
     // ------------------------------------------------------------------------------------------------------------- deployment import
     [Fact]
     public async Task Deployment_events_are_imported_once_masked_and_searchable_and_bad_lines_are_ignored()
@@ -304,7 +326,7 @@ public class LogStorageTests(DatabaseFixture fixture)
             DeploymentLogImporter.ResetOffsets();
             var file = Path.Combine(dir, "deployment-events-20261116.jsonl");
             string L(string id, string result, string step, string msg, int? exit = null) =>
-                JsonSerializer.Serialize(new Dictionary<string, object?> { ["id"] = id, ["time"] = DateTimeOffset.UtcNow.ToString("o"), ["script"] = "deploy.ps1", ["step"] = step, ["result"] = result, ["exitCode"] = exit, ["message"] = msg, ["host"] = "WIN11-01", ["commit"] = "abc1234" });
+                JsonSerializer.Serialize(new Dictionary<string, object?> { ["id"] = id, ["time"] = DateTimeOffset.Now.ToString("o"), ["script"] = "deploy.ps1", ["step"] = step, ["result"] = result, ["exitCode"] = exit, ["message"] = msg, ["host"] = "WIN11-01", ["commit"] = "abc1234" });
             await File.WriteAllTextAsync(file,
                 L("r1-1", "START", "deploy", "deployment started") + "\n" +
                 L("r1-2", "OK", "migrate", "migrations applied") + "\n" +

@@ -92,10 +92,38 @@ public sealed class SystemLogSink : ILogEventSink, IDisposable
     private readonly Task _loop;
     private long _dropped;
 
-    public SystemLogSink(IServiceProvider services, int capacity = 2000)
+    private readonly Func<IReadOnlyList<SystemLogEntry>, CancellationToken, Task> _store;
+    private readonly Func<CancellationToken, Task<bool>> _databaseUp;
+
+    /// <param name="store">Storage override (tests). Default: one SaveChanges on <see cref="WcsDbContext"/>.</param>
+    /// <param name="databaseUp">Reachability probe (tests). Default: <c>Database.CanConnectAsync</c>.</param>
+    public SystemLogSink(IServiceProvider services, int capacity = 2000, Func<IReadOnlyList<SystemLogEntry>, CancellationToken, Task>? store = null, Func<CancellationToken, Task<bool>>? databaseUp = null)
     {
         _services = services; _capacity = capacity;
+        _store = store ?? StoreAsync; _databaseUp = databaseUp ?? DatabaseUpAsync;
         _loop = Task.Run(RunAsync);
+    }
+
+    private async Task StoreAsync(IReadOnlyList<SystemLogEntry> batch, CancellationToken ct)
+    {
+        var scopes = _services.GetService<IServiceScopeFactory>() ?? throw new InvalidOperationException("host is still starting");
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<WcsDbContext>();
+        db.ChangeTracker.AutoDetectChangesEnabled = false;
+        db.SystemLog.AddRange(batch);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task<bool> DatabaseUpAsync(CancellationToken ct)
+    {
+        try
+        {
+            var scopes = _services.GetService<IServiceScopeFactory>(); if (scopes is null) return false;
+            await using var scope = scopes.CreateAsyncScope();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct); cts.CancelAfter(TimeSpan.FromSeconds(3));
+            return await scope.ServiceProvider.GetRequiredService<WcsDbContext>().Database.CanConnectAsync(cts.Token);
+        }
+        catch (Exception) { return false; }
     }
 
     public long Dropped => Interlocked.Read(ref _dropped);
@@ -145,20 +173,23 @@ public sealed class SystemLogSink : ILogEventSink, IDisposable
             if (batch.Count == 0) return true;
             try
             {
-                var scopes = _services.GetService<IServiceScopeFactory>();
-                if (scopes is null) return false;                                    // host still starting
-                await using var scope = scopes.CreateAsyncScope();
-                var db = scope.ServiceProvider.GetRequiredService<WcsDbContext>();
-                db.ChangeTracker.AutoDetectChangesEnabled = false;
-                db.SystemLog.AddRange(batch);
-                await db.SaveChangesAsync(ct);
+                await _store(batch, ct);
                 lock (_gate) foreach (var e in batch) _queue.Remove(e);
             }
             catch (OperationCanceledException) { return false; }
             catch (Exception ex)
             {
-                SelfLog.WriteLine("SystemLogSink could not store {0} entries (kept for retry): {1}", batch.Count, ex.GetType().Name);
-                return false;
+                SelfLog.WriteLine("SystemLogSink could not store {0} entries: {1}", batch.Count, ex.GetType().Name);
+                // Database unreachable: keep everything and retry later. Database reachable: the batch contains an entry that can never be stored ("poison"),
+                // so store the entries one by one and drop only the offender(s) - otherwise one bad entry would block all later events.
+                if (!await _databaseUp(ct)) return false;
+                foreach (var entry in batch)
+                {
+                    try { await _store([entry], ct); }
+                    catch (OperationCanceledException) { return false; }
+                    catch (Exception one) { Interlocked.Increment(ref _dropped); SelfLog.WriteLine("SystemLogSink dropped an entry that cannot be stored: {0}", one.GetType().Name); }
+                    lock (_gate) _queue.Remove(entry);
+                }
             }
         }
     }

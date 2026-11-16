@@ -38,7 +38,7 @@ public class SystemLogEntry
     public SystemLogEntry(DateTimeOffset occurredAt, string category, string level, string source, string? device, string? eventCode, string message,
         string? exception = null, string? correlationId = null, string? detailsJson = null, string? host = null, string? externalId = null)
     {
-        Id = Guid.NewGuid(); OccurredAt = occurredAt;
+        Id = Guid.NewGuid(); OccurredAt = occurredAt.ToUniversalTime();   // PostgreSQL timestamptz accepts only offset 0
         Category = LogCategories.IsValid(category) ? category : LogCategories.System;
         Level = LogLevels.IsValid(level) ? level : LogLevels.Information;
         Source = Cut(source, 200) ?? "unknown"; Device = Cut(device, 60); EventCode = Cut(eventCode, 60);
@@ -46,7 +46,13 @@ public class SystemLogEntry
         DetailsJson = Cut(detailsJson, 8000); Host = Cut(host, 100); ExternalId = Cut(externalId, 64);
     }
 
-    private static string? Cut(string? s, int n) => s is null ? null : s.Length <= n ? s : s[..n];
+    /// <summary>Truncates and removes NUL characters (PostgreSQL text cannot store them: one such character would make a whole batch fail).</summary>
+    private static string? Cut(string? s, int n)
+    {
+        if (s is null) return null;
+        if (s.Contains('\0')) s = s.Replace("\0", "");
+        return s.Length <= n ? s : s[..n];
+    }
 
     public Guid Id { get; private set; }
     public DateTimeOffset OccurredAt { get; private set; }

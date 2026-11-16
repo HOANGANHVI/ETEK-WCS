@@ -96,7 +96,7 @@ public sealed class DeploymentLogImporter(WcsDbContext db, ILogger<DeploymentLog
             var at = DateTimeOffset.TryParse(S("time"), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var t) ? t : DateTimeOffset.UtcNow;
             var host = LogSanitizer.Redact(S("host"), 100);
             var message = LogSanitizer.Redact(S("message"), 1500) ?? "";
-            var text = $"[{step}] {message}".Trim() + (exit is { } x ? $" (exit code {x})" : "");
+            var text = ((step.Length > 0 ? $"[{step}] " : "") + message).Trim() + (exit is { } x ? $" (exit code {x})" : "");
             var details = JsonSerializer.Serialize(new Dictionary<string, object?>
             {
                 ["script"] = script, ["step"] = step, ["result"] = result, ["exitCode"] = exit, ["host"] = host, ["commit"] = LogSanitizer.Redact(S("commit"), 40), ["runId"] = LogSanitizer.Redact(S("runId"), 64),

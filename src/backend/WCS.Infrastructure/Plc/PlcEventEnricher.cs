@@ -9,6 +9,7 @@ public sealed record PlcEventDetails(string? Ip, int? Port, string? PreviousStat
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
+    [JsonIgnore]
     public bool IsEmpty => Ip is null && Port is null && PreviousState is null && NewState is null && Kind is null && EndCode is null && Reason is null;
 
     public string ToJson() => JsonSerializer.Serialize(this, Json);
