@@ -21,6 +21,7 @@ public sealed class TaskOrchestrator(
     IInventoryService inventory,
     IFlowCatalog flows,
     IRcsClient rcs,
+    IRcsDispatchGuard rcsGuard,
     IStationSignalService stations,
     IProcessedEventRepository processed,
     IReservationRepository reservationRepo,
@@ -40,6 +41,9 @@ public sealed class TaskOrchestrator(
     public async Task<CreateTaskResult> CreateTaskAsync(CreateTaskCommand cmd, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(cmd.RequestKey)) throw AppException.Validation("REQUEST_KEY_REQUIRED", "RequestKey is required.");
+        // CR-008A (AUDIT-001): Production without a real RCS adapter refuses the task up front: nothing is created, reserved or shown as AGV work.
+        var link = rcsGuard.Check();
+        if (!link.Allowed) throw AppException.Rejected(link.Code, link.Message);
         if (!flows.TryParseFlow(cmd.Flow, out var flow))
         {
             var normalized = (cmd.Flow ?? "").Replace("-", "").Replace("_", "").Trim();
@@ -138,11 +142,16 @@ public sealed class TaskOrchestrator(
 
     public async Task DispatchToRcsAsync(Guid taskId, CancellationToken ct = default)
     {
+        var link = rcsGuard.Check();
+        if (!link.Allowed) { logger.LogDebug("Dispatch of {TaskId} skipped: {Code}", taskId, link.Code); return; }   // CR-008A: never call the simulator in Production
+
         // phase 1 (tx): prepare
         var prep = await Tx(async (events, after, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
             if (task is null || task.State != TaskState.Dispatching || task.RcsTaskCode is not null) return null;
+            // CR-008A (AUDIT-003): repeated attempts are spaced by the backoff (no more one attempt per scheduler tick). The first attempt is immediate.
+            if (task.DispatchAttempts > 0 && !RcsRetryPolicy.IsDue(task.RcsRetryCount, task.RcsLastAttemptAt, clock.UtcNow, schedulerOptions.Value)) return null;
             if (task.DispatchAttempts >= schedulerOptions.Value.MaxDispatchAttempts)
             {
                 // An unknown outcome may still have created a task in RCS: keep resources and require reconciliation.
@@ -168,7 +177,7 @@ public sealed class TaskOrchestrator(
             {
                 // After a timeout / unknown result, never blindly re-send: query first (task-state-machine.md 3.7).
                 var (status, code) = await rcs.QueryTaskStatusAsync(prep.Request.RequestCode, ct);
-                if (status == RcsTaskStatus.Unknown) { await Note(taskId, "RCS_QUERY_UNKNOWN", "Status query inconclusive; will retry", ct); return; }
+                if (status == RcsTaskStatus.Unknown) { await Note(taskId, "RCS_QUERY_UNKNOWN", "Status query inconclusive; will retry", ct, onlyIfChanged: true); return; }
                 if (status != RcsTaskStatus.NotFound && code is not null)
                     result = new RcsCallResult(RcsCallOutcome.Accepted, code, "Found by query");
                 else result = await rcs.CreateTaskAsync(prep.Request, ct);
@@ -196,7 +205,7 @@ public sealed class TaskOrchestrator(
                     await FinishAsync(task, TaskState.Failed, $"RCS_REJECTED: {result.Message}", "RCS", events, after, t);
                     break;
                 default:
-                    task.Note("RCS_DISPATCH_UNKNOWN", result.Message, "RCS", clock.UtcNow);
+                    task.NoteIfChanged("RCS_DISPATCH_UNKNOWN", result.Message, "RCS", clock.UtcNow);
                     break;
             }
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
@@ -365,6 +374,20 @@ public sealed class TaskOrchestrator(
         {
             var task = await tasks.GetAsync(taskId, t);
             if (task is null || task.State != TaskState.Continuing || task.RcsTaskCode is null) return null;
+            // CR-008A (AUDIT-004): bounded, spaced retries. After RcsMaxAttempts the automatic retry stops and an operator decides (no business timeout is invented).
+            var o = schedulerOptions.Value;
+            if (task.RcsRetryCount >= Math.Max(1, o.RcsMaxAttempts))
+            {
+                if (!task.HasHistory("RCS_CONTINUE_RETRY_EXHAUSTED"))
+                {
+                    task.Note("RCS_CONTINUE_RETRY_EXHAUSTED", $"{task.RcsRetryCount} attempts without a confirmed result; automatic retry stopped", Wcs, clock.UtcNow);
+                    task.RequireReconciliation("RCS continue not confirmed after the retry limit", clock.UtcNow);
+                    logger.LogError("Continue of task {TaskId} was not confirmed after {Attempts} attempts; automatic retry stopped", taskId, task.RcsRetryCount);
+                }
+                return null;
+            }
+            if (!RcsRetryPolicy.IsDue(task.RcsRetryCount, task.RcsLastAttemptAt, clock.UtcNow, o)) return null;
+            task.RegisterRcsAttempt(clock.UtcNow);
             var dest = await locations.GetAsync(task.DestinationLocationId ?? Guid.Empty, t);
             var isRetry = task.History.Any(h => h.EventName == "RCS_CONTINUE_UNKNOWN");
             return dest is null ? null : new ContinuePlan(task.RcsRequestCode, task.RcsTaskCode, dest.Code, isRetry);
@@ -413,7 +436,7 @@ public sealed class TaskOrchestrator(
                 case RcsCallOutcome.Rejected:
                     await FinishAsync(task, TaskState.Failed, $"RCS_CONTINUE_REJECTED: {result.Message}", "RCS", events, after, t); break;
                 default:
-                    task.Note("RCS_CONTINUE_UNKNOWN", result.Message, "RCS", clock.UtcNow); break;
+                    task.NoteIfChanged("RCS_CONTINUE_UNKNOWN", result.Message, "RCS", clock.UtcNow); break;
             }
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return true;
@@ -454,7 +477,7 @@ public sealed class TaskOrchestrator(
             return !task.IsTerminal;
         }, ct);
 
-        if (needsRcsCancel) await SendCancelToRcsAsync(taskId, ct);
+        if (needsRcsCancel) await SendCancelToRcsAsync(taskId, ct, registerAttempt: true);
         return await GetDto(taskId, ct);
     }
 
@@ -540,50 +563,133 @@ public sealed class TaskOrchestrator(
         }, ct);
     }
 
-    private async Task SendCancelToRcsAsync(Guid taskId, CancellationToken ct)
+    /// <summary>
+    /// Sends the cancel to RCS. <paramref name="registerAttempt"/> is true for user / timeout driven cancels (they are attempts of their own); the reconciliation pass has already
+    /// registered its attempt and passes false. Identical outcomes are written to the history once (CR-008A).
+    /// </summary>
+    private async Task SendCancelToRcsAsync(Guid taskId, CancellationToken ct, bool registerAttempt)
     {
         var plan = await Tx(async (_, _, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
-            return task is { State: TaskState.CancelPending } ? (task.RcsRequestCode, task.RcsTaskCode) : default((string, string?)?);
+            if (task is not { State: TaskState.CancelPending }) return default((string, string?)?);
+            if (registerAttempt) task.RegisterRcsAttempt(clock.UtcNow);
+            return (task.RcsRequestCode, task.RcsTaskCode);
         }, ct);
         if (plan is null) return;
         try
         {
             var r = await rcs.CancelTaskAsync(plan.Value.Item1, plan.Value.Item2, ct);
-            await Note(taskId, "RCS_CANCEL_REQUESTED", $"{r.Outcome}: {r.Message}", ct);
+            await Note(taskId, "RCS_CANCEL_REQUESTED", $"{r.Outcome}: {r.Message}", ct, onlyIfChanged: true);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "RCS cancel call failed for task {TaskId}", taskId);
-            await Note(taskId, "RCS_CANCEL_UNKNOWN", ex.Message, ct);
+            await Note(taskId, "RCS_CANCEL_UNKNOWN", ex.Message, ct, onlyIfChanged: true);
         }
     }
 
+    /// <summary>
+    /// CR-008A (AUDIT-004/006). Scheduler-driven follow-up of a task in CANCEL_PENDING: asks RCS what it knows and reacts to EVERY status explicitly.
+    /// Calls are spaced by the retry backoff and bounded by RcsMaxAttempts. Nothing here releases a rack: a task whose physical outcome is not proven
+    /// ends as Failed/Cancelled WITH reconciliation required (reservations kept, AGV freed because RCS no longer drives it).
+    /// </summary>
     public async Task ReconcileCancelPendingAsync(Guid taskId, CancellationToken ct = default)
     {
-        var code = await Tx(async (_, _, t) =>
+        var plan = await Tx(async (events, _, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
-            return task is { State: TaskState.CancelPending } ? task.RcsRequestCode : null;
+            if (task is not { State: TaskState.CancelPending }) return null;
+            var o = schedulerOptions.Value;
+            if (task.RcsRetryCount >= Math.Max(1, o.RcsMaxAttempts))
+            {
+                if (!task.HasHistory("RCS_CANCEL_RETRY_EXHAUSTED"))
+                {
+                    task.Note("RCS_CANCEL_RETRY_EXHAUSTED", $"{task.RcsRetryCount} attempts without a confirmed cancellation; automatic retry stopped", Wcs, clock.UtcNow);
+                    task.RequireReconciliation("RCS cancellation not confirmed after the retry limit", clock.UtcNow);
+                    events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+                    logger.LogError("Cancellation of task {TaskId} was not confirmed after {Attempts} attempts; automatic retry stopped", taskId, task.RcsRetryCount);
+                }
+                return null;
+            }
+            if (!RcsRetryPolicy.IsDue(task.RcsRetryCount, task.RcsLastAttemptAt, clock.UtcNow, o)) return null;
+            task.RegisterRcsAttempt(clock.UtcNow);
+            return new CancelReconcilePlan(task.RcsRequestCode, task.RcsTaskCode is not null);
         }, ct);
-        if (code is null) return;
+        if (plan is null) return;
 
         RcsTaskStatus status;
-        try { (status, _) = await rcs.QueryTaskStatusAsync(code, ct); }
-        catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogWarning(ex, "RCS status query failed"); return; }
+        try { (status, _) = await rcs.QueryTaskStatusAsync(plan.RequestCode, ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "RCS status query failed");
+            await Note(taskId, "RCS_QUERY_UNKNOWN", ex.Message, ct, onlyIfChanged: true);
+            return;
+        }
 
         switch (status)
         {
-            case RcsTaskStatus.Cancelled or RcsTaskStatus.NotFound:
+            case RcsTaskStatus.Cancelled:
                 await HandleSignalAsync(new TaskSignal(SignalKind.RcsCancelConfirmed, taskId, Source: ConfirmationSource.Rcs,
                     Detail: "Cancel confirmed by RCS status query"), ct);
                 break;
-            case RcsTaskStatus.Executing or RcsTaskStatus.Created:
-                await SendCancelToRcsAsync(taskId, ct); // cancel not yet effective: ask again
+
+            case RcsTaskStatus.Created or RcsTaskStatus.Executing:
+                await SendCancelToRcsAsync(taskId, ct, registerAttempt: false); // cancel not yet effective: ask again (spaced by the backoff)
+                break;
+
+            case RcsTaskStatus.Cancelling:
+                await Note(taskId, "RCS_CANCEL_IN_PROGRESS", "RCS is cancelling the task", ct, onlyIfChanged: true);
+                break;
+
+            case RcsTaskStatus.Completed or RcsTaskStatus.Interrupted:
+                // The robot finished or was interrupted before the cancel took effect: the physical result of the load is NOT proven, so the rack is never released here.
+                await EndUncertainAsync(taskId, TaskState.Failed,
+                    status == RcsTaskStatus.Completed ? "CANCEL_RACE_RCS_COMPLETED" : "CANCEL_RACE_RCS_INTERRUPTED", ct);
+                break;
+
+            case RcsTaskStatus.NotFound:
+                if (plan.HadRcsTaskCode)
+                {
+                    // RCS accepted this task earlier and now has no record of it: that is an anomaly, not a cancellation.
+                    await EndUncertainAsync(taskId, TaskState.Failed, "RCS_NOTFOUND_AFTER_ACCEPT", ct);
+                    break;
+                }
+                // RCS never reported a task code. NotFound is accepted as "cancelled" only after TWO consecutive NotFound answers (separated by the backoff).
+                await Tx(async (events, after, t) =>
+                {
+                    var task = await tasks.GetAsync(taskId, t);
+                    if (task is not { State: TaskState.CancelPending }) return false;
+                    if (task.LastHistory?.EventName != NotFoundSeen)
+                    {
+                        task.Note(NotFoundSeen, "RCS has no record of the task; waiting for a second confirmation", Wcs, clock.UtcNow);
+                        return false;
+                    }
+                    // an unknown dispatch outcome (attempts were made) keeps its reservations until an operator reconciles
+                    await FinishAsync(task, TaskState.Cancelled, "Cancel confirmed: RCS has no record of the task (2 consecutive checks)", "RCS", events, after, t,
+                        forceUncertain: task.DispatchAttempts > 0);
+                    return true;
+                }, ct);
+                break;
+
+            default: // Unknown
+                await Note(taskId, "RCS_QUERY_UNKNOWN", "Status query inconclusive; will retry", ct, onlyIfChanged: true);
                 break;
         }
     }
+
+    private const string NotFoundSeen = "RCS_CANCEL_NOTFOUND_SEEN";
+    private sealed record CancelReconcilePlan(string RequestCode, bool HadRcsTaskCode);
+
+    /// <summary>Ends a task whose physical outcome is not proven: terminal, reconciliation required, reservations and rack state kept, AGV freed.</summary>
+    private async Task EndUncertainAsync(Guid taskId, TaskState terminal, string reason, CancellationToken ct) =>
+        await Tx(async (events, after, t) =>
+        {
+            var task = await tasks.GetAsync(taskId, t);
+            if (task is not { State: TaskState.CancelPending }) return false;
+            await FinishAsync(task, terminal, reason, "RCS", events, after, t, forceUncertain: true);
+            return true;
+        }, ct);
 
     // ============================================================================ timeouts
 
@@ -603,7 +709,7 @@ public sealed class TaskOrchestrator(
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return task.State == TaskState.CancelPending;
         }, ct);
-        if (cancelRcs) await SendCancelToRcsAsync(taskId, ct);
+        if (cancelRcs) await SendCancelToRcsAsync(taskId, ct, registerAttempt: true);
     }
 
     // ============================================================================ helpers
@@ -629,12 +735,12 @@ public sealed class TaskOrchestrator(
         after.Add(() => TryDispatchNextAsync(wasQueuedBehind));
     }
 
-    private async Task Note(Guid taskId, string name, string? detail, CancellationToken ct) =>
+    private async Task Note(Guid taskId, string name, string? detail, CancellationToken ct, bool onlyIfChanged = false) =>
         await Tx(async (events, _, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
             if (task is null) return false;
-            task.Note(name, detail, Wcs, clock.UtcNow);
+            if (onlyIfChanged) task.NoteIfChanged(name, detail, Wcs, clock.UtcNow); else task.Note(name, detail, Wcs, clock.UtcNow);
             return true;
         }, ct);
 

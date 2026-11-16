@@ -93,6 +93,10 @@ public static class DependencyInjection
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
         services.AddSingleton<IRcsClient>(sp => sp.GetRequiredService<RcsSimulator>());
+        // CR-008A: Production must not dispatch to the simulator (explicit opt-in only).
+        var allowRcsSimulatorInProduction = configuration.GetValue("Rcs:AllowSimulatorInProduction", false);
+        services.AddSingleton<IRcsDispatchGuard>(sp => new RcsDispatchGuard(sp.GetRequiredService<IRcsClient>(),
+            sp.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>(), allowRcsSimulatorInProduction));
         // The legacy simulator stays the default. The PLC-backed service is used only when Plc:Integration:Enabled=true (approved flow mappings required).
         services.AddSingleton<IStationSignalService>(sp =>
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WCS.Application.Plc.PlcRuntimeOptions>>().Value.Integration.Enabled

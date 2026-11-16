@@ -234,7 +234,7 @@ public static class Endpoints
 
         // ---- System
         api.MapGet("/system/health", async (HttpContext c, WcsDbContext db, ISchedulerStatus scheduler, IPlcAdapter plc, WCS.Application.Plc.IPlcRuntime plcRuntime,
-            IOptions<IntegrationOptions> integration, IOptions<SchedulerOptions> schedulerOptions, IClock clock, CancellationToken ct) =>
+            IOptions<IntegrationOptions> integration, IOptions<SchedulerOptions> schedulerOptions, IRcsDispatchGuard rcsGuard, IClock clock, CancellationToken ct) =>
         {
             var dbOk = await db.Database.CanConnectAsync(ct);
             var last = scheduler.LastRunAt;
@@ -248,6 +248,7 @@ public static class Endpoints
                 integration = new
                 {
                     mode = integration.Value.Mode, plc = plc.GetConnectionStatus().ToString(),
+                    rcs = new { dispatchAllowed = rcsGuard.Check().Allowed, code = rcsGuard.Check().Code },   // CR-008A: RCS_NOT_CONNECTED in Production without a real adapter
                     plcRuntime = new
                     {
                         mode = plcRuntime.Info().EffectiveMode, running = plcRuntime.Running,

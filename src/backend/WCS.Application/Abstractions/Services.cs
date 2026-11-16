@@ -99,7 +99,13 @@ public sealed class SchedulerOptions
 {
     public const string SectionName = "Scheduler";
     public int TickIntervalMs { get; set; } = 1000;
+    /// <summary>Maximum RCS create attempts before the dispatch is declared uncertain. Attempts are spaced by the retry backoff below (CR-008A).</summary>
     public int MaxDispatchAttempts { get; set; } = 5;
+    /// <summary>CR-008A technical retry spacing (NOT a business timeout): first retry after this delay, doubling each attempt up to the maximum.</summary>
+    public int RcsRetryInitialDelayMs { get; set; } = 2000;
+    public int RcsRetryMaxDelayMs { get; set; } = 60000;
+    /// <summary>CR-008A: automatic continue/cancel RCS attempts per state. After this many the automatic retry stops, the task is flagged for reconciliation and an operator decides.</summary>
+    public int RcsMaxAttempts { get; set; } = 30;
     /// <summary>Per-state timeouts in seconds. Null/absent = disabled. Real values must be agreed with PLC/RCS teams (5.3).</summary>
     public Dictionary<string, int> StateTimeoutsSeconds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

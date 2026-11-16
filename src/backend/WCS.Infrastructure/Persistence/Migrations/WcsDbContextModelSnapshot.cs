@@ -790,10 +790,16 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<DateTimeOffset?>("RcsLastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("RcsRequestCode")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int>("RcsRetryCount")
+                        .HasColumnType("integer");
 
                     b.Property<string>("RcsTaskCode")
                         .HasMaxLength(100)

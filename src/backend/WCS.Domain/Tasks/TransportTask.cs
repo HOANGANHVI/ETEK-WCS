@@ -59,6 +59,10 @@ public class TransportTask
     /// <summary>RCS task code mapping (task-state-machine.md 3.1). Null until RCS accepted.</summary>
     public string? RcsTaskCode { get; private set; }
     public int DispatchAttempts { get; private set; }
+    /// <summary>CR-008A: RCS calls made since the task entered its CURRENT state (dispatch / continue / cancel). Reset by every state change; drives the retry backoff.</summary>
+    public int RcsRetryCount { get; private set; }
+    /// <summary>CR-008A: time of the latest RCS call attempt in the current state (null before the first one).</summary>
+    public DateTimeOffset? RcsLastAttemptAt { get; private set; }
 
     public DateTimeOffset? PickConfirmedAt { get; private set; }
     public DateTimeOffset? DropConfirmedAt { get; private set; }
@@ -84,6 +88,7 @@ public class TransportTask
         if (!TaskStateMachine.CanTransition(State, next)) throw new InvalidTaskTransitionException(State, next);
         var prev = State;
         State = next;
+        RcsRetryCount = 0; RcsLastAttemptAt = null;
         StateReason = reason;
         StateEnteredAt = now;
         UpdatedAt = now;
@@ -96,6 +101,28 @@ public class TransportTask
         UpdatedAt = now;
         _history.Add(new TaskHistoryEntry(Id, State, State, eventName, detail, source, now));
     }
+
+    /// <summary>Most recent history entry (insertion order breaks ties between identical timestamps).</summary>
+    public TaskHistoryEntry? LastHistory => _history.Select((h, i) => (h, i)).OrderByDescending(x => x.h.OccurredAt).ThenByDescending(x => x.i).Select(x => x.h).FirstOrDefault();
+
+    /// <summary>CR-008A: records the note only when it differs from the latest history entry, so a repeated identical outcome never floods the history.</summary>
+    public bool NoteIfChanged(string eventName, string? detail, string source, DateTimeOffset now)
+    {
+        // compared with every entry of the most recent timestamp, so the result does not depend on the order the history was loaded in
+        if (_history.Count > 0)
+        {
+            var latest = _history.Max(h => h.OccurredAt);
+            if (_history.Any(h => h.OccurredAt == latest && h.EventName == eventName && h.Detail == detail)) return false;
+        }
+        Note(eventName, detail, source, now);
+        return true;
+    }
+
+    /// <summary>True when the history already holds an entry with this event name (used to write a one-off marker exactly once).</summary>
+    public bool HasHistory(string eventName) => _history.Any(h => h.EventName == eventName);
+
+    /// <summary>CR-008A: one more RCS call attempt in the current state (used by the backoff gate).</summary>
+    public void RegisterRcsAttempt(DateTimeOffset now) { RcsRetryCount++; RcsLastAttemptAt = now; UpdatedAt = now; }
 
     public void AssignSource(Guid locationId, Guid rackId, DateTimeOffset now)
     {
@@ -132,7 +159,7 @@ public class TransportTask
         _history.Add(new TaskHistoryEntry(Id, State, State, "TASK_EDITED", detail, source, now));
     }
 
-    public void RegisterDispatchAttempt(DateTimeOffset now) { DispatchAttempts++; UpdatedAt = now; }
+    public void RegisterDispatchAttempt(DateTimeOffset now) { DispatchAttempts++; RegisterRcsAttempt(now); }
 
     public void AttachRcsTask(string rcsTaskCode, DateTimeOffset now)
     {

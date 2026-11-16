@@ -5,7 +5,7 @@ using WCS.Domain.Common;
 namespace WCS.Application.Services;
 
 /// <summary>Refreshes AGV connection status from the RCS client and publishes changes in real time.</summary>
-public sealed class AgvStatusService(IUnitOfWork uow, IAgvRepository agvs, IRcsClient rcs, IWcsNotifier notifier, IClock clock,
+public sealed class AgvStatusService(IUnitOfWork uow, IAgvRepository agvs, IRcsClient rcs, IRcsDispatchGuard guard, IWcsNotifier notifier, IClock clock,
     ILogger<AgvStatusService> logger)
 {
     public async Task RefreshAsync(CancellationToken ct = default)
@@ -14,7 +14,13 @@ public sealed class AgvStatusService(IUnitOfWork uow, IAgvRepository agvs, IRcsC
         {
             if (string.IsNullOrWhiteSpace(snapshot.RcsRobotCode)) continue; // robot code not configured yet
             AgvConnectionStatus status; string? detail;
-            try
+            var link = guard.Check();
+            if (!link.Allowed)
+            {
+                // CR-008A: the only RCS adapter is a simulator; its "Online" must never be shown as a real AGV.
+                (status, detail) = (AgvConnectionStatus.Unknown, link.Code);
+            }
+            else try
             {
                 var s = await rcs.QueryAgvStatusAsync(snapshot.RcsRobotCode, ct);
                 (status, detail) = s is null ? (AgvConnectionStatus.Unknown, "No status returned")

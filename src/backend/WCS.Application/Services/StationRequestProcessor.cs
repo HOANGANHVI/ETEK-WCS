@@ -26,7 +26,14 @@ public sealed class StationRequestProcessor(IStationSignalService stations, ITas
             {
                 // Business rejection (e.g. unsupported flow / station): acknowledge to avoid an endless re-poll, but keep the log.
                 logger.LogWarning("Station request {Key} from {Station} rejected: {Code} {Message}", request.RequestKey, request.StationCode, ex.Code, ex.Message);
-                await stations.AcknowledgeRequestAsync(request, ct);
+                try { await stations.AcknowledgeRequestAsync(request, ct); }
+                catch (Exception ackEx) when (ackEx is not OperationCanceledException) { logger.LogError(ackEx, "Acknowledging rejected station request {Key} failed", request.RequestKey); }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // CR-008A (AUDIT-002): an unexpected failure of ONE request must neither stop the remaining requests nor the scheduler. It is NOT acknowledged,
+                // so a PLC that still shows the request presents it again (the request key makes the retry idempotent).
+                logger.LogError(ex, "Station request {Key} from {Station} failed and was not acknowledged", request.RequestKey, request.StationCode);
             }
         }
         return handled;

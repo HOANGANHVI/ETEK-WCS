@@ -52,6 +52,13 @@ try
 
     LogSetup.LogStartupSummary(app);
 
+    // CR-008A (AUDIT-001): say clearly at start-up when Production cannot dispatch tasks because only the RCS simulator exists.
+    var rcsGuard = app.Services.GetRequiredService<IRcsDispatchGuard>().Check();
+    if (!rcsGuard.Allowed)
+        app.Logger.LogWarning("RCS is not connected: task creation and dispatch are refused ({Code}). {EventCode}", rcsGuard.Code, "RCS_NOT_CONNECTED");
+    else if (app.Environment.IsProduction())
+        app.Logger.LogWarning("Rcs:AllowSimulatorInProduction=true: tasks are dispatched to the RCS SIMULATOR (supervised test only; no AGV moves). {EventCode}", "CONFIG_RCS_SIMULATOR_IN_PRODUCTION");
+
     if (app.Environment.IsProduction() && string.Equals(app.Configuration["Auth:CookieSecure"], "SameAsRequest", StringComparison.OrdinalIgnoreCase))
         app.Logger.LogWarning("Auth:CookieSecure=SameAsRequest in Production: session cookies are sent over plain HTTP. Acceptable only on a trusted test LAN; use HTTPS with Auth:CookieSecure=Always for operation. {EventCode}", "CONFIG_COOKIE_INSECURE");
 

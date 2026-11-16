@@ -1,5 +1,15 @@
 # Change Log
 
+## v2.2 – CR-008A WCS dispatch and scheduler reliability (2026-11-16)
+
+- Change Request: CR-008A (AUDIT-001, 002, 003, 004, 006 of `report/ETEK_WCS_FULL_CODE_REVIEW_2026-11-16.md`). Status: IMPLEMENTED on `develop`; not merged.
+- Added: `IRcsDispatchGuard` / `RcsDispatchGuard` (Production + simulator => `RCS_NOT_CONNECTED`); `RcsRetryPolicy` (spaced retries); `TransportTask.RcsRetryCount/RcsLastAttemptAt/NoteIfChanged/HasHistory`; options `RcsRetryInitialDelayMs`, `RcsRetryMaxDelayMs`, `RcsMaxAttempts`; `Rcs:AllowSimulatorInProduction`; RCS simulator switches (`Unreachable`, `SetStatus`, `Forget`); migration `AddRcsRetryTracking`; health field `integration.rcs`.
+- Changed: scheduler hosted service runs station intake and scheduler pass in separate exception scopes; station intake isolates each request; dispatch / continue / cancel follow-up is spaced and bounded; cancel reconciliation handles every RCS status explicitly; AGV status is Unknown (`RCS_NOT_CONNECTED`) instead of the simulator's Online when Production has no RCS adapter.
+- Unchanged by design: TaskStateMachine, InventoryService rules, PER_AGV, FlowOptions, priority, PLC handshake/polling/timeout/retry, MC protocol, AGV Offline policy, `StateTimeoutsSeconds`.
+- Software components affected: WCS.Domain (TransportTask), WCS.Application (TaskOrchestrator, StationRequestProcessor, AgvStatusService, options, guard interface), WCS.Infrastructure (guard, simulator, migration, DI), WCS.Runtime (SchedulerHostedService), WCS.Api (health, start-up warning), deployment/docker-compose.yml (one optional variable).
+- Tests added/updated: `Cr008aReliabilityTests` (25); Harness gains `configure` hook and spacing 0 default for the pre-existing tests. Full backend suite 463/463.
+- Approved by: project owner ("EXECUTE CR-008A"). Date: 2026-11-16.
+
 ## v2.1 – CR-007 Centralized logging and diagnostics (2026-11-16)
 
 - Change Request: CR-007 (IMPLEMENTED on `develop`; Docker runtime, real PLC and real RCS NOT VERIFIED).

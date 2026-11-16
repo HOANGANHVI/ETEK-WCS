@@ -91,7 +91,7 @@ public sealed class Harness : IAsyncDisposable
     public StationSignalSimulator Stations => Services.GetRequiredService<StationSignalSimulator>();
     public SchedulerOptions SchedulerOptions => Services.GetRequiredService<IOptions<SchedulerOptions>>().Value;
 
-    private Harness(DatabaseFixture db)
+    private Harness(DatabaseFixture db, Action<IServiceCollection>? configure)
     {
         var config = new ConfigurationBuilder()
             .AddConfiguration(db.Configuration)
@@ -102,13 +102,17 @@ public sealed class Harness : IAsyncDisposable
         services.AddWcsApplication(config);
         services.AddWcsInfrastructure(config);
         services.AddSingleton<IClock>(Clock);
+        configure?.Invoke(services);   // CR-008A: lets a test replace a registration (e.g. a Production host environment)
         Services = services.BuildServiceProvider();
+        // CR-008A: the production default spaces RCS retries (2 s, doubling). The pre-existing tests exercise one retry per scheduler tick, so the harness starts with NO
+        // spacing; the CR-008A tests set the delays they need explicitly.
+        SchedulerOptions.RcsRetryInitialDelayMs = 0;
     }
 
-    public static async Task<Harness> CreateAsync(DatabaseFixture db)
+    public static async Task<Harness> CreateAsync(DatabaseFixture db, Action<IServiceCollection>? configure = null)
     {
         await db.ResetAsync();
-        return new Harness(db);
+        return new Harness(db, configure);
     }
 
     public ValueTask DisposeAsync() => Services.DisposeAsync();
