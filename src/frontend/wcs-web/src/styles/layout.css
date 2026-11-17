@@ -89,3 +89,14 @@
 /* Longer English labels: truncate instead of wrapping inside the fixed-height menu item (full text stays in the title tooltip). */
 .nav-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Narrow windows: the header keeps every control reachable (language, password, sign out) by dropping secondary labels instead of overflowing the page. */
+@media (max-width: 1000px) {
+  .topbar { gap: 10px; padding: 0 10px; }
+  .conn .label, .clock span, .whoami .who-role { display: none; }
+  .clock { min-width: 0; padding-left: 10px; }
+  .clock strong { font-size: 16px; }
+  .top-btn { padding: 0 8px; }
+  .whoami { max-width: 130px; }
+  .who-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

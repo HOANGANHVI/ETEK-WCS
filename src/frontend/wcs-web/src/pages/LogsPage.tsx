@@ -227,8 +227,11 @@ function LogDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
       {detail && (
         <div className="log-detail">
           <div className="log-detail-head"><LevelPill level={detail.level} /> <strong>{LOG_CATEGORY_VI[detail.category]}</strong></div>
-          {shown?.translated && <p className="log-detail-msg">{shown.text}</p>}
-          <p className={shown?.translated ? 'muted small' : 'log-detail-msg'}><strong>{t('logs.rawMessage')}:</strong> <span className="mono">{detail.message}</span></p>
+          {shown?.translated ? <p className="log-detail-msg">{shown.text}</p> : <p className="muted small">{t('logs.notTranslated')}</p>}
+          <details className="log-original" open={!shown?.translated}>
+            <summary>{t('logs.viewOriginal')}</summary>
+            <p className="muted small"><strong>{t('logs.rawMessage')}:</strong> <span className="mono">{detail.message}</span></p>
+          </details>
           <dl className="kv2">
             {rows.filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => <><dt key={k + 'k'}>{k}</dt><dd key={k + 'v'}>{v}</dd></>)}
           </dl>

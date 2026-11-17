@@ -101,6 +101,8 @@ export default defineMessages({
   dProperties: 'Thuộc tính',
   hidden: 'Thông tin bảo mật được ẩn khi hiển thị.',
   rawMessage: 'Nội dung gốc (nguyên bản đã lưu, không dịch)',
+  viewOriginal: 'Xem nội dung gốc',
+  notTranslated: 'Bản ghi này chưa có bản dịch; nội dung gốc được hiển thị bên dưới.',
   exceptionTrace: 'Ngoại lệ / Stack trace',
 }, {
   auditTitle: 'Operation Logs',
@@ -201,5 +203,7 @@ export default defineMessages({
   dProperties: 'Properties',
   hidden: 'Sensitive information is masked in this view.',
   rawMessage: 'Original message (as stored, not translated)',
+  viewOriginal: 'View original message',
+  notTranslated: 'This entry has no translation; the original text is shown below.',
   exceptionTrace: 'Exception / Stack trace',
 })

@@ -175,3 +175,22 @@
 .log-pre { max-height: 240px; overflow: auto; margin: 4px 0 10px; padding: 8px 10px; background: var(--muted-bg); border: 1px solid var(--line); border-radius: var(--radius); font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 1400px) { .logs-dash { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) { .logs-dash { grid-template-columns: 1fr; } .logs-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---- shared vertical rhythm and wrapping (one place for every page) ------------------------------------------------------------------------------
+   Information, status / alerts and the action group are separate blocks: an action group that follows content is always separated from it, a status line
+   (label + badges) has its own row, and every group of buttons / badges wraps instead of overflowing on a narrow screen. */
+.btn-row { align-items: center; gap: 8px 12px; }
+* + .btn-row { margin-top: 16px; }
+.cancel-box > .btn-row, .form-grid > .btn-row, .btn-row + .btn-row { margin-top: 0; }
+.btn-row + p, .btn-row + .notice { margin-top: 12px; }
+.notice:not(:first-child) { margin-top: 12px; }
+.meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 16px 0 0; font-size: var(--fs-sm); }
+.panel-head, .page-header, .modal-foot { flex-wrap: wrap; }
+.panel-actions, .page-actions { flex-wrap: wrap; }
+.modal-foot { gap: 8px 12px; }
+.log-original { margin: 10px 0 14px; }
+.log-detail .kv2 { margin-bottom: 12px; }
+.log-detail pre { margin-top: 6px; }
+.log-detail > p.small { margin-top: 12px; }
+.log-original summary { cursor: pointer; font-size: var(--fs-sm); color: var(--navy-600); }
+.log-original p { margin: 6px 0 0; overflow-wrap: anywhere; }

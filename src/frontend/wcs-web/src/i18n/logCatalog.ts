@@ -125,6 +125,40 @@ function parseJson(text: string | null | undefined): Record<string, unknown> | n
   try { const v: unknown = JSON.parse(text); return v && typeof v === 'object' ? (v as Record<string, unknown>) : null } catch { return null }
 }
 
+/**
+ * PLC events stored before the parameters were kept: the parameters are read back from the exact text WCS itself wrote for that event code (anchored on the whole message,
+ * scoped to the event). A message that does not match is never interpreted; the entry then shows the headline of the event only.
+ */
+const LEGACY_PLC: Record<string, { re: RegExp; names: string[] }> = {
+  STATION_ERROR: { re: /^(?:Lỗi xử lý trạm|Station processing error): ([\s\S]+)$/, names: ['error'] },
+  CONNECT_FAILED: { re: /^(?:Kết nối thất bại|Connection failed): ([\s\S]+?)\. (?:Thử lại sau|Retrying in) (\d+) ms\.$/, names: ['error', 'backoffMs'] },
+  LINK_LOST: { re: /^(?:Mất kết nối|Connection lost): ([\s\S]+?)\. (?:Thử kết nối lại sau|Reconnecting in) (\d+) ms\.$/, names: ['error', 'backoffMs'] },
+  READ_BAD: { re: /^(\d+) IO point(?:\(s\))? (?:đọc lỗi|failed to read): ([\s\S]+)$/, names: ['count', 'error'] },
+  STATE: { re: /^(\S+): (\w+)(?: - ([\s\S]+))?$/, names: ['plc', 'state', 'reason'] },
+  WRITE: { re: /^(\S+)\/(\S+) = ([\s\S]*)$/, names: ['station', 'signal', 'value'] },
+  WRITE_FAILED: { re: /^(\S+)\/(\S+): ([\s\S]+)$/, names: ['station', 'signal', 'error'] },
+  WRITE_AMBIGUOUS: { re: /^(\S+)\/(\S+): ([\s\S]*?) (?:KHÔNG tự động ghi lại|Not retried automatically)/, names: ['station', 'signal', 'error'] },
+  WRITE_DENIED: { re: /^(\S+): (\S+)\/(\S+) (?:bị chặn|blocked) \((\w+)\)\.$/, names: ['actor', 'station', 'signal', 'code'] },
+  RELOAD: { re: /^(\S+): (?:cấu hình được nạp lại|configuration reloaded)\.$/, names: ['plc'] },
+  RUNTIME_START: { re: /^PLC runtime started in mode (\w+) with (\d+) PLC workers\.$/, names: ['mode', 'workers'] },
+  HANDSHAKE: { re: /^(\w+) = (\d)$/, names: ['signal', 'value'] },
+  HANDSHAKE_WRITE_REFUSED: { re: /^(\w+): (\w+)$/, names: ['signal', 'code'] },
+  HANDSHAKE_TIMEOUT: { re: /^(\w+) (?:vẫn bật sau|still on after) (\d+) ms/, names: ['signal', 'ms'] },
+  REQUEST_ID_MISSING: { re: /^(\w+) (?:bật nhưng|is on but)/, names: ['signal'] },
+  REQUEST: { re: /^(\w+) -> (\w+), Request_ID ([\s\S]+)$/, names: ['signal', 'flow', 'requestId'] },
+  REQUEST_HANDLED: { re: /^(\S+) (?:đã được WCS ghi nhận|recorded by WCS)/, names: ['requestKey'] },
+  TRANSFER_PERMIT_NOT_APPROVED: { re: /^(?:Nhiệm vụ|Task) (\S+) (?:xin phép|requests) (\w+)(?: permission)? (?:tại|at) (\S+):/, names: ['taskId', 'direction', 'station'] },
+}
+
+function legacyPlcArgs(base: string, message: string): Record<string, string> | undefined {
+  const rule = LEGACY_PLC[base]
+  const m = rule?.re.exec(message)
+  if (!rule || !m) return undefined
+  return Object.fromEntries(rule.names.map((n, i) => [n, m[i + 1]]).filter(([, v]) => v !== undefined))
+}
+
+const VIETNAMESE = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i
+
 const PLC_EVENT_PREFIXES = ['READ_BAD', 'STATION_ERROR']
 const plcBase = (event: string) => PLC_EVENT_PREFIXES.find((p) => event === p || event.startsWith(`${p}_`)) ?? event
 
@@ -144,17 +178,18 @@ export function localizeLog(e: LogLike): LocalizedLog {
 
   if (e.category === 'PLC' && e.event) {
     const base = plcBase(e.event)
-    const args = details?.args as Record<string, unknown> | undefined
+    const args = (details?.args as Record<string, unknown> | undefined) ?? legacyPlcArgs(base, e.message)
+    const title = hasMessage(key(`codes.plcEvtTitle_${base}`)) ? t(key(`codes.plcEvtTitle_${base}`)) : null
     if (args && hasMessage(key(`codes.plcEvt_${base}`))) {
       const p = str(args)
       // STATE / DISABLED carry an optional reason: the event stores no parameter when there is none, so the placeholder must still be filled
       if (base === 'STATE' || base === 'DISABLED' || 'reason' in p) p.reason = p.reason ? ` – ${describeCoded(String(p.reason))}` : ''
-      return { text: t(key(`codes.plcEvt_${base}`), p), translated: true }
+      const sentence = t(key(`codes.plcEvt_${base}`), p)
+      // English never carries a Vietnamese fragment: if a stored parameter is Vietnamese, only the headline is shown (the stored text stays available as the original message)
+      if (!(getLang() === 'en' && VIETNAMESE.test(sentence))) return { text: sentence, translated: true }
     }
-    if (hasMessage(key(`codes.plcEvtTitle_${base}`))) {
-      // Older entries carry no parameters: only the translated headline is shown. The stored text is never appended to it; the detail view shows it separately as the original message.
-      return { text: t(key(`codes.plcEvtTitle_${base}`)), translated: true }
-    }
+    // Entries whose parameters cannot be read back: only the translated headline; the stored text is shown separately as the original message.
+    if (title) return { text: title, translated: true }
     return raw
   }
 
@@ -164,7 +199,7 @@ export function localizeLog(e: LogLike): LocalizedLog {
       const params: Params = { ...str(details), Device: e.device ?? '' }
       if (typeof params.Reason === 'string') params.Reason = describeReasonCode(params.Reason)   // a reason that is a known code is shown in words
       const sentence = (getLang() === 'en' ? tpl.en : tpl.vi).replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
-      return { text: sentence.trim(), translated: true }
+      if (!(getLang() === 'en' && VIETNAMESE.test(sentence))) return { text: sentence.trim(), translated: true }
     }
   }
   return raw

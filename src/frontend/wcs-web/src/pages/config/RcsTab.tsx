@@ -103,10 +103,10 @@ function RcsForm({ initial, onChanged }: { initial: RcsConfig; onChanged: () => 
             </Field>
           )}
         </div>
-        <p className="muted">
-          {tr('config.rcsCreds')} {initial.secrets.hasPassword ? <Pill tone="ok">{tr('config.rcsHasPassword')}</Pill> : <Pill tone="muted">{tr('config.rcsNoPassword')}</Pill>}{' '}
+        <div className="meta-row muted">
+          <span>{tr('config.rcsCreds')}</span> {initial.secrets.hasPassword ? <Pill tone="ok">{tr('config.rcsHasPassword')}</Pill> : <Pill tone="muted">{tr('config.rcsNoPassword')}</Pill>}{' '}
           {initial.secrets.hasToken ? <Pill tone="ok">{tr('config.rcsHasToken')}</Pill> : <Pill tone="muted">{tr('config.rcsNoToken')}</Pill>}
-        </p>
+        </div>
         {general && <div className="notice notice-bad" role="alert">{general}</div>}
         {saved && !dirty && <div className="notice notice-info">{tr('config.rcsSavedMsg')}</div>}
         <div className="btn-row">
