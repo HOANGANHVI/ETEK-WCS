@@ -1,5 +1,7 @@
 # Cá nhân hóa giao diện: Sidebar thu gọn, Light/Dark, Cấu hình người dùng
 
+> **Cập nhật 2026-11-17:** mô tả "từ 1200px trở xuống sidebar luôn thu gọn" trong báo cáo này đã được thay thế – sidebar nay có thể bật/tắt ở mọi độ rộng. Xem [PERSONALIZATION_FOLLOWUP_REPORT.md](PERSONALIZATION_FOLLOWUP_REPORT.md).
+
 **Ngày:** 2026-11-17 · **Branch:** `develop` · nền `2104404`. Có thay đổi backend/DB (chỉ phần tùy chọn người dùng); không đụng TaskStateMachine, Scheduler, InventoryService, AGV, PLC, RCS, số liệu dashboard, menu và phân quyền.
 
 ## 1. Kiến trúc Sidebar

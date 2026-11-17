@@ -2,10 +2,6 @@ import { createContext, useContext } from 'react'
 import type { Preferences } from './prefsStore'
 
 export interface PreferencesValue extends Preferences {
-  /** The viewport is too narrow for the full sidebar: it is shown collapsed whatever the preference says. */
-  sidebarForcedCollapsed: boolean
-  /** Sidebar as drawn (preference or forced by the viewport). */
-  sidebarIsCollapsed: boolean
   saving: boolean
   /** null: nothing to report; 'saved' / 'failed' describe the last save attempt. */
   saveState: 'saved' | 'failed' | null

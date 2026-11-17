@@ -76,6 +76,12 @@
 .dock-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .dock-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-sm); padding: 5px 8px; background: #0f2a4b; border-radius: var(--radius); }
 .dock-list .pill { background: transparent; }
+/* The dock is navy in both themes, so its pills use light tones (the Light-theme pill colours are dark and were unreadable here). */
+.dock-list .pill-ok { color: #7fe0b0; border-color: #2a6b4d; }
+.dock-list .pill-warn { color: #f3cd7a; border-color: #7a6228; }
+.dock-list .pill-bad { color: #ffb4ae; border-color: #7a3a36; }
+.dock-list .pill-info { color: #9cc7f5; border-color: #2c5a8f; }
+.dock-list .pill-muted { color: #b4c3d9; border-color: #3a4f6f; }
 .dock-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .dock .empty { color: #7f9ac0; font-size: var(--fs-sm); }
 
@@ -98,6 +104,24 @@
 /* Longer English labels: truncate instead of wrapping inside the fixed-height menu item (full text stays in the title tooltip). */
 .nav-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* An expanded sidebar keeps its 224px logo cell in the header, so the compact header starts earlier (<= 1200px) in that state. */
+@media (max-width: 1200px) {
+  .app[data-sidebar='expanded'] .topbar { gap: 10px; padding: 0 10px 0 0; }
+  .app[data-sidebar='expanded'] .conn .label, .app[data-sidebar='expanded'] .clock span, .app[data-sidebar='expanded'] .whoami .who-role, .app[data-sidebar='expanded'] .top-link span { display: none; }
+  .app[data-sidebar='expanded'] .clock { min-width: 0; padding-left: 10px; }
+  .app[data-sidebar='expanded'] .clock strong { font-size: 16px; }
+  .app[data-sidebar='expanded'] .top-btn { padding: 0 8px; }
+  .app[data-sidebar='expanded'] .whoami { max-width: 130px; }
+  .app[data-sidebar='expanded'] .who-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* Very narrow windows with the sidebar expanded: a slimmer sidebar that stays in the layout (never over the content), and the header gives up the name block
+   (the account name stays reachable on the User Configuration page) so that the connection status, language, sign-out and clock all still fit. */
+@media (max-width: 800px) {
+  .app[data-sidebar='expanded'] { --sidebar-w: 184px; }
+  .app[data-sidebar='expanded'] .whoami { display: none; }
+}
 
 /* Narrow windows: the header keeps every control reachable (language, password, sign out) by dropping secondary labels instead of overflowing the page. */
 @media (max-width: 1000px) {

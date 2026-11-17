@@ -90,7 +90,6 @@ export function AccountPage() {
             <ChoiceGroup id="pref-theme" label={t('account.themeLabel')} value={prefs.theme} choices={THEMES} onPick={(v) => void prefs.update({ theme: v })} />
             <ChoiceGroup id="pref-sidebar" label={t('account.sidebarLabel')} value={prefs.sidebarCollapsed ? 'collapsed' : 'expanded'} choices={SIDEBARS}
               onPick={(v) => void prefs.update({ sidebarCollapsed: v === 'collapsed' })} />
-            {prefs.sidebarForcedCollapsed && <div className="notice notice-warn">{t('account.sidebarForced')}</div>}
             <div className="pref-status" role="status" aria-live="polite">
               {prefs.saving && <span className="muted">{t('account.saving')}</span>}
               {!prefs.saving && prefs.saveState === 'saved' && <span className="text-ok">{t('account.saved')}</span>}

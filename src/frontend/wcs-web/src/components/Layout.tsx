@@ -85,7 +85,7 @@ function SideBar() {
   const t = useT()
   const { user } = useAuth()
   const { status } = useRealtime()
-  const { sidebarIsCollapsed: collapsed, sidebarForcedCollapsed: forced, sidebarCollapsed, update } = usePreferences()
+  const { sidebarCollapsed: collapsed, update } = usePreferences()
   const [tip, setTip] = useState<Tip | null>(null)
   const tone = status === 'connected' || status === 'demo' ? 'ok' : status === 'disconnected' ? 'bad' : 'warn'
 
@@ -108,9 +108,9 @@ function SideBar() {
   return (
     <aside className="sidebar">
       <button type="button" className="side-toggle" aria-label={toggleLabel} aria-expanded={!collapsed}
-        disabled={forced} title={collapsed ? undefined : toggleLabel}
+        title={collapsed ? undefined : toggleLabel}
         onMouseEnter={showTip(toggleLabel)} onMouseLeave={hideTip} onFocus={showTip(toggleLabel)} onBlur={hideTip}
-        onClick={() => { hideTip(); void update({ sidebarCollapsed: !sidebarCollapsed }) }}>
+        onClick={() => { hideTip(); void update({ sidebarCollapsed: !collapsed }) }}>
         {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
       </button>
       <nav aria-label={t('nav.mainNav')}>
@@ -134,7 +134,7 @@ export function Layout() {
   const t = useT()
   const { user } = useAuth()
   const location = useLocation()
-  const { sidebarIsCollapsed } = usePreferences()
+  const { sidebarCollapsed: sidebarIsCollapsed } = usePreferences()
   const deniedKey = (location.state as { denied?: MsgKey } | null)?.denied
   const denied = deniedKey ? t(deniedKey) : null
   return (

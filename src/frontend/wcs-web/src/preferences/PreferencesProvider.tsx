@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { PreferencesContext, type PreferencesValue } from './PreferencesContext'
 import { DEFAULT_PREFERENCES, readCache, sanitize, writeCache, type Preferences } from './prefsStore'
-
-const NARROW = '(max-width: 1200px)'
-const subscribeNarrow = (fn: () => void) => { const m = window.matchMedia(NARROW); m.addEventListener('change', fn); return () => m.removeEventListener('change', fn) }
 
 /**
  * Loads the signed-in account's preferences, applies the theme to the document and exposes the sidebar state. A change is applied immediately and then stored
@@ -20,7 +17,6 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const owner = useRef<string | null>(null)                        // current account (guards late answers after a sign-out / account switch)
   const [saving, setSaving] = useState(false)
   const [saveState, setSaveState] = useState<'saved' | 'failed' | null>(null)
-  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false)
 
   // Another account (or none) is now signed in: start from that account's own cache, never from the previous account's values.
   if (shownFor !== username) {
@@ -58,8 +54,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, [prefs, username])
 
   const value = useMemo<PreferencesValue>(() => ({
-    ...prefs, sidebarForcedCollapsed: narrow, sidebarIsCollapsed: prefs.sidebarCollapsed || narrow, saving, saveState, update,
-  }), [prefs, narrow, saving, saveState, update])
+    ...prefs, saving, saveState, update,
+  }), [prefs, saving, saveState, update])
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>
 }

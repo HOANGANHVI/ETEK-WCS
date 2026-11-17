@@ -38,6 +38,9 @@ table.grid.clickable tbody tr:hover { background: var(--navy-50); }
 table.grid tbody tr.selected { background: var(--navy-100); box-shadow: inset 3px 0 0 var(--navy-600); }
 table.grid td.right, table.grid th.right { text-align: right; }
 
+/* Native fieldset frames (e.g. the reconciliation result choice) follow the theme instead of the browser's default grey. */
+fieldset { border-color: var(--line-strong); }
+
 /* ---- status pill ---- */
 .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 12px; font-size: var(--fs-xs); font-weight: 600; border: 1px solid; white-space: nowrap; }
 .pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
