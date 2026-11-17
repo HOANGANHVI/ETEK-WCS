@@ -33,7 +33,7 @@ public class TransportTask
             UpdatedAt = now,
             StateEnteredAt = now,
         };
-        t._history.Add(new TaskHistoryEntry(id, null, TaskState.Pending, "TASK_CREATED", $"flow={flow}", "WCS", now));
+        t._history.Add(new TaskHistoryEntry(id, null, TaskState.Pending, "TASK_CREATED", $"flow={flow}", "WCS", now, HistoryDetail.Of("TASK_CREATED", ("flow", flow))));
         return t;
     }
 
@@ -156,13 +156,13 @@ public class TransportTask
     /// Identity (id, request key, requester, RCS codes) is never changed. Source/destination selection is cleared so it is re-evaluated;
     /// the caller releases reservations and re-reserves.
     /// </summary>
-    public void ReconfigureRequest(ProcessFlow flow, RackKind rackKind, Guid agvId, Guid requestLocationId, string detail, string source, DateTimeOffset now)
+    public void ReconfigureRequest(ProcessFlow flow, RackKind rackKind, Guid agvId, Guid requestLocationId, string detail, string source, DateTimeOffset now, HistoryDetail? code = null)
     {
         if (!IsUntouchedByAgvAndRcs) throw new DomainException("TASK_NOT_EDITABLE", $"Task in state {State} can no longer be edited.");
         Flow = flow; RackKind = rackKind; AgvId = agvId; RequestLocationId = requestLocationId;
         SourceLocationId = null; RackId = null; DestinationLocationId = null;
         UpdatedAt = now;
-        _history.Add(new TaskHistoryEntry(Id, State, State, "TASK_EDITED", detail, source, now));
+        _history.Add(new TaskHistoryEntry(Id, State, State, "TASK_EDITED", detail, source, now, code));
     }
 
     public void RegisterDispatchAttempt(DateTimeOffset now) { DispatchAttempts++; RegisterRcsAttempt(now); }

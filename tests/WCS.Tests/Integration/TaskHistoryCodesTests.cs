@@ -25,6 +25,8 @@ public class TaskHistoryCodesTests(DatabaseFixture fixture)
     [InlineData("STATE_CHANGED", "TIMEOUT_Executing", "TIMEOUT", "state", "Executing")]
     [InlineData("STATE_CHANGED", "RCS_REJECTED: busy", "RCS_REJECTED", "message", "busy")]
     [InlineData("STATE_CHANGED", "NO_SOURCE_AVAILABLE", "NO_SOURCE_AVAILABLE", null, null)]
+    [InlineData("TASK_CREATED", "flow=Bp01", "TASK_CREATED", "flow", "Bp01")]
+    [InlineData("TASK_EDITED", "flow Bp01/A1 -> Bp02/B1", "TASK_EDITED", "station", "B1")]
     [InlineData("SOURCE_RESERVED", "location=A1", "SOURCE_RESERVED", "location", "A1")]
     [InlineData("LATE_EVENT_IGNORED", "DropConfirmed after Failed", "LATE_EVENT_IGNORED", "state", "Failed")]
     [InlineData("AGV_DISPATCH_HOLD", "AGV1 placed on dispatch hold: RCS_ENDED_WITHOUT_DROP", "AGV_DISPATCH_HOLD", "reason", "RCS_ENDED_WITHOUT_DROP")]
@@ -66,7 +68,7 @@ public class TaskHistoryCodesTests(DatabaseFixture fixture)
         var task = await h.GetTaskAsync(t.Id);
 
         // every history entry that WCS itself words has a code (raw external messages - RCS answers, exception texts - legitimately have none)
-        var own = task.History.Where(x => x.EventName is "STATE_CHANGED" or "SOURCE_RESERVED" or "DESTINATION_RESERVED" or "RCS_CANCEL_RETRY_EXHAUSTED"
+        var own = task.History.Where(x => x.EventName is "TASK_CREATED" or "STATE_CHANGED" or "SOURCE_RESERVED" or "DESTINATION_RESERVED" or "RCS_CANCEL_RETRY_EXHAUSTED"
             or "AGV_DISPATCH_HOLD" or "RECONCILIATION_REQUIRED" or "WAITING_FOR_SOURCE").ToList();
         Assert.True(own.Count >= 5);
         Assert.All(own, x => Assert.False(string.IsNullOrEmpty(x.DetailCode), $"{x.EventName}: {x.Detail}"));

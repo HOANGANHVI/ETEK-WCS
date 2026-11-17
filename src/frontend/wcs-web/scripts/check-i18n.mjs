@@ -116,6 +116,7 @@ if (!fs.existsSync(backend)) { notes.push('backend source not found: backend cod
   // 3c. task history events (HISTORY_EVENT_VI)
   const events = uniq([
     ...grep(/\.Note\(\s*"([A-Z][A-Z0-9_]+)"/g),
+    ...grep(/new TaskHistoryEntry\([^\n]*?"([A-Z][A-Z0-9_]+)"/g),
     ...grep(/const string \w*Event\w*\s*=\s*"([A-Z][A-Z0-9_]+)"/g),
     ...grep(/new TaskEvent\(\s*"([A-Z][A-Z0-9_]+)"/g),
   ])

@@ -536,7 +536,8 @@ public sealed class TaskOrchestrator(
             var oldStation = (await locations.GetAsync(task.RequestLocationId, t))?.Code ?? "?";
             var oldFlow = task.Flow;
             await inventory.ReleaseReservationsAsync(task, t);
-            task.ReconfigureRequest(flow, rule.RackKind, agv.Id, station.Id, $"flow {oldFlow}/{oldStation} -> {flow}/{station.Code}", actor.Username, clock.UtcNow);
+            task.ReconfigureRequest(flow, rule.RackKind, agv.Id, station.Id, $"flow {oldFlow}/{oldStation} -> {flow}/{station.Code}", actor.Username, clock.UtcNow,
+                HistoryDetail.Of("TASK_EDITED", ("oldFlow", oldFlow), ("oldStation", oldStation), ("flow", flow), ("station", station.Code)));
             // A task that is already queued holds a source rack: re-select it for the new request. If none exists the whole edit is
             // refused and rolled back. Pending/Validating tasks have no reservation; the normal processing step reserves later.
             if (task.State == TaskState.Queued && !(await inventory.ReserveSourceAsync(task, rule, t)).Found)

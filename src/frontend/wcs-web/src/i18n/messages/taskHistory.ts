@@ -6,6 +6,8 @@ import { defineMessages } from '../core'
  * the hold `reason`, which are display labels of known enums / codes (resolved in logCatalog.describeHistory).
  */
 export default defineMessages({
+  d_TASK_CREATED: 'Tạo nhiệm vụ theo quy trình {flow}',
+  d_TASK_EDITED: 'Sửa yêu cầu: quy trình {oldFlow} / trạm {oldStation} → {flow} / {station}',
   d_VALIDATING: 'Đang kiểm tra điều kiện nghiệp vụ',
   d_QUEUED_AGV_BUSY: 'AGV đang bận, yêu cầu được xếp hàng chờ',
   d_QUEUED_AGV_HOLD: 'AGV đang bị giữ điều phối, yêu cầu được xếp hàng chờ',
@@ -52,6 +54,8 @@ export default defineMessages({
   d_RCS_NOTFOUND_AFTER_ACCEPT: 'RCS không còn bản ghi của nhiệm vụ đã tiếp nhận: cần đối soát',
   d_RCS_ENDED_WITHOUT_DROP: 'RCS báo kết thúc nhưng WCS chưa nhận xác nhận thả rack',
 }, {
+  d_TASK_CREATED: 'Task created for flow {flow}',
+  d_TASK_EDITED: 'Request edited: flow {oldFlow} / station {oldStation} → {flow} / {station}',
   d_VALIDATING: 'Validating business conditions',
   d_QUEUED_AGV_BUSY: 'AGV is busy; the request was queued',
   d_QUEUED_AGV_HOLD: 'AGV is on dispatch hold; the request was queued',

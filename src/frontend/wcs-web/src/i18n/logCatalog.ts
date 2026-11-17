@@ -126,7 +126,8 @@ export function localizeLog(e: LogLike): LocalizedLog {
     const args = details?.args as Record<string, unknown> | undefined
     if (args && hasMessage(key(`codes.plcEvt_${base}`))) {
       const p = str(args)
-      if ('reason' in p) p.reason = p.reason ? ` – ${describeCoded(String(p.reason))}` : ''
+      // STATE / DISABLED carry an optional reason: the event stores no parameter when there is none, so the placeholder must still be filled
+      if (base === 'STATE' || base === 'DISABLED' || 'reason' in p) p.reason = p.reason ? ` – ${describeCoded(String(p.reason))}` : ''
       return { text: t(key(`codes.plcEvt_${base}`), p), translated: true }
     }
     if (hasMessage(key(`codes.plcEvtTitle_${base}`))) {

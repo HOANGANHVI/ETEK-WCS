@@ -73,6 +73,8 @@ public sealed record HistoryDetail(string Code, IReadOnlyDictionary<string, stri
 
     private static readonly (string? Event, Regex Pattern, string Code, string[] Names)[] Patterns =
     [
+        ("TASK_CREATED", new(@"^flow=(\w+)$", RegexOptions.Compiled), "TASK_CREATED", ["flow"]),
+        ("TASK_EDITED", new(@"^flow (\w+)/(\S+) -> (\w+)/(\S+)$", RegexOptions.Compiled), "TASK_EDITED", ["oldFlow", "oldStation", "flow", "station"]),
         (null, new(@"^Waiting for PLC permission \((Pick|Drop)\)$", RegexOptions.Compiled), "WAITING_PLC_PERMISSION", ["leg"]),
         (null, new(@"^Destination assigned: (\S+)$", RegexOptions.Compiled), "DESTINATION_ASSIGNED", ["location"]),
         (null, new(@"^Cancel requested by ([^:]+): ([\s\S]*)$", RegexOptions.Compiled), "CANCEL_REQUESTED", ["user", "reason"]),

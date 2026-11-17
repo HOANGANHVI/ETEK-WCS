@@ -94,3 +94,8 @@ check('every history code has both languages and the same parameters', mod.allMe
   return a !== k && b !== k && ph(a) === ph(b)
 }))
 console.log(results.join(String.fromCharCode(10)))
+
+// ---- regression found in runtime acceptance: a PLC STATE event without a reason must not leave a raw placeholder
+mod.setLang('en')
+const stateNoReason = { category: 'PLC', source: 'PLC.Runtime', device: 'PLC-03', event: 'STATE', message: 'PLC-03: Connected', messageTemplate: null, detailsJson: '{"newState":"Connected","args":{"plc":"PLC-03","state":"Connected"}}' }
+console.log(cat.localizeLog(stateNoReason).text === 'PLC-03: state Connected' ? 'PASS state event without reason has no placeholder' : 'FAIL state event without reason: ' + cat.localizeLog(stateNoReason).text)
