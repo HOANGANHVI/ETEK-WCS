@@ -51,7 +51,7 @@ function App() {
         <Route path="plc/connections" element={<RequireRole roles={['Admin']}><PlcConnectionsPage /></RequireRole>} />
         <Route path="plc/io-mapping" element={<RequireRole roles={['Admin']}><PlcIoMappingPage /></RequireRole>} />
         <Route path="account" element={<AccountPage />} />
-        <Route path="account/password" element={<ChangePasswordPage />} />
+        <Route path="account/password" element={<Navigate to="/account" replace />} />
         <Route path="config" element={<RequireRole roles={['Admin']}><ConfigPage /></RequireRole>} />
         <Route path="users" element={<RequireRole roles={['Admin']}><UsersPage /></RequireRole>} />
         <Route path="audit" element={<RequireRole roles={['Admin']}><AuditPage /></RequireRole>} />

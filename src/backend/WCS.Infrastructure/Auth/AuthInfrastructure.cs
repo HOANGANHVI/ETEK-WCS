@@ -34,6 +34,12 @@ internal sealed class UserRepository(WcsDbContext db) : IUserRepository
     public Task<bool> AnyAdminAsync(CancellationToken ct) => db.Users.AnyAsync(x => x.Role == UserRole.Admin && x.IsActive, ct);
     public void Add(AppUser user) => db.Users.Add(user);
     public void Remove(AppUser user) => db.Users.Remove(user);
+
+    public Task<UserAvatar?> GetAvatarAsync(Guid userId, CancellationToken ct) => db.UserAvatars.FirstOrDefaultAsync(x => x.UserId == userId, ct);
+    public Task<DateTimeOffset?> GetAvatarStampAsync(Guid userId, CancellationToken ct) =>
+        db.UserAvatars.AsNoTracking().Where(x => x.UserId == userId).Select(x => (DateTimeOffset?)x.UpdatedAt).FirstOrDefaultAsync(ct);
+    public void AddAvatar(UserAvatar avatar) => db.UserAvatars.Add(avatar);
+    public void RemoveAvatar(UserAvatar avatar) => db.UserAvatars.Remove(avatar);
 }
 
 /// <summary>ASP.NET Core Identity password hasher (PBKDF2, per-password random salt, versioned format).</summary>

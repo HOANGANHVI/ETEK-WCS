@@ -978,10 +978,18 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Department")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
 
                     b.Property<int>("FailedLoginCount")
                         .HasColumnType("integer");
@@ -1002,6 +1010,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Position")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("Revision")
                         .HasColumnType("integer");
@@ -1105,6 +1117,28 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Actor", "OccurredAt");
 
                     b.ToTable("audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("WCS.Domain.Users.UserAvatar", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_avatars", (string)null);
                 });
 
             modelBuilder.Entity("WCS.Infrastructure.Logging.LogRow", b =>
@@ -1216,6 +1250,15 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SourceLocationId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("WCS.Domain.Users.UserAvatar", b =>
+                {
+                    b.HasOne("WCS.Domain.Users.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("WCS.Domain.Users.UserAvatar", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("WCS.Domain.Tasks.TransportTask", b =>

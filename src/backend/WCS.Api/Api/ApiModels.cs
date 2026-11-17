@@ -67,6 +67,12 @@ public sealed record LoginRequest(
 /// <summary>The caller's own preferences. There is deliberately no user id: the account is the authenticated session.</summary>
 public sealed record UserPreferencesRequest([property: Required, StringLength(10)] string Theme, bool SidebarCollapsed);
 
+/// <summary>The caller's own profile (full name, e-mail). No user id, no position/department/role: those are not self-service.</summary>
+public sealed record UpdateProfileRequest([property: Required, StringLength(100)] string DisplayName, [property: StringLength(254)] string? Email);
+
+/// <summary>Administrator-managed organization data of an account (blank = not provided).</summary>
+public sealed record UpdateOrganizationRequest([property: StringLength(100)] string? Position, [property: StringLength(100)] string? Department);
+
 public sealed record ChangePasswordRequest(
     [property: Required, StringLength(200)] string CurrentPassword,
     [property: Required, StringLength(200)] string NewPassword);

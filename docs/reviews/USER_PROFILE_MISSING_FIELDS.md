@@ -1,5 +1,7 @@
 # Trường hồ sơ người dùng còn thiếu – đầu vào cho một CR bổ sung
 
+> **CẬP NHẬT 2026-11-17: Email, Ảnh đại diện, Chức danh và Phòng ban đã được triển khai theo yêu cầu trực tiếp của chủ dự án** (migration `AddUserProfile`). Xem [USER_CONFIGURATION_REPORT.md](USER_CONFIGURATION_REPORT.md). Phần dưới đây là hiện trạng tại thời điểm trước đó và được giữ để truy vết; các câu hỏi mở còn lại là: email có bắt buộc duy nhất/xác minh không, danh mục chức danh/phòng ban, ngôn ngữ theo tài khoản.
+
 Ngày: 2026-11-17 · Liên quan: trang "Cấu hình người dùng" (`/account`), commit `dddd628` và đợt hoàn thiện kế tiếp.
 
 > Tài liệu này **chỉ ghi nhận hiện trạng và câu hỏi cần chủ dự án quyết định**. Chưa có Change Request nào được duyệt cho các trường dưới đây,

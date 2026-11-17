@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.Configure<Auth.AuthOptions>(configuration.GetSection(Auth.AuthOptions.SectionName));
         services.AddScoped<Auth.AuthService>();
         services.AddScoped<Auth.UserAdminService>();
+        services.AddScoped<Auth.ProfileService>();
         return services;
     }
 }

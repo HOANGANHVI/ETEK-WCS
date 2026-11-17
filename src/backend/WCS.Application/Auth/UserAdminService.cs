@@ -10,7 +10,7 @@ namespace WCS.Application.Auth;
 public sealed class UserAdminService(IUserRepository users, IPasswordService passwords, IUnitOfWork uow, IAuditLog audit, IClock clock)
 {
     private UserDto ToDto(AppUser u) => new(u.Id, u.Username, u.DisplayName, u.Role, u.IsActive, u.MustChangePassword, u.LastLoginAt,
-        u.IsLockedOut(clock.UtcNow) ? u.LockoutEnd : null, u.CreatedAt);
+        u.IsLockedOut(clock.UtcNow) ? u.LockoutEnd : null, u.CreatedAt, u.Email, u.Position, u.Department);
 
     private static object Snapshot(AppUser u) => new { u.Username, u.DisplayName, role = u.Role.ToString(), u.IsActive };
 
@@ -82,6 +82,31 @@ public sealed class UserAdminService(IUserRepository users, IPasswordService pas
             return ToDto(user);
         }, ct);
         await Audit(actor, "USER_UPDATE", id, before, new { dto.Username, dto.DisplayName, role = dto.Role.ToString(), dto.IsActive }, ct);
+        return dto;
+    }
+
+    /// <summary>
+    /// Position and department of any account (Admin only). Nothing else of the account changes: not the preferences, not the role, not the security
+    /// stamp (sessions stay valid), and not the e-mail / full name / avatar, which belong to the user.
+    /// </summary>
+    public async Task<UserDto> SetOrganizationAsync(ActorInfo actor, Guid id, string? position, string? department, CancellationToken ct = default)
+    {
+        RequireAdmin(actor);
+        var p = AppUser.NormalizeOptional(position); var d = AppUser.NormalizeOptional(department);
+        var errors = new List<FieldError>();
+        if ((p?.Length ?? 0) > AppUser.OrganizationMax) errors.Add(new FieldError("position", "Chức danh tối đa 100 ký tự.", "POSITION_MAX"));
+        if ((d?.Length ?? 0) > AppUser.OrganizationMax) errors.Add(new FieldError("department", "Phòng ban tối đa 100 ký tự.", "DEPARTMENT_MAX"));
+        if (errors.Count > 0) throw new ValidationFailedException(errors);
+
+        object? before = null;
+        var dto = await uow.ExecuteAsync(async t =>
+        {
+            var user = await users.GetAsync(id, t) ?? throw AppException.NotFound("USER_NOT_FOUND", "Không tìm thấy tài khoản.");
+            before = new { user.Username, user.Position, user.Department };
+            user.SetOrganization(p, d, clock.UtcNow);
+            return ToDto(user);
+        }, ct);
+        await Audit(actor, "USER_ORG_UPDATE", id, before, new { dto.Username, dto.Position, dto.Department }, ct);
         return dto;
     }
 

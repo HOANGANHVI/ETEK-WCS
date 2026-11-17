@@ -207,9 +207,26 @@ internal sealed class AppUserConfiguration : IEntityTypeConfiguration<WCS.Domain
         b.Property(x => x.DisplayName).HasMaxLength(100).IsRequired();
         b.Property(x => x.Theme).HasMaxLength(10).IsRequired().HasDefaultValue(WCS.Domain.Users.UserPreferences.DefaultTheme);
         b.Property(x => x.SidebarCollapsed).HasDefaultValue(false);
+        b.Property(x => x.Email).HasMaxLength(WCS.Domain.Users.AppUser.EmailMax);
+        b.Property(x => x.Position).HasMaxLength(WCS.Domain.Users.AppUser.OrganizationMax);
+        b.Property(x => x.Department).HasMaxLength(WCS.Domain.Users.AppUser.OrganizationMax);
         b.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired(); // salted hash only, never the password
         b.HasIndex(x => x.Username).IsUnique();
         b.Property(x => x.Version).IsRowVersion();
+    }
+}
+
+internal sealed class UserAvatarConfiguration : IEntityTypeConfiguration<WCS.Domain.Users.UserAvatar>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Users.UserAvatar> b)
+    {
+        b.ToTable("user_avatars");
+        b.HasKey(x => x.UserId);
+        b.Property(x => x.UserId).ValueGeneratedNever();
+        b.Property(x => x.ContentType).HasMaxLength(30).IsRequired();
+        b.Property(x => x.Data).IsRequired();
+        // The avatar belongs to the account and goes with it; the account is never touched when the image changes.
+        b.HasOne<WCS.Domain.Users.AppUser>().WithOne().HasForeignKey<WCS.Domain.Users.UserAvatar>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

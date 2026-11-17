@@ -38,12 +38,13 @@ export function UsersPage() {
           {(rows) => (
             <div className="table-wrap">
               <table className="grid">
-                <thead><tr><th>{t('users.colUsername')}</th><th>{t('users.colName')}</th><th>{t('users.colRole')}</th><th>{t('users.colStatus')}</th><th>{t('users.colCreated')}</th><th>{t('users.colLastLogin')}</th><th>{t('users.colActions')}</th></tr></thead>
+                <thead><tr><th>{t('users.colUsername')}</th><th>{t('users.colName')}</th><th>{t('users.colOrg')}</th><th>{t('users.colRole')}</th><th>{t('users.colStatus')}</th><th>{t('users.colCreated')}</th><th>{t('users.colLastLogin')}</th><th>{t('users.colActions')}</th></tr></thead>
                 <tbody>
                   {rows.map((u) => (
                     <tr key={u.id}>
                       <td className="mono"><strong>{u.username}</strong>{u.username === me?.username && <span className="muted">{t('users.you')}</span>}</td>
-                      <td>{displayNameOf(u.displayName)}</td>
+                      <td>{displayNameOf(u.displayName)}{u.email && <small className="muted block">{u.email}</small>}</td>
+                      <td>{u.position || u.department ? <>{u.position ?? <span className="muted">{t('users.notProvided')}</span>}<small className="muted block">{u.department ?? t('users.notProvided')}</small></> : <span className="muted">{t('users.notProvided')}</span>}</td>
                       <td><Pill tone={u.role === 'Admin' ? 'info' : 'muted'} dot={false}>{ROLE_SHORT_VI[u.role]}</Pill></td>
                       <td>
                         {u.isActive ? <Pill tone="ok">{t('users.active')}</Pill> : <Pill tone="bad">{t('users.disabled')}</Pill>}
@@ -134,7 +135,14 @@ function EditDialog({ user, isSelf, onClose, onDone }: { user: UserRow; isSelf: 
   const [displayName, setDisplayName] = useState(user.displayName)
   const [role, setRole] = useState<Role>(user.role)
   const [active, setActive] = useState(user.isActive)
-  const s = useSubmit(() => api.updateUser(user.id, { displayName: displayName.trim(), role, isActive: active }), onDone)
+  const [position, setPosition] = useState(user.position ?? '')
+  const [department, setDepartment] = useState(user.department ?? '')
+  const s = useSubmit(async () => {
+    await api.updateUser(user.id, { displayName: displayName.trim(), role, isActive: active })
+    // position / department are separate administrator-managed data (blank = not provided); the preferences, e-mail and avatar are never part of this dialog
+    if (position.trim() !== (user.position ?? '') || department.trim() !== (user.department ?? ''))
+      await api.setUserOrganization(user.id, { position: position.trim() || null, department: department.trim() || null })
+  }, onDone)
   return (
     <Modal title={t('users.editTitle', { user: user.username })} onClose={onClose} footer={<>
       <Button onClick={onClose}>{t('users.skip')}</Button>
@@ -144,6 +152,8 @@ function EditDialog({ user, isSelf, onClose, onDone }: { user: UserRow; isSelf: 
       {isSelf && <div className="notice notice-info">{t('users.selfNotice')}</div>}
       <div className="form-grid single">
         <Field label={t('users.fDisplayName')} error={s.errors.displayName}><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
+        <Field label={t('users.fPosition')} error={s.errors.position}><input value={position} maxLength={100} onChange={(e) => setPosition(e.target.value)} /></Field>
+        <Field label={t('users.fDepartment')} error={s.errors.department} hint={t('users.fOrgHint')}><input value={department} maxLength={100} onChange={(e) => setDepartment(e.target.value)} /></Field>
         <Field label={t('users.fRole')} error={s.errors.role}><RoleSelect value={role} onChange={setRole} disabled={isSelf} /></Field>
         <label className="check"><input type="checkbox" checked={active} disabled={isSelf} onChange={(e) => setActive(e.target.checked)} /> {t('users.fActiveCheck')}</label>
       </div>

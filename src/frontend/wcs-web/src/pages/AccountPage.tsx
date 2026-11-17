@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react'
+import { useCallback, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { api } from '../api/client'
+import { ProfilePanel } from '../account/ProfilePanel'
+import { SecurityPanel } from '../account/SecurityPanel'
 import { hasRole, useAuth } from '../auth/AuthContext'
-import { Button, PageHeader, Panel } from '../components/ui'
+import { Async, Button, PageHeader, Panel } from '../components/ui'
+import { useApi } from '../hooks/useApi'
 import { IconMoon, IconPanelLeftClose, IconPanelLeftOpen, IconSun } from '../components/icons'
 import { useT, type MsgKey } from '../i18n'
-import { displayNameOf } from '../i18n/format'
 import { ROLE_VI } from '../i18n/vi'
 import { usePreferences } from '../preferences/PreferencesContext'
 import type { Preferences } from '../preferences/prefsStore'
@@ -44,45 +47,35 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
   return <div className="kv-row"><div className="kv-label">{label}{hint && <small>{hint}</small>}</div><div className="kv-value">{children}</div></div>
 }
 
-/** The signed-in user's own page: profile (read-only, managed by an administrator), security, role, and personal interface preferences. */
+/** The signed-in user's own page: profile (own data), account security, role and organization (administrator-managed), and personal interface preferences. */
 export function AccountPage() {
   const t = useT()
   const { user } = useAuth()
   const prefs = usePreferences()
+  const profile = useApi(useCallback(() => api.profile(), []))
   if (!user) return null
-  const name = displayNameOf(user.displayName)
-  const initial = (name.trim()[0] ?? user.username[0] ?? '?').toUpperCase()
+  const refresh = () => profile.reload()
 
   return (
     <>
       <PageHeader title={t('account.title')} description={t('account.subtitle')} />
       <div className="account-grid">
-        <Panel title={t('account.secProfile')}>
-          <div className="pad">
-            <div className="avatar-row">
-              <span className="avatar" aria-label={t('account.avatar')} role="img">{initial}</span>
-              <small className="muted">{t('account.avatarHint')}</small>
-            </div>
-            <Row label={t('account.displayName')} hint={t('account.displayNameHint')}>{name}</Row>
-          </div>
-        </Panel>
-
-        <Panel title={t('account.secSecurity')}>
-          <div className="pad">
-            <Row label={t('account.username')}><span className="mono">{user.username}</span></Row>
-            <Row label={t('account.password')} hint={t('account.passwordHint')}>
-              <Link to="/account/password"><Button size="sm">{t('account.changePassword')}</Button></Link>
-            </Row>
-          </div>
-        </Panel>
-
-        <Panel title={t('account.secRole')}>
-          <div className="pad">
-            <Row label={t('account.role')} hint={t('account.roleHint')}>{ROLE_VI[user.role]}</Row>
-            <p className="muted small">{t('account.orgNote')}</p>
-            {hasRole(user, 'Admin') && <div className="btn-row"><Link to="/users"><Button size="sm">{t('account.manageUsers')}</Button></Link></div>}
-          </div>
-        </Panel>
+        <Async state={profile} empty={{ title: t('account.notProvided') }}>
+          {(p) => (
+            <>
+              <ProfilePanel profile={p} onChanged={refresh} />
+              <SecurityPanel />
+              <Panel title={t('account.secRole')}>
+                <div className="pad">
+                  <Row label={t('account.role')} hint={t('account.roleHint')}>{ROLE_VI[p.role]}</Row>
+                  <Row label={t('account.position')} hint={t('account.orgHint')}>{p.position ?? <span className="muted">{t('account.notProvided')}</span>}</Row>
+                  <Row label={t('account.department')} hint={t('account.orgHint')}>{p.department ?? <span className="muted">{t('account.notProvided')}</span>}</Row>
+                  {hasRole(user, 'Admin') && <div className="btn-row"><Link to="/users"><Button size="sm">{t('account.manageUsers')}</Button></Link></div>}
+                </div>
+              </Panel>
+            </>
+          )}
+        </Async>
 
         <Panel title={t('account.secPrefs')} className="account-prefs">
           <div className="pad">

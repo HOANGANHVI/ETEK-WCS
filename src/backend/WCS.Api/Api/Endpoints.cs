@@ -73,6 +73,40 @@ public static class Endpoints
             ApiResults.Ok(c, await svc.GetPreferencesAsync(c.Actor(), ct))).RequireAuthorization();
         auth.MapPut("preferences", async (HttpContext c, UserPreferencesRequest r, AuthService svc, CancellationToken ct) =>
             ApiResults.Ok(c, await svc.SetPreferencesAsync(c.Actor(), r.Theme, r.SidebarCollapsed, ct))).RequireAuthorization();
+        // Own profile: full name + e-mail (self-service), avatar. Always the caller's account (from the session); there is no route that addresses another user.
+        auth.MapGet("profile", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.GetAsync(c.Actor(), ct))).RequireAuthorization();
+        auth.MapPut("profile", async (HttpContext c, UpdateProfileRequest r, ProfileService svc, CancellationToken ct) =>
+        {
+            var (profile, identity) = await svc.UpdateOwnAsync(c.Actor(), r.DisplayName, r.Email, ct);
+            await c.SignInAsync(identity); // the display name is a session claim: refresh it (the security stamp is unchanged, other sessions stay valid)
+            return ApiResults.Ok(c, profile);
+        }).RequireAuthorization();
+        auth.MapGet("avatar", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+        {
+            var file = await svc.GetAvatarAsync(c.Actor(), ct);
+            if (file is null) return ApiResults.Fail(c, StatusCodes.Status404NotFound, "AVATAR_NOT_FOUND", "Chưa có ảnh đại diện.");
+            // The stored (validated) type is the only type served; the browser may not sniff it into anything else and may not run it as a document.
+            c.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            c.Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+            c.Response.Headers["Cache-Control"] = "private, no-store";
+            return Results.File(file.Data, file.ContentType);
+        }).RequireAuthorization();
+        auth.MapPut("avatar", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+        {
+            // Raw image bytes in the body (no file name, no path, no multipart): read at most limit+1 bytes so an oversized upload is refused without buffering it.
+            if (c.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } f) f.MaxRequestBodySize = AvatarImage.MaxBytes + 1024;
+            using var ms = new MemoryStream();
+            var buffer = new byte[16 * 1024]; int n;
+            while ((n = await c.Request.Body.ReadAsync(buffer, ct)) > 0)
+            {
+                ms.Write(buffer, 0, n);
+                if (ms.Length > AvatarImage.MaxBytes) throw AppException.Validation("AVATAR_TOO_LARGE", "Ảnh đại diện tối đa 512 KB.");
+            }
+            return ApiResults.Ok(c, await svc.SetAvatarAsync(c.Actor(), ms.ToArray(), ct));
+        }).RequireAuthorization();
+        auth.MapDelete("avatar", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.RemoveAvatarAsync(c.Actor(), ct))).RequireAuthorization();
         auth.MapPost("change-password", async (HttpContext c, ChangePasswordRequest r, AuthService svc, CancellationToken ct) =>
         {
             var user = await svc.ChangeOwnPasswordAsync(c.Actor(), r.CurrentPassword, r.NewPassword, ct);
@@ -243,6 +277,8 @@ public static class Endpoints
             ApiResults.Ok(c, await s.CreateAsync(c.Actor(), new CreateUserCommand(r.Username, r.DisplayName, r.Role, r.Password, r.IsActive ?? true), ct), StatusCodes.Status201Created));
         users.MapPut("{id:guid}", async (HttpContext c, Guid id, UpdateUserRequest r, UserAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await s.UpdateAsync(c.Actor(), id, new UpdateUserCommand(r.DisplayName, r.Role, r.IsActive), ct)));
+        users.MapPut("{id:guid}/organization", async (HttpContext c, Guid id, UpdateOrganizationRequest r, UserAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.SetOrganizationAsync(c.Actor(), id, r.Position, r.Department, ct)));
         users.MapDelete("{id:guid}", async (HttpContext c, Guid id, UserAdminService s, CancellationToken ct) =>
         {
             await s.DeleteAsync(c.Actor(), id, ct);

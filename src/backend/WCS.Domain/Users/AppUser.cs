@@ -60,7 +60,32 @@ public class AppUser
     public string Theme { get; private set; } = UserPreferences.DefaultTheme;
     /// <summary>Personal interface preference: the navigation sidebar is collapsed to icons.</summary>
     public bool SidebarCollapsed { get; private set; }
+    /// <summary>Contact e-mail. Owned by the user (self-service). Null = not provided yet; never defaulted or guessed.</summary>
+    public string? Email { get; private set; }
+    /// <summary>Job title. Managed by an administrator. Null = not provided yet.</summary>
+    public string? Position { get; private set; }
+    /// <summary>Department. Managed by an administrator. Null = not provided yet.</summary>
+    public string? Department { get; private set; }
     public uint Version { get; private set; }
+
+    public const int DisplayNameMax = 100;
+    public const int EmailMax = 254;
+    public const int OrganizationMax = 100;
+
+    /// <summary>Trims; empty becomes null ("not provided").</summary>
+    public static string? NormalizeOptional(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Pragmatic e-mail shape check (one '@', a dotted domain, no spaces/control characters, length limit). It does not prove the address exists.</summary>
+    public static bool IsValidEmail(string email)
+    {
+        if (email.Length is 0 or > EmailMax || email.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))) return false;
+        var at = email.IndexOf('@');
+        if (at <= 0 || at != email.LastIndexOf('@') || at == email.Length - 1) return false;
+        var local = email[..at]; var domain = email[(at + 1)..];
+        if (local.Length > 64 || local.StartsWith('.') || local.EndsWith('.') || local.Contains("..")) return false;
+        var labels = domain.Split('.');
+        return labels.Length >= 2 && labels.All(l => l.Length is > 0 and <= 63 && !l.StartsWith('-') && !l.EndsWith('-') && l.All(ch => char.IsLetterOrDigit(ch) || ch == '-'));
+    }
 
     public static string NormalizeUsername(string? username) => (username ?? "").Trim().ToLowerInvariant();
 
@@ -95,6 +120,26 @@ public class AppUser
     {
         if (string.IsNullOrWhiteSpace(displayName)) throw new DomainException("DISPLAY_NAME_REQUIRED", "Cần nhập họ tên hiển thị.");
         DisplayName = displayName.Trim(); UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// Self-service profile (full name and e-mail). Not a security change (sessions stay valid) and it never touches the interface preferences,
+    /// the organization data or the role.
+    /// </summary>
+    public void UpdateOwnProfile(string displayName, string? email, DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(displayName) || displayName.Trim().Length > DisplayNameMax) throw new DomainException("DISPLAY_NAME_LENGTH", "Full name must be 1-100 characters.");
+        var mail = NormalizeOptional(email);
+        if (mail is not null && !IsValidEmail(mail)) throw new DomainException("EMAIL_INVALID", "E-mail address is not valid.");
+        DisplayName = displayName.Trim(); Email = mail; UpdatedAt = now;
+    }
+
+    /// <summary>Administrator-managed organization data. Null/blank = not provided. Does not touch preferences, role or security stamp.</summary>
+    public void SetOrganization(string? position, string? department, DateTimeOffset now)
+    {
+        var p = NormalizeOptional(position); var d = NormalizeOptional(department);
+        if ((p?.Length ?? 0) > OrganizationMax || (d?.Length ?? 0) > OrganizationMax) throw new DomainException("ORGANIZATION_TOO_LONG", "Position / department: at most 100 characters.");
+        Position = p; Department = d; UpdatedAt = now;
     }
 
     public void ChangeRole(UserRole role, DateTimeOffset now)

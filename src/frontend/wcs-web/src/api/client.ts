@@ -3,7 +3,7 @@ import { demoDataApi } from '../demo/demoApi'
 import type { Preferences } from '../preferences/prefsStore'
 import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
-import type { AuditFilter, AuditRow, Me, Role, UserRow } from './authTypes'
+import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
 import type { AddressIssue, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
@@ -85,6 +85,13 @@ const realApi = {
   me: () => request<Me>('/api/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<Me>('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+  // own profile (full name, e-mail, avatar). The account is always the signed-in one; there is no user id in any of these calls.
+  profile: () => request<Profile>('/api/auth/profile'),
+  updateProfile: (b: { displayName: string; email: string | null }) => request<Profile>('/api/auth/profile', { method: 'PUT', body: JSON.stringify(b) }),
+  /** Raw image bytes in the body (no file name or path is sent). */
+  uploadAvatar: (image: Blob) => request<Profile>('/api/auth/avatar', { method: 'PUT', body: image, headers: { 'Content-Type': image.type || 'application/octet-stream' } }),
+  deleteAvatar: () => request<Profile>('/api/auth/avatar', { method: 'DELETE' }),
+  avatarUrl: (version: number) => `${BASE_URL}/api/auth/avatar?v=${version}`,
   preferences: () => request<Preferences>('/api/auth/preferences'),
   savePreferences: (p: Preferences) => request<Preferences>('/api/auth/preferences', { method: 'PUT', body: JSON.stringify(p) }),
   users: (search?: string) => request<UserRow[]>(`/api/users${qs({ search })}`),
@@ -92,6 +99,9 @@ const realApi = {
     request<UserRow>('/api/users', { method: 'POST', body: JSON.stringify(b) }),
   updateUser: (id: string, b: { displayName: string; role: Role; isActive: boolean }) =>
     request<UserRow>(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  /** Administrator-managed organization data (blank = not provided). */
+  setUserOrganization: (id: string, b: { position: string | null; department: string | null }) =>
+    request<UserRow>(`/api/users/${id}/organization`, { method: 'PUT', body: JSON.stringify(b) }),
   deleteUser: (id: string) => request<{ deleted: boolean }>(`/api/users/${id}`, { method: 'DELETE' }),
   resetPassword: (id: string, newPassword: string) =>
     request<{ reset: boolean }>(`/api/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) }),
