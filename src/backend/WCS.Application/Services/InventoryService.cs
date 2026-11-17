@@ -88,6 +88,14 @@ public sealed class InventoryService(
             if (await locations.GetAsync(id!.Value, ct) is { } loc) loc.SetReconciliationRequired(true, clock.UtcNow);
     }
 
+    public async Task MarkPhysicalUnprovenAsync(TransportTask task, CancellationToken ct = default)
+    {
+        if (task.DropConfirmedAt is not null) return;      // delivered and confirmed: nothing is uncertain
+        if (task.RackId is { } rid && await racks.GetAsync(rid, ct) is { } rack && rack.Status != RackStatus.Unknown) rack.MarkUnknown(clock.UtcNow);
+        foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId }.Where(x => x is not null).Distinct())
+            if (await locations.GetAsync(id!.Value, ct) is { } loc) loc.SetReconciliationRequired(true, clock.UtcNow);
+    }
+
     // -------------------------------------------------------------------------- confirmed events
 
     public async Task ConfirmPickAsync(TransportTask task, ConfirmationSource source, string? user, CancellationToken ct = default)

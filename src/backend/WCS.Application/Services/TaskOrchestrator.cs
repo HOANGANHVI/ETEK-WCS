@@ -338,7 +338,7 @@ public sealed class TaskOrchestrator(
                 return Applied("Cancelled");
 
             case SignalKind.RcsInterrupted:
-                await FinishAsync(task, TaskState.Failed, s.Detail ?? "RCS reported the task interrupted", src, events, after, t);
+                await FinishAsync(task, TaskState.Failed, s.Detail ?? "RCS reported the task interrupted", src, events, after, t, physicalUnproven: true);   // CR-008B-4
                 return Applied("Failed");
 
             case SignalKind.RcsEnded:
@@ -677,7 +677,7 @@ public sealed class TaskOrchestrator(
         {
             var task = await tasks.GetAsync(taskId, t);
             if (task is not { State: TaskState.CancelPending }) return false;
-            await FinishAsync(task, terminal, reason, "RCS", events, after, t, forceUncertain: true);
+            await FinishAsync(task, terminal, reason, "RCS", events, after, t, forceUncertain: true, physicalUnproven: true);   // CR-008B-4: Completed / Interrupted / no record after accept
             return true;
         }, ct);
 
@@ -710,15 +710,16 @@ public sealed class TaskOrchestrator(
     /// are released.
     /// </summary>
     private async Task FinishAsync(TransportTask task, TaskState terminal, string reason, string source, List<WcsEvent> events,
-        List<Func<Task>> after, CancellationToken t, bool forceUncertain = false)
+        List<Func<Task>> after, CancellationToken t, bool forceUncertain = false, bool physicalUnproven = false)
     {
-        var physical = forceUncertain || task.RcsTaskCode is not null || task.PickConfirmedAt is not null;
+        var physical = forceUncertain || physicalUnproven || task.RcsTaskCode is not null || task.PickConfirmedAt is not null;
         var wasQueuedBehind = task.AgvId;
         task.TransitionTo(terminal, reason, source, clock.UtcNow);
         if (physical)
         {
             if (terminal != TaskState.Completed) task.RequireReconciliation(reason, clock.UtcNow);
-            await inventory.MarkUncertainAsync(task, t);
+            // CR-008B-4: an outcome reported by RCS that WCS cannot prove marks the rack and the locations uncertain even before a pick; every other case keeps the old rule
+            if (physicalUnproven) await inventory.MarkPhysicalUnprovenAsync(task, t); else await inventory.MarkUncertainAsync(task, t);
         }
         else await inventory.ReleaseReservationsAsync(task, t);
         events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));

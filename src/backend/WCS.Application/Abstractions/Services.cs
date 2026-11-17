@@ -34,6 +34,12 @@ public interface IInventoryService
     Task ReleaseReservationsAsync(TransportTask task, CancellationToken ct = default);
     /// <summary>Mark racks/locations uncertain after a failure/cancel with physical uncertainty (4.8 steps 1-2).</summary>
     Task MarkUncertainAsync(TransportTask task, CancellationToken ct = default);
+    /// <summary>
+    /// CR-008B-4: RCS reported an outcome (Completed / Interrupted / no record after accepting) that WCS cannot prove physically, whether or not a pick was confirmed.
+    /// Neither "still at the source" nor "arrived" may be claimed: the rack becomes UNKNOWN (its WCS-recorded location is kept so it still counts against capacity) and the
+    /// source / destination locations require reconciliation, so no new task is allocated to them. Reservations are NOT released. Nothing is done once the drop is confirmed.
+    /// </summary>
+    Task MarkPhysicalUnprovenAsync(TransportTask task, CancellationToken ct = default);
 
     // API-level operations (own transaction)
     Task<IReadOnlyList<Guid>> DeclareInitialStockAsync(string locationCode, RackKind kind, int quantity, string user, CancellationToken ct = default);

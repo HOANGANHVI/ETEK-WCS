@@ -1,5 +1,14 @@
 # Change Log
 
+## v2.6 – CR-008B-4 Rack and inventory uncertainty (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-4). Status: IMPLEMENTED on `develop`; not merged. No migration. Touches the protected `InventoryService` (one added method) with the owner's approval of CR-008B section 7.
+- Added: `IInventoryService.MarkPhysicalUnprovenAsync`: when RCS reports Completed / Interrupted / no record after accepting a task and WCS cannot prove the physical result, the rack becomes `Unknown` (its WCS location kept) and the source / destination locations require reconciliation; nothing is released. Called through `FinishAsync(physicalUnproven: true)`.
+- Unchanged: reservation rules, pick/drop/reconcile logic, `MarkUncertainAsync`, the cancel-confirmed and normal-completion paths, the retry-limit outcome (D-1: resource state kept), `Rack`/`Location`, no new state.
+- Open: decisions D-5/D-6 (model and scope) were not chosen explicitly; the narrowest reading of CR-008B section 7 was applied. `RcsEnded` signal and `RCS_DISPATCH_UNCERTAIN` keep the old behaviour.
+- Tests: `Cr008b4InventoryUncertaintyTests` (9); backend 491/491.
+- Approved by: project owner (2026-11-17).
+
 ## v2.5 – CR-008B-3 CancelPending reconciliation (2026-11-17)
 
 - Change Request: CR-008B (sub-CR B-3). Status: IMPLEMENTED on `develop`; not merged. No migration.

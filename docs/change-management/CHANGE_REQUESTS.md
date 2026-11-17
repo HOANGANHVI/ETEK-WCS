@@ -215,4 +215,5 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Decisions NOT taken (must not be assumed):** **D-7** (conditions for handing an AGV back to the scheduler) - no new AGV policy, flag or migration is introduced; **D-9** - two NotFound answers are NOT a cancellation; **REV-005** - RCS idempotency by `RcsRequestCode` is NOT VERIFIED (RCS vendor confirmation required before CreateTask is retried against a real RCS).
 - **Migrations so far:** B-2 `AddStationRequests` (new table `station_requests`, additive).
 - **B-3:** no migration; new Admin endpoints under `/api/tasks/.../reconciliation*`.
+- **B-4:** no migration; `InventoryService.MarkPhysicalUnprovenAsync` added (protected module, approved by CR-008B section 7).
 - **Sub-CRs:** B-1 documentation correction; B-2 PLC station intake reliability; B-3 CancelPending reconciliation (+ Admin reconciliation screen); B-4 rack/inventory uncertainty; B-5 AGV reconciliation hold - ANALYSIS ONLY until D-7 is decided. Each has its own report in `docs/reviews/`.
