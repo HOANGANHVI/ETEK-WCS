@@ -100,6 +100,18 @@ export interface TransportTask {
   finishedAt: string | null
 }
 
+/** CR-008B-3: what an Admin needs to reconcile a task (GET /api/tasks/{id}/reconciliation). */
+export interface ReconciliationDetail {
+  task: TransportTask
+  rcsRetryCount: number
+  rcsLastAttemptAt: string | null
+  rcsEvents: TaskHistory[]
+  reservations: { kind: string; status: string; locationCode: string | null; rackId: string | null }[]
+  rack: { id: string; status: string; currentLocationCode: string | null; lastConfirmedAt: string } | null
+  locations: { code: string; reconciliationRequired: boolean }[]
+  canReconcile: boolean
+}
+
 export interface TaskHistory {
   id: string
   fromState: string | null

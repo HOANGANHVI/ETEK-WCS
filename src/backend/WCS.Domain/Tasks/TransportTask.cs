@@ -88,7 +88,8 @@ public class TransportTask
         if (!TaskStateMachine.CanTransition(State, next)) throw new InvalidTaskTransitionException(State, next);
         var prev = State;
         State = next;
-        RcsRetryCount = 0; RcsLastAttemptAt = null;
+        // a terminal task keeps its final retry count / last attempt time (shown to the Admin who reconciles it); every other state starts a new series
+        if (!TaskStateMachine.IsTerminal(next)) { RcsRetryCount = 0; RcsLastAttemptAt = null; }
         StateReason = reason;
         StateEnteredAt = now;
         UpdatedAt = now;

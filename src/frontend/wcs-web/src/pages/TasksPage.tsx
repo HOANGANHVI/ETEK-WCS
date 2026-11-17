@@ -4,9 +4,10 @@ import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
 import { CreateTaskDialog, DeleteTaskDialog, EditTaskDialog } from './TaskDialogs'
+import { ReconciliationPanel } from './ReconciliationPanel'
 import { USER_EDITABLE } from './taskRules'
 import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
-import { ENGINEERING_TOOLS } from '../config'
+import { DEMO_MODE, ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
 import { formatDateTime, formatTime } from '../i18n/format'
@@ -29,6 +30,7 @@ export function TasksPage() {
   const [stateFilter, setStateFilter] = useState<TaskState | ''>('')
   const [agvFilter, setAgvFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [reconOnly, setReconOnly] = useState(false)
   const [cancelFor, setCancelFor] = useState<string | null>(null)
   const urlId = params.get('id')
 
@@ -39,8 +41,8 @@ export function TasksPage() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return (tasks.data?.items ?? []).filter((t) => (!agvFilter || t.agvId === agvFilter) && (!q || taskCode(t.id).toLowerCase().includes(q)))
-  }, [tasks.data, agvFilter, search])
+    return (tasks.data?.items ?? []).filter((t) => (!agvFilter || t.agvId === agvFilter) && (!reconOnly || t.requiresReconciliation) && (!q || taskCode(t.id).toLowerCase().includes(q)))
+  }, [tasks.data, agvFilter, search, reconOnly])
 
   // Nothing chosen yet: show the newest task so the detail area is never an empty void.
   const selectedId = urlId ?? rows[0]?.id ?? null
@@ -62,6 +64,7 @@ export function TasksPage() {
           actions={
             <>
               <input type="search" placeholder="Tìm mã nhiệm vụ" aria-label="Tìm mã nhiệm vụ" value={search} onChange={(e) => setSearch(e.target.value)} />
+              {isAdmin && !DEMO_MODE && <label className="inline-check"><input type="checkbox" checked={reconOnly} onChange={(e) => setReconOnly(e.target.checked)} /> Cần đối soát</label>}
               <select aria-label="Lọc theo AGV" value={agvFilter} onChange={(e) => setAgvFilter(e.target.value)}>
                 <option value="">Tất cả AGV</option>
                 {(agvs.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.code}</option>)}
@@ -225,6 +228,10 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
                   {actionMsg && <div className="notice notice-info">{actionMsg}</div>}
                   {actionError && <div className="notice notice-bad" role="alert">{actionError}</div>}
                 </section>
+              )}
+
+              {isAdmin && !DEMO_MODE && t.requiresReconciliation && ['Failed', 'Cancelled', 'Completed'].includes(t.state) && (
+                <ReconciliationPanel task={t} onChanged={() => { task.reload(); history.reload() }} />
               )}
 
               <section className="detail-sec">

@@ -159,6 +159,17 @@ public static class Endpoints
             return ApiResults.Ok(c, await Audited.RunAsync(c, "TASK_CANCEL", "Task", id.ToString(), Audited.TaskSnapshot(before),
                 () => o.CancelTaskAsync(id, r.Reason, c.Actor().Username, ct), Audited.TaskSnapshot, r.Reason));
         }).RequireAuthorization(admin);
+        // CR-008B-3: reconciliation worklist and detail for the Admin (read only), and the "could not be established" check (records history, releases nothing).
+        task.MapGet("reconciliation", async (HttpContext c, ReconciliationService s, int? take, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.ListAsync(take ?? 200, ct))).RequireAuthorization(admin);
+        task.MapGet("{id:guid}/reconciliation", async (HttpContext c, Guid id, ReconciliationService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.GetDetailAsync(id, ct))).RequireAuthorization(admin);
+        task.MapPost("{id:guid}/reconciliation-check", async (HttpContext c, Guid id, ReconciliationCheckRequest r, ReconciliationService s, WcsQueries q, CancellationToken ct) =>
+        {
+            await Audited.RunAsync(c, "TASK_RECONCILE_CHECK_UNRESOLVED", "Task", id.ToString(), null,
+                async () => { await s.RecordUnresolvedCheckAsync(id, r.Note.Trim(), c.Actor().Username, ct); return 0; }, _ => new { unresolved = true }, r.Note);
+            return ApiResults.Ok(c, await q.GetTaskAsync(id, ct));
+        }).RequireAuthorization(admin);
         task.MapPost("{id:guid}/reconcile", async (HttpContext c, Guid id, ReconcileTaskRequest r, IInventoryService inv2, WcsQueries q, CancellationToken ct) =>
         {
             await Audited.RunAsync(c, "TASK_RECONCILE", "Task", id.ToString(), null,

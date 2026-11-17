@@ -86,6 +86,8 @@ public interface ITransportTaskRepository
     Task<IReadOnlyList<TransportTask>> ListByStatesAsync(IReadOnlyCollection<TaskState> states, int take, CancellationToken ct = default);
     Task<(IReadOnlyList<TransportTask> Items, int Total)> QueryAsync(TaskQuery query, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, Guid>> ActiveTaskIdByAgvAsync(CancellationToken ct = default);
+    /// <summary>CR-008B-3: tasks whose physical outcome still has to be reconciled by an Admin (newest first).</summary>
+    Task<IReadOnlyList<TransportTask>> ListRequiringReconciliationAsync(int take, CancellationToken ct = default);
 }
 
 public interface IProcessedEventRepository

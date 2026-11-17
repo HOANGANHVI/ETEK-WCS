@@ -7,7 +7,7 @@ import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
 import type { AddressIssue, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
-  Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, SimulationStep, SystemHealth,
+  Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, ReconciliationDetail, SimulationStep, SystemHealth,
   TaskHistory, TaskState, TransportTask,
 } from './types'
 
@@ -61,6 +61,13 @@ const realApi = {
   taskHistory: (id: string) => request<TaskHistory[]>(`/api/tasks/${id}/history`),
   cancelTask: (id: string, reason: string) =>
     request<TransportTask>(`/api/tasks/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  // CR-008B-3 physical reconciliation (Admin only; the API enforces it)
+  reconciliationList: () => request<TransportTask[]>('/api/tasks/reconciliation'),
+  reconciliationDetail: (id: string) => request<ReconciliationDetail>(`/api/tasks/${id}/reconciliation`),
+  reconcileTask: (id: string, actualLocationCode: string, user: string, note: string) =>
+    request<TransportTask>(`/api/tasks/${id}/reconcile`, { method: 'POST', body: JSON.stringify({ actualLocationCode, user, note }) }),
+  reconciliationCheck: (id: string, note: string) =>
+    request<TransportTask>(`/api/tasks/${id}/reconciliation-check`, { method: 'POST', body: JSON.stringify({ note }) }),
   simulateNext: (id: string) => request<SimulationStep>(`/api/simulator/tasks/${id}/advance`, { method: 'POST' }),
   createTask: (flow: string, stationCode: string, requestKey: string) =>
     request<TransportTask>('/api/tasks', { method: 'POST', body: JSON.stringify({ requestKey, flow, stationCode }) }),

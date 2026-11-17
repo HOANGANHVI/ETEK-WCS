@@ -1,5 +1,15 @@
 # Change Log
 
+## v2.5 – CR-008B-3 CancelPending reconciliation (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-3). Status: IMPLEMENTED on `develop`; not merged. No migration.
+- Decision applied: D-1 - a task in CancelPending that reaches 30 automatic attempts stops retrying and becomes `Failed` with `RequiresReconciliation=true` (reason `CANCEL_RETRY_LIMIT_REACHED`); reservations, rack and location state are kept; `Failed` is not evidence that RCS cancelled.
+- Removed: "two consecutive NotFound answers = Cancelled" (D-9 not approved; `task-state-machine.md` 3.9). NotFound is recorded (`RCS_CANCEL_NOTFOUND_NOT_CONFIRMED`) and never turned into Cancelled.
+- Added: Admin reconciliation - `GET /api/tasks/reconciliation`, `GET /api/tasks/{id}/reconciliation`, `POST /api/tasks/{id}/reconciliation-check` (records an inconclusive check, releases nothing); web `ReconciliationPanel` + "Cần đối soát" filter; terminal tasks keep their final retry counter. The existing `POST /api/tasks/{id}/reconcile` is unchanged.
+- Unchanged: `TaskStateMachine`, `TaskScheduler`, `InventoryService`, PER_AGV, `StateTimeoutsSeconds`, retry values.
+- Tests: `Cr008b3CancelReconciliationTests` (7) + adapted CR-008A tests.
+- Approved by: project owner (2026-11-17).
+
 ## v2.4 – CR-008B-2 PLC station intake reliability (2026-11-17)
 
 - Change Request: CR-008B (sub-CR B-2). Status: IMPLEMENTED on `develop`; not merged.

@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<ITaskScheduler, Services.TaskScheduler>();
         services.AddScoped<StationRequestProcessor>();
         services.AddScoped<WcsQueries>();
+        services.AddScoped<ReconciliationService>();   // CR-008B-3
         services.AddScoped<AgvStatusService>();
         services.AddScoped<ConnectionConfigService>();
         services.AddScoped<OperationalConfigService>();

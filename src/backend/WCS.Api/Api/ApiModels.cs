@@ -23,6 +23,9 @@ public sealed record ReconcileTaskRequest(
     [property: Required, StringLength(100)] string User,
     [property: StringLength(1000)] string? Note);
 
+/// <summary>CR-008B-3: the Admin checked on site and could not establish the physical location: record it, release nothing.</summary>
+public sealed record ReconciliationCheckRequest([property: Required, StringLength(1000, MinimumLength = 3)] string Note);
+
 public sealed record InitialStockRequest(
     [property: Required, StringLength(50)] string LocationCode,
     RackKind RackKind,

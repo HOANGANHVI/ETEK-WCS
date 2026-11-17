@@ -596,20 +596,20 @@ public sealed class TaskOrchestrator(
     /// </summary>
     public async Task ReconcileCancelPendingAsync(Guid taskId, CancellationToken ct = default)
     {
-        var plan = await Tx(async (events, _, t) =>
+        var plan = await Tx(async (events, after, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
             if (task is not { State: TaskState.CancelPending }) return null;
             var o = schedulerOptions.Value;
             if (task.RcsRetryCount >= Math.Max(1, o.RcsMaxAttempts))
             {
-                if (!task.HasHistory("RCS_CANCEL_RETRY_EXHAUSTED"))
-                {
-                    task.Note("RCS_CANCEL_RETRY_EXHAUSTED", $"{task.RcsRetryCount} attempts without a confirmed cancellation; automatic retry stopped", Wcs, clock.UtcNow);
-                    task.RequireReconciliation("RCS cancellation not confirmed after the retry limit", clock.UtcNow);
-                    events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
-                    logger.LogError("Cancellation of task {TaskId} was not confirmed after {Attempts} attempts; automatic retry stopped", taskId, task.RcsRetryCount);
-                }
+                // CR-008B-3 (owner decision D-1): the limit is final. The automatic retry stops, the task becomes Failed and requires reconciliation; the reservations and the
+                // resource state are KEPT and nothing is released. Failed is NOT evidence that RCS cancelled the task: an Admin has to reconcile before the resources are used again.
+                // The counter is neither raised nor reset and no Cancel is sent again.
+                var attempts = task.RcsRetryCount;
+                task.Note(RetryLimitEvent, $"RCS did not confirm the cancellation after {attempts} automatic attempts (last attempt {task.RcsLastAttemptAt:O}, limit reached at {clock.UtcNow:O}). Automatic retry stopped; this is not a confirmation that RCS cancelled the task.", Wcs, clock.UtcNow);
+                await FinishAsync(task, TaskState.Failed, RetryLimitReason, Wcs, events, after, t, forceUncertain: true);
+                logger.LogError("Cancellation of task {TaskId} was not confirmed after {Attempts} attempts; the task is Failed and requires reconciliation. {EventCode}", taskId, attempts, "CANCEL_RETRY_LIMIT_REACHED");
                 return null;
             }
             if (!RcsRetryPolicy.IsDue(task.RcsRetryCount, task.RcsLastAttemptAt, clock.UtcNow, o)) return null;
@@ -655,21 +655,9 @@ public sealed class TaskOrchestrator(
                     await EndUncertainAsync(taskId, TaskState.Failed, "RCS_NOTFOUND_AFTER_ACCEPT", ct);
                     break;
                 }
-                // RCS never reported a task code. NotFound is accepted as "cancelled" only after TWO consecutive NotFound answers (separated by the backoff).
-                await Tx(async (events, after, t) =>
-                {
-                    var task = await tasks.GetAsync(taskId, t);
-                    if (task is not { State: TaskState.CancelPending }) return false;
-                    if (task.LastHistory?.EventName != NotFoundSeen)
-                    {
-                        task.Note(NotFoundSeen, "RCS has no record of the task; waiting for a second confirmation", Wcs, clock.UtcNow);
-                        return false;
-                    }
-                    // an unknown dispatch outcome (attempts were made) keeps its reservations until an operator reconciles
-                    await FinishAsync(task, TaskState.Cancelled, "Cancel confirmed: RCS has no record of the task (2 consecutive checks)", "RCS", events, after, t,
-                        forceUncertain: task.DispatchAttempts > 0);
-                    return true;
-                }, ct);
+                // CR-008B-3 (D-9 not approved): NotFound - once or repeatedly - is NEVER turned into Cancelled (task-state-machine.md 3.9: CANCELLED only when RCS confirms the
+                // cancellation or an approved equivalent reconciliation exists). It is recorded and the follow-up continues; at the retry limit the task becomes Failed (D-1).
+                await Note(taskId, NotFoundNotConfirmed, "RCS reports no record of the task. This is not treated as a cancellation.", ct, onlyIfChanged: true);
                 break;
 
             default: // Unknown
@@ -678,7 +666,9 @@ public sealed class TaskOrchestrator(
         }
     }
 
-    private const string NotFoundSeen = "RCS_CANCEL_NOTFOUND_SEEN";
+    private const string NotFoundNotConfirmed = "RCS_CANCEL_NOTFOUND_NOT_CONFIRMED";
+    private const string RetryLimitEvent = "RCS_CANCEL_RETRY_EXHAUSTED";
+    public const string RetryLimitReason = "CANCEL_RETRY_LIMIT_REACHED";
     private sealed record CancelReconcilePlan(string RequestCode, bool HadRcsTaskCode);
 
     /// <summary>Ends a task whose physical outcome is not proven: terminal, reconciliation required, reservations and rack state kept, AGV freed.</summary>

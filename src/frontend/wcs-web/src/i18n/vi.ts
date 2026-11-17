@@ -101,11 +101,19 @@ export const HISTORY_EVENT_VI: Record<string, string> = {
   RCS_CANCEL_UNKNOWN: 'Chưa rõ kết quả hủy tại RCS',
   RCS_CONTINUE_UNKNOWN: 'Chưa rõ kết quả tiếp tục nhiệm vụ tại RCS',
   CANCEL_RETRY: 'Gửi lại yêu cầu hủy',
+  RCS_CANCEL_RETRY_EXHAUSTED: 'Hết số lần thử hủy tự động – chuyển Thất bại, cần đối soát',
+  RCS_CANCEL_NOTFOUND_NOT_CONFIRMED: 'RCS báo không có bản ghi (không coi là đã hủy)',
+  RCS_CANCEL_IN_PROGRESS: 'RCS đang hủy nhiệm vụ',
+  RECONCILIATION_CHECK_UNRESOLVED: 'Admin kiểm tra: chưa xác định được vị trí thực tế',
 }
 /** Events that come from or concern the PLC / RCS interfaces (shown in a dedicated list of the task detail). */
 export const DEVICE_EVENT_RE = /^(RCS_|PICK_CONFIRMED|LATE_EVENT|OUT_OF_ORDER)/
 
 const REASON_RULES: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^CANCEL_RETRY_LIMIT_REACHED$/, () => 'Hết giới hạn thử hủy tự động: chưa có xác nhận hủy từ RCS, cần đối soát'],
+  [/^CANCEL_RACE_RCS_COMPLETED$/, () => 'RCS báo hoàn thành trước khi hủy kịp: cần đối soát vị trí rack'],
+  [/^CANCEL_RACE_RCS_INTERRUPTED$/, () => 'RCS báo gián đoạn trước khi hủy kịp: cần đối soát vị trí rack'],
+  [/^RCS_NOTFOUND_AFTER_ACCEPT$/, () => 'RCS không còn bản ghi của nhiệm vụ đã tiếp nhận: cần đối soát'],
   [/^Validating business conditions$/, () => 'Đang kiểm tra điều kiện nghiệp vụ'],
   [/^AGV free; claimed from queue$/, () => 'AGV rảnh, nhận nhiệm vụ từ hàng đợi'],
   [/^AGV free; claimed$/, () => 'AGV rảnh, đã nhận nhiệm vụ'],
@@ -153,6 +161,8 @@ export function reasonVi(text: string | null | undefined): string {
 
 const ERROR_VI: Record<string, string> = {
   VALIDATION_FAILED: 'Dữ liệu gửi lên không hợp lệ.',
+  RCS_NOT_CONNECTED: 'RCS chưa được kết nối (chưa có RCS adapter thật): hệ thống không nhận nhiệm vụ mới.',
+  TASK_NOT_FINISHED: 'Chỉ đối soát được nhiệm vụ đã kết thúc.',
   TASK_NOT_FOUND: 'Không tìm thấy nhiệm vụ.',
   AGV_NOT_FOUND: 'Không tìm thấy AGV.',
   LOCATION_NOT_FOUND: 'Không tìm thấy vị trí.',

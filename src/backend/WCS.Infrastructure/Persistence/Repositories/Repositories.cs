@@ -148,6 +148,9 @@ internal sealed class TransportTaskRepository(WcsDbContext db) : ITransportTaskR
     public Task<TransportTask?> NextQueuedForAgvAsync(Guid agvId, CancellationToken ct) =>
         WithHistory.Where(x => x.AgvId == agvId && x.State == TaskState.Queued).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).FirstOrDefaultAsync(ct);
 
+    public async Task<IReadOnlyList<TransportTask>> ListRequiringReconciliationAsync(int take, CancellationToken ct) =>
+        await db.Tasks.AsNoTracking().Where(x => x.RequiresReconciliation).OrderByDescending(x => x.UpdatedAt).Take(take).ToListAsync(ct);
+
     public async Task<IReadOnlyList<TransportTask>> ListByStatesAsync(IReadOnlyCollection<TaskState> states, int take, CancellationToken ct)
     {
         var arr = states.ToArray();

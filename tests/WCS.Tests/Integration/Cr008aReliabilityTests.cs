@@ -367,7 +367,7 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Cancel_follow_up_is_spaced_bounded_and_does_not_repeat_identical_history()
+    public async Task Cancel_follow_up_is_spaced_and_bounded_and_the_limit_fails_the_task_for_reconciliation()
     {
         await using var h = await ReadyAsync(fixture);
         Backoff(h, initialMs: 1000, maxMs: 4000, maxAttempts: 4);
@@ -380,16 +380,19 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
 
         for (var i = 0; i < 40; i++) { h.Clock.Advance(TimeSpan.FromSeconds(10)); await h.TickAsync(); }
         var task = await h.GetTaskAsync(t.Id);
-        Assert.Equal(TaskState.CancelPending, task.State);
+        // CR-008B-3 (decision D-1): the limit is final - Failed + reconciliation, nothing released
+        Assert.Equal(TaskState.Failed, task.State);
+        Assert.Equal(WCS.Application.Services.TaskOrchestrator.RetryLimitReason, task.StateReason);
         Assert.True(task.RequiresReconciliation);
         Assert.Single(task.History, x => x.EventName == "RCS_CANCEL_RETRY_EXHAUSTED");
         Assert.Single(task.History, x => x.EventName == "RCS_QUERY_UNKNOWN");   // identical result recorded once
         Assert.True(h.Rcs.QueryCalls <= 4);
+        Assert.NotEmpty(await h.ActiveReservationsAsync());
 
         var after = RcsCalls(h);
         h.Rcs.Unreachable = false;
         for (var i = 0; i < 5; i++) { h.Clock.Advance(TimeSpan.FromMinutes(5)); await h.TickAsync(); }
-        Assert.Equal(after, RcsCalls(h));                                       // stopped: an operator decides
+        Assert.Equal(after, RcsCalls(h));                                       // stopped for good: no Cancel / query any more
     }
 
     // ============================================================================================ AUDIT-006
@@ -457,10 +460,10 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Cancel_pending_with_notfound_needs_two_consecutive_confirmations_when_rcs_never_accepted()
+    public async Task Cancel_pending_with_notfound_is_never_turned_into_cancelled_even_when_rcs_never_accepted()
     {
         await using var h = await ReadyAsync(fixture);
-        Backoff(h, initialMs: 1000, maxMs: 4000, maxDispatch: 10);
+        Backoff(h, initialMs: 1000, maxMs: 4000, maxAttempts: 5, maxDispatch: 10);
         h.Rcs.Unreachable = true;
         var t = (await h.CreateTaskAsync("BP01", "A1")).Task;                   // dispatch outcome unknown: no RCS task code
         Assert.Equal("Dispatching", t.State);
@@ -468,16 +471,17 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
         Assert.Equal(TaskState.CancelPending, (await h.GetTaskAsync(t.Id)).State);
         h.Rcs.Unreachable = false;                                              // RCS answers again and has no record of the task
 
-        h.Clock.Advance(TimeSpan.FromSeconds(5)); await h.TickAsync();
-        var first = await h.GetTaskAsync(t.Id);
-        Assert.Equal(TaskState.CancelPending, first.State);                     // one NotFound is not enough
-        Assert.Contains(first.History, x => x.EventName == "RCS_CANCEL_NOTFOUND_SEEN");
+        for (var i = 0; i < 3; i++) { h.Clock.Advance(TimeSpan.FromSeconds(5)); await h.TickAsync(); }
+        var waiting = await h.GetTaskAsync(t.Id);
+        Assert.Equal(TaskState.CancelPending, waiting.State);                   // NotFound (even repeated) is not a cancellation (decision D-9 not approved)
+        Assert.Single(waiting.History, x => x.EventName == "RCS_CANCEL_NOTFOUND_NOT_CONFIRMED");
 
-        h.Clock.Advance(TimeSpan.FromSeconds(5)); await h.TickAsync();
-        var second = await h.GetTaskAsync(t.Id);
-        Assert.Equal(TaskState.Cancelled, second.State);                        // second consecutive NotFound
-        Assert.True(second.RequiresReconciliation);                             // dispatch outcome had been uncertain: reservations kept
+        for (var i = 0; i < 10; i++) { h.Clock.Advance(TimeSpan.FromMinutes(2)); await h.TickAsync(); }
+        var final = await h.GetTaskAsync(t.Id);
+        Assert.Equal(TaskState.Failed, final.State);                            // only the retry limit ends it, as Failed (D-1), never as Cancelled
+        Assert.True(final.RequiresReconciliation);
         Assert.NotEmpty(await h.ActiveReservationsAsync());
+        Assert.DoesNotContain(final.History, x => x.ToState == TaskState.Cancelled);
     }
 
     [Fact]
