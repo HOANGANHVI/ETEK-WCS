@@ -1,5 +1,13 @@
 # Change Log
 
+## v2.3 – CR-008B-1 Documentation correction (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-1). Documentation only; no source, schema or configuration change.
+- Corrected (history kept, corrections marked): CR-008A dispatch retry time (about 62 s, not 30 s) and continue/cancel limit (about 25 minutes); the false statement that an unacknowledged PLC station request is presented again by the PLC (`PlcStationSignalService` is edge-based, acknowledgement only logs); the unapproved "two NotFound = Cancelled" rule (decision D-9, withdrawn by B-3).
+- Added: CR-008B entry with the owner's decisions (D-1 taken; D-7, D-9, REV-005 open).
+- Files: CHANGE_REQUESTS.md, CHANGELOG.md, ADR-0007, CR-008A report, `docs/reviews/CR008B-1_DOCUMENTATION_CORRECTION.md`.
+- Approved by: project owner (2026-11-17).
+
 ## v2.2 – CR-008A WCS dispatch and scheduler reliability (2026-11-16)
 
 - Change Request: CR-008A (AUDIT-001, 002, 003, 004, 006 of `report/ETEK_WCS_FULL_CODE_REVIEW_2026-11-16.md`). Status: IMPLEMENTED on `develop`; not merged.

@@ -12,8 +12,8 @@
 | Audit | Trước | Sau |
 |---|---|---|
 | 001 | Production + simulator: task được RcsSimulator "chấp nhận" rồi treo; AGV có mã robot hiện Online giả | Production + simulator: tạo task bị từ chối `RCS_NOT_CONNECTED` (422), không đặt chỗ, không gọi RCS; dispatch task đã có bị bỏ qua; AGV hiển thị `Unknown / RCS_NOT_CONNECTED`; cảnh báo khi khởi động; `/api/system/health` có `integration.rcs`. Cho phép thử có giám sát bằng `Rcs:AllowSimulatorInProduction=true`. Development/Testing/Staging/Demo không đổi |
-| 002 | Intake + scheduler trong một `try`: lỗi intake bỏ qua cả lượt scheduler; một request lỗi không phải `AppException` thoát khỏi vòng | Hai phạm vi exception độc lập; mỗi request intake được cô lập (lỗi → log, **không ack** để PLC trình lại; khoá `RequestKey` giữ idempotency); lỗi ack cũng được cô lập |
-| 003 | Mỗi tick thử lại dispatch; 5 lần ≈ 5 s → Failed "uncertain" | Thử lại cách nhau 2 s, 4 s, 8 s … (tối đa 60 s, cấu hình); `MaxDispatchAttempts` giữ 5 (≈ 30 s mặc định); vẫn query trước khi gửi lại, `RcsRequestCode` không đổi; hết hạn mức → Failed uncertain, **giữ reservation** |
+| 002 | Intake + scheduler trong một `try`: lỗi intake bỏ qua cả lượt scheduler; một request lỗi không phải `AppException` thoát khỏi vòng | Hai phạm vi exception độc lập; mỗi request intake được cô lập (lỗi → log, **không ack**; khoá `RequestKey` giữ idempotency) *(đính chính 2026-11-17: câu gốc "để PLC trình lại" là SAI – xem mục Đính chính)*; lỗi ack cũng được cô lập |
+| 003 | Mỗi tick thử lại dispatch; 5 lần ≈ 5 s → Failed "uncertain" | Thử lại cách nhau 2 s, 4 s, 8 s … (tối đa 60 s, cấu hình); `MaxDispatchAttempts` giữ 5 (≈ **62 s** mặc định: lần thử tại 0/2/6/14/30 s rồi chờ thêm 32 s; *đính chính 2026-11-17: trước đây ghi ≈ 30 s*); vẫn query trước khi gửi lại, `RcsRequestCode` không đổi; hết hạn mức → Failed uncertain, **giữ reservation** |
 | 004 | Continue/cancel gọi RCS mỗi tick, mỗi vòng ghi một dòng lịch sử, không giới hạn | Cách nhau theo backoff; tối đa `RcsMaxAttempts` (30) lần tự động rồi dừng, ghi 1 dòng `RCS_*_RETRY_EXHAUSTED`, đặt `RequiresReconciliation`, giao cho người vận hành; kết quả giống nhau chỉ ghi một lần (`NoteIfChanged`); RCS sống lại trong hạn mức → tự phục hồi |
 | 006 | Chỉ xử lý Cancelled/NotFound/Executing/Created | Xử lý tường minh 8 trạng thái (bảng bên dưới) |
 
@@ -58,7 +58,16 @@ Test mới phủ: Production+Simulator bị từ chối (không có task, không
 - RCS HIK RCS-2000, PLC, AGV và Docker thật: NOT VERIFIED; hành vi với RCS thật (mã trạng thái, ngữ nghĩa NotFound sau khi huỷ) cần xác nhận khi có tài liệu API.
 - Các giá trị mặc định (2 s, 60 s, 5 lần dispatch, 30 lần continue/cancel) là kỹ thuật, **chưa được chủ dự án/RCS engineer xác nhận**; `StateTimeoutsSeconds` vẫn rỗng nên task kẹt ở trạng thái khác vẫn không tự giải phóng.
 - Task đã hết hạn mức retry (hoặc kết thúc Completed/Interrupted/NotFound-sau-accept) cần Admin đối soát qua chức năng có sẵn; khối lượng thực tế chưa đo.
-- Khi `PollRequestsAsync` của simulator trả yêu cầu rồi xử lý lỗi, yêu cầu của simulator không được trình lại (hàng đợi bộ nhớ); với PLC thật yêu cầu được trình lại (chưa kiểm thử với PLC thật).
+- Khi `PollRequestsAsync` của simulator trả yêu cầu rồi xử lý lỗi, yêu cầu của simulator không được trình lại (hàng đợi bộ nhớ); với PLC thật **yêu cầu cũng KHÔNG được trình lại** (đính chính 2026-11-17: dịch vụ chỉ nhận cạnh lên và đã ghi nhận bit đang cao; ack chỉ ghi log) – xử lý ở CR-008B-2.
 - AUDIT-005 (retry yêu cầu quyền PLC), 007, 008, 009, 010… **ngoài phạm vi CR-008A**, không đổi.
 - Frontend không đổi: chỉ báo hiện có đã hiển thị "Chưa kết nối" khi mode Simulator; hiển thị thẻ AGV trên Docker/Production không được kiểm tra trực quan.
 - Ba DB thử nghiệm cũ (`wcs_e2e`, `wcs_test_0e4898eb…`, `wcs_test_65783ebf…`) vẫn còn, không bị đụng tới.
+
+## Đính chính (CR-008B-1, 2026-11-17) – lịch sử trên được giữ nguyên
+
+| Nội dung gốc | Sự thật theo mã | Xử lý |
+|---|---|---|
+| Hết hạn mức dispatch ≈ 30 s | ≈ **62 s** (0/2/6/14/30 s + chờ 32 s). Continue/Cancel: lần thứ 30 sau ≈ **25 phút** | Sửa tài liệu (B-1); không đổi thông số |
+| Yêu cầu PLC không ack "sẽ được PLC trình lại" | `PlcStationSignalService` chỉ nhận **cạnh lên**; ack chỉ ghi log. Yêu cầu có thể mất dù ack hay không | Persistent tracking ở CR-008B-2 |
+| NotFound hai lần liên tiếp ⇒ Cancelled | Chưa được chủ dự án phê duyệt (D-9); mâu thuẫn `task-state-machine.md` 3.9 | Gỡ bỏ ở CR-008B-3 |
+| Hết hạn mức cancel: task giữ `CancelPending` | Chủ dự án chốt D-1: chuyển `Failed` + đối soát bắt buộc | CR-008B-3 |
