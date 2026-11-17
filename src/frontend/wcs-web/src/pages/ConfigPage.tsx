@@ -1,25 +1,25 @@
 import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/ui'
+import { useT, type MsgKey } from '../i18n'
 import { OperationsTab } from './config/OperationsTab'
 import { RcsTab } from './config/RcsTab'
 
-const TABS = [
-  { key: 'rcs', label: 'Kết nối RCS' },
-  { key: 'ops', label: 'Tham số vận hành' },
-] as const
+const TABS: { key: 'rcs' | 'ops'; label: MsgKey }[] = [
+  { key: 'rcs', label: 'config.tabRcs' },
+  { key: 'ops', label: 'config.tabOps' },
+]
 
 export function ConfigPage() {
+  const t = useT()
   const [params, setParams] = useSearchParams()
-  const tab = TABS.find((t) => t.key === params.get('tab'))?.key ?? 'rcs'
+  const tab = TABS.find((x) => x.key === params.get('tab'))?.key ?? 'rcs'
   return (
     <>
-      <PageHeader
-        title="Cấu hình hệ thống"
-      />
-      <div className="tabs" role="tablist" aria-label="Nhóm cấu hình">
-        {TABS.map((t) => (
-          <button key={t.key} type="button" role="tab" id={`tab-${t.key}`} aria-selected={tab === t.key} aria-controls={`panel-${t.key}`}
-            className={tab === t.key ? 'tab active' : 'tab'} onClick={() => setParams({ tab: t.key })}>{t.label}</button>
+      <PageHeader title={t('config.title')} />
+      <div className="tabs" role="tablist" aria-label={t('config.tabsLabel')}>
+        {TABS.map((x) => (
+          <button key={x.key} type="button" role="tab" id={`tab-${x.key}`} aria-selected={tab === x.key} aria-controls={`panel-${x.key}`}
+            className={tab === x.key ? 'tab active' : 'tab'} onClick={() => setParams({ tab: x.key })}>{t(x.label)}</button>
         ))}
       </div>
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>

@@ -4,6 +4,7 @@ import type { AddressIssue, IoPointConfig } from '../api/plcTypes'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
 import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
+import { useT } from '../i18n'
 import { CONFIG_STATUS_VI, DATATYPE_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
 import { AddressDialog, SimDialog, WriteDialog, type DialogPoint } from './plc/plcDialogs'
@@ -28,6 +29,7 @@ const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
  * only the existing approval step does (CR-003). Supported devices: D, W (word) and M (bit). X/Y are OUT_OF_SCOPE / NEEDS_CONFIRMATION.
  */
 export function PlcIoMappingPage() {
+  const t = useT()
   const points = useApi(useCallback(() => api.plcPoints({}), []))
   const overview = useApi(useCallback(() => api.plcOverview(), []))
   const [plc, setPlc] = useState('')
@@ -61,43 +63,43 @@ export function PlcIoMappingPage() {
 
   return (
     <>
-      <PageHeader title="Cấu hình địa chỉ IO" />
+      <PageHeader title={t('plc.ioTitle')} />
       {notice && <div className="notice notice-ok" role="status">{notice}</div>}
-      <Panel title="Bộ lọc" subtitle={`${counts.total} tín hiệu · ${counts.configured} đã nhập địa chỉ · ${counts.pollable} được polling (Pollable)`}>
+      <Panel title={t('plc.filters')} subtitle={t('plc.filterSummary', { total: counts.total, configured: counts.configured, pollable: counts.pollable })}>
         <div className="form-grid">
           <label className="field"><span className="field-label">PLC</span>
             <select value={plc} onChange={(e) => { setPlc(e.target.value); setStation(''); setIssues(null) }}>
-              <option value="">Tất cả</option>{PLCS.map((p) => <option key={p} value={p}>{p}</option>)}
+              <option value="">{t('plc.all')}</option>{PLCS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select></label>
-          <label className="field"><span className="field-label">Trạm</span>
+          <label className="field"><span className="field-label">{t('plc.station')}</span>
             <select value={station} onChange={(e) => setStation(e.target.value)}>
-              <option value="">Tất cả</option>{stationOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              <option value="">{t('plc.all')}</option>{stationOptions.map((s) => <option key={s} value={s}>{s}</option>)}
             </select></label>
-          <label className="field"><span className="field-label">Trạng thái cấu hình</span>
+          <label className="field"><span className="field-label">{t('plc.configStatus')}</span>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">Tất cả</option>{STATUSES.map((s) => <option key={s} value={s}>{CONFIG_STATUS_VI[s] ?? s}</option>)}
+              <option value="">{t('plc.all')}</option>{STATUSES.map((s) => <option key={s} value={s}>{CONFIG_STATUS_VI[s] ?? s}</option>)}
             </select></label>
-          <label className="field"><span className="field-label">Tìm tên tín hiệu</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="ví dụ Rack_Full" /></label>
+          <label className="field"><span className="field-label">{t('plc.searchSignal')}</span>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('plc.searchPh')} /></label>
         </div>
         <div className="btn-row">
-          <Button disabled={!plc} onClick={() => void check()}>Kiểm tra xung đột địa chỉ {plc || '(chọn PLC)'}</Button>
-          <Button onClick={() => { setPlc(''); setStation(''); setStatus(''); setSearch('') }}>Xóa bộ lọc</Button>
-          <span className="muted">Hiển thị {rows.length} / {counts.total}</span>
+          <Button disabled={!plc} onClick={() => void check()}>{t('plc.checkConflicts', { plc: plc || t('plc.choosePlc') })}</Button>
+          <Button onClick={() => { setPlc(''); setStation(''); setStatus(''); setSearch('') }}>{t('plc.clearFilters')}</Button>
+          <span className="muted">{t('plc.showing', { shown: rows.length, total: counts.total })}</span>
         </div>
         {checkError && <div className="notice notice-bad" role="alert">{checkError}</div>}
         {issues && (issues.length === 0
-          ? <div className="notice notice-ok">Không có xung đột địa chỉ trên {plc}.</div>
-          : <div className="notice notice-bad"><strong>Xung đột địa chỉ:</strong><ul>{issues.map((i) => <li key={i.pointId + i.code}>{i.stationId}/{i.signal}: {i.message}</li>)}</ul></div>)}
+          ? <div className="notice notice-ok">{t('plc.noConflicts', { plc })}</div>
+          : <div className="notice notice-bad"><strong>{t('plc.conflicts')}</strong><ul>{issues.map((i) => <li key={i.pointId + i.code}>{i.stationId}/{i.signal}: {i.message}</li>)}</ul></div>)}
       </Panel>
 
-      <Panel title="Bảng IO Mapping" flush>
-        <Async state={points} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có IO point', hint: 'Danh mục IO chưa sẵn sàng. Vui lòng liên hệ quản trị hệ thống.' }}>
+      <Panel title={t('plc.mappingTable')} flush>
+        <Async state={points} isEmpty={(d) => d.length === 0} empty={{ title: t('plc.noIo'), hint: t('plc.noIoHint') }}>
           {() => (
             <div className="table-wrap">
               <table className="grid" aria-label="IO Mapping">
                 <thead>
-                  <tr><th>PLC</th><th>Trạm</th><th>Tín hiệu</th><th>Mô tả</th><th>Kiểu dữ liệu</th><th>Thiết bị</th><th>Địa chỉ PLC thực tế</th><th>Pollable</th><th>Xác nhận</th><th>Thao tác</th></tr>
+                  <tr><th>{t('plc.colPlc')}</th><th>{t('plc.station')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colDescription')}</th><th>{t('plc.colDataType')}</th><th>{t('plc.colDevice')}</th><th>{t('plc.colActualAddress')}</th><th>{t('plc.colPollable')}</th><th>{t('plc.colApproval')}</th><th>{t('plc.colActions')}</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((p) => {
@@ -111,19 +113,19 @@ export function PlcIoMappingPage() {
                         <td className="small">{p.description}</td>
                         <td>{DATATYPE_VI[p.dataType]}</td>
                         <td className="mono">{deviceOf(p.actualAddress) ?? <span className="muted">—</span>}</td>
-                        <td className="mono">{p.actualAddress ?? <span className="muted">chưa gán</span>}</td>
-                        <td>{p.pollable ? <Pill tone="ok" dot={false}>Có</Pill> : <Pill tone="muted" dot={false}>Không</Pill>}</td>
+                        <td className="mono">{p.actualAddress ?? <span className="muted">{t('plc.unassigned')}</span>}</td>
+                        <td>{p.pollable ? <Pill tone="ok" dot={false}>{t('plc.yes')}</Pill> : <Pill tone="muted" dot={false}>{t('plc.no')}</Pill>}</td>
                         <td><ConfigPill status={p.configStatus} />{p.approvedBy && <small className="muted"> {p.approvedBy}</small>}</td>
                         <td className="nowrap">
-                          <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>Địa chỉ</Button>{' '}
-                          {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>Mô phỏng</Button>{' '}</>}
-                          {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'write', point: p })}>Ghi thử</Button>}
-                          {ENGINEERING_TOOLS && !inbound && blocked && <small className="muted" title="Safety/Interlock và Transfer/Departure Permit không bao giờ được ghi thử">🔒 chặn ghi</small>}
+                          <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
+                          {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>{t('plc.btnSim')}</Button>{' '}</>}
+                          {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnTestWrite')}</Button>}
+                          {ENGINEERING_TOOLS && !inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
                         </td>
                       </tr>
                     )
                   })}
-                  {rows.length === 0 && <tr><td colSpan={10} className="muted">Không có tín hiệu nào khớp bộ lọc.</td></tr>}
+                  {rows.length === 0 && <tr><td colSpan={10} className="muted">{t('plc.noMatch')}</td></tr>}
                 </tbody>
               </table>
             </div>

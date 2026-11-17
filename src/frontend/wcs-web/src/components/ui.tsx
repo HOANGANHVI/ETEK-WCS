@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { taskStage } from './taskStage'
+import { useT, type MsgKey } from '../i18n'
 import type { ApiState } from '../hooks/useApi'
 import type { TaskState, TransportTask } from '../api/types'
 import {
@@ -68,15 +69,17 @@ export function Button({ variant = 'secondary', size = 'md', className = '', ...
 }
 
 /* ------------------------------------------------------------------ async states */
-export function Loading({ label = 'Đang tải dữ liệu…' }: { label?: string }) {
-  return <div className="state" role="status"><span className="spinner" aria-hidden="true" />{label}</div>
+export function Loading({ label }: { label?: string }) {
+  const t = useT()
+  return <div className="state" role="status"><span className="spinner" aria-hidden="true" />{label ?? t('common.loading')}</div>
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const t = useT()
   return (
     <div className="state state-error" role="alert">
-      <div><strong>Không tải được dữ liệu</strong><span>{message}</span></div>
-      {onRetry && <Button size="sm" onClick={onRetry}>Thử lại</Button>}
+      <div><strong>{t('common.loadFailed')}</strong><span>{message}</span></div>
+      {onRetry && <Button size="sm" onClick={onRetry}>{t('common.retry')}</Button>}
     </div>
   )
 }
@@ -96,27 +99,29 @@ export function Async<T>({ state, isEmpty, empty, children }: {
   empty: { title: string; hint?: string }
   children: (data: T) => ReactNode
 }) {
+  const t = useT()
   if (state.loading && state.data === null) return <Loading />
   if (state.error && state.data === null) return <ErrorState message={state.error} onRetry={state.reload} />
   if (state.data === null) return <Loading />
   if (isEmpty?.(state.data)) return <EmptyState {...empty} />
   return (
     <>
-      {state.error && <ErrorState message={`Đang hiển thị dữ liệu cũ. ${state.error}`} onRetry={state.reload} />}
+      {state.error && <ErrorState message={t('common.staleData', { error: state.error })} onRetry={state.reload} />}
       {children(state.data)}
     </>
   )
 }
 
 /* ------------------------------------------------------------------ task flow stepper */
-const STEPS = ['Tiếp nhận', 'Lấy rack', 'Vận chuyển', 'Thả rack', 'Hoàn thành']
+const STEPS: MsgKey[] = ['common.stepAccepted', 'common.stepPick', 'common.stepTransport', 'common.stepDrop', 'common.stepDone']
 
 export function FlowStepper({ task }: { task: TransportTask }) {
+  const t = useT()
   const stage = taskStage(task)
   const failed = task.state === 'Failed'
   const cancelled = task.state === 'Cancelled'
   return (
-    <ol className="stepper" aria-label="Luồng xử lý">
+    <ol className="stepper" aria-label={t('common.flowLabel')}>
       {STEPS.map((label, i) => {
         const done = i < stage || stage === 5
         const current = i === stage && stage < 5
@@ -124,7 +129,7 @@ export function FlowStepper({ task }: { task: TransportTask }) {
         return (
           <li key={label} className={cls}>
             <span className="step-dot">{done ? '✓' : failed && current ? '!' : i + 1}</span>
-            <span className="step-label">{label}</span>
+            <span className="step-label">{t(label)}</span>
           </li>
         )
       })}

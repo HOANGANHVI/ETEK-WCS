@@ -5,6 +5,8 @@ import type { TransportTask } from '../api/types'
 import { Button, Loading } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { useApi } from '../hooks/useApi'
+import { useT } from '../i18n'
+import { Rich } from '../components/Rich'
 import { describeError, flowInfo, taskCode, TASK_STATE_VI } from '../i18n/vi'
 import { Field } from './config/FormKit'
 
@@ -24,6 +26,7 @@ function useAction(onDone: () => void, onStale: () => void) {
 }
 
 export function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (t: TransportTask) => void }) {
+  const t = useT()
   const flows = useApi(useCallback(() => api.flows(), []))
   const [flow, setFlow] = useState('')
   const [station, setStation] = useState('')
@@ -33,23 +36,23 @@ export function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; 
   const a = useAction(() => undefined, () => undefined)
 
   return (
-    <Modal title="Tạo nhiệm vụ mới" onClose={onClose} footer={<>
-      <Button onClick={onClose}>Bỏ qua</Button>
+    <Modal title={t('tasks.createTitle')} onClose={onClose} footer={<>
+      <Button onClick={onClose}>{t('tasks.skip')}</Button>
       <Button variant="primary" disabled={a.busy || !flow || !station}
-        onClick={() => void a.run(async () => { const t = await api.createTask(flow, station, requestKey); onCreated(t) })}>Tạo nhiệm vụ</Button>
+        onClick={() => void a.run(async () => { const created = await api.createTask(flow, station, requestKey); onCreated(created) })}>{t('tasks.create')}</Button>
     </>}>
       {a.error && <div className="notice notice-bad" role="alert">{a.error}</div>}
       {flows.loading && !flows.data ? <Loading /> : flows.error && !flows.data ? <div className="notice notice-bad">{flows.error}</div> : (
         <div className="form-grid single">
-          <Field label="Quy trình" hint="Chỉ các quy trình đã được phê duyệt triển khai.">
+          <Field label={t('tasks.flowField')} hint={t('tasks.flowHint')}>
             <select value={flow} onChange={(e) => { setFlow(e.target.value); setStation('') }}>
-              <option value="">— Chọn quy trình —</option>
+              <option value="">{t('tasks.chooseFlow')}</option>
               {(flows.data ?? []).map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
             </select>
           </Field>
-          <Field label="Trạm yêu cầu" hint="Hệ thống tự chọn AGV, rack nguồn và vị trí đích theo quy trình.">
+          <Field label={t('tasks.stationField')} hint={t('tasks.stationHint')}>
             <select value={station} disabled={!flow} onChange={(e) => setStation(e.target.value)}>
-              <option value="">— Chọn trạm —</option>
+              <option value="">{t('tasks.chooseStation')}</option>
               {stations.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </Field>
@@ -62,6 +65,7 @@ export function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; 
 export function EditTaskDialog({ task, stationCode, onClose, onChanged }: {
   task: TransportTask; stationCode: string; onClose: () => void; onChanged: () => void
 }) {
+  const t = useT()
   const flows = useApi(useCallback(() => api.flows(), []))
   const currentFlow = flows.data?.find((f) => f.flow.toLowerCase() === task.flow.toLowerCase())?.flow ?? task.flow
   const [flow, setFlow] = useState(currentFlow)
@@ -70,16 +74,15 @@ export function EditTaskDialog({ task, stationCode, onClose, onChanged }: {
   const a = useAction(() => { onChanged(); onClose() }, onChanged)
   const unchanged = flow === currentFlow && station === stationCode
   return (
-    <Modal title={`Sửa nhiệm vụ ${taskCode(task.id)}`} onClose={onClose} footer={<>
-      <Button onClick={onClose}>Bỏ qua</Button>
+    <Modal title={t('tasks.editTitle', { code: taskCode(task.id) })} onClose={onClose} footer={<>
+      <Button onClick={onClose}>{t('tasks.skip')}</Button>
       <Button variant="primary" disabled={a.busy || !flow || !station || unchanged}
-        onClick={() => void a.run(() => api.updateTask(task.id, flow, station, task.state))}>Lưu thay đổi</Button>
+        onClick={() => void a.run(() => api.updateTask(task.id, flow, station, task.state))}>{t('tasks.saveChanges')}</Button>
     </>}>
-      <p className="dialog-hint">Sửa toàn bộ thông tin yêu cầu khi nhiệm vụ còn chờ và chưa được AGV/RCS tiếp nhận (hiện: {TASK_STATE_VI[task.state]}).
-        AGV, loại rack và rack nguồn sẽ được xác định lại theo quy trình mới; nếu không có rack phù hợp, nhiệm vụ giữ nguyên.</p>
+      <p className="dialog-hint">{t('tasks.editHint', { state: TASK_STATE_VI[task.state] })}</p>
       {a.error && <div className="notice notice-bad" role="alert">{a.error}</div>}
       <div className="form-grid single">
-        <Field label="Quy trình">
+        <Field label={t('tasks.flowField')}>
           <select value={flow} disabled={flows.loading && !flows.data} onChange={(e) => {
             const next = e.target.value; setFlow(next)
             const allowed = flows.data?.find((f) => f.flow === next)?.stations ?? []
@@ -88,7 +91,7 @@ export function EditTaskDialog({ task, stationCode, onClose, onChanged }: {
             {(flows.data ?? [{ flow: currentFlow, rackKind: '', stations: [] }]).map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
           </select>
         </Field>
-        <Field label="Trạm yêu cầu">
+        <Field label={t('tasks.stationField')}>
           <select value={station} onChange={(e) => setStation(e.target.value)} disabled={flows.loading && !flows.data}>
             {(stations.length ? stations : [stationCode]).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -99,17 +102,17 @@ export function EditTaskDialog({ task, stationCode, onClose, onChanged }: {
 }
 
 export function DeleteTaskDialog({ task, onClose, onChanged }: { task: TransportTask; onClose: () => void; onChanged: () => void }) {
+  const t = useT()
   const a = useAction(() => { onChanged(); onClose() }, onChanged)
   return (
-    <Modal title={`Xóa nhiệm vụ ${taskCode(task.id)}`} onClose={onClose} footer={<>
-      <Button onClick={onClose}>Bỏ qua</Button>
-      <Button variant="danger" disabled={a.busy} onClick={() => void a.run(() => api.deleteTask(task.id, task.state))}>Xác nhận xóa</Button>
+    <Modal title={t('tasks.deleteTitle', { code: taskCode(task.id) })} onClose={onClose} footer={<>
+      <Button onClick={onClose}>{t('tasks.skip')}</Button>
+      <Button variant="danger" disabled={a.busy} onClick={() => void a.run(() => api.deleteTask(task.id, task.state))}>{t('tasks.confirmDelete')}</Button>
     </>}>
       {a.error && <div className="notice notice-bad" role="alert">{a.error}</div>}
       <p className="dialog-hint">
-        Nhiệm vụ {flowInfo(task.flow).code} đang ở trạng thái “{TASK_STATE_VI[task.state]}” và chưa được AGV/RCS tiếp nhận.
-        Nhiệm vụ sẽ bị <strong>xóa hẳn</strong> khỏi hệ thống (không phải hủy) và rack đã giữ chỗ được giải phóng. Việc xóa được ghi vào nhật ký thao tác
-        (mã nhiệm vụ, người xóa, thời gian, thông tin nhiệm vụ) và nhật ký này vẫn còn sau khi xóa.
+        {t('tasks.deleteBody1', { flow: flowInfo(task.flow).code, state: TASK_STATE_VI[task.state] })}{' '}
+        <Rich text={t('tasks.deleteBody2')} parts={{ bold: <strong>{t('tasks.deleteBold')}</strong> }} />
       </p>
     </Modal>
   )

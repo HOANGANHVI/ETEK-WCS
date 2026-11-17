@@ -1,5 +1,6 @@
 import { ApiRequestError } from '../../api/errors'
 import type { FieldError } from '../../api/configTypes'
+import { t } from '../../i18n'
 import { describeError } from '../../i18n/vi'
 
 export const toInt = (v: string): number | null => (v.trim() === '' ? null : Number(v.trim()))
@@ -17,7 +18,7 @@ export function toErrors(list: FieldError[]): Errors {
 /** Field errors returned by the API (HTTP 400, error.details = [{field,message}]) or a general message. */
 export function fromApiError(e: unknown): { fields: Errors; general: string | null } {
   if (e instanceof ApiRequestError && e.code === 'VALIDATION_FAILED' && Array.isArray(e.details)) {
-    return { fields: toErrors(e.details as FieldError[]), general: 'Dữ liệu chưa hợp lệ. Hãy sửa các trường được đánh dấu.' }
+    return { fields: toErrors(e.details as FieldError[]), general: t('validation.invalidForm') }
   }
   return { fields: {}, general: describeError(e) }
 }

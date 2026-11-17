@@ -7,11 +7,13 @@ import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
 import { isActive, useCodeMaps } from '../hooks/useLookups'
 import { formatDateTime } from '../i18n/format'
+import { useT } from '../i18n'
 import { flowInfo, taskCode } from '../i18n/vi'
 
 const EVENTS = ['TaskCreated', 'TaskStateChanged', 'AgvStatusChanged'] as const
 
 export function AgvPage() {
+  const t = useT()
   const now = useClock(5000).getTime()
   const agvs = useApi(useCallback(() => api.agvs(), []), [...EVENTS])
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])
@@ -21,9 +23,9 @@ export function AgvPage() {
   return (
     <>
       <PageHeader
-        title="Giám sát AGV"
+        title={t('agv.pageTitle')}
       />
-      <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có AGV', hint: 'Danh sách AGV sẽ hiển thị khi hệ thống khởi tạo xong.' }}>
+      <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
         {(list) => (
           <div className="agv-grid wide">
             {list.map((a) => {
@@ -38,13 +40,13 @@ export function AgvPage() {
         {(agvs.data ?? []).map((a) => {
           const mine = (tasks.data?.items ?? []).filter((t) => t.agvId === a.id).slice(0, 8)
           return (
-            <Panel key={a.id} title={`Nhiệm vụ gần đây của ${a.code}`} flush>
+            <Panel key={a.id} title={t('agv.recentTasks', { code: a.code })} flush>
               {mine.length === 0 ? (
-                <div className="state state-empty"><div><strong>Chưa có nhiệm vụ nào</strong></div></div>
+                <div className="state state-empty"><div><strong>{t('agv.noTasks')}</strong></div></div>
               ) : (
                 <div className="table-wrap">
                   <table className="grid">
-                    <thead><tr><th>Mã nhiệm vụ</th><th>Quy trình</th><th>Xuất phát → Đích</th><th>Trạng thái</th><th>Cập nhật</th></tr></thead>
+                    <thead><tr><th>{t('agv.colTask')}</th><th>{t('agv.colFlow')}</th><th>{t('agv.colRoute')}</th><th>{t('agv.colState')}</th><th>{t('agv.colUpdated')}</th></tr></thead>
                     <tbody>
                       {mine.map((t) => (
                         <tr key={t.id}>

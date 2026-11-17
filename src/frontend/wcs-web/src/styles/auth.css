@@ -51,3 +51,16 @@
   .audit-diff { grid-template-columns: 1fr; }
   .whoami .who-name { max-width: 110px; }
 }
+
+/* Language switch (VI | EN) */
+.lang-switch { display: inline-flex; border: 1px solid #55719a; border-radius: var(--radius); overflow: hidden; flex: none; }
+.lang-switch button { height: 28px; min-width: 36px; padding: 0 8px; border: 0; background: transparent; color: #c3d2e6; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .03em; cursor: pointer; }
+.lang-switch button + button { border-left: 1px solid #55719a; }
+.lang-switch button:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.lang-switch button.active { background: #e6effa; color: var(--navy-800); }
+.lang-switch.on-light { border-color: var(--line-strong); }
+.lang-switch.on-light button { color: var(--text-2); }
+.lang-switch.on-light button + button { border-left-color: var(--line-strong); }
+.lang-switch.on-light button:hover { background: var(--surface-2); color: var(--text); }
+.lang-switch.on-light button.active { background: var(--navy-700); color: #fff; }
+.login-lang { display: flex; justify-content: flex-end; margin-bottom: 8px; }

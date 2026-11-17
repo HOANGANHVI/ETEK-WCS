@@ -85,3 +85,7 @@
 @media (max-width: 1440px) {
   .clock { min-width: 128px; }
 }
+
+/* Longer English labels: truncate instead of wrapping inside the fixed-height menu item (full text stays in the title tooltip). */
+.nav-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

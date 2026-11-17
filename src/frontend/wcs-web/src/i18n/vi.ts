@@ -1,28 +1,27 @@
-import { PLC_ERROR_VI } from './plc'
 /**
- * Vietnamese UI vocabulary. Technical codes (AGV1, BP-01, PLC, RCS, API, Rack ID, backend state names) are never renamed in the
- * data layer: only the text shown to the user is translated here.
+ * Display vocabulary (Vietnamese / English). Technical codes (AGV1, BP-01, PLC, RCS, API, Rack ID, backend state names, error
+ * codes) are never renamed in the data layer: only the text shown to the user is localized here.
+ *
+ * The `*_VI` export names are historical; every table is language-aware and returns the label of the current language.
+ * Maps are read at render time, so they follow the language selector without extra wiring.
  */
 import { ApiRequestError } from '../api/errors'
 import type { TaskState } from '../api/types'
+import { getLang, localizedMap } from './core'
+import { t, type MsgKey } from './index'
+import { PLC_ERROR_VI } from './plc'
 
 export type Tone = 'ok' | 'info' | 'warn' | 'bad' | 'muted'
 
-export const TASK_STATE_VI: Record<TaskState, string> = {
-  Pending: 'Chờ xử lý',
-  Validating: 'Đang kiểm tra',
-  Queued: 'Đang chờ',
-  Dispatching: 'Đang gửi RCS',
-  Accepted: 'Đã tiếp nhận',
-  Executing: 'Đang thực hiện',
-  WaitingForPlc: 'Chờ PLC cho phép',
-  WaitingForDestination: 'Chờ vị trí đích',
-  Continuing: 'Đang tiếp tục',
-  Completed: 'Hoàn thành',
-  Failed: 'Thất bại',
-  CancelPending: 'Đang hủy',
-  Cancelled: 'Đã hủy',
-}
+export const TASK_STATE_VI = localizedMap({
+  Pending: 'Chờ xử lý', Validating: 'Đang kiểm tra', Queued: 'Đang chờ', Dispatching: 'Đang gửi RCS', Accepted: 'Đã tiếp nhận',
+  Executing: 'Đang thực hiện', WaitingForPlc: 'Chờ PLC cho phép', WaitingForDestination: 'Chờ vị trí đích', Continuing: 'Đang tiếp tục',
+  Completed: 'Hoàn thành', Failed: 'Thất bại', CancelPending: 'Đang hủy', Cancelled: 'Đã hủy',
+}, {
+  Pending: 'Pending', Validating: 'Validating', Queued: 'Queued', Dispatching: 'Sending to RCS', Accepted: 'Accepted',
+  Executing: 'In progress', WaitingForPlc: 'Waiting for PLC permission', WaitingForDestination: 'Waiting for destination', Continuing: 'Continuing',
+  Completed: 'Completed', Failed: 'Failed', CancelPending: 'Cancelling', Cancelled: 'Cancelled',
+}) as Record<TaskState, string>
 
 export const TASK_STATE_TONE: Record<TaskState, Tone> = {
   Pending: 'muted', Validating: 'muted', Queued: 'warn', Dispatching: 'info', Accepted: 'info', Executing: 'ok',
@@ -30,59 +29,78 @@ export const TASK_STATE_TONE: Record<TaskState, Tone> = {
   CancelPending: 'warn', Cancelled: 'muted',
 }
 
-/** Groups used by the task chart. Every backend state belongs to exactly one group. */
-export const TASK_GROUPS: { key: string; label: string; tone: Tone; states: TaskState[] }[] = [
-  { key: 'waiting', label: 'Đang chờ', tone: 'warn', states: ['Pending', 'Validating', 'Queued', 'WaitingForPlc', 'WaitingForDestination'] },
-  { key: 'accepted', label: 'Đã tiếp nhận', tone: 'info', states: ['Dispatching', 'Accepted'] },
-  { key: 'moving', label: 'Đang vận chuyển', tone: 'ok', states: ['Executing', 'Continuing'] },
-  { key: 'done', label: 'Hoàn thành', tone: 'ok', states: ['Completed'] },
-  { key: 'failed', label: 'Lỗi', tone: 'bad', states: ['Failed'] },
-  { key: 'cancelled', label: 'Đã hủy / đang hủy', tone: 'muted', states: ['CancelPending', 'Cancelled'] },
+/** Groups used by the task chart. Every backend state belongs to exactly one group. `label` is resolved when read. */
+export const TASK_GROUPS: { key: string; labelKey: MsgKey; label: string; tone: Tone; states: TaskState[] }[] = [
+  { key: 'waiting', labelKey: 'dashboard.grpWaiting', get label() { return t('dashboard.grpWaiting') }, tone: 'warn', states: ['Pending', 'Validating', 'Queued', 'WaitingForPlc', 'WaitingForDestination'] },
+  { key: 'accepted', labelKey: 'dashboard.grpAccepted', get label() { return t('dashboard.grpAccepted') }, tone: 'info', states: ['Dispatching', 'Accepted'] },
+  { key: 'moving', labelKey: 'dashboard.grpMoving', get label() { return t('dashboard.grpMoving') }, tone: 'ok', states: ['Executing', 'Continuing'] },
+  { key: 'done', labelKey: 'dashboard.grpDone', get label() { return t('dashboard.grpDone') }, tone: 'ok', states: ['Completed'] },
+  { key: 'failed', labelKey: 'dashboard.grpFailed', get label() { return t('dashboard.grpFailed') }, tone: 'bad', states: ['Failed'] },
+  { key: 'cancelled', labelKey: 'dashboard.grpCancelled', get label() { return t('dashboard.grpCancelled') }, tone: 'muted', states: ['CancelPending', 'Cancelled'] },
 ]
 
 export const OCCUPYING_STATES: TaskState[] = ['Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending']
 
-export const AGV_CONNECTION_VI: Record<string, string> = { Unknown: 'Chưa rõ', Online: 'Trực tuyến', Offline: 'Mất kết nối', Error: 'Lỗi' }
+export const AGV_CONNECTION_VI = localizedMap(
+  { Unknown: 'Chưa rõ', Online: 'Trực tuyến', Offline: 'Mất kết nối', Error: 'Lỗi' },
+  { Unknown: 'Unknown', Online: 'Online', Offline: 'Disconnected', Error: 'Error' })
 export const AGV_CONNECTION_TONE: Record<string, Tone> = { Unknown: 'muted', Online: 'ok', Offline: 'bad', Error: 'bad' }
-export const AGV_ROLE_VI: Record<string, string> = { FullRack: 'Vận chuyển rack đầy', EmptyRack: 'Vận chuyển rack rỗng' }
+export const AGV_ROLE_VI = localizedMap(
+  { FullRack: 'Vận chuyển rack đầy', EmptyRack: 'Vận chuyển rack rỗng' },
+  { FullRack: 'Full-rack transport', EmptyRack: 'Empty-rack transport' })
 
-export const OCCUPANCY_VI: Record<string, string> = { Empty: 'Trống', Occupied: 'Đang có rack', Reserved: 'Đang được giữ chỗ', Unknown: 'Chưa xác định' }
+export const OCCUPANCY_VI = localizedMap(
+  { Empty: 'Trống', Occupied: 'Đang có rack', Reserved: 'Đang được giữ chỗ', Unknown: 'Chưa xác định' },
+  { Empty: 'Empty', Occupied: 'Occupied', Reserved: 'Reserved', Unknown: 'Undetermined' })
 export const OCCUPANCY_TONE: Record<string, Tone> = { Empty: 'muted', Occupied: 'info', Reserved: 'warn', Unknown: 'bad' }
 
-export const RACK_STATUS_VI: Record<string, string> = { Full: 'Rack đầy', Empty: 'Rack rỗng', InTransit: 'Đang vận chuyển', Unknown: 'Chưa xác định' }
+export const RACK_STATUS_VI = localizedMap(
+  { Full: 'Rack đầy', Empty: 'Rack rỗng', InTransit: 'Đang vận chuyển', Unknown: 'Chưa xác định' },
+  { Full: 'Full rack', Empty: 'Empty rack', InTransit: 'In transit', Unknown: 'Undetermined' })
 export const RACK_STATUS_TONE: Record<string, Tone> = { Full: 'info', Empty: 'muted', InTransit: 'warn', Unknown: 'bad' }
-export const RACK_KIND_VI: Record<string, string> = { Full: 'rack đầy', Empty: 'rack rỗng' }
+export const RACK_KIND_VI = localizedMap({ Full: 'rack đầy', Empty: 'rack rỗng' }, { Full: 'full rack', Empty: 'empty rack' })
 
-export const LOCATION_TYPE_VI: Record<string, string> = { Station: 'Trạm máy', Buffer: 'Vị trí đệm', ManualBuffer: 'Vị trí đệm thủ công', Waypoint: 'Điểm trung gian' }
-export const ALLOWED_KIND_VI: Record<string, string> = { Any: 'Mọi loại rack', Full: 'Chỉ rack đầy', Empty: 'Chỉ rack rỗng' }
-export const LEG_VI: Record<string, string> = { Pick: 'Lấy rack', Drop: 'Thả rack' }
+export const LOCATION_TYPE_VI = localizedMap(
+  { Station: 'Trạm máy', Buffer: 'Vị trí đệm', ManualBuffer: 'Vị trí đệm thủ công', Waypoint: 'Điểm trung gian' },
+  { Station: 'Machine station', Buffer: 'Buffer', ManualBuffer: 'Manual buffer', Waypoint: 'Waypoint' })
+export const ALLOWED_KIND_VI = localizedMap(
+  { Any: 'Mọi loại rack', Full: 'Chỉ rack đầy', Empty: 'Chỉ rack rỗng' },
+  { Any: 'Any rack type', Full: 'Full racks only', Empty: 'Empty racks only' })
+export const LEG_VI = localizedMap({ Pick: 'Lấy rack', Drop: 'Thả rack' }, { Pick: 'Pick rack', Drop: 'Drop rack' })
 
-export const FLOW_VI: Record<string, { code: string; label: string }> = {
-  Bp01: { code: 'BP-01', label: 'Lấy rack đầy tại máy A' },
-  Bp02: { code: 'BP-02', label: 'Cấp rack rỗng cho máy A' },
-  Bp03: { code: 'BP-03', label: 'Lấy rack rỗng tại máy B' },
-  Bp05: { code: 'BP-05', label: 'F5 gọi rack đầy' },
-  Bp06: { code: 'BP-06', label: 'F5 trả rack rỗng' },
-}
+const FLOW_LABELS = {
+  Bp01: { code: 'BP-01', vi: 'Lấy rack đầy tại máy A', en: 'Pick up full rack at machine A' },
+  Bp02: { code: 'BP-02', vi: 'Cấp rack rỗng cho máy A', en: 'Supply empty rack to machine A' },
+  Bp03: { code: 'BP-03', vi: 'Lấy rack rỗng tại máy B', en: 'Pick up empty rack at machine B' },
+  Bp05: { code: 'BP-05', vi: 'F5 gọi rack đầy', en: 'F5 calls a full rack' },
+  Bp06: { code: 'BP-06', vi: 'F5 trả rack rỗng', en: 'F5 returns an empty rack' },
+} as const
+/** Flow codes with their localized label (label resolved when read). */
+export const FLOW_VI: Record<string, { code: string; label: string }> = Object.fromEntries(
+  Object.entries(FLOW_LABELS).map(([k, v]) => [k, { code: v.code, get label() { return getLang() === 'en' ? v.en : v.vi } }]))
 /** Accepts backend (Bp01) or demo (BP01) spellings. */
 export function flowInfo(flow: string) {
   const key = flow.charAt(0).toUpperCase() + flow.slice(1).toLowerCase()
   return FLOW_VI[key] ?? { code: flow, label: '' }
 }
 
-export const INVENTORY_EVENT_VI: Record<string, string> = {
-  PickConfirmed: 'Xác nhận lấy rack',
-  DropConfirmed: 'Xác nhận thả rack',
-  ManualAdjustment: 'Điều chỉnh thủ công',
-  InitialStockDeclared: 'Khai báo tồn ban đầu',
-  Reconciliation: 'Đối soát',
-}
-export const BIND_VI: Record<string, string> = { NotRequested: '—', Bound: 'Đã bind rack', NotBoundByProcess: 'Không bind rack (theo quy trình)' }
-export const SOURCE_VI: Record<string, string> = {
+export const INVENTORY_EVENT_VI = localizedMap({
+  PickConfirmed: 'Xác nhận lấy rack', DropConfirmed: 'Xác nhận thả rack', ManualAdjustment: 'Điều chỉnh thủ công',
+  InitialStockDeclared: 'Khai báo tồn ban đầu', Reconciliation: 'Đối soát',
+}, {
+  PickConfirmed: 'Pick confirmed', DropConfirmed: 'Drop confirmed', ManualAdjustment: 'Manual adjustment',
+  InitialStockDeclared: 'Initial stock declared', Reconciliation: 'Reconciliation',
+})
+export const BIND_VI = localizedMap(
+  { NotRequested: '—', Bound: 'Đã bind rack', NotBoundByProcess: 'Không bind rack (theo quy trình)' },
+  { NotRequested: '—', Bound: 'Rack bound', NotBoundByProcess: 'Rack not bound (per process)' })
+export const SOURCE_VI = localizedMap({
   WCS: 'WCS', RCS: 'RCS', Rcs: 'RCS', PLC: 'PLC', Plc: 'PLC', Operator: 'Người vận hành', WcsReconciliation: 'Đối soát WCS', Simulator: 'Mô phỏng',
-}
+}, {
+  WCS: 'WCS', RCS: 'RCS', Rcs: 'RCS', PLC: 'PLC', Plc: 'PLC', Operator: 'Operator', WcsReconciliation: 'WCS reconciliation', Simulator: 'Simulation',
+})
 
-export const HISTORY_EVENT_VI: Record<string, string> = {
+export const HISTORY_EVENT_VI = localizedMap({
   STATE_CHANGED: 'Chuyển trạng thái',
   TASK_CREATED: 'Tạo nhiệm vụ',
   SOURCE_RESERVED: 'Giữ chỗ rack nguồn',
@@ -107,62 +125,95 @@ export const HISTORY_EVENT_VI: Record<string, string> = {
   RCS_CANCEL_NOTFOUND_NOT_CONFIRMED: 'RCS báo không có bản ghi (không coi là đã hủy)',
   RCS_CANCEL_IN_PROGRESS: 'RCS đang hủy nhiệm vụ',
   RECONCILIATION_CHECK_UNRESOLVED: 'Admin kiểm tra: chưa xác định được vị trí thực tế',
-}
+}, {
+  STATE_CHANGED: 'State changed',
+  TASK_CREATED: 'Task created',
+  SOURCE_RESERVED: 'Source rack reserved',
+  DESTINATION_RESERVED: 'Destination reserved',
+  AGV_DISPATCH_HOLD: 'AGV placed on dispatch hold',
+  AGV_DISPATCH_HOLD_RELEASED: 'Admin released the AGV hold',
+  PICK_CONFIRMED: 'Rack pick confirmed',
+  RECONCILIATION_REQUIRED: 'Rack position needs reconciliation',
+  RECONCILED: 'Reconciled',
+  TASK_EDITED: 'Task edited by user',
+  TASK_DELETED: 'Task deleted',
+  WAITING_FOR_SOURCE: 'Waiting for source rack',
+  LATE_EVENT_IGNORED: 'Late event ignored',
+  OUT_OF_ORDER_EVENT_IGNORED: 'Out-of-order event ignored',
+  RCS_DISPATCH_UNKNOWN: 'Outcome of sending the task to RCS is unknown',
+  RCS_QUERY_UNKNOWN: 'Outcome of the RCS query is unknown',
+  RCS_CANCEL_REQUESTED: 'Cancel request sent to RCS',
+  RCS_CANCEL_UNKNOWN: 'Outcome of the cancel at RCS is unknown',
+  RCS_CONTINUE_UNKNOWN: 'Outcome of continuing the task at RCS is unknown',
+  CANCEL_RETRY: 'Cancel request resent',
+  RCS_CANCEL_RETRY_EXHAUSTED: 'Automatic cancel retries exhausted – task failed, reconciliation required',
+  RCS_CANCEL_NOTFOUND_NOT_CONFIRMED: 'RCS reports no record (not treated as cancelled)',
+  RCS_CANCEL_IN_PROGRESS: 'RCS is cancelling the task',
+  RECONCILIATION_CHECK_UNRESOLVED: 'Admin check: actual position still undetermined',
+})
 /** Events that come from or concern the PLC / RCS interfaces (shown in a dedicated list of the task detail). */
 export const DEVICE_EVENT_RE = /^(RCS_|PICK_CONFIRMED|LATE_EVENT|OUT_OF_ORDER)/
 
-const REASON_RULES: [RegExp, (m: RegExpMatchArray) => string][] = [
-  [/^CANCEL_RETRY_LIMIT_REACHED$/, () => 'Hết giới hạn thử hủy tự động: chưa có xác nhận hủy từ RCS, cần đối soát'],
-  [/^CANCEL_RACE_RCS_COMPLETED$/, () => 'RCS báo hoàn thành trước khi hủy kịp: cần đối soát vị trí rack'],
-  [/^CANCEL_RACE_RCS_INTERRUPTED$/, () => 'RCS báo gián đoạn trước khi hủy kịp: cần đối soát vị trí rack'],
-  [/^RCS_ENDED_WITHOUT_DROP$/, () => 'RCS báo kết thúc nhưng WCS chưa nhận xác nhận thả rack'],
-  [/^RCS_NOTFOUND_AFTER_ACCEPT$/, () => 'RCS không còn bản ghi của nhiệm vụ đã tiếp nhận: cần đối soát'],
-  [/^Validating business conditions$/, () => 'Đang kiểm tra điều kiện nghiệp vụ'],
-  [/^AGV free; claimed from queue$/, () => 'AGV rảnh, nhận nhiệm vụ từ hàng đợi'],
-  [/^AGV free; claimed$/, () => 'AGV rảnh, đã nhận nhiệm vụ'],
-  [/^AGV busy; request queued$/, () => 'AGV đang bận, yêu cầu được xếp hàng chờ'],
-  [/^RCS accepted the task( \(simulated\))?$/, (m) => 'RCS đã tiếp nhận nhiệm vụ' + (m[1] ? ' (mô phỏng)' : '')],
-  [/^AGV executing$/, () => 'AGV bắt đầu thực hiện'],
-  [/^Waiting for PLC permission \((Pick|Drop)\)$/, (m) => `Chờ PLC cho phép ${m[1] === 'Pick' ? 'lấy' : 'thả'} rack`],
-  [/^PLC permission granted$/, () => 'PLC đã cho phép'],
-  [/^Destination assigned: (.+)$/, (m) => `Đã chỉ định vị trí đích ${m[1]}`],
-  [/^No destination available$/, () => 'Chưa có vị trí đích phù hợp'],
-  [/^RCS continued the task$/, () => 'RCS đã tiếp tục nhiệm vụ'],
-  [/^Drop confirmed; inventory updated$/, () => 'Đã xác nhận thả rack, tồn kho được cập nhật'],
-  [/^Cancel requested by (.+?): (.*)$/, (m) => `${m[1]} yêu cầu hủy: ${m[2]}`],
-  [/^Cancel requested: (.*?)( \(waiting for RCS confirmation\))?$/, (m) => `Yêu cầu hủy: ${m[1]}${m[2] ? ' (chờ RCS xác nhận)' : ''}`],
-  [/^Cancel confirmed by RCS( status query)?$/, () => 'RCS đã xác nhận hủy'],
-  [/^Cancelled before reaching RCS$/, () => 'Đã hủy trước khi gửi tới RCS'],
-  [/^RCS reported the task interrupted$/, () => 'RCS báo nhiệm vụ bị gián đoạn'],
-  [/^RCS reported cancellation$/, () => 'RCS báo nhiệm vụ đã bị hủy'],
-  [/^NO_SOURCE_AVAILABLE$/, () => 'Không có rack nguồn phù hợp'],
-  [/^AGV_UNAVAILABLE$/, () => 'AGV không khả dụng'],
-  [/^RCS_REJECTED: ?(.*)$/, (m) => `RCS từ chối nhiệm vụ${m[1] ? `: ${m[1]}` : ''}`],
-  [/^RCS_CONTINUE_REJECTED: ?(.*)$/, (m) => `RCS từ chối tiếp tục nhiệm vụ${m[1] ? `: ${m[1]}` : ''}`],
-  [/^RCS_DISPATCH_UNCERTAIN$/, () => 'Không rõ RCS đã nhận nhiệm vụ hay chưa'],
-  [/^TIMEOUT_(\w+)$/, (m) => `Quá thời gian ở trạng thái ${TASK_STATE_VI[m[1] as TaskState] ?? m[1]}`],
-  [/^flow=(\w+)$/, (m) => `Quy trình ${flowInfo(m[1]).code}`],
-  [/^location=(.+)$/, (m) => `Vị trí ${m[1]}`],
-  [/^actual=(.+?)(; .*)?$/, (m) => `Rack thực tế ở ${m[1]}`],
-  [/^Pick confirmed while cancelling.*$/, () => 'Đã lấy rack trong lúc hủy; rack đang vận chuyển, cần đối soát'],
-  [/^Initial stock declared( \(demo\))?$/, () => 'Khai báo tồn ban đầu'],
-  [/^Manual adjustment \(([+-])\)$/, (m) => `Điều chỉnh thủ công (${m[1]})`],
-  [/^Operator cleared the position( \(demo\))?$/, () => 'Người vận hành dọn vị trí'],
-  [/^Confirmed by operator( \(demo\))?$/, () => 'Người vận hành xác nhận vị trí thực tế'],
-  [/^NO_BIND_POINT: external rack id ignored$/, () => 'Điểm không bind rack: bỏ qua Rack ID đọc được'],
+type Rule = [RegExp, (m: RegExpMatchArray) => { vi: string; en?: string }]
+
+/**
+ * Free-text reasons produced by the backend / simulator. Backend sentences are already English, so in English they are shown
+ * as received (`en` omitted); technical reason codes get an English wording of their own.
+ */
+const REASON_RULES: Rule[] = [
+  [/^CANCEL_RETRY_LIMIT_REACHED$/, () => ({ vi: 'Hết giới hạn thử hủy tự động: chưa có xác nhận hủy từ RCS, cần đối soát', en: 'Automatic cancel retry limit reached: RCS has not confirmed the cancellation, reconciliation required' })],
+  [/^CANCEL_RACE_RCS_COMPLETED$/, () => ({ vi: 'RCS báo hoàn thành trước khi hủy kịp: cần đối soát vị trí rack', en: 'RCS reported completion before the cancel took effect: rack position needs reconciliation' })],
+  [/^CANCEL_RACE_RCS_INTERRUPTED$/, () => ({ vi: 'RCS báo gián đoạn trước khi hủy kịp: cần đối soát vị trí rack', en: 'RCS reported an interruption before the cancel took effect: rack position needs reconciliation' })],
+  [/^RCS_ENDED_WITHOUT_DROP$/, () => ({ vi: 'RCS báo kết thúc nhưng WCS chưa nhận xác nhận thả rack', en: 'RCS reported the task ended but WCS has not received the rack drop confirmation' })],
+  [/^RCS_NOTFOUND_AFTER_ACCEPT$/, () => ({ vi: 'RCS không còn bản ghi của nhiệm vụ đã tiếp nhận: cần đối soát', en: 'RCS no longer has a record of the accepted task: reconciliation required' })],
+  [/^Validating business conditions$/, () => ({ vi: 'Đang kiểm tra điều kiện nghiệp vụ' })],
+  [/^AGV free; claimed from queue$/, () => ({ vi: 'AGV rảnh, nhận nhiệm vụ từ hàng đợi' })],
+  [/^AGV free; claimed$/, () => ({ vi: 'AGV rảnh, đã nhận nhiệm vụ' })],
+  [/^AGV busy; request queued$/, () => ({ vi: 'AGV đang bận, yêu cầu được xếp hàng chờ' })],
+  [/^AGV on dispatch hold; request queued$/, () => ({ vi: 'AGV đang bị giữ điều phối, yêu cầu được xếp hàng chờ' })],
+  [/^RCS accepted the task( \(simulated\))?$/, (m) => ({ vi: 'RCS đã tiếp nhận nhiệm vụ' + (m[1] ? ' (mô phỏng)' : ''), en: 'RCS accepted the task' + (m[1] ? ' (simulated)' : '') })],
+  [/^AGV executing$/, () => ({ vi: 'AGV bắt đầu thực hiện' })],
+  [/^Waiting for PLC permission \((Pick|Drop)\)$/, (m) => ({ vi: `Chờ PLC cho phép ${m[1] === 'Pick' ? 'lấy' : 'thả'} rack` })],
+  [/^PLC permission granted$/, () => ({ vi: 'PLC đã cho phép' })],
+  [/^Destination assigned: (.+)$/, (m) => ({ vi: `Đã chỉ định vị trí đích ${m[1]}` })],
+  [/^No destination available$/, () => ({ vi: 'Chưa có vị trí đích phù hợp' })],
+  [/^RCS continued the task$/, () => ({ vi: 'RCS đã tiếp tục nhiệm vụ' })],
+  [/^Drop confirmed; inventory updated$/, () => ({ vi: 'Đã xác nhận thả rack, tồn kho được cập nhật' })],
+  [/^Cancel requested by (.+?): (.*)$/, (m) => ({ vi: `${m[1]} yêu cầu hủy: ${m[2]}` })],
+  [/^Cancel requested: (.*?)( \(waiting for RCS confirmation\))?$/, (m) => ({ vi: `Yêu cầu hủy: ${m[1]}${m[2] ? ' (chờ RCS xác nhận)' : ''}` })],
+  [/^Cancel confirmed by RCS( status query)?$/, () => ({ vi: 'RCS đã xác nhận hủy' })],
+  [/^Cancelled before reaching RCS$/, () => ({ vi: 'Đã hủy trước khi gửi tới RCS' })],
+  [/^RCS reported the task interrupted$/, () => ({ vi: 'RCS báo nhiệm vụ bị gián đoạn' })],
+  [/^RCS reported cancellation$/, () => ({ vi: 'RCS báo nhiệm vụ đã bị hủy' })],
+  [/^NO_SOURCE_AVAILABLE$/, () => ({ vi: 'Không có rack nguồn phù hợp', en: 'No suitable source rack available' })],
+  [/^AGV_UNAVAILABLE$/, () => ({ vi: 'AGV không khả dụng', en: 'AGV unavailable' })],
+  [/^RCS_REJECTED: ?(.*)$/, (m) => ({ vi: `RCS từ chối nhiệm vụ${m[1] ? `: ${m[1]}` : ''}`, en: `RCS rejected the task${m[1] ? `: ${m[1]}` : ''}` })],
+  [/^RCS_CONTINUE_REJECTED: ?(.*)$/, (m) => ({ vi: `RCS từ chối tiếp tục nhiệm vụ${m[1] ? `: ${m[1]}` : ''}`, en: `RCS rejected continuing the task${m[1] ? `: ${m[1]}` : ''}` })],
+  [/^RCS_DISPATCH_UNCERTAIN$/, () => ({ vi: 'Không rõ RCS đã nhận nhiệm vụ hay chưa', en: 'It is unknown whether RCS received the task' })],
+  [/^TIMEOUT_(\w+)$/, (m) => ({ vi: `Quá thời gian ở trạng thái ${TASK_STATE_VI[m[1] as TaskState] ?? m[1]}`, en: `Timed out in state ${TASK_STATE_VI[m[1] as TaskState] ?? m[1]}` })],
+  [/^flow=(\w+)$/, (m) => ({ vi: `Quy trình ${flowInfo(m[1]).code}`, en: `Flow ${flowInfo(m[1]).code}` })],
+  [/^location=(.+)$/, (m) => ({ vi: `Vị trí ${m[1]}`, en: `Location ${m[1]}` })],
+  [/^actual=(.+?)(; .*)?$/, (m) => ({ vi: `Rack thực tế ở ${m[1]}`, en: `Rack actually at ${m[1]}` })],
+  [/^Pick confirmed while cancelling.*$/, () => ({ vi: 'Đã lấy rack trong lúc hủy; rack đang vận chuyển, cần đối soát' })],
+  [/^Initial stock declared( \(demo\))?$/, () => ({ vi: 'Khai báo tồn ban đầu' })],
+  [/^Manual adjustment \(([+-])\)$/, (m) => ({ vi: `Điều chỉnh thủ công (${m[1]})` })],
+  [/^Operator cleared the position( \(demo\))?$/, () => ({ vi: 'Người vận hành dọn vị trí' })],
+  [/^Confirmed by operator( \(demo\))?$/, () => ({ vi: 'Người vận hành xác nhận vị trí thực tế' })],
+  [/^NO_BIND_POINT: external rack id ignored$/, () => ({ vi: 'Điểm không bind rack: bỏ qua Rack ID đọc được', en: 'No-bind point: the rack ID read was ignored' })],
 ]
 
-/** Translates the free-text reasons produced by the backend / simulator. Unknown text (technical codes) is kept as is. */
+/** Localizes the free-text reasons produced by the backend / simulator. Unknown text (technical codes) is kept as is. */
 export function reasonVi(text: string | null | undefined): string {
   if (!text) return ''
+  const en = getLang() === 'en'
   for (const [re, fn] of REASON_RULES) {
     const m = text.match(re)
-    if (m) return fn(m)
+    if (m) { const r = fn(m); return en ? (r.en ?? text) : r.vi }
   }
   return text
 }
 
-const ERROR_VI: Record<string, string> = {
+const ERROR_VI = localizedMap({
   VALIDATION_FAILED: 'Dữ liệu gửi lên không hợp lệ.',
   HOLD_RELEASE_CONFIRMATION_REQUIRED: 'Cần xác nhận cả hai: đã đối soát rack/vị trí VÀ đã kiểm tra thực tế AGV.',
   AGV_NOT_ON_HOLD: 'AGV này không ở trạng thái giữ điều phối.',
@@ -202,31 +253,74 @@ const ERROR_VI: Record<string, string> = {
   REQUEST_KEY_REQUIRED: 'Thiếu mã định danh yêu cầu.',
   CONCURRENT_MODIFICATION: 'Dữ liệu vừa được thay đổi bởi thao tác khác, vui lòng thử lại.',
   INTERNAL_ERROR: 'Máy chủ gặp lỗi nội bộ. Kiểm tra nhật ký Backend.',
-}
+}, {
+  VALIDATION_FAILED: 'The submitted data is not valid.',
+  HOLD_RELEASE_CONFIRMATION_REQUIRED: 'Both confirmations are required: rack/location reconciled AND AGV physically checked.',
+  AGV_NOT_ON_HOLD: 'This AGV is not on dispatch hold.',
+  HOLD_TASK_NOT_FINISHED: 'The task that caused the hold is still active; finish or cancel it first.',
+  RCS_NOT_CONNECTED: 'RCS is not connected (no real RCS adapter): the system does not accept new tasks.',
+  TASK_NOT_FINISHED: 'Only finished tasks can be reconciled.',
+  TASK_NOT_FOUND: 'Task not found.',
+  AGV_NOT_FOUND: 'AGV not found.',
+  LOCATION_NOT_FOUND: 'Location not found.',
+  STATION_NOT_FOUND: 'Requesting station not found.',
+  STATION_NOT_ALLOWED: 'This station is not allowed to request the selected flow.',
+  FLOW_IN_REVIEW: 'This flow is under review and has not been approved for use.',
+  FLOW_NOT_SUPPORTED: 'This flow is not supported.',
+  TASK_ALREADY_FINISHED: 'The task has already finished and cannot be changed.',
+  INVALID_TASK_TRANSITION: 'The task cannot be moved to that state.',
+  CAPACITY_EXCEEDED: 'The location has no free capacity.',
+  NO_RECONCILIATION_NEEDED: 'The task does not need reconciliation.',
+  UNAUTHENTICATED: 'You are not signed in or your session has expired.',
+  INVALID_CREDENTIALS: 'Incorrect username or password.',
+  ACCOUNT_LOCKED: 'The account is temporarily locked after repeated failed sign-ins. Please try again in a few minutes.',
+  ACCOUNT_DISABLED: 'The account has been disabled. Please contact an administrator.',
+  FORBIDDEN: 'You are not permitted to perform this action.',
+  PASSWORD_CHANGE_REQUIRED: 'You must change your password before continuing.',
+  CURRENT_PASSWORD_INCORRECT: 'The current password is incorrect.',
+  PASSWORD_UNCHANGED: 'The new password must differ from the current one.',
+  CLIENT_HEADER_MISSING: 'Invalid request (missing application identification).',
+  USER_NOT_FOUND: 'Account not found.',
+  CANNOT_CHANGE_OWN_ROLE: 'You cannot change your own role.',
+  CANNOT_DELETE_SELF: 'You cannot delete your own account.',
+  USER_HAS_HISTORY: 'The account has an activity history and cannot be deleted, to preserve traceability. Disable the account instead.',
+  CANNOT_DISABLE_SELF: 'You cannot disable your own account.',
+  LAST_ADMIN: 'The last active Admin cannot be disabled, demoted or deleted.',
+  TASK_LOCKED: 'The task has been accepted by the AGV/RCS or has finished; Operator accounts cannot edit or delete it.',
+  TASK_NOT_EDITABLE: 'The task is in progress or finished and cannot be edited or deleted directly. Use cancel or reconciliation instead.',
+  TASK_STATE_CHANGED: 'The task changed state while you were working. The data has been reloaded; please review and try again.',
+  NO_SOURCE_AT_STATION: 'No suitable source rack for the new request. The task was not changed.',
+  REQUEST_KEY_REQUIRED: 'The request identifier is missing.',
+  CONCURRENT_MODIFICATION: 'The data was just changed by another action; please try again.',
+  INTERNAL_ERROR: 'The server encountered an internal error. Check the backend log.',
+})
 
 export function describeError(e: unknown): string {
   if (e instanceof ApiRequestError) {
-    if (e.status === 0 || e.code === 'NETWORK_ERROR' || [502, 503, 504].includes(e.status))
-      return 'Không kết nối được tới máy chủ WCS (API). Hãy kiểm tra Backend đang chạy rồi thử lại.'
-    return ERROR_VI[e.code] ?? PLC_ERROR_VI[e.code] ?? `Yêu cầu không thành công (mã ${e.code}).`
+    if (e.status === 0 || e.code === 'NETWORK_ERROR' || [502, 503, 504].includes(e.status)) return t('common.networkError')
+    return ERROR_VI[e.code] ?? PLC_ERROR_VI[e.code] ?? t('common.requestFailed', { code: e.code })
   }
-  return 'Đã xảy ra lỗi không xác định.'
+  return t('common.unknownError')
 }
 
-export const CONNECTION_VI: Record<string, string> = {
-  connecting: 'Đang kết nối', connected: 'Đã kết nối', reconnecting: 'Đang kết nối lại', disconnected: 'Mất kết nối', demo: 'Chế độ mô phỏng',
-}
+export const CONNECTION_VI = localizedMap(
+  { connecting: 'Đang kết nối', connected: 'Đã kết nối', reconnecting: 'Đang kết nối lại', disconnected: 'Mất kết nối', demo: 'Chế độ mô phỏng' },
+  { connecting: 'Connecting', connected: 'Connected', reconnecting: 'Reconnecting', disconnected: 'Disconnected', demo: 'Simulation mode' })
 
 /** Display code of a task, derived from its id (not a stored business field). */
 export const taskCode = (id: string) => `NV-${id.replaceAll('-', '').slice(0, 8).toUpperCase()}`
 
-export const ROLE_VI: Record<string, string> = { Admin: 'Quản trị viên (Admin)', Operator: 'Vận hành viên (Operator)' }
-export const ROLE_SHORT_VI: Record<string, string> = { Admin: 'Admin', Operator: 'Operator' }
+export const ROLE_VI = localizedMap(
+  { Admin: 'Quản trị viên (Admin)', Operator: 'Vận hành viên (Operator)' },
+  { Admin: 'Administrator (Admin)', Operator: 'Operator (Operator)' })
+export const ROLE_SHORT_VI = localizedMap({ Admin: 'Admin', Operator: 'Operator' }, { Admin: 'Admin', Operator: 'Operator' })
 
-export const AUDIT_RESULT_VI: Record<string, string> = { Success: 'Thành công', Denied: 'Bị từ chối', Failed: 'Thất bại' }
+export const AUDIT_RESULT_VI = localizedMap(
+  { Success: 'Thành công', Denied: 'Bị từ chối', Failed: 'Thất bại' },
+  { Success: 'Success', Denied: 'Denied', Failed: 'Failed' })
 export const AUDIT_RESULT_TONE: Record<string, Tone> = { Success: 'ok', Denied: 'warn', Failed: 'bad' }
 
-export const AUDIT_ACTION_VI: Record<string, string> = {
+export const AUDIT_ACTION_VI = localizedMap({
   AUTH_LOGIN: 'Đăng nhập',
   AUTH_LOGOUT: 'Đăng xuất',
   AUTH_PASSWORD_CHANGE: 'Đổi mật khẩu',
@@ -236,6 +330,7 @@ export const AUDIT_ACTION_VI: Record<string, string> = {
   TASK_DELETE: 'Xóa nhiệm vụ',
   TASK_CANCEL: 'Hủy nhiệm vụ',
   TASK_RECONCILE: 'Đối soát nhiệm vụ',
+  AGV_DISPATCH_HOLD_RELEASE: 'Gỡ giữ điều phối AGV',
   CONFIG_PLC_UPDATE: 'Sửa cấu hình PLC',
   CONFIG_PLC_TEST: 'Kiểm tra kết nối PLC',
   CONFIG_RCS_UPDATE: 'Sửa cấu hình RCS',
@@ -250,7 +345,35 @@ export const AUDIT_ACTION_VI: Record<string, string> = {
   USER_BOOTSTRAP_ADMIN: 'Khởi tạo Admin đầu tiên',
   INVENTORY_INITIAL_STOCK: 'Khai báo tồn kho ban đầu',
   INVENTORY_ADJUST: 'Điều chỉnh tồn kho',
-  SIMULATOR_ADVANCE: 'Giả lập: chạy bước tiếp theo',
-  SIMULATOR_RUN: 'Giả lập: chạy toàn bộ',
-  SIMULATOR_STATION_REQUEST: 'Giả lập: yêu cầu từ trạm',
-}
+  SIMULATOR_ADVANCE: 'Mô phỏng: chạy bước tiếp theo',
+  SIMULATOR_RUN: 'Mô phỏng: chạy toàn bộ',
+  SIMULATOR_STATION_REQUEST: 'Mô phỏng: yêu cầu từ trạm',
+}, {
+  AUTH_LOGIN: 'Sign in',
+  AUTH_LOGOUT: 'Sign out',
+  AUTH_PASSWORD_CHANGE: 'Change password',
+  ACCESS_DENIED: 'Access denied',
+  TASK_CREATE: 'Create task',
+  TASK_UPDATE: 'Edit task',
+  TASK_DELETE: 'Delete task',
+  TASK_CANCEL: 'Cancel task',
+  TASK_RECONCILE: 'Reconcile task',
+  AGV_DISPATCH_HOLD_RELEASE: 'Release AGV dispatch hold',
+  CONFIG_PLC_UPDATE: 'Edit PLC configuration',
+  CONFIG_PLC_TEST: 'Test PLC connection',
+  CONFIG_RCS_UPDATE: 'Edit RCS configuration',
+  CONFIG_RCS_TEST: 'Test RCS connection',
+  CONFIG_AGV_UPDATE: 'Edit AGV configuration',
+  CONFIG_LOCATION_CREATE: 'Add location',
+  CONFIG_LOCATION_UPDATE: 'Edit location',
+  USER_CREATE: 'Create account',
+  USER_UPDATE: 'Edit account',
+  USER_DELETE: 'Delete account',
+  USER_PASSWORD_RESET: 'Reset password',
+  USER_BOOTSTRAP_ADMIN: 'Create first Admin',
+  INVENTORY_INITIAL_STOCK: 'Declare initial stock',
+  INVENTORY_ADJUST: 'Adjust inventory',
+  SIMULATOR_ADVANCE: 'Simulation: run next step',
+  SIMULATOR_RUN: 'Simulation: run all',
+  SIMULATOR_STATION_REQUEST: 'Simulation: station request',
+})

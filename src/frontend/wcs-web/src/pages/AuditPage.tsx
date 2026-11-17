@@ -4,6 +4,7 @@ import type { AuditResult, AuditRow } from '../api/authTypes'
 import { Async, PageHeader, Panel, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime } from '../i18n/format'
+import { useT } from '../i18n'
 import { AUDIT_ACTION_VI, AUDIT_RESULT_TONE, AUDIT_RESULT_VI } from '../i18n/vi'
 
 const PAGE = 100
@@ -14,6 +15,7 @@ function pretty(json: string | null) {
 }
 
 export function AuditPage() {
+  const t = useT()
   const [actor, setActor] = useState('')
   const [action, setAction] = useState('')
   const [result, setResult] = useState<AuditResult | ''>('')
@@ -23,26 +25,26 @@ export function AuditPage() {
 
   return (
     <>
-      <PageHeader title="Nhật ký thao tác" />
-      <Panel title="Nhật ký" flush actions={
+      <PageHeader title={t('logs.auditTitle')} />
+      <Panel title={t('logs.auditPanel')} flush actions={
         <>
-          <input type="search" placeholder="Người thực hiện" aria-label="Lọc theo người thực hiện" value={actor} onChange={(e) => { setActor(e.target.value); setTake(PAGE) }} />
-          <select aria-label="Lọc theo hành động" value={action} onChange={(e) => { setAction(e.target.value); setTake(PAGE) }}>
-            <option value="">Tất cả hành động</option>
+          <input type="search" placeholder={t('logs.actorPh')} aria-label={t('logs.actorAria')} value={actor} onChange={(e) => { setActor(e.target.value); setTake(PAGE) }} />
+          <select aria-label={t('logs.actionAria')} value={action} onChange={(e) => { setAction(e.target.value); setTake(PAGE) }}>
+            <option value="">{t('logs.allActions')}</option>
             {Object.entries(AUDIT_ACTION_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <select aria-label="Lọc theo kết quả" value={result} onChange={(e) => { setResult(e.target.value as AuditResult | ''); setTake(PAGE) }}>
-            <option value="">Mọi kết quả</option>
+          <select aria-label={t('logs.resultAria')} value={result} onChange={(e) => { setResult(e.target.value as AuditResult | ''); setTake(PAGE) }}>
+            <option value="">{t('logs.allResults')}</option>
             {Object.entries(AUDIT_RESULT_VI).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         </>
       }>
-        <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có bản ghi nào khớp bộ lọc' }}>
+        <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: t('logs.auditNone') }}>
           {(rows: AuditRow[]) => (
             <>
               <div className="table-wrap">
                 <table className="grid clickable">
-                  <thead><tr><th>Thời gian</th><th>Người thực hiện</th><th>Hành động</th><th>Đối tượng</th><th>Kết quả</th><th>Ghi chú</th></tr></thead>
+                  <thead><tr><th>{t('logs.colTime')}</th><th>{t('logs.colActor')}</th><th>{t('logs.colAction')}</th><th>{t('logs.colTarget')}</th><th>{t('logs.colResult')}</th><th>{t('logs.colNote')}</th></tr></thead>
                   <tbody>
                     {rows.map((a) => (
                       <Fragment key={a.id}>
@@ -58,9 +60,9 @@ export function AuditPage() {
                           <tr className="audit-detail">
                             <td colSpan={6}>
                               <div className="audit-diff">
-                                <div><strong>Trước</strong><pre>{pretty(a.beforeJson) ?? '—'}</pre></div>
-                                <div><strong>Sau</strong><pre>{pretty(a.afterJson) ?? '—'}</pre></div>
-                                <div><strong>Địa chỉ</strong><pre>{a.ipAddress ?? '—'}</pre></div>
+                                <div><strong>{t('logs.before')}</strong><pre>{pretty(a.beforeJson) ?? '—'}</pre></div>
+                                <div><strong>{t('logs.after')}</strong><pre>{pretty(a.afterJson) ?? '—'}</pre></div>
+                                <div><strong>{t('logs.address')}</strong><pre>{a.ipAddress ?? '—'}</pre></div>
                               </div>
                             </td>
                           </tr>
@@ -71,7 +73,7 @@ export function AuditPage() {
                 </table>
               </div>
               {rows.length >= take && (
-                <div className="pad"><button type="button" className="btn btn-secondary btn-sm" onClick={() => setTake(take + PAGE)}>Tải thêm</button></div>
+                <div className="pad"><button type="button" className="btn btn-secondary btn-sm" onClick={() => setTake(take + PAGE)}>{t('common.loadMore')}</button></div>
               )}
             </>
           )}
