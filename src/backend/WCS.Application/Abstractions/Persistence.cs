@@ -31,6 +31,8 @@ public interface IAgvRepository
     Task<Agv?> GetByCodeAsync(string code, CancellationToken ct = default);
     Task<Agv?> GetByRoleAsync(AgvRole role, CancellationToken ct = default);
     Task<IReadOnlyList<Agv>> ListAsync(CancellationToken ct = default);
+    /// <summary>CR-008 closure: reads the CURRENT committed hold flag with a fresh query (never the tracked, possibly stale entity). Dispatch decisions call it AFTER the active-task check.</summary>
+    Task<bool> IsOnDispatchHoldAsync(Guid agvId, CancellationToken ct = default);
     void Add(Agv agv);
 }
 

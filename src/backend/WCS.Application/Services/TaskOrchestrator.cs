@@ -113,8 +113,12 @@ public sealed class TaskOrchestrator(
             }
 
             // CR-008B-5 (D-7): an AGV on dispatch hold takes no new task; the request waits in the queue (never moved to the other AGV)
-            var busy = agv.DispatchHold || await tasks.GetActiveForAgvAsync(agv.Id, t) is not null || await tasks.AnyQueuedForAgvAsync(agv.Id, t);
-            if (busy) task.TransitionTo(TaskState.Queued, agv.DispatchHold ? "AGV on dispatch hold; request queued" : "AGV busy; request queued", Wcs, clock.UtcNow);
+            // The hold flag is read AFTER the active-task check and with a fresh query: a task that finished (and set the hold) in the same commit as its terminal state can then never look
+            // "inactive but not held". The tracked entity read above may be stale (read committed), so it is not used for this decision.
+            var busy = await tasks.GetActiveForAgvAsync(agv.Id, t) is not null || await tasks.AnyQueuedForAgvAsync(agv.Id, t);
+            var held = await agvs.IsOnDispatchHoldAsync(agv.Id, t);
+            busy |= held;
+            if (busy) task.TransitionTo(TaskState.Queued, held ? "AGV on dispatch hold; request queued" : "AGV busy; request queued", Wcs, clock.UtcNow);
             else task.TransitionTo(TaskState.Dispatching, "AGV free; claimed", Wcs, clock.UtcNow);
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return !busy;
@@ -129,7 +133,7 @@ public sealed class TaskOrchestrator(
         {
             if (await tasks.GetActiveForAgvAsync(agvId, t) is not null) return (Guid?)null; // PER_AGV
             var agv = await agvs.GetAsync(agvId, t);
-            if (agv is null || !agv.Enabled || agv.DispatchHold) return null;   // CR-008B-5 (D-7): held AGV
+            if (agv is null || !agv.Enabled || await agvs.IsOnDispatchHoldAsync(agvId, t)) return null;   // CR-008B-5 (D-7): held AGV (fresh read, after the active-task check)
             var task = await tasks.NextQueuedForAgvAsync(agvId, t); // FIFO: NEEDS_CONFIRMATION (no approved priority policy)
             if (task is null) return null;
             task.TransitionTo(TaskState.Dispatching, "AGV free; claimed from queue", Wcs, clock.UtcNow);
@@ -699,7 +703,8 @@ public sealed class TaskOrchestrator(
 
             var reason = $"TIMEOUT_{task.State}";
             if (!task.OccupiesAgv) await FinishAsync(task, TaskState.Failed, reason, Wcs, events, after, t);
-            else if (task.State == TaskState.CancelPending) await FinishAsync(task, TaskState.Failed, reason, Wcs, events, after, t, forceUncertain: true);
+            else if (task.State == TaskState.CancelPending)   // CR-008 closure: an unconfirmed cancel that times out is the same outcome as the retry limit (D-1/D-5/D-6): uncertain + hold
+                await FinishAsync(task, TaskState.Failed, reason, Wcs, events, after, t, forceUncertain: true, physicalUnproven: true);
             else task.TransitionTo(TaskState.CancelPending, reason, Wcs, clock.UtcNow);
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return task.State == TaskState.CancelPending;

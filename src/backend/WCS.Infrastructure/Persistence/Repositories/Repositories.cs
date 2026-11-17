@@ -23,6 +23,7 @@ internal sealed class AgvRepository(WcsDbContext db) : IAgvRepository
     public Task<Agv?> GetByCodeAsync(string code, CancellationToken ct) => db.Agvs.FirstOrDefaultAsync(x => x.Code == code, ct);
     public Task<Agv?> GetByRoleAsync(AgvRole role, CancellationToken ct) => db.Agvs.FirstOrDefaultAsync(x => x.Role == role, ct);
     public async Task<IReadOnlyList<Agv>> ListAsync(CancellationToken ct) => await db.Agvs.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public Task<bool> IsOnDispatchHoldAsync(Guid agvId, CancellationToken ct) => db.Agvs.AsNoTracking().Where(x => x.Id == agvId).Select(x => x.DispatchHold).FirstOrDefaultAsync(ct);
     public void Add(Agv agv) => db.Agvs.Add(agv);
 }
 
