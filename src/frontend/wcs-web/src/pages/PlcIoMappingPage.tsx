@@ -62,11 +62,6 @@ export function PlcIoMappingPage() {
   return (
     <>
       <PageHeader title="Cấu hình địa chỉ IO" description="Địa chỉ PLC thực tế của 368 tín hiệu (4 PLC · 16 trạm · 23 tín hiệu). Khóa định danh: PLC + Trạm + Tín hiệu." />
-      <div className="notice notice-info">
-        Chỉ nhập địa chỉ <strong>do kỹ sư PLC cấp</strong>; hệ thống không tự sinh, không tự cộng offset, không gán theo thứ tự. Thiết bị hỗ trợ: <strong>D, W</strong> (word) và <strong>M</strong> (bit).
-        <strong> X/Y chưa được hỗ trợ</strong> (OUT_OF_SCOPE / NEEDS_CONFIRMATION: cơ số bát phân hay thập lục phân phải được kỹ sư PLC xác nhận).
-        Nhập địa chỉ <strong>không</strong> làm tín hiệu được polling: chỉ tín hiệu đã được ghi nhận xác nhận mới được đọc từ PLC thật.
-      </div>
       {notice && <div className="notice notice-ok" role="status">{notice}</div>}
       <Panel title="Bộ lọc" subtitle={`${counts.total} tín hiệu · ${counts.configured} đã nhập địa chỉ · ${counts.pollable} được polling (Pollable)`}>
         <div className="form-grid">

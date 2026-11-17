@@ -9,7 +9,7 @@ export const ENDPOINT_STATE_TONE: Record<string, Tone> = {
 }
 
 export const MODE_VI: Record<string, string> = {
-  Simulator: 'CHƯA KẾT NỐI PLC THẬT', RealReadOnly: 'PLC THẬT – CHỈ ĐỌC (REAL_READ_ONLY)', RealReadWrite: 'PLC THẬT – ĐỌC/GHI (REAL_READ_WRITE)',
+  Simulator: 'Chế độ mô phỏng', RealReadOnly: 'PLC THẬT – CHỈ ĐỌC (REAL_READ_ONLY)', RealReadWrite: 'PLC THẬT – ĐỌC/GHI (REAL_READ_WRITE)',
 }
 export const MODE_TONE: Record<string, Tone> = { Simulator: 'warn', RealReadOnly: 'warn', RealReadWrite: 'bad' }
 

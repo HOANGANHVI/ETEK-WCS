@@ -19,7 +19,6 @@ export function StationPanel({ stationId, isAdmin, handshake, onClose }: Props) 
         <div className="hs-strip">
           <span><small>Pha quan sát (kỹ thuật)</small> <Pill tone={PHASE_TONE[handshake.phase] ?? 'muted'}>{PHASE_VI[handshake.phase] ?? handshake.phase}</Pill></span>
           <span><small>Handshake</small> <Pill tone={handshake.approval === 'NEEDS_CONFIRMATION' ? 'warn' : 'ok'} dot={false}>{APPROVAL_VI[handshake.approval] ?? handshake.approval}</Pill></span>
-          <span className="muted">{handshake.signalsAwaitingConfirmation} tín hiệu chưa có quy tắc set/reset được duyệt (NEEDS_CONFIRMATION)</span>
           {handshake.lastError && isAdmin && <span className="text-bad">Lần ghi gần nhất bị từ chối: {handshake.lastError}</span>}
         </div>
       )}

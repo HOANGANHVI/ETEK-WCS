@@ -38,7 +38,6 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
               <tr><td>Khi không có rack nguồn</td><td>{NO_SOURCE_VI[ops.policy.noSourceBehavior] ?? ops.policy.noSourceBehavior}</td><td>{approval(ops.policy.noSourceBehaviorApproved)}</td></tr>
             </tbody>
           </table>
-          <p className="muted">WCS không tự đặt thêm quy tắc ưu tiên nhiệm vụ. Các mục “Chưa được xác nhận” là giá trị mặc định trung tính, chờ chủ dự án quyết định.</p>
         </Panel>
 
         <Panel title="Tham số bộ lập lịch và timeout" subtitle="Chỉ đọc – cấu hình trong appsettings.json của Backend">
@@ -46,10 +45,9 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
             <dt>Chu kỳ quét</dt><dd>{ops.scheduler.tickIntervalMs} ms</dd>
             <dt>Số lần gửi RCS tối đa</dt><dd>{ops.scheduler.maxDispatchAttempts}</dd>
             <dt>Timeout theo trạng thái</dt>
-            <dd>{timeouts.length === 0 ? <span className="muted">Chưa cấu hình – không giới hạn thời gian (cần thống nhất với kỹ sư PLC/RCS)</span>
+            <dd>{timeouts.length === 0 ? <span className="muted">Không giới hạn</span>
               : timeouts.map(([k, v]) => <div key={k}>{TASK_STATE_VI[k as TaskState] ?? k}: {v} giây</div>)}</dd>
           </dl>
-          <p className="muted">Thay đổi các tham số này cần sửa cấu hình triển khai và khởi động lại Backend.</p>
         </Panel>
       </div>
 
@@ -72,7 +70,6 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
             </tbody>
           </table>
         </div>
-        <p className="muted pad">Thứ tự nhóm nguồn/đích chép theo thứ tự trong tài liệu quy trình; đây chưa phải chính sách ưu tiên đã được phê duyệt.</p>
       </Panel>
 
       <Panel title="AGV và RCS Robot Code" subtitle="Có thể chỉnh – lưu trong cơ sở dữ liệu" flush>

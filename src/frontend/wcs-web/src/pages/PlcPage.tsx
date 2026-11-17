@@ -58,7 +58,6 @@ function RuntimeBanner({ rt }: { rt: PlcOverview['runtime'] }) {
       <Pill tone={MODE_TONE[rt.effectiveMode] ?? 'muted'}>{MODE_VI[rt.effectiveMode] ?? rt.effectiveMode}</Pill>
       {rt.mode !== rt.effectiveMode && <span className="muted">(yêu cầu: {MODE_VI[rt.mode] ?? rt.mode})</span>}
       {!rt.running && <Pill tone="warn">Runtime PLC chưa chạy</Pill>}
-      {rt.effectiveMode === 'Simulator' && <span className="muted">Dữ liệu hiển thị không lấy từ thiết bị PLC thật.</span>}
       <span className="plc-banner-notes">{rt.effectiveMode === 'Simulator' ? null : rt.notes.map((n) => <span key={n}>{n}</span>)}</span>
     </div>
   )

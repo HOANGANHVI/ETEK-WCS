@@ -57,7 +57,6 @@ export function AgvCard({ agv, task, lastTask, code, now, compact, onChanged }: 
 
       <footer className="agv-foot">
         <span title={formatDateTime(lastTask?.updatedAt ?? agv.lastStatusAt)}>Hoạt động gần nhất: {timeAgo(lastTask?.updatedAt ?? agv.lastStatusAt, now)}</span>
-        <span className="muted">Vị trí hiện tại: chưa có dữ liệu định vị</span>
       </footer>
     </article>
   )

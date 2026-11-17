@@ -66,10 +66,11 @@ export function WriteDialog({ point, simulator, onClose, onDone }: { point: Dial
       <Button onClick={onClose}>Bỏ qua</Button>
       <Button variant="danger" disabled={busy || !parsed || !parsed.ok} onClick={() => void submit()}>Xác nhận ghi</Button>
     </>}>
-      <div className={simulator ? 'notice notice-info' : 'notice notice-warn'}>
-        {simulator ? 'Chế độ mô phỏng: lệnh ghi chỉ tác động vào bộ nhớ mô phỏng.' : 'PLC THẬT: lệnh ghi này sẽ tác động vào thiết bị. Chỉ thực hiện theo quy trình thử đã được kỹ sư PLC cho phép.'}
-        {' '}Mọi lần ghi thử đều được ghi nhật ký. Tín hiệu an toàn và permit không bao giờ được ghi.
-      </div>
+      {!simulator && (
+        <div className="notice notice-warn">
+          PLC THẬT: lệnh ghi này sẽ tác động vào thiết bị. Chỉ thực hiện theo quy trình thử đã được kỹ sư PLC cho phép. Mọi lần ghi thử đều được ghi nhật ký. Tín hiệu an toàn và permit không bao giờ được ghi.
+        </div>
+      )}
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
       <div className="form-grid single">
         <Field label={`Giá trị (${DATATYPE_VI[point.dataType]})`} error={parsed && !parsed.ok ? parsed.message : undefined}><input value={text} onChange={(e) => setText(e.target.value)} /></Field>
@@ -94,7 +95,6 @@ export function SimDialog({ point, onClose, onDone }: { point: DialogPoint; onCl
       <Button onClick={onClose}>Bỏ qua</Button>
       <Button variant="primary" disabled={busy || !parsed || !parsed.ok} onClick={() => void submit()}>Đặt giá trị mô phỏng</Button>
     </>}>
-      <p className="dialog-hint">Đặt giá trị như thể PLC mô phỏng đưa ra. Không có thiết bị thật nào bị tác động.</p>
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
       <div className="form-grid single">
         <Field label={`Giá trị (${DATATYPE_VI[point.dataType]})`} error={parsed && !parsed.ok ? parsed.message : undefined}><input value={text} onChange={(e) => setText(e.target.value)} /></Field>

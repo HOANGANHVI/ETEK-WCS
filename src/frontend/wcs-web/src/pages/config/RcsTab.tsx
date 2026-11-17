@@ -69,10 +69,6 @@ function RcsForm({ initial, onChanged }: { initial: RcsConfig; onChanged: () => 
   return (
     <div className="cfg-grid">
       <Panel title="Kết nối HIK RCS-2000" subtitle={initial.updatedAt ? `Lưu lần cuối ${formatDateTime(initial.updatedAt)} · ${initial.updatedBy ?? ''}` : 'Chưa có cấu hình nào được lưu'}>
-        <div className="notice notice-warn">
-          Không có endpoint, đường dẫn API hay payload nào được đặt sẵn: tài liệu API RCS chưa được xác nhận. Phương thức xác thực chỉ áp dụng nếu tài liệu RCS yêu cầu.
-          Giai đoạn 1 chưa có RCS client thật: bật kết nối chỉ lưu cấu hình.
-        </div>
         <Switch checked={form.enabled} onChange={(v) => set('enabled', v)} label="Bật kết nối RCS" />
         <div className="form-grid">
           <Field label="Tên hệ thống" error={errors.systemName}><input value={form.systemName} onChange={(e) => set('systemName', e.target.value)} maxLength={100} /></Field>
@@ -118,10 +114,6 @@ function RcsForm({ initial, onChanged }: { initial: RcsConfig; onChanged: () => 
       </Panel>
 
       <Panel title="Kiểm tra kết nối" subtitle="Dùng cấu hình đã lưu">
-        <p className="muted">
-          Phép kiểm tra an toàn: không gọi API RCS, không gửi hay tiếp tục nhiệm vụ vận chuyển. Mặc định không dùng mạng và chưa kiểm tra thiết bị thật;
-          kiểm tra cổng TCP thật chỉ chạy khi Backend được bật tùy chọn riêng.
-        </p>
         <div className="btn-row">
           <Button variant="primary" disabled={dirty || !initial.configured || busy !== null} onClick={() => void test()}>Kiểm tra kết nối</Button>
         </div>
