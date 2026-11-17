@@ -8,7 +8,7 @@
 import { ApiRequestError } from '../api/errors'
 import type { TaskState } from '../api/types'
 import { getLang, localizedMap } from './core'
-import { t, type MsgKey } from './index'
+import { t } from './index'
 import { PLC_ERROR_VI } from './plc'
 
 export type Tone = 'ok' | 'info' | 'warn' | 'bad' | 'muted'
@@ -28,16 +28,6 @@ export const TASK_STATE_TONE: Record<TaskState, Tone> = {
   WaitingForPlc: 'warn', WaitingForDestination: 'warn', Continuing: 'ok', Completed: 'ok', Failed: 'bad',
   CancelPending: 'warn', Cancelled: 'muted',
 }
-
-/** Groups used by the task chart. Every backend state belongs to exactly one group. `label` is resolved when read. */
-export const TASK_GROUPS: { key: string; labelKey: MsgKey; label: string; tone: Tone; states: TaskState[] }[] = [
-  { key: 'waiting', labelKey: 'dashboard.grpWaiting', get label() { return t('dashboard.grpWaiting') }, tone: 'warn', states: ['Pending', 'Validating', 'Queued', 'WaitingForPlc', 'WaitingForDestination'] },
-  { key: 'accepted', labelKey: 'dashboard.grpAccepted', get label() { return t('dashboard.grpAccepted') }, tone: 'info', states: ['Dispatching', 'Accepted'] },
-  { key: 'moving', labelKey: 'dashboard.grpMoving', get label() { return t('dashboard.grpMoving') }, tone: 'ok', states: ['Executing', 'Continuing'] },
-  { key: 'done', labelKey: 'dashboard.grpDone', get label() { return t('dashboard.grpDone') }, tone: 'ok', states: ['Completed'] },
-  { key: 'failed', labelKey: 'dashboard.grpFailed', get label() { return t('dashboard.grpFailed') }, tone: 'bad', states: ['Failed'] },
-  { key: 'cancelled', labelKey: 'dashboard.grpCancelled', get label() { return t('dashboard.grpCancelled') }, tone: 'muted', states: ['CancelPending', 'Cancelled'] },
-]
 
 export const OCCUPYING_STATES: TaskState[] = ['Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending']
 

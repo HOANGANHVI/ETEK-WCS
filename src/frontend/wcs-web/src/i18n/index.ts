@@ -36,7 +36,7 @@ export const hasMessage = (k: MsgKey): boolean => table.vi[k] !== undefined && t
 export function translate(lang: Lang, key: MsgKey, params?: Params): string {
   const text = table[lang][key]
   if (text === undefined) {
-    if (import.meta.env.DEV) console.warn(`[i18n] missing ${lang} message: ${key}`)
+    if (import.meta.env?.DEV) console.warn(`[i18n] missing ${lang} message: ${key}`)
     return key // a visible key is better than silently showing text in the wrong language
   }
   return interpolate(text, params)

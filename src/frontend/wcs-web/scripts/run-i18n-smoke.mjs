@@ -9,11 +9,11 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'wcs-i18n-'))
 try {
-  await build({ input: path.join(here, 'i18n-smoke.ts'), platform: 'node', output: { dir: out, format: 'esm' }, logLevel: 'silent' })
-  const r = spawnSync(process.execPath, [path.join(out, 'i18n-smoke.js')], { encoding: 'utf8' })
+  await build({ input: path.join(here, process.argv[2] ?? 'i18n-smoke.ts'), platform: 'node', output: { dir: out, format: 'esm' }, logLevel: 'silent' })
+  const r = spawnSync(process.execPath, [path.join(out, (process.argv[2] ?? 'i18n-smoke.ts').replace(/.ts$/, '.js'))], { encoding: 'utf8' })
   process.stdout.write(r.stdout); process.stderr.write(r.stderr)
   const lines = r.stdout.split('\n')
   const failed = lines.filter((l) => l.startsWith('FAIL'))
-  console.log(`i18n:test ${lines.filter((l) => l.startsWith('PASS')).length} passed, ${failed.length} failed`)
+  console.log(`tests ${lines.filter((l) => l.startsWith('PASS')).length} passed, ${failed.length} failed`)
   process.exitCode = r.status || failed.length ? 1 : 0
 } finally { fs.rmSync(out, { recursive: true, force: true }) }

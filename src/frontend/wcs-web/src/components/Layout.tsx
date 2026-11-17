@@ -1,7 +1,6 @@
 import { useCallback, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Agv, SystemHealth } from '../api/types'
 import { hasRole, useAuth } from '../auth/AuthContext'
 import { DEMO_MODE } from '../config'
 import { DemoDock } from '../demo/DemoDock'
@@ -9,8 +8,9 @@ import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
 import { displayNameOf, formatDate, formatTime } from '../i18n/format'
 import { useT, type MsgKey } from '../i18n'
-import { ROLE_SHORT_VI, type Tone } from '../i18n/vi'
+import { ROLE_SHORT_VI } from '../i18n/vi'
 import { LangSwitch } from './LangSwitch'
+import { plcView, rcsView, type LinkView } from './linkStatus'
 import { useRealtime } from '../realtime/RealtimeProvider'
 import { IconAgv, IconLog, IconOverview, IconPlc, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
 
@@ -39,41 +39,11 @@ const NAV_SYSTEM: NavItem[] = [
 ]
 
 interface NavItem { to: string; label: MsgKey; end?: boolean; icon: ReactNode }
-interface LinkView { tone: Tone; text: MsgKey | { raw: string } }
-
-/** PLC link, from the API health. With no real controller attached the label is "Chưa kết nối" - never a healthy-looking state. */
-function plcView(health: SystemHealth | null): LinkView {
-  if (!health) return { tone: 'bad', text: 'nav.noData' }
-  const rt = health.integration.plcRuntime
-  if (rt) {
-    if (rt.mode === 'Simulator') return { tone: 'warn', text: 'nav.notConnected' }
-    if (!rt.running) return { tone: 'warn', text: 'nav.notRunning' }
-    if (rt.connected === 0) return { tone: 'bad', text: { raw: `0/${rt.total} PLC` } }
-    return { tone: rt.connected === rt.total ? 'ok' : 'warn', text: { raw: `${rt.connected}/${rt.total} PLC` } }
-  }
-  if (health.integration.mode === 'Simulator') return { tone: 'warn', text: 'nav.notConnected' }
-  switch (health.integration.plc) {
-    case 'Connected': return { tone: 'ok', text: 'nav.connected' }
-    case 'Connecting': return { tone: 'warn', text: 'nav.connecting' }
-    case 'Faulted': return { tone: 'bad', text: 'nav.fault' }
-    default: return { tone: 'bad', text: 'nav.disconnected' }
-  }
-}
-
-/** RCS link: there is no dedicated RCS health yet, so it is derived from AGV statuses reported through RCS. */
-function rcsView(health: SystemHealth | null, agvs: Agv[] | null): LinkView {
-  if (!health) return { tone: 'bad', text: 'nav.noData' }
-  if (health.integration.mode === 'Simulator') return { tone: 'warn', text: 'nav.notConnected' }
-  const withRobot = (agvs ?? []).filter((a) => a.rcsRobotCode)
-  if (withRobot.length === 0) return { tone: 'warn', text: 'nav.notSet' }
-  return withRobot.some((a) => a.connectionStatus === 'Online') ? { tone: 'ok', text: 'nav.connected' } : { tone: 'bad', text: 'nav.disconnected' }
-}
-
 function TopBar() {
   const t = useT()
   const { user, logout } = useAuth()
   const now = useClock()
-  const linkText = (m: MsgKey | { raw: string }) => (typeof m === 'string' ? t(m) : m.raw)
+  const linkText = (m: LinkView['text']) => (typeof m === 'string' ? t(m) : m.raw)
   const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
   const agvs = useApi(useCallback(() => api.agvs(), []), ['AgvStatusChanged'])
   const plc = plcView(health.error && !health.data ? null : health.data)
