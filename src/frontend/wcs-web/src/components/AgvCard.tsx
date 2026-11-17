@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { Agv, TransportTask } from '../api/types'
 import { formatDateTime, timeAgo } from '../i18n/format'
 import { AGV_ROLE_VI, flowInfo, LEG_VI, taskCode } from '../i18n/vi'
+import { AgvHoldPanel } from './AgvHoldPanel'
 import { ConnectionPill, FlowStepper, Pill, TaskStatePill } from './ui'
 
 interface Props {
@@ -11,15 +12,17 @@ interface Props {
   code: (locationId: string | null) => string
   now: number
   compact?: boolean
+  onChanged?: () => void
 }
 
 function activity(agv: Agv) {
+  if (agv.dispatchHold) return <Pill tone="bad">Dispatch Hold</Pill>
   if (agv.connectionStatus === 'Offline' || agv.connectionStatus === 'Error') return <Pill tone="bad">Không khả dụng</Pill>
   return agv.busy ? <Pill tone="ok">Đang hoạt động</Pill> : <Pill tone="warn">Đang chờ nhiệm vụ</Pill>
 }
 
 /** Operational card of one AGV. No position is shown: the API does not provide AGV coordinates yet. */
-export function AgvCard({ agv, task, lastTask, code, now, compact }: Props) {
+export function AgvCard({ agv, task, lastTask, code, now, compact, onChanged }: Props) {
   const flow = task ? flowInfo(task.flow) : null
   return (
     <article className={`agv-card ${compact ? 'compact' : ''}`}>
@@ -30,6 +33,8 @@ export function AgvCard({ agv, task, lastTask, code, now, compact }: Props) {
         </div>
         <div className="agv-states">{activity(agv)}<ConnectionPill value={agv.connectionStatus} /></div>
       </header>
+
+      <AgvHoldPanel agv={agv} onChanged={onChanged} compact={compact} />
 
       {task && flow ? (
         <div className="agv-task">

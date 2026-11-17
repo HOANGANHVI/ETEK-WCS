@@ -342,8 +342,10 @@ public class RobustnessTests(DatabaseFixture fixture)
         await h.AdvanceUntilAsync(first.Id, TaskState.Executing);
         await h.SignalAsync(first.Id, SignalKind.RcsInterrupted);
 
-        Assert.Equal(TaskState.Accepted, (await h.GetTaskAsync(second.Id)).State);
-        Assert.Equal(1, await h.ActiveTaskCountAsync("AGV1"));
+        // CR-008B-5 (D-7/D-6): an interrupted task leaves the physical state unproven, so AGV1 is on dispatch hold and the queued task keeps waiting (it is NOT moved to AGV2).
+        Assert.Equal(TaskState.Queued, (await h.GetTaskAsync(second.Id)).State);
+        Assert.Equal(0, await h.ActiveTaskCountAsync("AGV1"));
+        Assert.True((await h.AgvAsync("AGV1")).DispatchHold);
     }
 
     // ------------------------------------------------------------------------------------------ timeouts / queue policy

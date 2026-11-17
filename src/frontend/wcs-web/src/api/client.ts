@@ -66,6 +66,8 @@ const realApi = {
   reconciliationDetail: (id: string) => request<ReconciliationDetail>(`/api/tasks/${id}/reconciliation`),
   reconcileTask: (id: string, actualLocationCode: string, user: string, note: string) =>
     request<TransportTask>(`/api/tasks/${id}/reconcile`, { method: 'POST', body: JSON.stringify({ actualLocationCode, user, note }) }),
+  releaseAgvHold: (id: string, inventoryReconciled: boolean, agvPhysicallyVerified: boolean, note: string) =>
+    request<Agv>(`/api/agvs/${id}/release-hold`, { method: 'POST', body: JSON.stringify({ inventoryReconciled, agvPhysicallyVerified, note }) }),
   reconciliationCheck: (id: string, note: string) =>
     request<TransportTask>(`/api/tasks/${id}/reconciliation-check`, { method: 'POST', body: JSON.stringify({ note }) }),
   simulateNext: (id: string) => request<SimulationStep>(`/api/simulator/tasks/${id}/advance`, { method: 'POST' }),

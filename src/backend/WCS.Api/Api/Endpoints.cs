@@ -83,6 +83,16 @@ public static class Endpoints
         var agv = api.MapGroup("/agvs").WithTags("AGV");
         agv.MapGet("", async (HttpContext c, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.ListAgvsAsync(ct)));
         agv.MapGet("{id:guid}", async (HttpContext c, Guid id, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.GetAgvAsync(id, ct)));
+        // CR-008B-5 (D-8): Admin only, both confirmations mandatory, audited with the AGV, the task and both confirmations.
+        agv.MapPost("{id:guid}/release-hold", async (HttpContext c, Guid id, ReleaseAgvHoldRequest r, AgvHoldService s, WcsQueries q, CancellationToken ct) =>
+        {
+            var before = await q.GetAgvAsync(id, ct);
+            await Audited.RunAsync(c, "AGV_DISPATCH_HOLD_RELEASE", "Agv", id.ToString(), before,
+                () => s.ReleaseAsync(id, r.InventoryReconciled, r.AgvPhysicallyVerified, r.Note, c.Actor().Username, ct),
+                res => new { agv = res.Agv.Code, taskId = res.TaskId, previousReason = res.PreviousReason, heldAt = res.HeldAt, inventoryReconciled = r.InventoryReconciled, agvPhysicallyVerified = r.AgvPhysicallyVerified },
+                r.Note);
+            return ApiResults.Ok(c, await q.GetAgvAsync(id, ct));
+        }).RequireAuthorization(admin);
 
         // ---- Location
         var loc = api.MapGroup("/locations").WithTags("Location");

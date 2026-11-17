@@ -185,7 +185,7 @@ public class Cr008b4InventoryUncertaintyTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task The_cancel_retry_limit_keeps_the_rack_and_location_state_as_decided_in_D1()
+    public async Task The_cancel_retry_limit_marks_rack_and_location_uncertain_and_keeps_the_reservation_D5_D6()
     {
         await using var h = await ReadyAsync(fixture, a1Racks: 1);
         h.SchedulerOptions.RcsMaxAttempts = 3;
@@ -196,8 +196,8 @@ public class Cr008b4InventoryUncertaintyTests(DatabaseFixture fixture)
 
         var task = await h.GetTaskAsync(t.Id);
         Assert.Equal(TaskState.Failed, task.State);
-        Assert.Equal(RackStatus.Full, Assert.Single(await AllRacksAsync(h)).Status);   // D-1: "keep reservation and resource state" - not changed
-        Assert.False((await h.LocationAsync("A1")).ReconciliationRequired);
+        Assert.Equal(RackStatus.Unknown, Assert.Single(await AllRacksAsync(h)).Status);   // D-5/D-6 (CR-008B-5) supersede the narrower D-1 wording: no proof -> uncertain
+        Assert.True((await h.LocationAsync("A1")).ReconciliationRequired);
         Assert.NotEmpty(await h.ActiveReservationsAsync());
     }
 }

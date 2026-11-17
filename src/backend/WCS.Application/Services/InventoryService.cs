@@ -120,7 +120,8 @@ public sealed class InventoryService(
     {
         var rack = await racks.GetAsync(task.RackId ?? Guid.Empty, ct)
                    ?? throw AppException.Conflict("RACK_NOT_FOUND", "The task rack no longer exists.");
-        if (rack.Status != RackStatus.InTransit || rack.CurrentTaskId != task.Id)
+        // CR-008B-5: after "RCS ended" the rack is Unknown but still belongs to this task; a PLC drop confirmation is physical evidence and is accepted
+        if (rack.CurrentTaskId != task.Id || rack.Status is not (RackStatus.InTransit or RackStatus.Unknown))
             throw AppException.Conflict("RACK_NOT_IN_TRANSIT", "Drop cannot be confirmed: the rack is not in transit for this task.");
         var dest = await locations.GetAsync(task.DestinationLocationId ?? Guid.Empty, ct)
                    ?? throw AppException.Conflict("DESTINATION_NOT_ASSIGNED", "The task has no destination.");

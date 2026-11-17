@@ -29,7 +29,7 @@ export function AgvPage() {
           <div className="agv-grid wide">
             {list.map((a) => {
               const mine = (tasks.data?.items ?? []).filter((t) => t.agvId === a.id) // newest first
-              return <AgvCard key={a.id} agv={a} task={mine.find(isActive) ?? null} lastTask={mine[0] ?? null} code={codes.loc} now={now} />
+              return <AgvCard key={a.id} agv={a} task={mine.find(isActive) ?? null} lastTask={mine[0] ?? null} code={codes.loc} now={now} onChanged={() => { agvs.reload(); tasks.reload() }} />
             })}
           </div>
         )}

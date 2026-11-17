@@ -59,7 +59,8 @@ public class Cr008b3CancelReconciliationTests(DatabaseFixture fixture)
 
         Assert.Single(await h.ActiveReservationsAsync());                         // the rack reservation is kept
         var rack = Assert.Single(await h.RacksAtAsync("A1"));
-        Assert.Equal(RackStatus.Full, rack.Status);                               // nothing released, nothing moved
+        Assert.Equal(RackStatus.Unknown, rack.Status);                            // CR-008B-5 (D-5/D-6): uncertain rack, nothing released, nothing moved (location kept)
+        Assert.Equal((await h.LocationAsync("A1")).Id, rack.CurrentLocationId);
         Assert.Equal(0, await h.ActiveTaskCountAsync("AGV1"));                    // terminal task: AGV1 is no longer occupied (see CR008B-5 analysis: policy D-7 is open)
     }
 
@@ -139,7 +140,7 @@ public class Cr008b3CancelReconciliationTests(DatabaseFixture fixture)
         Assert.Equal("Failed", d.GetProperty("task").GetProperty("state").GetString());
         Assert.Contains(d.GetProperty("rcsEvents").EnumerateArray(), e => e.GetProperty("event").GetString() == "RCS_CANCEL_RETRY_EXHAUSTED");
         Assert.Contains(d.GetProperty("reservations").EnumerateArray(), e => e.GetProperty("kind").GetString() == "SourceRack" && e.GetProperty("locationCode").GetString() == "A1");
-        Assert.Equal("Full", d.GetProperty("rack").GetProperty("status").GetString());
+        Assert.Equal("Unknown", d.GetProperty("rack").GetProperty("status").GetString());   // CR-008B-5 (D-5/D-6)
         Assert.Equal("A1", d.GetProperty("rack").GetProperty("currentLocationCode").GetString());
     }
 

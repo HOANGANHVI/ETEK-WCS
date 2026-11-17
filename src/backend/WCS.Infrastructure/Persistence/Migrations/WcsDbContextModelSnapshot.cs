@@ -37,6 +37,21 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<bool>("DispatchHold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTimeOffset?>("DispatchHoldAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DispatchHoldReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("DispatchHoldTaskId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
 

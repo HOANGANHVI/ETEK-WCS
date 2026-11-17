@@ -167,6 +167,7 @@ export class DemoEngine {
       return {
         id: a.id, code: a.code, role: a.role, rcsRobotCode: a.robotCode, enabled: a.enabled, connectionStatus: a.status,
         statusDetail: a.detail, lastStatusAt: a.at, activeTaskId: active?.pub.id ?? null, busy: !!active,
+        dispatchHold: false, dispatchHoldReason: null, dispatchHoldAt: null, dispatchHoldTaskId: null,   // the offline demo has no hold
       }
     })
   }

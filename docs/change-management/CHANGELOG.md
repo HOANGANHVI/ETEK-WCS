@@ -1,5 +1,15 @@
 # Change Log
 
+## v2.7 – CR-008B-5 AGV dispatch hold (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-5). Status: IMPLEMENTED on `develop`; not merged. Owner decisions D-5 (M2), D-6, D-7 (P2), D-8 applied.
+- Added: `agvs.DispatchHold` / `DispatchHoldReason` / `DispatchHoldAt` / `DispatchHoldTaskId` (migration `AddAgvDispatchHold`, additive); the hold is set in the same transaction as the terminal transition for Interrupted, Completed-while-cancelling without a drop, NotFound after accept, cancel retry limit, RCS_DISPATCH_UNCERTAIN, and on RcsEnded without a drop. `ProcessTaskAsync`, `TryDispatchNextAsync` and `DispatchToRcsAsync` honour it; queued tasks stay queued and are never moved to the other AGV.
+- Added: Admin-only `POST /api/agvs/{id}/release-hold` (both confirmations + note, audited `AGV_DISPATCH_HOLD_RELEASE`), AGV card banner and Admin release form.
+- Changed (owner decision): the cancel retry limit (D-1) now also marks the rack Unknown and the locations ReconciliationRequired (D-5/D-6); `InventoryService.ConfirmDropAsync` accepts a PLC drop for a rack that is Unknown but still belongs to the task (needed after RcsEnded).
+- Unchanged: TaskStateMachine, PER_AGV, FlowOptions, priority, PLC/MC/handshake, retry defaults, StateTimeoutsSeconds, Agv.Enabled semantics.
+- Tests: `Cr008b5AgvDispatchHoldTests` (15); four earlier tests updated to the new decisions; backend 506/506.
+- Approved by: project owner (2026-11-17).
+
 ## v2.6 – CR-008B-4 Rack and inventory uncertainty (2026-11-17)
 
 - Change Request: CR-008B (sub-CR B-4). Status: IMPLEMENTED on `develop`; not merged. No migration. Touches the protected `InventoryService` (one added method) with the owner's approval of CR-008B section 7.

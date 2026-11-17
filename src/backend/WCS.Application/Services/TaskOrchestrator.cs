@@ -112,8 +112,9 @@ public sealed class TaskOrchestrator(
                 return false;
             }
 
-            var busy = await tasks.GetActiveForAgvAsync(agv.Id, t) is not null || await tasks.AnyQueuedForAgvAsync(agv.Id, t);
-            if (busy) task.TransitionTo(TaskState.Queued, "AGV busy; request queued", Wcs, clock.UtcNow);
+            // CR-008B-5 (D-7): an AGV on dispatch hold takes no new task; the request waits in the queue (never moved to the other AGV)
+            var busy = agv.DispatchHold || await tasks.GetActiveForAgvAsync(agv.Id, t) is not null || await tasks.AnyQueuedForAgvAsync(agv.Id, t);
+            if (busy) task.TransitionTo(TaskState.Queued, agv.DispatchHold ? "AGV on dispatch hold; request queued" : "AGV busy; request queued", Wcs, clock.UtcNow);
             else task.TransitionTo(TaskState.Dispatching, "AGV free; claimed", Wcs, clock.UtcNow);
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return !busy;
@@ -128,7 +129,7 @@ public sealed class TaskOrchestrator(
         {
             if (await tasks.GetActiveForAgvAsync(agvId, t) is not null) return (Guid?)null; // PER_AGV
             var agv = await agvs.GetAsync(agvId, t);
-            if (agv is null || !agv.Enabled) return null;
+            if (agv is null || !agv.Enabled || agv.DispatchHold) return null;   // CR-008B-5 (D-7): held AGV
             var task = await tasks.NextQueuedForAgvAsync(agvId, t); // FIFO: NEEDS_CONFIRMATION (no approved priority policy)
             if (task is null) return null;
             task.TransitionTo(TaskState.Dispatching, "AGV free; claimed from queue", Wcs, clock.UtcNow);
@@ -155,10 +156,11 @@ public sealed class TaskOrchestrator(
             if (task.DispatchAttempts >= schedulerOptions.Value.MaxDispatchAttempts)
             {
                 // An unknown outcome may still have created a task in RCS: keep resources and require reconciliation.
-                await FinishAsync(task, TaskState.Failed, "RCS_DISPATCH_UNCERTAIN", Wcs, events, after, t, forceUncertain: true);
+                await FinishAsync(task, TaskState.Failed, "RCS_DISPATCH_UNCERTAIN", Wcs, events, after, t, forceUncertain: true, physicalUnproven: true);   // CR-008B-5 (D-6)
                 return null;
             }
             var agv = await agvs.GetAsync(task.AgvId, t);
+            if (agv is { DispatchHold: true }) { logger.LogWarning("Dispatch of {TaskId} skipped: AGV {Agv} is on dispatch hold", taskId, agv.Code); return null; }   // CR-008B-5: last check before the RCS call
             var src = await locations.GetAsync(task.SourceLocationId ?? Guid.Empty, t);
             var req = await locations.GetAsync(task.RequestLocationId, t);
             var attemptsBefore = task.DispatchAttempts;
@@ -345,6 +347,9 @@ public sealed class TaskOrchestrator(
                 if (task.DropConfirmedAt is not null) return Dup("Already completed by drop confirmation");
                 // RCS 'end' alone is not physical proof of delivery (business-rules.md 1.6): never complete from it.
                 if (!task.RequiresReconciliation) task.RequireReconciliation("RCS reported end without WCS drop confirmation", now);
+                // CR-008B-5 (D-6): the physical result is unproven -> rack Unknown, locations flagged, AGV held (the task itself stays active; nothing is released)
+                await inventory.MarkPhysicalUnprovenAsync(task, t);
+                await HoldAgvAsync(task, "RCS_ENDED_WITHOUT_DROP", t);
                 return Applied("RCS end recorded without completion; reconciliation required");
 
             default:
@@ -608,7 +613,7 @@ public sealed class TaskOrchestrator(
                 // The counter is neither raised nor reset and no Cancel is sent again.
                 var attempts = task.RcsRetryCount;
                 task.Note(RetryLimitEvent, $"RCS did not confirm the cancellation after {attempts} automatic attempts (last attempt {task.RcsLastAttemptAt:O}, limit reached at {clock.UtcNow:O}). Automatic retry stopped; this is not a confirmation that RCS cancelled the task.", Wcs, clock.UtcNow);
-                await FinishAsync(task, TaskState.Failed, RetryLimitReason, Wcs, events, after, t, forceUncertain: true);
+                await FinishAsync(task, TaskState.Failed, RetryLimitReason, Wcs, events, after, t, forceUncertain: true, physicalUnproven: true);   // CR-008B-5 (D-5/D-6): rack Unknown, locations flagged, AGV held, reservations kept
                 logger.LogError("Cancellation of task {TaskId} was not confirmed after {Attempts} attempts; the task is Failed and requires reconciliation. {EventCode}", taskId, attempts, "CANCEL_RETRY_LIMIT_REACHED");
                 return null;
             }
@@ -719,11 +724,28 @@ public sealed class TaskOrchestrator(
         {
             if (terminal != TaskState.Completed) task.RequireReconciliation(reason, clock.UtcNow);
             // CR-008B-4: an outcome reported by RCS that WCS cannot prove marks the rack and the locations uncertain even before a pick; every other case keeps the old rule
-            if (physicalUnproven) await inventory.MarkPhysicalUnprovenAsync(task, t); else await inventory.MarkUncertainAsync(task, t);
+            if (physicalUnproven)
+            {
+                await inventory.MarkPhysicalUnprovenAsync(task, t);
+                // CR-008B-5 (D-7): the hold is set in the SAME transaction as the terminal transition, so no dispatch can see the AGV free but not held
+                if (task.DropConfirmedAt is null) await HoldAgvAsync(task, reason, t);
+            }
+            else await inventory.MarkUncertainAsync(task, t);
         }
         else await inventory.ReleaseReservationsAsync(task, t);
         events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
         after.Add(() => TryDispatchNextAsync(wasQueuedBehind));
+    }
+
+    /// <summary>CR-008B-5: puts the task's AGV on dispatch hold (idempotent). Runs inside the caller's transaction.</summary>
+    private async Task HoldAgvAsync(TransportTask task, string reason, CancellationToken t)
+    {
+        if (await agvs.GetAsync(task.AgvId, t) is not { } agv) return;
+        if (agv.PlaceDispatchHold(reason, task.Id, clock.UtcNow))
+        {
+            task.Note("AGV_DISPATCH_HOLD", $"{agv.Code} placed on dispatch hold: {reason}", Wcs, clock.UtcNow);
+            logger.LogWarning("AGV {Agv} placed on dispatch hold because of task {TaskId}: {Reason}", agv.Code, task.Id, reason);
+        }
     }
 
     private async Task Note(Guid taskId, string name, string? detail, CancellationToken ct, bool onlyIfChanged = false) =>

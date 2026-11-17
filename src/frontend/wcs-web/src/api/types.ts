@@ -34,6 +34,10 @@ export interface Agv {
   lastStatusAt: string | null
   activeTaskId: string | null
   busy: boolean
+  dispatchHold: boolean                 // CR-008B-5
+  dispatchHoldReason: string | null
+  dispatchHoldAt: string | null
+  dispatchHoldTaskId: string | null
 }
 
 export interface Location {

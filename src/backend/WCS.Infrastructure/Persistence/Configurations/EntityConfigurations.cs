@@ -18,6 +18,8 @@ internal sealed class AgvConfiguration : IEntityTypeConfiguration<Agv>
         b.Property(x => x.Code).HasMaxLength(50).IsRequired();
         b.Property(x => x.RcsRobotCode).HasMaxLength(100);
         b.Property(x => x.StatusDetail).HasMaxLength(500);
+        b.Property(x => x.DispatchHold).HasDefaultValue(false);   // CR-008B-5 (additive)
+        b.Property(x => x.DispatchHoldReason).HasMaxLength(200);
         b.Property(x => x.Version).IsRowVersion(); // PostgreSQL xmin
         b.Ignore(x => x.CarriedRackKind);
         b.HasIndex(x => x.Code).IsUnique();

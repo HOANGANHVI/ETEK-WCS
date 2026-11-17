@@ -26,6 +26,9 @@ public sealed record ReconcileTaskRequest(
 /// <summary>CR-008B-3: the Admin checked on site and could not establish the physical location: record it, release nothing.</summary>
 public sealed record ReconciliationCheckRequest([property: Required, StringLength(1000, MinimumLength = 3)] string Note);
 
+/// <summary>CR-008B-5 (D-8): both confirmations are mandatory to lift an AGV dispatch hold.</summary>
+public sealed record ReleaseAgvHoldRequest(bool InventoryReconciled, bool AgvPhysicallyVerified, [property: Required, StringLength(1000, MinimumLength = 3)] string Note);
+
 public sealed record InitialStockRequest(
     [property: Required, StringLength(50)] string LocationCode,
     RackKind RackKind,

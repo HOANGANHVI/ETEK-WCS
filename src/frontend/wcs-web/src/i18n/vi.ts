@@ -87,6 +87,8 @@ export const HISTORY_EVENT_VI: Record<string, string> = {
   TASK_CREATED: 'Tạo nhiệm vụ',
   SOURCE_RESERVED: 'Giữ chỗ rack nguồn',
   DESTINATION_RESERVED: 'Giữ chỗ vị trí đích',
+  AGV_DISPATCH_HOLD: 'AGV bị giữ điều phối',
+  AGV_DISPATCH_HOLD_RELEASED: 'Admin gỡ giữ AGV',
   PICK_CONFIRMED: 'Xác nhận đã lấy rack',
   RECONCILIATION_REQUIRED: 'Cần đối soát vị trí rack',
   RECONCILED: 'Đã đối soát',
@@ -113,6 +115,7 @@ const REASON_RULES: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^CANCEL_RETRY_LIMIT_REACHED$/, () => 'Hết giới hạn thử hủy tự động: chưa có xác nhận hủy từ RCS, cần đối soát'],
   [/^CANCEL_RACE_RCS_COMPLETED$/, () => 'RCS báo hoàn thành trước khi hủy kịp: cần đối soát vị trí rack'],
   [/^CANCEL_RACE_RCS_INTERRUPTED$/, () => 'RCS báo gián đoạn trước khi hủy kịp: cần đối soát vị trí rack'],
+  [/^RCS_ENDED_WITHOUT_DROP$/, () => 'RCS báo kết thúc nhưng WCS chưa nhận xác nhận thả rack'],
   [/^RCS_NOTFOUND_AFTER_ACCEPT$/, () => 'RCS không còn bản ghi của nhiệm vụ đã tiếp nhận: cần đối soát'],
   [/^Validating business conditions$/, () => 'Đang kiểm tra điều kiện nghiệp vụ'],
   [/^AGV free; claimed from queue$/, () => 'AGV rảnh, nhận nhiệm vụ từ hàng đợi'],
@@ -161,6 +164,9 @@ export function reasonVi(text: string | null | undefined): string {
 
 const ERROR_VI: Record<string, string> = {
   VALIDATION_FAILED: 'Dữ liệu gửi lên không hợp lệ.',
+  HOLD_RELEASE_CONFIRMATION_REQUIRED: 'Cần xác nhận cả hai: đã đối soát rack/vị trí VÀ đã kiểm tra thực tế AGV.',
+  AGV_NOT_ON_HOLD: 'AGV này không ở trạng thái giữ điều phối.',
+  HOLD_TASK_NOT_FINISHED: 'Nhiệm vụ gây ra việc giữ AGV vẫn đang hoạt động; hãy kết thúc hoặc hủy nhiệm vụ trước.',
   RCS_NOT_CONNECTED: 'RCS chưa được kết nối (chưa có RCS adapter thật): hệ thống không nhận nhiệm vụ mới.',
   TASK_NOT_FINISHED: 'Chỉ đối soát được nhiệm vụ đã kết thúc.',
   TASK_NOT_FOUND: 'Không tìm thấy nhiệm vụ.',

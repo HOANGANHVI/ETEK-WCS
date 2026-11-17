@@ -7,7 +7,8 @@ using WCS.Domain.Tasks;
 namespace WCS.Application;
 
 public sealed record AgvDto(Guid Id, string Code, string Role, string? RcsRobotCode, bool Enabled, string ConnectionStatus,
-    string? StatusDetail, DateTimeOffset? LastStatusAt, Guid? ActiveTaskId, bool Busy);
+    string? StatusDetail, DateTimeOffset? LastStatusAt, Guid? ActiveTaskId, bool Busy,
+    bool DispatchHold = false, string? DispatchHoldReason = null, DateTimeOffset? DispatchHoldAt = null, Guid? DispatchHoldTaskId = null);
 
 public sealed record LocationDto(Guid Id, string Code, string Name, string Type, int RackCapacity, string AllowedRackKind,
     bool Enabled, bool RequiresPlcPermission, int Occupied, int Reserved, string Occupancy);
@@ -33,7 +34,8 @@ public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip,
 public static class DtoMapper
 {
     public static AgvDto ToDto(this Agv a, Guid? activeTaskId) => new(a.Id, a.Code, a.Role.ToString(), a.RcsRobotCode, a.Enabled,
-        a.ConnectionStatus.ToString(), a.StatusDetail, a.LastStatusAt, activeTaskId, activeTaskId is not null);
+        a.ConnectionStatus.ToString(), a.StatusDetail, a.LastStatusAt, activeTaskId, activeTaskId is not null,
+        a.DispatchHold, a.DispatchHoldReason, a.DispatchHoldAt, a.DispatchHoldTaskId);
 
     public static LocationDto ToDto(this Location l, int occupied, int reserved) => new(l.Id, l.Code, l.Name, l.Type.ToString(),
         l.RackCapacity, l.AllowedRackKind.ToString(), l.Enabled, l.RequiresPlcPermission, occupied, reserved,

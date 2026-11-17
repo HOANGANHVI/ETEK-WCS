@@ -40,6 +40,26 @@ public class Agv
         ConnectionStatus = status; StatusDetail = detail; LastStatusAt = now;
     }
 
+    /// <summary>CR-008B-5 (D-7, P2): the AGV takes no new task while true. Independent of <see cref="Enabled"/>; only an Admin releases it (D-8).</summary>
+    public bool DispatchHold { get; private set; }
+    public string? DispatchHoldReason { get; private set; }
+    public DateTimeOffset? DispatchHoldAt { get; private set; }
+    /// <summary>The task whose uncertain outcome caused the hold (no foreign key: it is an audit pointer).</summary>
+    public Guid? DispatchHoldTaskId { get; private set; }
+
+    /// <summary>Idempotent: an AGV already on hold keeps the first reason / task (the later ones are in the task history).</summary>
+    public bool PlaceDispatchHold(string reason, Guid taskId, DateTimeOffset now)
+    {
+        if (DispatchHold) return false;
+        DispatchHold = true; DispatchHoldReason = reason.Length > 200 ? reason[..200] : reason; DispatchHoldAt = now; DispatchHoldTaskId = taskId;
+        return true;
+    }
+
+    public void ReleaseDispatchHold()
+    {
+        DispatchHold = false; DispatchHoldReason = null; DispatchHoldAt = null; DispatchHoldTaskId = null;
+    }
+
     public void SetEnabled(bool enabled) => Enabled = enabled;
     public void SetRobotCode(string? code) => RcsRobotCode = string.IsNullOrWhiteSpace(code) ? null : code.Trim();
 }
