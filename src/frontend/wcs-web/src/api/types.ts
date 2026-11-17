@@ -142,7 +142,9 @@ export interface Paged<T> {
 export interface SystemHealth {
   status: 'Healthy' | 'Degraded'
   time: string
-  database: { connected: boolean }
+  /** Application health only. PLC / RCS / AGV state is in `integration` and the AGV list; server resources are a separate API. */
+  backend?: { startedAt: string; uptimeSeconds: number }
+  database: { connected: boolean; latencyMs?: number | null }
   scheduler: { lastRunAt: string | null; lastError: string | null; stale: boolean }
   integration: { mode: string; plc: string; plcRuntime?: { mode: string; running: boolean; connected: number; total: number } }
 }
@@ -158,4 +160,46 @@ export interface FlowOption {
   flow: string
   rackKind: string
   stations: string[]
+}
+
+// ---- Server Resource Monitoring (GET /api/system/resources, Admin only)
+export type MetricStatus = 'Normal' | 'Warning' | 'Critical' | 'Unavailable'
+/** Container = the WCS container; DockerVm = the Linux VM that runs containers on Docker Desktop (NOT the Windows/macOS host); Host = the machine the OS really runs on. */
+export type MetricSource = 'Container' | 'DockerVm' | 'Host'
+
+export interface ResourceMetric {
+  value: number | null
+  unit: string
+  source: MetricSource
+  status: MetricStatus
+  lastUpdatedAt: string
+  /** Stable reason code when the metric is Unavailable (translated in the UI). */
+  reason: string | null
+}
+
+export interface ResourceEnvironment {
+  platform: string
+  operatingSystem: string
+  architecture: string
+  inContainer: boolean
+  containerRuntime: string | null
+  hostname: string | null
+  containerHostname: string | null
+  hostScope: MetricSource
+  hostAgentRequired: boolean
+  processorNote: string | null
+}
+
+export interface ResourceHistoryPoint { t: string; containerCpu: number | null; containerMemory: number | null; hostCpu: number | null; hostMemory: number | null }
+
+export interface ResourceSnapshot {
+  time: string
+  sampledAt: string | null
+  sampleAgeSeconds: number | null
+  intervalSeconds: number
+  enabled: boolean
+  environment: ResourceEnvironment
+  container: Record<string, ResourceMetric>
+  host: Record<string, ResourceMetric>
+  history: ResourceHistoryPoint[]
 }

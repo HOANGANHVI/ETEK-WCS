@@ -48,6 +48,15 @@ public static class DependencyInjection
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
         services.Configure<IntegrationOptions>(configuration.GetSection(IntegrationOptions.SectionName));
 
+        // Server resource monitoring: container metrics (cgroup) and host metrics are separate providers chosen by platform; one sampler feeds the dashboard.
+        services.Configure<WCS.Application.Monitoring.ResourceMonitoringOptions>(configuration.GetSection(WCS.Application.Monitoring.ResourceMonitoringOptions.SectionName));
+        var diskPath = configuration[$"{WCS.Application.Monitoring.ResourceMonitoringOptions.SectionName}:DiskPath"];
+        services.AddSingleton<WCS.Application.Monitoring.IContainerMetricsProvider>(_ => WCS.Infrastructure.Monitoring.MetricsProviderFactory.Container(diskPath));
+        services.AddSingleton<WCS.Application.Monitoring.IHostMetricsProvider>(_ => WCS.Infrastructure.Monitoring.MetricsProviderFactory.Host(diskPath));
+        services.AddSingleton<WCS.Infrastructure.Monitoring.ResourceMonitor>();
+        services.AddSingleton<WCS.Application.Monitoring.IResourceMonitor>(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
+        services.AddHostedService(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
+
         services.AddDbContext<WcsDbContext>(o => o.UseNpgsql(BuildConnectionString(configuration),
             npgsql => npgsql.MigrationsAssembly(typeof(WcsDbContext).Assembly.FullName)));
 

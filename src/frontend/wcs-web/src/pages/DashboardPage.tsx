@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { InventoryTransaction, TransportTask } from '../api/types'
 import { AgvCard } from '../components/AgvCard'
+import { ServerResources } from '../components/ServerResources'
+import { DEMO_MODE } from '../config'
 import { BarChart, Donut, LineChart } from '../components/charts'
 import { IconAgv, IconClock, IconTasks, IconWarehouse } from '../components/icons'
 import { linkText, plcView, rcsView } from '../components/linkStatus'
@@ -17,6 +19,7 @@ import { formatNumber, formatTime } from '../i18n/format'
 import { useLang, useT } from '../i18n'
 import { describeHistory } from '../i18n/logCatalog'
 import { flowInfo, INVENTORY_EVENT_VI, reasonVi, TASK_STATE_VI, taskCode, type Tone } from '../i18n/vi'
+import { formatUptime } from '../lib/resourceMonitor'
 import { buildBuckets, completedPerAgv, countByBucket, failureRate, meanCycle, meanCycleByBucket, RANGES, type RangeKey } from '../lib/dashboardStats'
 
 const EVENTS_TASK = ['TaskCreated', 'TaskStateChanged'] as const
@@ -133,6 +136,7 @@ export function DashboardPage() {
   const bucketTitle = (start: number) => range === 'today' ? bucketLabel(start) : new Date(start).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })
   const duration = (ms: number) => ms < 90_000 ? t('dashboard.durSec', { n: Math.round(ms / 1000) })
     : ms < 5_400_000 ? t('dashboard.durMin', { n: Math.round((ms / 60_000) * 10) / 10 }) : t('dashboard.durHour', { n: Math.round((ms / 3_600_000) * 10) / 10 })
+  const uptimeText = (secs: number) => formatUptime(secs, t)
   const labels = stats?.buckets.map((b) => bucketLabel(b.start)) ?? []
   const rate = stats?.rate ?? null
   const cycleMax = Math.max(0, ...(stats?.cycleByBucket.filter((v): v is number => v !== null) ?? []))
@@ -141,6 +145,12 @@ export function DashboardPage() {
   const plc = plcView(health.error && !health.data ? null : health.data)
   const rcs = rcsView(health.error && !health.data ? null : health.data, agvList)
   const rtTone = realtime === 'connected' ? 'ok' : realtime === 'disconnected' ? 'bad' : 'warn'
+  // Application health (backend process + PostgreSQL) is shown apart from the devices: a running backend says nothing about PLC, RCS or AGV.
+  const hd = health.error && !health.data ? null : health.data
+  const backendTone = hd ? 'ok' : 'bad'
+  const backendText = hd?.backend ? t('monitor.backendUp', { uptime: uptimeText(hd.backend.uptimeSeconds) }) : hd ? t('nav.connected') : t('nav.disconnected')
+  const dbTone = hd ? (hd.database.connected ? 'ok' : 'bad') : 'bad'
+  const dbText = !hd ? t('nav.disconnected') : hd.database.connected ? (hd.database.latencyMs != null ? t('monitor.dbUp', { ms: formatNumber(Math.round(hd.database.latencyMs)) }) : t('nav.connected')) : t('nav.disconnected')
   const simulator = health.data?.integration.mode === 'Simulator' || health.data?.integration.plcRuntime?.mode === 'Simulator'
   const running = (taskItems ?? []).filter(isActive)
   const maxPerAgv = Math.max(1, ...(agvList ?? []).map((a) => stats?.perAgv.get(a.id) ?? 0))
@@ -176,6 +186,9 @@ export function DashboardPage() {
       {stats?.truncated && <div className="notice notice-warn">{t('dashboard.truncated', { n: 2000 })}</div>}
 
       <div className="dc-grid">
+        {/* Server resources: Admin only, real mode only (Demo Mode has no server to measure). */}
+        {isAdmin && !DEMO_MODE && <ServerResources />}
+
         <Panel title={t('dashboard.trendTitle')} className="dc-8" subtitle={range === 'today' ? t('dashboard.trendUnitHour') : t('dashboard.trendUnitDay')}>
           <Async state={finished} empty={{ title: t('dashboard.noData') }}>
             {() => !stats || !hasFinished ? <div className="chart-empty">{t('dashboard.noData')}</div> : (
@@ -238,6 +251,8 @@ export function DashboardPage() {
 
         <Panel title={t('dashboard.liveTitle')} className="dc-7">
           <div className="live-links">
+            <div className="live-link"><i className={`led ${backendTone}`} /><strong>{t('monitor.liveBackend')}</strong><span>{backendText}</span></div>
+            <div className="live-link"><i className={`led ${dbTone}`} /><strong>{t('monitor.livePostgres')}</strong><span>{dbText}</span></div>
             <div className="live-link"><i className={`led ${plc.tone}`} /><strong>PLC</strong><span>{linkText(t, plc.text)}</span></div>
             <div className="live-link"><i className={`led ${rcs.tone}`} /><strong>RCS</strong><span>{linkText(t, rcs.text)}</span></div>
             <div className="live-link"><i className={`led ${rtTone}`} /><strong>{t('dashboard.liveRealtime')}</strong><span>{t(`nav.rt${realtime[0].toUpperCase()}${realtime.slice(1)}` as 'nav.rtConnected')}</span></div>

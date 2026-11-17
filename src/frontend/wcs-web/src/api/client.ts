@@ -9,7 +9,7 @@ import type { AddressIssue, HandshakeState, IoPointConfig, IoPointState, PlcConn
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, ReconciliationDetail, SimulationStep, SystemHealth,
-  TaskHistory, TaskState, TransportTask,
+  ResourceSnapshot, TaskHistory, TaskState, TransportTask,
 } from './types'
 
 export const UNAUTHORIZED_EVENT = 'wcs:unauthorized'
@@ -52,6 +52,8 @@ const qs = (params: Record<string, string | number | undefined>) => {
 
 const realApi = {
   health: () => request<SystemHealth>('/api/system/health'),
+  /** Server resources, container and host kept apart (Admin only). */
+  resources: (signal?: AbortSignal) => request<ResourceSnapshot>('/api/system/resources', { signal }),
   agvs: () => request<Agv[]>('/api/agvs'),
   flows: () => request<FlowOption[]>('/api/flows'),
   locations: () => request<Location[]>('/api/locations'),

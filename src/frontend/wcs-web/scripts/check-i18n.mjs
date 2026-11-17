@@ -27,7 +27,7 @@ const rel = (f) => path.relative(web, f).replaceAll('\\', '/')
 const messagesDir = path.join(src, 'i18n', 'messages')
 const feFiles = walk(src).filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes(`${path.sep}messages${path.sep}`))
 const feText = feFiles.map(read).join('\n')
-const dynamicPrefixes = ['taskHistory.d_', 'codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_']
+const dynamicPrefixes = ['taskHistory.d_', 'codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_', 'monitor.reason_']
 const dictKeys = new Set()
 let keyCount = 0
 for (const f of fs.readdirSync(messagesDir)) {
@@ -48,7 +48,7 @@ for (const f of fs.readdirSync(messagesDir)) {
   }
   for (const k of Object.keys(en)) if (!(k in vi)) fail('dict', `${domain}.${k} missing in VI`)
 }
-for (const m of feText.matchAll(/\bt\(\s*'((?:common|nav|auth|dashboard|agv|tasks|inventory|plc|config|users|logs|validation|codes|taskHistory)\.\w+)'/g))
+for (const m of feText.matchAll(/\bt\(\s*'((?:common|nav|auth|dashboard|agv|tasks|inventory|plc|config|users|logs|validation|codes|taskHistory|monitor|demo|account)\.\w+)'/g))
   if (!dictKeys.has(m[1])) fail('dict', `t('${m[1]}') has no dictionary entry`)
 
 /* ------------------------------------------------------------------ 2. hardcoded text */

@@ -50,6 +50,8 @@ internal static class Audited
 
 public static class Endpoints
 {
+    private static readonly DateTimeOffset BackendStart = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime();
+
     public static void MapWcsApi(this WebApplication app)
     {
         // ---------------------------------------------------------------- authentication (no role required, login is anonymous)
@@ -295,17 +297,24 @@ public static class Endpoints
             .WithTags("Audit").RequireAuthorization(admin);
 
         // ---- System
+        // Server resources (container and host metrics, kept apart): Admin only, served from the one background sampler (it never samples per request).
+        api.MapGet("/system/resources", (HttpContext c, WCS.Application.Monitoring.IResourceMonitor monitor) => ApiResults.Ok(c, monitor.GetSnapshot()))
+            .WithTags("System").RequireAuthorization(admin);
         api.MapGet("/system/health", async (HttpContext c, WcsDbContext db, ISchedulerStatus scheduler, IPlcAdapter plc, WCS.Application.Plc.IPlcRuntime plcRuntime,
             IOptions<IntegrationOptions> integration, IOptions<SchedulerOptions> schedulerOptions, IRcsDispatchGuard rcsGuard, IClock clock, CancellationToken ct) =>
         {
+            var dbWatch = System.Diagnostics.Stopwatch.StartNew();
             var dbOk = await db.Database.CanConnectAsync(ct);
+            dbWatch.Stop();
             var last = scheduler.LastRunAt;
             var stale = last is null || clock.UtcNow - last > TimeSpan.FromMilliseconds(Math.Max(10_000, schedulerOptions.Value.TickIntervalMs * 10));
             var health = new
             {
                 status = dbOk && !stale && scheduler.LastError is null ? "Healthy" : "Degraded",
                 time = clock.UtcNow,
-                database = new { connected = dbOk },
+                // Application health only: the backend process and its database. It says nothing about PLC, RCS or AGV (see integration) nor about the server resources (see /system/resources).
+                backend = new { startedAt = BackendStart, uptimeSeconds = Math.Max(0, Math.Round((clock.UtcNow - BackendStart).TotalSeconds)) },
+                database = new { connected = dbOk, latencyMs = dbOk ? Math.Round(dbWatch.Elapsed.TotalMilliseconds, 1) : (double?)null },
                 scheduler = new { lastRunAt = last, lastError = scheduler.LastError, stale },
                 integration = new
                 {
