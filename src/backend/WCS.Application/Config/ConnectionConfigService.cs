@@ -114,7 +114,7 @@ public sealed class ConnectionConfigService(
 
             if (errors.Count > 0 || host is null || port is null || timeout is null)
                 result = Done(ConnectionTestOutcome.NotExecuted, "None", "[CONFIG_INCOMPLETE] Cấu hình chưa đầy đủ hoặc không hợp lệ nên không thực hiện kiểm tra.",
-                    string.Join("; ", errors.Select(x => x.Message)));
+                    "[CONFIG_INVALID] " + System.Text.Json.JsonSerializer.Serialize(errors.Select(x => new { field = x.Field, code = x.Code, args = x.Args })));
             else
             {
                 var p = await probe.ProbeAsync(kind, host, port.Value, TimeSpan.FromMilliseconds(timeout.Value), ct);

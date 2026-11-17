@@ -50,7 +50,7 @@ public static partial class PlcEndpoints
             else if (!opt.AllowLiveConnection)
                 result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "[LIVE_CONNECTION_DISABLED] Plc:AllowLiveConnection = false: không mở kết nối tới PLC thật.");
             else if (conn.MissingParameters.Count > 0)
-                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "[PLC_PARAMS_MISSING] NEEDS_CONFIGURATION: thiếu " + string.Join(", ", conn.MissingParameters));
+                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "[PLC_PARAMS_MISSING] " + string.Join(", ", conn.MissingParameters));
             else
                 result = await probe.ProbeAsync(ConnectionKind.Plc, conn.IpAddress, conn.Port!.Value, TimeSpan.FromMilliseconds(conn.TimeoutMs!.Value), ct);
             return ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_CONNECTION_TEST", "PlcConnection", plcId, null, () => Task.FromResult(result), res => new { res.Outcome, res.Mode }));

@@ -115,7 +115,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
             case PlcDataType.Int: return new(p.Id, PointValue.OfInt((short)words[0]), PointQuality.Good, null);   // signed 16-bit INT (NEEDS_CONFIRMATION: signed vs unsigned)
             case PlcDataType.String:
                 if (!string.Equals(p.Encoding, "ASCII", StringComparison.OrdinalIgnoreCase))
-                    return new(p.Id, null, PointQuality.Bad, $"Encoding '{p.Encoding}' chưa được hỗ trợ (chỉ ASCII).");
+                    return new(p.Id, null, PointQuality.Bad, $"Encoding '{p.Encoding}' is not supported (ASCII only).");
                 var bytes = new byte[words.Length * 2];
                 for (var i = 0; i < words.Length; i++) { bytes[i * 2] = (byte)(words[i] & 0xFF); bytes[i * 2 + 1] = (byte)(words[i] >> 8); }   // low byte first
                 var end = Array.IndexOf(bytes, (byte)0); if (end < 0) end = bytes.Length;

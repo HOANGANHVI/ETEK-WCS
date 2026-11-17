@@ -79,6 +79,20 @@ for (const f of uiFiles.filter((x) => x.endsWith('.tsx'))) {
     if (!EN_ALLOWED.has(m[2]) && !/^[A-Z0-9_ /.-]+$/.test(m[2]) && /[a-z]{2,}/.test(m[2]) && !/^(Any|Full|Empty)$/.test(m[2])) fail('hardcoded-en', `${rel(f)}: attribute ${m[1]}="${m[2].slice(0, 60)}"`)
 }
 
+/* ------------------------------------------------------------------ 2b. no Vietnamese in English text, no raw text glued to translated text */
+const VI_ANY = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i
+for (const f of fs.readdirSync(messagesDir)) {
+  const s = read(path.join(messagesDir, f)); const i = s.indexOf('\n}, {\n')
+  s.slice(i).split('\n').forEach((line, n) => { if (VI_ANY.test(line)) fail('vi-in-en', `messages/${f}: English entry contains Vietnamese: ${line.trim().slice(0, 90)}`) })
+}
+for (const m of read(path.join(src, 'i18n', 'systemLogTemplates.ts')).matchAll(/en: ('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g))
+  if (VI_ANY.test(m[1])) fail('vi-in-en', `systemLogTemplates: English wording contains Vietnamese: ${m[1].slice(0, 90)}`)
+// translated text must never be assembled with the raw stored message (e.g. "Title (raw message)")
+for (const f of ['logCatalog.ts']) {
+  const text = stripComments(read(path.join(src, 'i18n', f)))
+  for (const m of text.matchAll(/`[^`]*\$\{[^}]*\bmessage\b[^}]*\}[^`]*`/g)) fail('raw-glued', `i18n/${f}: a template literal inserts the raw message: ${m[0].slice(0, 90)}`)
+}
+
 /* ------------------------------------------------------------------ 3. backend codes -> translations */
 if (!fs.existsSync(backend)) { notes.push('backend source not found: backend code checks skipped') } else {
   const cs = walk(backend, ['bin', 'obj', 'Migrations']).filter((f) => f.endsWith('.cs'))
@@ -167,6 +181,23 @@ if (!fs.existsSync(backend)) { notes.push('backend source not found: backend cod
   for (const tpl of uniq(templates)) {
     const needle = tpl.includes("'") ? `"${tpl.replace(/"/g, '\\"')}":` : `'${tpl}':`
     if (!tplFile.includes(needle)) fail('log-template', `persisted log template has no translation: ${tpl.slice(0, 100)}`)
+  }
+  // 3g. Vietnamese text in the backend may only exist where the UI never shows it as it is: fallback messages of coded errors, coded texts ([CODE] ...),
+  //     the default administrator name (mapped in the UI) and seed data. Anything else (log messages, reasons, exception texts) must be English + code/args.
+  const VI_ALLOWED_LINE = [
+    /AppException\.|DomainException\(|: AppException\(|new FieldError|errors\.Add\(new|e\.Add\(new|\[new\(|\bRange\(/,   // message of a coded error (the UI uses the code)
+    /new\(null, AddressProblem|new\(p\.Id|parsed\.Message|new\(false, "|new WriteResult\(false,|FailPendingWrites\(/,   // coded address / write results
+    /"\[[A-Z][A-Z0-9_]+\] /, /^\s*"[^"]*"\)\);\s*$/,                                                                        // coded texts and their continuation lines
+    /ApiResults\.Fail\(|\bWrite\(ctx,|const string Generic|FieldArgs\.Of\(/,                                                                // coded API errors
+    /"Quản trị viên"/,                                                                                                       // default administrator name (UI: displayNameOf)
+  ]
+  const VI = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i
+  for (const { f, s } of all) {
+    if (/Seed|appsettings/i.test(f)) continue
+    s.split('\n').forEach((line, i) => {
+      if (!VI.test(line) || /^\s*(\/\/|\/\*|\*)/.test(line) || VI_ALLOWED_LINE.some((r) => r.test(line))) return
+      fail('backend-vi', `${path.relative(backend, f).replaceAll('\\', '/')}:${i + 1}: Vietnamese text outside the allowed categories: ${line.trim().slice(0, 100)}`)
+    })
   }
   notes.push(`backend: ${errorCodes.length} error codes, ${actions.length} audit actions, ${events.length} history events, ${plcEvents.length} PLC events, ${fieldCodes.length} field codes, ${codedTexts.length} coded texts, ${uniq(templates).length} log templates`)
 }

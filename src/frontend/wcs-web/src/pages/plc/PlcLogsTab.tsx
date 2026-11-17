@@ -3,6 +3,7 @@ import { api } from '../../api/client'
 import { Async, Panel, Pill } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { useT } from '../../i18n'
+import { localizeLog } from '../../i18n/logCatalog'
 import { LOG_LEVEL_TONE, LOG_LEVEL_VI } from '../../i18n/plc'
 import { fmtTime } from './plcFormat'
 
@@ -37,7 +38,7 @@ export function PlcLogsTab() {
                     <tr key={l.id}>
                       <td className="nowrap num">{fmtTime(l.occurredAt)}</td>
                       <td><Pill tone={LOG_LEVEL_TONE[l.level]} dot={false}>{LOG_LEVEL_VI[l.level]}</Pill></td>
-                      <td>{l.plcId ?? '—'}</td><td>{l.stationId ?? '—'}</td><td className="mono">{l.event}</td><td>{l.message}</td>
+                      <td>{l.plcId ?? '—'}</td><td>{l.stationId ?? '—'}</td><td className="mono">{l.event}</td><td title={l.message}>{localizeLog({ category: 'PLC', source: 'PLC.Runtime', device: l.plcId, event: l.event, message: l.message, detailsJson: l.detailsJson }).text}</td>
                     </tr>
                   ))}
                 </tbody>

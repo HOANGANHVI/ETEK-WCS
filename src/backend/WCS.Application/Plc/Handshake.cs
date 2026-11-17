@@ -67,11 +67,11 @@ public sealed class HandshakeCoordinator(IPlcRuntime runtime, IOptions<PlcRuntim
         var del = h.Read("Delivery_Request"); var done = h.Read("Transfer_Complete");
         var missing = new[] { ("Station_Online", online), ("Station_Fault", fault), ("Pickup_Request", pick), ("Delivery_Request", del), ("Transfer_Complete", done) }
             .Where(x => !Live(x.Item2)).Select(x => x.Item1).ToList();
-        if (missing.Count > 0) return (HandshakePhase.Unknown, "Chưa có dữ liệu hợp lệ: " + string.Join(", ", missing));
+        if (missing.Count > 0) return (HandshakePhase.Unknown, "No valid data: " + string.Join(", ", missing));
         if (Truthy(fault, true)) return (HandshakePhase.Fault, null);
         if (Truthy(online, false)) return (HandshakePhase.Offline, null);
         var (p, d) = (Truthy(pick, true), Truthy(del, true));
-        if (p && d) return (HandshakePhase.ConflictingRequests, "Pickup_Request và Delivery_Request cùng bật");
+        if (p && d) return (HandshakePhase.ConflictingRequests, "Pickup_Request and Delivery_Request are both on");
         if (p) return (HandshakePhase.PickupRequested, null);
         if (d) return (HandshakePhase.DeliveryRequested, null);
         if (Truthy(done, true)) return (HandshakePhase.TransferComplete, null);

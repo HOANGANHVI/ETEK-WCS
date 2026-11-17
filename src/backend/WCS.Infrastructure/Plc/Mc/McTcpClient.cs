@@ -127,7 +127,7 @@ public sealed class McTcpClient(McClientSettings settings) : IAsyncDisposable
                     Close(); State = EndpointState.Disconnected;
                     var ambiguous = !retryable && trace.Sent;
                     Record(frame, trace, sw, null, ambiguous ? "AMBIGUOUS" : "CANCELLED", "cancelled", ambiguous);
-                    if (ambiguous) throw new PlcWriteAmbiguousException("Lệnh ghi bị hủy sau khi đã gửi xuống PLC; kết quả không xác định.");
+                    if (ambiguous) throw new PlcWriteAmbiguousException("The write was cancelled after it had been sent to the PLC; the result is undetermined.");
                     throw;
                 }
                 catch (Exception ex) when (ex is TimeoutException or IOException or SocketException or McProtocolException or ObjectDisposedException)
@@ -140,7 +140,7 @@ public sealed class McTcpClient(McClientSettings settings) : IAsyncDisposable
                     if (ambiguous)
                     {
                         State = EndpointState.Faulted;
-                        throw new PlcWriteAmbiguousException($"Không nhận được xác nhận cho lệnh ghi ({ex.Message}). PLC có thể đã thực thi lệnh; lệnh KHÔNG được ghi lại tự động.", ex);
+                        throw new PlcWriteAmbiguousException($"No confirmation was received for the write ({ex.Message}). The PLC may have executed the command; it is NOT retried automatically.", ex);
                     }
                     if (attempt >= attempts) { State = EndpointState.Faulted; throw; }
                     await Task.Delay(Settings.RetryDelay ?? TimeSpan.FromMilliseconds(100), ct);

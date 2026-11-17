@@ -16,7 +16,7 @@ public sealed class RcsDispatchGuard(IRcsClient rcs, IHostEnvironment? environme
     {
         if (environment?.IsProduction() == true && rcs is RcsSimulator && !allowSimulatorInProduction)
             return new RcsDispatchStatus(false, NotConnected,
-                "RCS chưa được kết nối: hệ thống Production chưa có RCS adapter thật nên nhiệm vụ không được gửi tới AGV. (Rcs:AllowSimulatorInProduction chỉ dùng cho thử nghiệm có giám sát.)");
+                "RCS is not connected: the Production environment has no real RCS adapter, so tasks are not sent to the AGV. (Rcs:AllowSimulatorInProduction is for supervised testing only.)");
         return new RcsDispatchStatus(true, "OK", "RCS dispatch allowed.");
     }
 }

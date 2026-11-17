@@ -562,7 +562,7 @@ public sealed class TaskOrchestrator(
             var station = (await locations.GetAsync(task.RequestLocationId, t))?.Code;
             var code = $"NV-{task.Id.ToString("N")[..8].ToUpperInvariant()}";
             audit.Enlist(new Auth.AuditRecord("TASK_DELETE", actor.Username, actor.Role.ToString(), "Task", task.Id.ToString(), WCS.Domain.Users.AuditResult.Success,
-                $"Đã xóa cứng nhiệm vụ {code}",
+                $"Task hard-deleted {code}",
                 Before: new { code, task.Id, task.RequestKey, flow = task.Flow.ToString(), state = task.State.ToString(), requestStation = station, task.RequestedBy,
                               task.AgvId, task.SourceLocationId, task.DestinationLocationId, task.CreatedAt, deletedState = task.State.ToString() },
                 After: null, IpAddress: actor.IpAddress));

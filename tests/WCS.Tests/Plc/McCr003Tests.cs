@@ -290,7 +290,7 @@ public class McCr003SocketTests
         server.Mute = true;
         await using var c = Client(server, timeoutMs: 400, retries: 3, writeMs: 200);
         var ex = await Assert.ThrowsAsync<PlcWriteAmbiguousException>(() => c.WriteWordsAsync(A(PlcDevice.D, 5), [7], default));
-        Assert.Contains("KHÔNG", ex.Message);
+        Assert.Contains("NOT retried", ex.Message);   // diagnostic text is English; the UI phrases it from the event code
         await Task.Delay(500);
         Assert.Equal(1, server.RequestCount);                                              // MaxReadRetries = 3 does not apply to writes
         var f = c.Diagnostics.LastFailedExchange!;

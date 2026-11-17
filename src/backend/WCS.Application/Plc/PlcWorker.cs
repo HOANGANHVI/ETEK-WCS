@@ -171,7 +171,7 @@ public sealed class PlcWorker : IAsyncDisposable
                     catch (NeedsConfigurationException nc)
                     {
                         lock (_gate) _missing = nc.Missing;
-                        SetState(EndpointState.NeedsConfiguration, nc.Message);
+                        SetState(EndpointState.NeedsConfiguration, "[PLC_PARAMS_MISSING] " + string.Join(", ", nc.Missing));
                         MarkAllDisconnected(null);
                         FailPendingWrites("NEEDS_CONFIGURATION", nc.Message);
                         await _wake.WaitAsync(TimeSpan.FromSeconds(1), ct);

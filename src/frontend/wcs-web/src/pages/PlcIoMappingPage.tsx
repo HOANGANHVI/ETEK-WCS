@@ -5,6 +5,7 @@ import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
 import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
+import { localizeFieldError } from '../i18n/logCatalog'
 import { CONFIG_STATUS_VI, DATATYPE_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
 import { AddressDialog, SimDialog, WriteDialog, type DialogPoint } from './plc/plcDialogs'
@@ -90,7 +91,7 @@ export function PlcIoMappingPage() {
         {checkError && <div className="notice notice-bad" role="alert">{checkError}</div>}
         {issues && (issues.length === 0
           ? <div className="notice notice-ok">{t('plc.noConflicts', { plc })}</div>
-          : <div className="notice notice-bad"><strong>{t('plc.conflicts')}</strong><ul>{issues.map((i) => <li key={i.pointId + i.code}>{i.stationId}/{i.signal}: {i.message}</li>)}</ul></div>)}
+          : <div className="notice notice-bad"><strong>{t('plc.conflicts')}</strong><ul>{issues.map((i) => <li key={i.pointId + i.code}>{i.stationId}/{i.signal}: {localizeFieldError({ field: 'address', message: i.message, code: i.code, args: i.args })}</li>)}</ul></div>)}
       </Panel>
 
       <Panel title={t('plc.mappingTable')} flush>

@@ -50,7 +50,7 @@ check('plc event en with args', cat.localizeLog(plcNew).text === 'Connection fai
 mod.setLang('vi')
 check('plc event vi with args', cat.localizeLog(plcNew).text === 'Kết nối thất bại: boom. Thử lại sau 500 ms.')
 const plcOld = { ...plcNew, event: 'READ_BAD_A1', message: '2 IO point đọc lỗi: x', detailsJson: null }
-check('plc historic event: headline translated, raw kept', cat.localizeLog(plcOld).text.startsWith('Một số tín hiệu đọc lỗi') && cat.localizeLog(plcOld).text.includes('2 IO point đọc lỗi: x'))
+check('plc historic event: headline only, the stored text is not glued to it', cat.localizeLog(plcOld).text === 'Một số tín hiệu đọc lỗi' && cat.localizeLog(plcOld).translated)
 const plcState = { ...plcNew, event: 'STATE', message: 'PLC-01: Faulted - [PLC_LINK_LOST] Mất kết nối PLC.', detailsJson: '{"args":{"plc":"PLC-01","state":"Faulted","reason":"[PLC_LINK_LOST] Mất kết nối PLC."}}' }
 mod.setLang('en')
 check('plc STATE coded reason en', cat.localizeLog(plcState).text === 'PLC-01: state Faulted – The PLC connection was lost.')
@@ -93,9 +93,46 @@ check('every history code has both languages and the same parameters', mod.allMe
   const ph = (x: string) => [...x.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join()
   return a !== k && b !== k && ph(a) === ph(b)
 }))
-console.log(results.join(String.fromCharCode(10)))
 
 // ---- regression found in runtime acceptance: a PLC STATE event without a reason must not leave a raw placeholder
 mod.setLang('en')
 const stateNoReason = { category: 'PLC', source: 'PLC.Runtime', device: 'PLC-03', event: 'STATE', message: 'PLC-03: Connected', messageTemplate: null, detailsJson: '{"newState":"Connected","args":{"plc":"PLC-03","state":"Connected"}}' }
 console.log(cat.localizeLog(stateNoReason).text === 'PLC-03: state Connected' ? 'PASS state event without reason has no placeholder' : 'FAIL state event without reason: ' + cat.localizeLog(stateNoReason).text)
+
+// ---- no mixed languages: a translated entry is never followed by the raw stored text, and English output has no Vietnamese
+const VI_CHARS = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i
+const reported = { category: 'PLC', source: 'PLC.Runtime', device: 'PLC-01', event: 'STATION_ERROR_A1', message: 'Lỗi xử lý trạm: simulated PLC is offline', messageTemplate: null, detailsJson: null }
+mod.setLang('en')
+check('reported case: English title only', cat.localizeLog(reported).text === 'Station processing error')
+mod.setLang('vi')
+check('reported case: Vietnamese title only', cat.localizeLog(reported).text === 'Lỗi xử lý trạm')
+const corpus = [
+  reported,
+  { ...reported, event: 'CONNECT_FAILED', message: 'Kết nối thất bại: x. Thử lại sau 2000 ms.' },
+  { ...reported, event: 'LINK_LOST', message: 'Mất kết nối: x.' },
+  { ...reported, event: 'RELOAD', message: 'PLC-01: cấu hình được nạp lại.' },
+  { ...reported, event: 'WRITE_AMBIGUOUS', message: 'A1/Rack_Full: Không nhận được xác nhận cho lệnh ghi. KHÔNG tự động ghi lại.' },
+  { ...reported, event: 'HANDSHAKE_TIMEOUT', message: 'Pickup_Request vẫn bật sau 5000 ms (chính sách retry chưa được phê duyệt).' },
+  { ...reported, event: 'REQUEST_ID_MISSING', message: 'Pickup_Request bật nhưng Request_ID chưa đọc được.' },
+  { ...reported, detailsJson: '{"args":{"error":"simulated PLC is offline"}}' },
+  { category: 'SYSTEM', source: 'WCS', device: null, event: null, message: 'x', messageTemplate: 'Station request {Key} from {Station} rejected: {Code} {Message}', detailsJson: '{"Key":"k","Station":"A1","Code":"FLOW_IN_REVIEW","Message":"Quy trình đang xem xét"}' },
+  { category: 'SECURITY_AUDIT', source: 'Audit', device: 'u', event: 'TASK_DELETE', message: 'Đã xóa cứng nhiệm vụ NV-ABCD1234', messageTemplate: null, detailsJson: null },
+  { category: 'SECURITY_AUDIT', source: 'Audit', device: 'u', event: 'TASK_CANCEL', message: 'TASK_ALREADY_FINISHED: Nhiệm vụ đã kết thúc', messageTemplate: null, detailsJson: null },
+  { category: 'SECURITY_AUDIT', source: 'Audit', device: 'u', event: 'TASK_CANCEL', message: 'FUTURE_CODE_NOT_IN_DICTIONARY: Câu tiếng Việt', messageTemplate: null, detailsJson: null },
+]
+mod.setLang('en')
+for (const row of corpus) { const out = cat.localizeLog(row); check(`English output has no Vietnamese (${row.event ?? row.messageTemplate?.slice(0, 20)})`, !VI_CHARS.test(out.text)) }
+check('coded probe error list is localized', !VI_CHARS.test(cat.describeTestError('[CONFIG_INVALID] [{"field":"port","code":"PORT_RANGE","args":null},{"field":"ipAddress","code":"IP_INVALID","args":null}]')))
+check('plc params list uses labels', cat.describeCoded('[PLC_PARAMS_MISSING] port, protocol') === 'PLC configuration parameters are missing: TCP port, Protocol')
+// every English dictionary text and every English label table is free of Vietnamese
+const bad: string[] = []
+for (const k of mod.allMessageKeys()) if (VI_CHARS.test(mod.translate('en', k as never))) bad.push(k)
+check(`English dictionary has no Vietnamese (${bad.slice(0, 3).join(',')})`, bad.length === 0)
+const tables = [await import('../src/i18n/vi.ts'), await import('../src/i18n/plc.ts'), await import('../src/i18n/config.ts'), await import('../src/i18n/logs.ts')]
+const badTables: string[] = []
+for (const ns of tables) for (const [name, table] of Object.entries(ns)) {
+  if (!name.endsWith('_VI') && name !== 'LOG_CATEGORY_HINT' && name !== 'ERROR_VI') continue
+  for (const [k, v] of Object.entries(table as Record<string, unknown>)) if (typeof v === 'string' && VI_CHARS.test(v) && k !== 'Unknown') badTables.push(`${name}.${k}`)
+}
+check(`English label tables have no Vietnamese (${badTables.slice(0, 3).join(',')})`, badTables.length === 0)
+console.log(results.slice(-200).join(String.fromCharCode(10)))

@@ -62,10 +62,10 @@ export interface SavePlcConnectionBody {
 }
 
 export interface PlcLogRow {
-  id: string; occurredAt: string; plcId: string | null; stationId: string | null; level: 'Info' | 'Warning' | 'Error'; event: string; message: string
+  id: string; occurredAt: string; plcId: string | null; stationId: string | null; level: 'Info' | 'Warning' | 'Error'; event: string; message: string; detailsJson?: string | null
 }
 
-export interface AddressIssue { pointId: string; stationId: string; signal: string; code: string; message: string }
+export interface AddressIssue { pointId: string; stationId: string; signal: string; code: string; message: string; args?: Record<string, unknown> | null }
 
 export interface ProbeResultView { outcome: string; mode: string; message: string; error: string | null; latencyMs: number | null }
 

@@ -219,6 +219,7 @@ function LogDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
     [t('logs.dTarget'), [detail.targetType ? (AUDIT_TARGET_VI[detail.targetType] ?? detail.targetType) : null, detail.targetId].filter(Boolean).join(' ') || null],
   ] : []
 
+  const shown = detail ? localizeLog(detail) : null
   return (
     <Modal title={t('logs.detailTitle')} onClose={onClose} footer={<Button onClick={onClose}>{t('common.close')}</Button>}>
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
@@ -226,8 +227,8 @@ function LogDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
       {detail && (
         <div className="log-detail">
           <div className="log-detail-head"><LevelPill level={detail.level} /> <strong>{LOG_CATEGORY_VI[detail.category]}</strong></div>
-          <p className="log-detail-msg">{localizeLog({ ...detail, messageTemplate: detail.messageTemplate, detailsJson: detail.entryKind === 'audit' ? null : detail.detailsJson }).text}</p>
-          {localizeLog(detail).translated && <p className="muted small"><strong>{t('logs.rawMessage')}:</strong> <span className="mono">{detail.message}</span></p>}
+          {shown?.translated && <p className="log-detail-msg">{shown.text}</p>}
+          <p className={shown?.translated ? 'muted small' : 'log-detail-msg'}><strong>{t('logs.rawMessage')}:</strong> <span className="mono">{detail.message}</span></p>
           <dl className="kv2">
             {rows.filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => <><dt key={k + 'k'}>{k}</dt><dd key={k + 'v'}>{v}</dd></>)}
           </dl>

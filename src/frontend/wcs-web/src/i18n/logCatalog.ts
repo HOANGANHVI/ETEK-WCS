@@ -11,6 +11,7 @@ import type { FieldError } from '../api/configTypes'
 import { getLang, type Params } from './core'
 import { hasMessage, t, type MsgKey } from './index'
 import { SYSTEM_LOG_TEMPLATES } from './systemLogTemplates'
+import { MISSING_PARAM_VI } from './plc'
 import { AUDIT_ACTION_VI, errorTextForCode, LEG_VI, TASK_STATE_VI } from './vi'
 
 const key = (k: string) => k as MsgKey
@@ -21,12 +22,31 @@ export function parseCoded(text: string): { code: string | null; rest: string } 
   return m ? { code: m[1], rest: m[2] } : { code: null, rest: text }
 }
 
-/** Notes / reasons / connection-check messages: the translated sentence for a known code; otherwise the text as stored (without the bracket). */
+/**
+ * Notes / reasons / connection-check messages: the translated sentence for a known code (its technical detail, e.g. a list of parameter names, is inserted as `{list}`);
+ * a text without a known code is returned as stored (without the bracket) because it cannot be translated reliably.
+ */
 export function describeCoded(text: string | null | undefined): string {
   if (!text) return ''
   const { code, rest } = parseCoded(text)
-  if (code && hasMessage(key(`codes.text_${code}`))) return t(key(`codes.text_${code}`))
+  if (code && hasMessage(key(`codes.text_${code}`))) {
+    const list = code === 'PLC_PARAMS_MISSING' ? rest.split(',').map((x) => MISSING_PARAM_VI[x.trim()] ?? x.trim()).join(', ') : rest
+    return t(key(`codes.text_${code}`), { list })
+  }
   return rest
+}
+
+/** The `error` of a connection check: a list of field errors (code + parameters) is phrased in the selected language; any other technical text is shown as stored. */
+export function describeTestError(error: string | null | undefined): string {
+  if (!error) return ''
+  const { code, rest } = parseCoded(error)
+  if (code === 'CONFIG_INVALID') {
+    try {
+      const items = JSON.parse(rest) as { field: string; code?: string | null; args?: Record<string, unknown> | null }[]
+      return items.map((e) => localizeFieldError({ field: e.field, message: e.field, code: e.code, args: e.args })).join('; ')
+    } catch { return rest }
+  }
+  return describeCoded(error)
 }
 
 /* ------------------------------------------------------------------ field errors */
@@ -64,7 +84,8 @@ export function localizeAuditDetail(detail: string | null | undefined): string {
   const failed = /^([A-Z][A-Z0-9_]+): ([\s\S]*)$/.exec(detail)
   if (failed) {
     const text = errorTextForCode(failed[1])
-    if (text) return text
+    // a failure whose code has no wording yet: the code itself (technical, identical in every language); the stored sentence stays in the tooltip
+    return text ?? failed[1]
   }
   return detail
 }
@@ -131,8 +152,8 @@ export function localizeLog(e: LogLike): LocalizedLog {
       return { text: t(key(`codes.plcEvt_${base}`), p), translated: true }
     }
     if (hasMessage(key(`codes.plcEvtTitle_${base}`))) {
-      // Older entries carry no parameters: the translated headline is shown, the stored text follows unchanged.
-      return { text: `${t(key(`codes.plcEvtTitle_${base}`))} (${e.message})`, translated: true }
+      // Older entries carry no parameters: only the translated headline is shown. The stored text is never appended to it; the detail view shows it separately as the original message.
+      return { text: t(key(`codes.plcEvtTitle_${base}`)), translated: true }
     }
     return raw
   }
@@ -141,6 +162,7 @@ export function localizeLog(e: LogLike): LocalizedLog {
     const tpl = SYSTEM_LOG_TEMPLATES[e.messageTemplate]
     if (tpl) {
       const params: Params = { ...str(details), Device: e.device ?? '' }
+      if (typeof params.Reason === 'string') params.Reason = describeReasonCode(params.Reason)   // a reason that is a known code is shown in words
       const sentence = (getLang() === 'en' ? tpl.en : tpl.vi).replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
       return { text: sentence.trim(), translated: true }
     }
