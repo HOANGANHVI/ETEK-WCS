@@ -1,5 +1,14 @@
 # Change Log
 
+## v2.4 – CR-008B-2 PLC station intake reliability (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-2). Status: IMPLEMENTED on `develop`; not merged.
+- Added: `StationRequestRecord` + table `station_requests` (migration `AddStationRequests`, additive); `IStationRequestRepository`; every detected station request is stored before processing and kept until a task exists.
+- Changed: `StationRequestProcessor` processes from the store: RCS not connected keeps the request (no attempt used); technical failures retry with backoff up to `Scheduler:RcsMaxAttempts`; accepted only after the task is committed; permanent business rejections unchanged (rejected + acknowledged).
+- Unchanged: PLC handshake, addresses, `Request_Ack` (still not written), MC protocol, `PlcStationSignalService`, `TaskOrchestrator`.
+- Tests: `Cr008b2PlcIntakeTests` (12); backend 474/474.
+- Approved by: project owner (2026-11-17).
+
 ## v2.3 – CR-008B-1 Documentation correction (2026-11-17)
 
 - Change Request: CR-008B (sub-CR B-1). Documentation only; no source, schema or configuration change.

@@ -8,6 +8,15 @@ using WCS.Domain.Tasks;
 
 namespace WCS.Infrastructure.Persistence.Repositories;
 
+internal sealed class StationRequestRepository(WcsDbContext db) : IStationRequestRepository
+{
+    public Task<WCS.Domain.Intake.StationRequestRecord?> GetByKeyAsync(string requestKey, CancellationToken ct) =>
+        db.StationRequests.FirstOrDefaultAsync(x => x.RequestKey == requestKey, ct);
+    public async Task<IReadOnlyList<WCS.Domain.Intake.StationRequestRecord>> ListPendingAsync(int take, CancellationToken ct) =>
+        await db.StationRequests.AsNoTracking().Where(x => x.Status == WCS.Domain.Intake.StationRequestStatus.Pending).OrderBy(x => x.FirstSeenAt).Take(take).ToListAsync(ct);
+    public void Add(WCS.Domain.Intake.StationRequestRecord record) => db.StationRequests.Add(record);
+}
+
 internal sealed class AgvRepository(WcsDbContext db) : IAgvRepository
 {
     public Task<Agv?> GetAsync(Guid id, CancellationToken ct) => db.Agvs.FirstOrDefaultAsync(x => x.Id == id, ct);

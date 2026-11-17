@@ -17,6 +17,7 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<TransportTask> Tasks => Set<TransportTask>();
     public DbSet<TaskHistoryEntry> TaskHistory => Set<TaskHistoryEntry>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
+    public DbSet<WCS.Domain.Intake.StationRequestRecord> StationRequests => Set<WCS.Domain.Intake.StationRequestRecord>();
     public DbSet<ConnectionSetting> ConnectionSettings => Set<ConnectionSetting>();
     public DbSet<WCS.Domain.Users.AppUser> Users => Set<WCS.Domain.Users.AppUser>();
     public DbSet<WCS.Domain.Users.AuditEntry> AuditLog => Set<WCS.Domain.Users.AuditEntry>();

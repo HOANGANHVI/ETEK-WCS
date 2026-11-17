@@ -53,6 +53,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IAgvRepository, AgvRepository>();
+        services.AddScoped<IStationRequestRepository, StationRequestRepository>();   // CR-008B-2
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<IRackRepository, RackRepository>();
         services.AddScoped<IReservationRepository, ReservationRepository>();

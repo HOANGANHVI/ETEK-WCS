@@ -92,6 +92,24 @@ internal sealed class InventoryTransactionConfiguration : IEntityTypeConfigurati
     }
 }
 
+internal sealed class StationRequestConfiguration : IEntityTypeConfiguration<WCS.Domain.Intake.StationRequestRecord>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Intake.StationRequestRecord> b)
+    {
+        b.ToTable("station_requests");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.RequestKey).HasMaxLength(300).IsRequired();
+        b.Property(x => x.StationCode).HasMaxLength(50).IsRequired();
+        b.Property(x => x.Flow).HasMaxLength(50).IsRequired();
+        b.Property(x => x.LastError).HasMaxLength(500);
+        b.Property(x => x.Version).IsRowVersion();
+        b.Ignore(x => x.IsPending);
+        b.HasIndex(x => x.RequestKey).IsUnique();            // request idempotency: one record per PlcId:Station:Request_ID
+        b.HasIndex(x => new { x.Status, x.FirstSeenAt });
+    }
+}
+
 internal sealed class ProcessedEventConfiguration : IEntityTypeConfiguration<ProcessedEvent>
 {
     public void Configure(EntityTypeBuilder<ProcessedEvent> b)

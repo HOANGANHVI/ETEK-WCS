@@ -17,6 +17,14 @@ public interface IUnitOfWork
     Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default);
 }
 
+/// <summary>CR-008B-2: durable store of detected station requests (see <see cref="WCS.Domain.Intake.StationRequestRecord"/>).</summary>
+public interface IStationRequestRepository
+{
+    Task<WCS.Domain.Intake.StationRequestRecord?> GetByKeyAsync(string requestKey, CancellationToken ct = default);
+    Task<IReadOnlyList<WCS.Domain.Intake.StationRequestRecord>> ListPendingAsync(int take, CancellationToken ct = default);
+    void Add(WCS.Domain.Intake.StationRequestRecord record);
+}
+
 public interface IAgvRepository
 {
     Task<Agv?> GetAsync(Guid id, CancellationToken ct = default);

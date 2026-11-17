@@ -159,6 +159,18 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
         public Task RequestTransferPermissionAsync(string stationCode, TransferDirection direction, Guid taskId, CancellationToken ct = default) => Task.CompletedTask;
     }
 
+    private sealed class DirectUnitOfWork : IUnitOfWork
+    {
+        public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => work(ct);
+    }
+
+    private sealed class ThrowingRequestRepository : IStationRequestRepository
+    {
+        public Task<WCS.Domain.Intake.StationRequestRecord?> GetByKeyAsync(string requestKey, CancellationToken ct = default) => Task.FromResult<WCS.Domain.Intake.StationRequestRecord?>(null);
+        public Task<IReadOnlyList<WCS.Domain.Intake.StationRequestRecord>> ListPendingAsync(int take, CancellationToken ct = default) => throw new InvalidOperationException("intake store exploded");
+        public void Add(WCS.Domain.Intake.StationRequestRecord record) { }
+    }
+
     private sealed class RecordingScheduler : ITaskScheduler
     {
         public int Runs;
@@ -188,20 +200,6 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task One_failing_intake_request_does_not_lose_the_other_requests()
-    {
-        var stations = new FailingStations(failPoll: false);
-        var orch = new StubOrchestrator();
-        var processor = new StationRequestProcessor(stations, orch, NullLogger<StationRequestProcessor>.Instance);
-
-        var handled = await processor.RunOnceAsync();
-
-        Assert.Equal(["k1", "k3"], orch.Created);                              // the requests around the failing one were processed
-        Assert.Equal(2, handled);
-        Assert.Equal(["k1", "k3"], stations.Acked);                            // the failing one is NOT acknowledged (the PLC presents it again)
-    }
-
-    [Fact]
     public async Task Scheduler_keeps_running_while_the_station_intake_fails_every_tick()
     {
         var stations = new FailingStations(failPoll: true);
@@ -211,6 +209,10 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
         services.AddSingleton<IStationSignalService>(stations);
         services.AddSingleton<ITaskOrchestrator>(new StubOrchestrator());
         services.AddScoped<StationRequestProcessor>();
+        services.AddSingleton<IRcsDispatchGuard>(new SwitchGuard());
+        services.AddSingleton<IClock>(new TestClock());
+        services.AddSingleton<IUnitOfWork, DirectUnitOfWork>();
+        services.AddSingleton<IStationRequestRepository, ThrowingRequestRepository>();   // CR-008B-2: the processor itself now fails -> the host must still run the scheduler
         services.AddSingleton<ITaskScheduler>(scheduler);
         services.Configure<SchedulerOptions>(o => o.TickIntervalMs = 100);
         await using var provider = services.BuildServiceProvider();
