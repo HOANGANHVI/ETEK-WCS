@@ -7,7 +7,7 @@ import { DEMO_MODE } from '../config'
 import { DemoDock } from '../demo/DemoDock'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
-import { formatDate, formatTime } from '../i18n/format'
+import { displayNameOf, formatDate, formatTime } from '../i18n/format'
 import { useT, type MsgKey } from '../i18n'
 import { ROLE_SHORT_VI, type Tone } from '../i18n/vi'
 import { LangSwitch } from './LangSwitch'
@@ -94,7 +94,7 @@ function TopBar() {
       <div className="conn" title={t('nav.rcsLink')}><span className="label">RCS</span><span className={`led ${rcs.tone}`} /><strong>{linkText(rcs.text)}</strong></div>
       {user && (
         <div className="whoami" title={t('nav.loggedInAs', { user: user.username })}>
-          <span className="who-name">{user.displayName}</span>
+          <span className="who-name">{displayNameOf(user.displayName)}</span>
           <span className="who-role">{ROLE_SHORT_VI[user.role]}</span>
         </div>
       )}

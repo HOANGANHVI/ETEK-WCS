@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { LastTest } from '../../api/configTypes'
 import { Pill } from '../../components/ui'
 import { formatDateTime } from '../../i18n/format'
+import { describeCoded } from '../../i18n/logCatalog'
 import { useT } from '../../i18n'
 import { TEST_MODE_VI, TEST_OUTCOME_TONE, TEST_OUTCOME_VI } from '../../i18n/config'
 
@@ -38,7 +39,7 @@ export function TestResultPanel({ last, running }: { last: LastTest | null; runn
       </div>
       <dl className="kv2">
         <dt>{t('config.testMethod')}</dt><dd>{TEST_MODE_VI[last.mode] ?? last.mode}</dd>
-        <dt>{t('config.testResult')}</dt><dd>{last.message}</dd>
+        <dt>{t('config.testResult')}</dt><dd title={last.message}>{describeCoded(last.message)}</dd>
         <dt>{t('config.testLatency')}</dt><dd>{last.latencyMs === null ? '—' : `${last.latencyMs} ms`}</dd>
         <dt>{t('config.testLastError')}</dt><dd className={last.error ? 'text-bad' : 'muted'}>{last.error ?? t('config.testNoError')}</dd>
       </dl>

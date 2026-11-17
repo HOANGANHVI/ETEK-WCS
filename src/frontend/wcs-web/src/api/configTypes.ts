@@ -100,4 +100,4 @@ export interface SaveLocationBody {
   requiresPlcPermission: boolean
 }
 
-export interface FieldError { field: string; message: string }
+export interface FieldError { field: string; message: string; code?: string | null; args?: Record<string, unknown> | null }

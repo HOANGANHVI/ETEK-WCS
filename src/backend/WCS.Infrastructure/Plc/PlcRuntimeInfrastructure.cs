@@ -114,7 +114,7 @@ public sealed class PlcEventDispatcher : IPlcEvents, IDisposable
         _loop = Task.Run(RunAsync);
     }
 
-    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message)
+    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message, IReadOnlyDictionary<string, object?>? args = null)
     {
         // CR-007: every PLC event is ALSO written to the application log (stdout), so it is visible in "docker compose logs" and survives a database outage.
         // The sources already rate-limit these events (state changes, LogLimited), so this adds only a few lines per minute and never one per polling cycle.
@@ -123,8 +123,19 @@ public sealed class PlcEventDispatcher : IPlcEvents, IDisposable
         catch (Exception) { /* logging must never disturb the PLC worker */ }
 
         var entry = new PlcCommLogEntry(_clock.UtcNow, plcId, stationId, level, eventName, message);
-        if (details is { IsEmpty: false }) entry.WithDetails(details.ToJson());
+        entry.WithDetails(MergeArgs(details is { IsEmpty: false } ? details.ToJson() : null, args));
         _channel.Writer.TryWrite(new LogItem(entry));
+    }
+
+    /// <summary>Details JSON = derived facts (ip, port, states ...) plus the event's own parameters under <c>args</c>.</summary>
+    private static string? MergeArgs(string? detailsJson, IReadOnlyDictionary<string, object?>? args)
+    {
+        if (args is null || args.Count == 0) return detailsJson;
+        var root = detailsJson is null ? new System.Text.Json.Nodes.JsonObject() : System.Text.Json.Nodes.JsonNode.Parse(detailsJson)!.AsObject();
+        var a = new System.Text.Json.Nodes.JsonObject();
+        foreach (var (k, v) in args) if (v is not null) a[k] = System.Text.Json.Nodes.JsonValue.Create(v is string or bool or int or long or double ? v : v.ToString());
+        root["args"] = a;
+        return root.ToJsonString();
     }
 
     private PlcEventDetails BuildDetails(string? plcId, string eventName, string message)

@@ -2,6 +2,7 @@ import { defineMessages } from '../core'
 
 export default defineMessages({
   title: 'Quản lý tài khoản',
+  defaultAdminName: 'Quản trị viên',
   create: 'Tạo tài khoản',
   listPanel: 'Danh sách tài khoản',
   searchPh: 'Tìm tên đăng nhập hoặc họ tên',
@@ -53,6 +54,7 @@ export default defineMessages({
   deleteBody: 'Bạn sắp xóa vĩnh viễn tài khoản {user} ({name}). Thao tác không thể hoàn tác. Tài khoản đã có lịch sử thao tác, hoặc là Admin đang hoạt động cuối cùng, sẽ không xóa được; khi đó hãy khóa (vô hiệu hóa) tài khoản.',
 }, {
   title: 'User Management',
+  defaultAdminName: 'Administrator',
   create: 'Create account',
   listPanel: 'Accounts',
   searchPh: 'Search username or full name',

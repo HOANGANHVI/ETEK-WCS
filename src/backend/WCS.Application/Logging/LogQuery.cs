@@ -4,7 +4,9 @@ namespace WCS.Application.Logging;
 public sealed record LogSearchQuery(DateTimeOffset? From, DateTimeOffset? To, string? Category, string? Level, string? MinLevel, string? Device, string? Source,
     string? EventCode, string? Keyword, int Page = 1, int PageSize = 50);
 
-public sealed record LogEntryView(string Id, DateTimeOffset OccurredAt, string Category, string Level, string Source, string? Device, string? Event, string Message);
+/// <summary><c>MessageTemplate</c> (system events: the stable log template) and <c>DetailsJson</c> (its parameters; PLC events: <c>args</c>) let the UI render the entry in the language the user chose. <c>Message</c> stays the raw, original text.</summary>
+public sealed record LogEntryView(string Id, DateTimeOffset OccurredAt, string Category, string Level, string Source, string? Device, string? Event, string Message,
+    string? MessageTemplate = null, string? DetailsJson = null);
 
 public sealed record LogPage(IReadOnlyList<LogEntryView> Items, long Total, int Page, int PageSize);
 
@@ -17,7 +19,7 @@ public sealed record LogStats(DateTimeOffset From, DateTimeOffset To, long Total
 /// <summary>Everything known about one entry (Admin only). Secrets are masked; fields that do not apply to the entry kind are null.</summary>
 public sealed record LogDetailView(string Id, string EntryKind, DateTimeOffset OccurredAt, string Category, string Level, string Source, string? Device, string? Station, string? Event,
     string Message, string? Exception, string? CorrelationId, string? Ip, int? Port, string? PreviousState, string? NewState, string? FailureKind, string? EndCode, string? Reason,
-    string? Host, string? Actor, string? ActorRole, string? Result, string? TargetType, string? TargetId, string? BeforeJson, string? AfterJson, string? DetailsJson);
+    string? Host, string? Actor, string? ActorRole, string? Result, string? TargetType, string? TargetId, string? BeforeJson, string? AfterJson, string? DetailsJson, string? MessageTemplate = null);
 
 public interface ILogQueryService
 {

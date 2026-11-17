@@ -3,6 +3,7 @@ import { getLang, interpolate, useLang, type Lang, type Params } from './core'
 import agv from './messages/agv'
 import auth from './messages/auth'
 import common from './messages/common'
+import codes from './messages/codes'
 import config from './messages/config'
 import dashboard from './messages/dashboard'
 import inventory from './messages/inventory'
@@ -16,7 +17,7 @@ import validation from './messages/validation'
 export * from './core'
 
 /** One dictionary pair per domain. A key is `<domain>.<name>`; the English dictionary must contain exactly the Vietnamese keys. */
-const domains = { common, nav, auth, dashboard, agv, tasks, inventory, plc, config, users, logs, validation }
+const domains = { common, nav, auth, dashboard, agv, tasks, inventory, plc, config, users, logs, validation, codes }
 
 type DomainKeys<D extends keyof typeof domains> = `${D}.${Extract<keyof (typeof domains)[D]['vi'], string>}`
 export type MsgKey = { [D in keyof typeof domains]: DomainKeys<D> }[keyof typeof domains]
@@ -27,6 +28,9 @@ for (const [domain, pair] of Object.entries(domains)) {
     for (const [k, v] of Object.entries(pair[lang] as Record<string, string>)) table[lang][`${domain}.${k}`] = v
   }
 }
+
+/** True when a (dynamically composed) key exists in the dictionaries. */
+export const hasMessage = (k: MsgKey): boolean => table.vi[k] !== undefined && table.en[k] !== undefined
 
 export function translate(lang: Lang, key: MsgKey, params?: Params): string {
   const text = table[lang][key]

@@ -14,6 +14,9 @@ export interface LogEntry {
   device: string | null
   event: string | null
   message: string
+  /** Stable log template (system events) and the event parameters: the UI phrases the entry in the selected language from these. */
+  messageTemplate?: string | null
+  detailsJson?: string | null
 }
 
 export interface LogPage { items: LogEntry[]; total: number; page: number; pageSize: number }
@@ -60,6 +63,7 @@ export interface LogDetail {
   beforeJson: string | null
   afterJson: string | null
   detailsJson: string | null
+  messageTemplate?: string | null
 }
 
 export interface LogFilter {

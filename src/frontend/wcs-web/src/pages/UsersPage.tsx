@@ -7,7 +7,7 @@ import { Modal } from '../components/Modal'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { Rich } from '../components/Rich'
-import { formatDateTime } from '../i18n/format'
+import { displayNameOf, formatDateTime } from '../i18n/format'
 import { ROLE_SHORT_VI } from '../i18n/vi'
 import { checkPassword } from '../auth/passwordPolicy'
 import { Field } from './config/FormKit'
@@ -43,7 +43,7 @@ export function UsersPage() {
                   {rows.map((u) => (
                     <tr key={u.id}>
                       <td className="mono"><strong>{u.username}</strong>{u.username === me?.username && <span className="muted">{t('users.you')}</span>}</td>
-                      <td>{u.displayName}</td>
+                      <td>{displayNameOf(u.displayName)}</td>
                       <td><Pill tone={u.role === 'Admin' ? 'info' : 'muted'} dot={false}>{ROLE_SHORT_VI[u.role]}</Pill></td>
                       <td>
                         {u.isActive ? <Pill tone="ok">{t('users.active')}</Pill> : <Pill tone="bad">{t('users.disabled')}</Pill>}
@@ -180,7 +180,7 @@ function DeleteDialog({ user, onClose, onDone }: { user: UserRow; onClose: () =>
     </>}>
       {s.general && <div className="notice notice-bad" role="alert">{s.general}</div>}
       <p className="dialog-hint">
-        <Rich text={t('users.deleteBody', { name: user.displayName })} parts={{ user: <strong>{user.username}</strong> }} />
+        <Rich text={t('users.deleteBody', { name: displayNameOf(user.displayName) })} parts={{ user: <strong>{user.username}</strong> }} />
       </p>
     </Modal>
   )

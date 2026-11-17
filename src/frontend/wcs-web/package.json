@@ -9,6 +9,7 @@
     "build:demo": "tsc -b && vite build --mode demo",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "i18n:check": "node scripts/check-i18n.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

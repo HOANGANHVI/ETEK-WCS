@@ -32,7 +32,7 @@ public sealed class SimulatedConnectionProbe : IConnectionProbe
 {
     public Task<ProbeResult> ProbeAsync(ConnectionKind kind, string host, int port, TimeSpan timeout, CancellationToken ct = default) =>
         Task.FromResult(new ProbeResult(ConnectionTestOutcome.Simulated, "Simulated",
-            "Kiểm tra MÔ PHỎNG: cấu hình hợp lệ nhưng KHÔNG có kết nối mạng nào tới thiết bị được thực hiện. " +
+            "[PROBE_SIMULATED] Kiểm tra MÔ PHỎNG: cấu hình hợp lệ nhưng KHÔNG có kết nối mạng nào tới thiết bị được thực hiện. " +
             "Việc kiểm tra mạng thật đang bị tắt (Integration:AllowNetworkProbe = false)."));
 }
 
@@ -55,17 +55,17 @@ public sealed class TcpReachabilityProbe : IConnectionProbe
             sw.Stop();
             return new ProbeResult(ConnectionTestOutcome.Success, "TcpReachability",
                 kind == ConnectionKind.Rcs
-                    ? "Cổng TCP đang mở. Chưa gọi API RCS (endpoint/payload chưa được xác nhận) nên chưa kiểm tra được xác thực và giao thức."
-                    : "Cổng TCP đang mở. Chưa gửi khung MC Protocol nào nên chưa kiểm tra được giao thức và các số hiệu mạng/trạm.",
+                    ? "[RCS_TCP_OPEN] Cổng TCP đang mở. Chưa gọi API RCS (endpoint/payload chưa được xác nhận) nên chưa kiểm tra được xác thực và giao thức."
+                    : "[PLC_TCP_OPEN] Cổng TCP đang mở. Chưa gửi khung MC Protocol nào nên chưa kiểm tra được giao thức và các số hiệu mạng/trạm.",
                 null, sw.ElapsedMilliseconds);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new ProbeResult(ConnectionTestOutcome.Failed, "TcpReachability", "Hết thời gian chờ khi mở cổng TCP.", "TIMEOUT", sw.ElapsedMilliseconds);
+            return new ProbeResult(ConnectionTestOutcome.Failed, "TcpReachability", "[TCP_TIMEOUT] Hết thời gian chờ khi mở cổng TCP.", "TIMEOUT", sw.ElapsedMilliseconds);
         }
         catch (SocketException ex)
         {
-            return new ProbeResult(ConnectionTestOutcome.Failed, "TcpReachability", "Không mở được cổng TCP.", ex.SocketErrorCode.ToString(), sw.ElapsedMilliseconds);
+            return new ProbeResult(ConnectionTestOutcome.Failed, "TcpReachability", "[TCP_UNREACHABLE] Không mở được cổng TCP.", ex.SocketErrorCode.ToString(), sw.ElapsedMilliseconds);
         }
     }
 }

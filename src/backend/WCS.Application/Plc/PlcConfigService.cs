@@ -69,7 +69,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     public async Task<PlcConnectionView> UpdateConnectionAsync(string plcId, UpdatePlcConnectionCommand cmd, PlcRuntimeOptions options, string? by, CancellationToken ct = default)
     {
         var errors = new List<FieldError>();
-        if (string.IsNullOrWhiteSpace(cmd.IpAddress) || !ConnectionValidator.IsStrictIp(cmd.IpAddress.Trim())) errors.Add(new("ipAddress", "Địa chỉ IP không hợp lệ."));
+        if (string.IsNullOrWhiteSpace(cmd.IpAddress) || !ConnectionValidator.IsStrictIp(cmd.IpAddress.Trim())) errors.Add(new("ipAddress", "Địa chỉ IP không hợp lệ.", "IP_INVALID"));
         Range(errors, "port", cmd.Port, 1, 65535, "Cổng TCP");
         Range(errors, "networkNumber", cmd.NetworkNumber, 0, 255, "Network number");
         Range(errors, "pcNumber", cmd.PcNumber, 0, 255, "PC number");
@@ -81,10 +81,10 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         Range(errors, "connectTimeoutMs", cmd.ConnectTimeoutMs, 100, 60_000, "Timeout kết nối (ms)");
         Range(errors, "readTimeoutMs", cmd.ReadTimeoutMs, 100, 60_000, "Timeout đọc (ms)");
         Range(errors, "writeTimeoutMs", cmd.WriteTimeoutMs, 100, 60_000, "Timeout ghi (ms)");
-        if (cmd.XyAddressBase is { } xb && !AddressBases.IsValidXy(xb)) errors.Add(new("xyAddressBase", "Cơ số địa chỉ X/Y chỉ có thể là 8 (bát phân) hoặc 16 (thập lục phân)."));
-        if (cmd.WAddressBase is { } wb && !AddressBases.IsValidW(wb)) errors.Add(new("wAddressBase", "Cơ số địa chỉ W chỉ có thể là 10 (thập phân) hoặc 16 (thập lục phân)."));
+        if (cmd.XyAddressBase is { } xb && !AddressBases.IsValidXy(xb)) errors.Add(new("xyAddressBase", "Cơ số địa chỉ X/Y chỉ có thể là 8 (bát phân) hoặc 16 (thập lục phân).", "XY_BASE_INVALID"));
+        if (cmd.WAddressBase is { } wb && !AddressBases.IsValidW(wb)) errors.Add(new("wAddressBase", "Cơ số địa chỉ W chỉ có thể là 10 (thập phân) hoặc 16 (thập lục phân).", "W_BASE_INVALID"));
         if (!string.IsNullOrWhiteSpace(cmd.Protocol) && !ConnectionOptions.PlcProtocols.Contains(cmd.Protocol.Trim()))
-            errors.Add(new("protocol", "Giao thức không được hỗ trợ."));
+            errors.Add(new("protocol", "Giao thức không được hỗ trợ.", "PROTOCOL_UNSUPPORTED"));
         if (errors.Count > 0) throw new ValidationFailedException(errors);
 
         return await uow.ExecuteAsync(async t =>
@@ -96,7 +96,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
                 cmd.ConnectTimeoutMs, cmd.ReadTimeoutMs, cmd.WriteTimeoutMs, cmd.XyAddressBase, cmd.WAddressBase);
             // Switching a REAL connection on needs the complete, confirmed parameter set. The simulator never needs them.
             if (cmd.Enabled && options.Mode != PlcRuntimeMode.Simulator && c.MissingParameters() is { Count: > 0 } missing)
-                throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).")).ToList());
+                throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).", "NEEDS_ENGINEER_CONFIRMATION")).ToList());
             var stations = (await repo.ListStationsAsync(t)).Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList();
             return ToView(c, stations);
         }, ct);
@@ -104,7 +104,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
 
     private static void Range(List<FieldError> e, string field, int? v, int min, int max, string label)
     {
-        if (v is { } x && (x < min || x > max)) e.Add(new(field, $"{label} phải nằm trong khoảng {min}–{max}."));
+        if (v is { } x && (x < min || x > max)) e.Add(new(field, $"{label} phải nằm trong khoảng {min}–{max}.", "RANGE", FieldArgs.Of(("min", min), ("max", max))));
     }
 
     public async Task<IReadOnlyList<PlcStationView>> ListStationsAsync(CancellationToken ct = default)
@@ -133,18 +133,18 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             // CR-004: X/Y are OUT_OF_SCOPE for IO mapping (radix NEEDS_CONFIRMATION). Only D, W, M may be entered. The driver is unchanged.
             if (!string.IsNullOrWhiteSpace(cmd.Address) && char.ToUpperInvariant(cmd.Address.Trim()[0]) is 'X' or 'Y')
-                throw new ValidationFailedException([new("address", "Thiết bị X/Y chưa được hỗ trợ trong cấu hình địa chỉ IO (OUT_OF_SCOPE, NEEDS_CONFIRMATION: cần xác nhận cơ số với kỹ sư PLC). Chỉ dùng M, D hoặc W.")]);
+                throw new ValidationFailedException([new("address", "Thiết bị X/Y chưa được hỗ trợ trong cấu hình địa chỉ IO (OUT_OF_SCOPE, NEEDS_CONFIRMATION: cần xác nhận cơ số với kỹ sư PLC). Chỉ dùng M, D hoặc W.", "ADDRESS_XY_UNSUPPORTED")]);
             var bases = await BasesOfAsync(p.PlcId, t);
             var address = string.IsNullOrWhiteSpace(cmd.Address) ? cmd.Address?.Trim() : DeviceAddress.Normalize(cmd.Address, bases);
             var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, address, cmd.WordLength, p.Direction);
-            if (AddressValidator.ValidateOne(spec, bases) is { } issue) throw new ValidationFailedException([new("address", issue.Message)]);
+            if (AddressValidator.ValidateOne(spec, bases) is { } issue) throw new ValidationFailedException([new("address", issue.Message, issue.Code, issue.Args)]);
             if (p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(cmd.Encoding))
-                throw new ValidationFailedException([new("encoding", "STRING cần encoding được xác nhận.")]);
+                throw new ValidationFailedException([new("encoding", "STRING cần encoding được xác nhận.", "ENCODING_REQUIRED")]);
 
             var others = (await repo.ListPointsAsync(p.PlcId, null, t)).Where(x => x.Id != p.Id)
                 .Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction));
             var conflict = AddressValidator.Validate(others.Append(spec), bases).FirstOrDefault(i => i.PointId == p.Id || i.ConflictWith == p.Id);
-            if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message)]);
+            if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message, conflict.Code, conflict.Args)]);
 
             p.ConfigureAddress(address!, p.DataType == PlcDataType.String ? cmd.WordLength : null, p.DataType == PlcDataType.String ? cmd.Encoding!.Trim() : null, clock.UtcNow);
             return ToView(p, true);

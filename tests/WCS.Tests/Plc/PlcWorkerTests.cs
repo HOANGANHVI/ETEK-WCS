@@ -11,7 +11,7 @@ public sealed class FakeEvents : IPlcEvents
 {
     public List<(PlcLogLevel Level, string? Plc, string? Station, string Event, string Message)> Logs { get; } = [];
     public List<(string Name, object Payload, bool AdminOnly)> Events { get; } = [];
-    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message) { lock (Logs) Logs.Add((level, plcId, stationId, eventName, message)); }
+    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message, IReadOnlyDictionary<string, object?>? args = null) { lock (Logs) Logs.Add((level, plcId, stationId, eventName, message)); }
     public void Publish(string name, object payload, bool adminOnly = false) { lock (Events) Events.Add((name, payload, adminOnly)); }
     public bool HasLog(string evt) { lock (Logs) return Logs.Any(l => l.Event == evt); }
 }

@@ -1,6 +1,7 @@
 import { ApiRequestError } from '../../api/errors'
 import type { FieldError } from '../../api/configTypes'
 import { t } from '../../i18n'
+import { localizeFieldError } from '../../i18n/logCatalog'
 import { describeError } from '../../i18n/vi'
 
 export const toInt = (v: string): number | null => (v.trim() === '' ? null : Number(v.trim()))
@@ -11,7 +12,7 @@ export type Errors = Record<string, string>
 
 export function toErrors(list: FieldError[]): Errors {
   const e: Errors = {}
-  for (const x of list) e[x.field] ??= x.message
+  for (const x of list) e[x.field] ??= localizeFieldError(x)
   return e
 }
 

@@ -30,17 +30,17 @@ public sealed class UserAdminService(IUserRepository users, IPasswordService pas
         RequireAdmin(actor);
         var name = AppUser.NormalizeUsername(cmd.Username);
         var errors = new List<FieldError>();
-        if (!AppUser.IsValidUsername(name)) errors.Add(new FieldError("username", "Tên đăng nhập gồm 3-50 ký tự: chữ thường, số, dấu chấm, gạch dưới hoặc gạch ngang."));
-        if (string.IsNullOrWhiteSpace(cmd.DisplayName)) errors.Add(new FieldError("displayName", "Cần nhập họ tên hiển thị."));
-        else if (cmd.DisplayName.Trim().Length > 100) errors.Add(new FieldError("displayName", "Họ tên không được dài quá 100 ký tự."));
-        if (!Enum.IsDefined(cmd.Role)) errors.Add(new FieldError("role", "Vai trò không hợp lệ."));
+        if (!AppUser.IsValidUsername(name)) errors.Add(new FieldError("username", "Tên đăng nhập gồm 3-50 ký tự: chữ thường, số, dấu chấm, gạch dưới hoặc gạch ngang.", "USERNAME_FORMAT"));
+        if (string.IsNullOrWhiteSpace(cmd.DisplayName)) errors.Add(new FieldError("displayName", "Cần nhập họ tên hiển thị.", "DISPLAY_NAME_REQUIRED"));
+        else if (cmd.DisplayName.Trim().Length > 100) errors.Add(new FieldError("displayName", "Họ tên không được dài quá 100 ký tự.", "DISPLAY_NAME_MAX"));
+        if (!Enum.IsDefined(cmd.Role)) errors.Add(new FieldError("role", "Vai trò không hợp lệ.", "ROLE_INVALID"));
         errors.AddRange(PasswordPolicy.Check(cmd.Password, name));
         if (errors.Count > 0) throw new ValidationFailedException(errors);
 
         var dto = await uow.ExecuteAsync(async t =>
         {
             if (await users.GetByUsernameAsync(name, t) is not null)
-                throw new ValidationFailedException([new FieldError("username", "Tên đăng nhập đã tồn tại.")]);
+                throw new ValidationFailedException([new FieldError("username", "Tên đăng nhập đã tồn tại.", "USERNAME_EXISTS")]);
             // A new account must change the password handed over by the administrator at first login.
             var user = AppUser.Create(name, cmd.DisplayName, cmd.Role, passwords.Hash(cmd.Password), mustChangePassword: true, clock.UtcNow);
             if (!cmd.IsActive) user.SetActive(false, clock.UtcNow);
@@ -55,8 +55,8 @@ public sealed class UserAdminService(IUserRepository users, IPasswordService pas
     {
         RequireAdmin(actor);
         if (string.IsNullOrWhiteSpace(cmd.DisplayName) || cmd.DisplayName.Trim().Length > 100)
-            throw new ValidationFailedException([new FieldError("displayName", "Họ tên phải có 1-100 ký tự.")]);
-        if (!Enum.IsDefined(cmd.Role)) throw new ValidationFailedException([new FieldError("role", "Vai trò không hợp lệ.")]);
+            throw new ValidationFailedException([new FieldError("displayName", "Họ tên phải có 1-100 ký tự.", "DISPLAY_NAME_LENGTH")]);
+        if (!Enum.IsDefined(cmd.Role)) throw new ValidationFailedException([new FieldError("role", "Vai trò không hợp lệ.", "ROLE_INVALID")]);
 
         object? before = null;
         var dto = await uow.ExecuteAsync(async t =>

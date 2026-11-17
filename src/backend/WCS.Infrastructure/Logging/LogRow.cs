@@ -15,6 +15,8 @@ public sealed class LogRow
     public string? Device { get; set; }
     public string? Event { get; set; }
     public string Message { get; set; } = default!;
+    public string? MessageTemplate { get; set; }
+    public string? DetailsJson { get; set; }
 }
 
 internal sealed class LogRowConfiguration : IEntityTypeConfiguration<LogRow>
@@ -44,6 +46,7 @@ internal sealed class SystemLogEntryConfiguration : IEntityTypeConfiguration<WCS
         b.Property(x => x.DetailsJson).HasColumnType("text");
         b.Property(x => x.Host).HasMaxLength(100);
         b.Property(x => x.ExternalId).HasMaxLength(64);
+        b.Property(x => x.MessageTemplate).HasMaxLength(500);
         b.HasIndex(x => x.OccurredAt);
         b.HasIndex(x => new { x.Category, x.OccurredAt });
         b.HasIndex(x => new { x.Level, x.OccurredAt });

@@ -52,10 +52,10 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
     {
         var o = Options; var notes = new List<string>();
         var effective = WritePolicy.EffectiveMode(o);
-        if (o.Mode != PlcRuntimeMode.Simulator && !o.AllowLiveConnection) notes.Add("Plc:AllowLiveConnection = false: không mở socket tới PLC thật.");
+        if (o.Mode != PlcRuntimeMode.Simulator && !o.AllowLiveConnection) notes.Add("[LIVE_CONNECTION_DISABLED] Plc:AllowLiveConnection = false: không mở socket tới PLC thật.");
         if (o.Mode == PlcRuntimeMode.RealReadWrite && effective != PlcRuntimeMode.RealReadWrite)
-            notes.Add("REAL_READ_WRITE đã được yêu cầu nhưng thiếu khóa ghi (Write.Enabled, EngineerApprovalReference, HandshakeApproved): hệ thống chạy REAL_READ_ONLY.");
-        if (o.Mode == PlcRuntimeMode.Simulator) notes.Add("Chế độ mô phỏng: không có kết nối nào tới PLC vật lý.");
+            notes.Add("[WRITE_KEYS_MISSING] REAL_READ_WRITE đã được yêu cầu nhưng thiếu khóa ghi (Write.Enabled, EngineerApprovalReference, HandshakeApproved): hệ thống chạy REAL_READ_ONLY.");
+        if (o.Mode == PlcRuntimeMode.Simulator) notes.Add("[SIMULATOR_MODE] Chế độ mô phỏng: không có kết nối nào tới PLC vật lý.");
         return new PlcRuntimeInfo(o.Mode.ToString(), effective.ToString(), o.AllowLiveConnection, o.Write.Enabled, WritePolicy.WriteKeysComplete(o), _running, notes);
     }
 
@@ -74,7 +74,7 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
             foreach (var w in await BuildAsync(null, ct)) { _workers[w.PlcId] = w; w.Start(); }
             _running = true;
             logger.LogInformation("PLC runtime started: {Count} workers, mode {Mode}", _workers.Count, Options.Mode);
-            events.Log(PlcLogLevel.Info, null, null, "RUNTIME_START", $"PLC runtime started in mode {Info().EffectiveMode} with {_workers.Count} PLC workers.");
+            events.Log(PlcLogLevel.Info, null, null, "RUNTIME_START", $"PLC runtime started in mode {Info().EffectiveMode} with {_workers.Count} PLC workers.", WCS.Application.Logging.LogArgs.Of(("mode", Info().EffectiveMode), ("workers", _workers.Count)));
         }
         finally { _sync.Release(); }
     }
@@ -99,7 +99,7 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
             if (!_running) return;
             if (_workers.TryRemove(plcId, out var old)) await old.DisposeAsync();
             foreach (var w in await BuildAsync(plcId, ct)) { _workers[w.PlcId] = w; w.Start(); }
-            events.Log(PlcLogLevel.Info, plcId, null, "RELOAD", $"{plcId}: cấu hình được nạp lại.");
+            events.Log(PlcLogLevel.Info, plcId, null, "RELOAD", $"{plcId}: configuration reloaded.", WCS.Application.Logging.LogArgs.Of(("plc", plcId)));
         }
         finally { _sync.Release(); }
     }
@@ -116,8 +116,8 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         {
             bool enabled; string? why = null;
             if (mode == PlcRuntimeMode.Simulator) enabled = true;
-            else if (!o.AllowLiveConnection) { enabled = false; why = "Chưa cho phép kết nối thật (Plc:AllowLiveConnection)."; }
-            else if (!c.Enabled) { enabled = false; why = "Admin chưa bật kết nối PLC này."; }
+            else if (!o.AllowLiveConnection) { enabled = false; why = "[LIVE_CONNECTION_DISABLED] Chưa cho phép kết nối thật (Plc:AllowLiveConnection)."; }
+            else if (!c.Enabled) { enabled = false; why = "[CONNECTION_NOT_ENABLED] Admin chưa bật kết nối PLC này."; }
             else enabled = true;
 
             var handlers = stations.Where(s => s.PlcId == c.Id && s.Enabled).OrderBy(s => s.Order).Select(s => new StationIoHandler(c.Id, s.Id,
@@ -140,7 +140,7 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         var decision = WritePolicy.Evaluate(Options, point, handshake);
         if (!decision.Allowed)
         {
-            events.Log(PlcLogLevel.Warning, plcId, stationId, "WRITE_DENIED", $"{actor}: {stationId}/{signal} bị chặn ({decision.Code}).");
+            events.Log(PlcLogLevel.Warning, plcId, stationId, "WRITE_DENIED", $"{actor}: {stationId}/{signal} blocked ({decision.Code}).", WCS.Application.Logging.LogArgs.Of(("actor", actor), ("station", stationId), ("signal", signal), ("code", decision.Code)));
             return new WriteResult(false, decision.Code, decision.Reason);
         }
         if (value.Type != point.DataType) return new WriteResult(false, "TYPE_MISMATCH", $"Tín hiệu kiểu {point.DataType}, giá trị kiểu {value.Type}.");

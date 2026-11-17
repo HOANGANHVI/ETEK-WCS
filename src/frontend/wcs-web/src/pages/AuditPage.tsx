@@ -4,8 +4,9 @@ import type { AuditResult, AuditRow } from '../api/authTypes'
 import { Async, PageHeader, Panel, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime } from '../i18n/format'
+import { localizeAuditDetail } from '../i18n/logCatalog'
 import { useT } from '../i18n'
-import { AUDIT_ACTION_VI, AUDIT_RESULT_TONE, AUDIT_RESULT_VI } from '../i18n/vi'
+import { AUDIT_ACTION_VI, AUDIT_RESULT_TONE, AUDIT_RESULT_VI, AUDIT_TARGET_VI } from '../i18n/vi'
 
 const PAGE = 100
 
@@ -52,9 +53,9 @@ export function AuditPage() {
                           <td className="nowrap num">{formatDateTime(a.occurredAt)}</td>
                           <td><strong>{a.actor ?? '—'}</strong>{a.actorRole && <small className="muted"> · {a.actorRole}</small>}</td>
                           <td>{AUDIT_ACTION_VI[a.action] ?? a.action}</td>
-                          <td className="mono">{[a.targetType, a.targetId].filter(Boolean).join(' ') || '—'}</td>
+                          <td className="mono">{[a.targetType ? (AUDIT_TARGET_VI[a.targetType] ?? a.targetType) : null, a.targetId].filter(Boolean).join(' ') || '—'}</td>
                           <td><Pill tone={AUDIT_RESULT_TONE[a.result]}>{AUDIT_RESULT_VI[a.result]}</Pill></td>
-                          <td>{a.detail ?? ''}</td>
+                          <td title={a.detail ?? undefined}>{localizeAuditDetail(a.detail)}</td>
                         </tr>
                         {open === a.id && (
                           <tr className="audit-detail">

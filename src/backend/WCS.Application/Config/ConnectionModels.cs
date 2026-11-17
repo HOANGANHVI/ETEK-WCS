@@ -3,7 +3,14 @@ using WCS.Domain.Common;
 
 namespace WCS.Application.Config;
 
-public sealed record FieldError(string Field, string Message);
+/// <summary>One invalid field. <c>Message</c> is a human-readable fallback; <c>Code</c> (+ <c>Args</c>) is the stable key the UI translates (bilingual UI).</summary>
+public sealed record FieldError(string Field, string Message, string? Code = null, IReadOnlyDictionary<string, object?>? Args = null);
+
+/// <summary>Builds the <c>Args</c> dictionary of a <see cref="FieldError"/>.</summary>
+public static class FieldArgs
+{
+    public static IReadOnlyDictionary<string, object?> Of(params (string Key, object? Value)[] items) => items.ToDictionary(x => x.Key, x => x.Value);
+}
 
 /// <summary>Input validation failure with per-field messages (mapped to HTTP 400 with details).</summary>
 public sealed class ValidationFailedException(IReadOnlyList<FieldError> errors)

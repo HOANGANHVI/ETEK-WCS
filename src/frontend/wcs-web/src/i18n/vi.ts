@@ -125,6 +125,7 @@ export const HISTORY_EVENT_VI = localizedMap({
   RCS_CANCEL_NOTFOUND_NOT_CONFIRMED: 'RCS báo không có bản ghi (không coi là đã hủy)',
   RCS_CANCEL_IN_PROGRESS: 'RCS đang hủy nhiệm vụ',
   RECONCILIATION_CHECK_UNRESOLVED: 'Admin kiểm tra: chưa xác định được vị trí thực tế',
+  RCS_CONTINUE_RETRY_EXHAUSTED: 'Hết số lần thử tiếp tục nhiệm vụ tại RCS',
 }, {
   STATE_CHANGED: 'State changed',
   TASK_CREATED: 'Task created',
@@ -150,6 +151,7 @@ export const HISTORY_EVENT_VI = localizedMap({
   RCS_CANCEL_NOTFOUND_NOT_CONFIRMED: 'RCS reports no record (not treated as cancelled)',
   RCS_CANCEL_IN_PROGRESS: 'RCS is cancelling the task',
   RECONCILIATION_CHECK_UNRESOLVED: 'Admin check: actual position still undetermined',
+  RCS_CONTINUE_RETRY_EXHAUSTED: 'Automatic retries to continue the task at RCS exhausted',
 })
 /** Events that come from or concern the PLC / RCS interfaces (shown in a dedicated list of the task detail). */
 export const DEVICE_EVENT_RE = /^(RCS_|PICK_CONFIRMED|LATE_EVENT|OUT_OF_ORDER)/
@@ -253,6 +255,38 @@ const ERROR_VI = localizedMap({
   REQUEST_KEY_REQUIRED: 'Thiếu mã định danh yêu cầu.',
   CONCURRENT_MODIFICATION: 'Dữ liệu vừa được thay đổi bởi thao tác khác, vui lòng thử lại.',
   INTERNAL_ERROR: 'Máy chủ gặp lỗi nội bộ. Kiểm tra nhật ký Backend.',
+  AGV_HAS_ACTIVE_TASK: 'AGV đang có nhiệm vụ hoạt động nên chưa thể tắt.',
+  LOCATION_HAS_RESERVATION: 'Vị trí đang được giữ chỗ cho nhiệm vụ nên chưa thể tắt.',
+  NOTE_REQUIRED: 'Cần nhập ghi chú.',
+  RACK_NOT_FOUND: 'Không tìm thấy rack.',
+  RACK_NOT_AT_SOURCE: 'Rack không nằm ở vị trí nguồn.',
+  RACK_NOT_IN_TRANSIT: 'Rack không ở trạng thái đang vận chuyển.',
+  DESTINATION_NOT_ASSIGNED: 'Nhiệm vụ chưa có vị trí đích.',
+  INVALID_QUANTITY: 'Số lượng không hợp lệ.',
+  RACK_KIND_NOT_ALLOWED: 'Vị trí không nhận loại rack này.',
+  RACKS_RESERVED: 'Rack đang được giữ chỗ cho nhiệm vụ nên không thể thực hiện thao tác.',
+  AGV_NOT_CONFIGURED: 'AGV chưa được cấu hình (thiếu RCS Robot Code).',
+  AGV_DISABLED: 'AGV đang bị tắt.',
+  AGV_CODE_REQUIRED: 'Cần có mã AGV.',
+  RACK_NOT_PICKABLE: 'Rack không ở trạng thái có thể lấy.',
+  RACK_NOT_AT_LOCATION: 'Rack không nằm tại vị trí này.',
+  INVALID_RACK_STATUS: 'Trạng thái rack không hợp lệ.',
+  RACK_ID_REQUIRED: 'Cần có Rack ID.',
+  LOCATION_CODE_REQUIRED: 'Cần có mã vị trí.',
+  INVALID_CAPACITY: 'Sức chứa không hợp lệ.',
+  RCS_TASK_CODE_MISMATCH: 'Mã nhiệm vụ RCS không khớp với nhiệm vụ.',
+  PICK_ALREADY_CONFIRMED: 'Đã xác nhận lấy rack trước đó.',
+  DROP_BEFORE_PICK: 'Không thể xác nhận thả rack khi chưa xác nhận lấy rack.',
+  DROP_ALREADY_CONFIRMED: 'Đã xác nhận thả rack trước đó.',
+  USERNAME_INVALID: 'Tên đăng nhập không hợp lệ.',
+  DISPLAY_NAME_REQUIRED: 'Cần nhập họ tên hiển thị.',
+  LOG_NOT_FOUND: 'Không tìm thấy bản ghi nhật ký.',
+  NOT_FOUND: 'Không tìm thấy đối tượng.',
+  STOPPED: 'Kết nối PLC đã dừng.',
+  CANCELLED: 'Thao tác đã bị hủy.',
+  DISABLED: 'Kết nối PLC đang tắt.',
+  WRITE_REFUSED: 'Lệnh ghi bị từ chối.',
+  ADDRESS_NOT_APPROVED: 'Địa chỉ của tín hiệu chưa được kỹ sư PLC xác nhận.',
 }, {
   VALIDATION_FAILED: 'The submitted data is not valid.',
   HOLD_RELEASE_CONFIRMATION_REQUIRED: 'Both confirmations are required: rack/location reconciled AND AGV physically checked.',
@@ -293,7 +327,44 @@ const ERROR_VI = localizedMap({
   REQUEST_KEY_REQUIRED: 'The request identifier is missing.',
   CONCURRENT_MODIFICATION: 'The data was just changed by another action; please try again.',
   INTERNAL_ERROR: 'The server encountered an internal error. Check the backend log.',
+  AGV_HAS_ACTIVE_TASK: 'The AGV has an active task and cannot be disabled yet.',
+  LOCATION_HAS_RESERVATION: 'The location is reserved for a task and cannot be disabled yet.',
+  NOTE_REQUIRED: 'A note is required.',
+  RACK_NOT_FOUND: 'Rack not found.',
+  RACK_NOT_AT_SOURCE: 'The rack is not at the source location.',
+  RACK_NOT_IN_TRANSIT: 'The rack is not in transit.',
+  DESTINATION_NOT_ASSIGNED: 'The task has no destination yet.',
+  INVALID_QUANTITY: 'The quantity is not valid.',
+  RACK_KIND_NOT_ALLOWED: 'The location does not accept this rack type.',
+  RACKS_RESERVED: 'The racks are reserved for a task, so the operation cannot be performed.',
+  AGV_NOT_CONFIGURED: 'The AGV is not configured (RCS Robot Code missing).',
+  AGV_DISABLED: 'The AGV is disabled.',
+  AGV_CODE_REQUIRED: 'An AGV code is required.',
+  RACK_NOT_PICKABLE: 'The rack cannot be picked in its current state.',
+  RACK_NOT_AT_LOCATION: 'The rack is not at this location.',
+  INVALID_RACK_STATUS: 'The rack status is not valid.',
+  RACK_ID_REQUIRED: 'A Rack ID is required.',
+  LOCATION_CODE_REQUIRED: 'A location code is required.',
+  INVALID_CAPACITY: 'The capacity is not valid.',
+  RCS_TASK_CODE_MISMATCH: 'The RCS task code does not match the task.',
+  PICK_ALREADY_CONFIRMED: 'The pick was already confirmed.',
+  DROP_BEFORE_PICK: 'A drop cannot be confirmed before the pick.',
+  DROP_ALREADY_CONFIRMED: 'The drop was already confirmed.',
+  USERNAME_INVALID: 'The username is not valid.',
+  DISPLAY_NAME_REQUIRED: 'A display name is required.',
+  LOG_NOT_FOUND: 'Log entry not found.',
+  NOT_FOUND: 'Not found.',
+  STOPPED: 'The PLC connection has stopped.',
+  CANCELLED: 'The operation was cancelled.',
+  DISABLED: 'The PLC connection is disabled.',
+  WRITE_REFUSED: 'The write was refused.',
+  ADDRESS_NOT_APPROVED: 'The signal address has not been confirmed by the PLC engineer.',
 })
+
+/** Translated message of a backend error code, or undefined when the code is unknown. */
+export function errorTextForCode(code: string): string | undefined {
+  return ERROR_VI[code] ?? PLC_ERROR_VI[code]
+}
 
 export function describeError(e: unknown): string {
   if (e instanceof ApiRequestError) {
@@ -319,6 +390,14 @@ export const AUDIT_RESULT_VI = localizedMap(
   { Success: 'Thành công', Denied: 'Bị từ chối', Failed: 'Thất bại' },
   { Success: 'Success', Denied: 'Denied', Failed: 'Failed' })
 export const AUDIT_RESULT_TONE: Record<string, Tone> = { Success: 'ok', Denied: 'warn', Failed: 'bad' }
+
+export const AUDIT_TARGET_VI = localizedMap({
+  User: 'Tài khoản', Task: 'Nhiệm vụ', Agv: 'AGV', Location: 'Vị trí', ConnectionSetting: 'Cấu hình kết nối', PlcConnection: 'Kết nối PLC',
+  StationIoPoint: 'Tín hiệu IO', PlcStation: 'Trạm PLC',
+}, {
+  User: 'Account', Task: 'Task', Agv: 'AGV', Location: 'Location', ConnectionSetting: 'Connection settings', PlcConnection: 'PLC connection',
+  StationIoPoint: 'IO signal', PlcStation: 'PLC station',
+})
 
 export const AUDIT_ACTION_VI = localizedMap({
   AUTH_LOGIN: 'Đăng nhập',
@@ -348,6 +427,17 @@ export const AUDIT_ACTION_VI = localizedMap({
   SIMULATOR_ADVANCE: 'Mô phỏng: chạy bước tiếp theo',
   SIMULATOR_RUN: 'Mô phỏng: chạy toàn bộ',
   SIMULATOR_STATION_REQUEST: 'Mô phỏng: yêu cầu từ trạm',
+  TASK_RECONCILE_CHECK_UNRESOLVED: 'Ghi nhận kiểm tra đối soát: chưa xác định',
+  PLC_CONNECTION_UPDATE: 'Sửa kết nối PLC',
+  PLC_CONNECTION_TEST: 'Kiểm tra kết nối PLC',
+  PLC_IO_ADDRESS_SET: 'Gán địa chỉ IO',
+  PLC_IO_ADDRESS_CLEAR: 'Xóa địa chỉ IO',
+  PLC_IO_ADDRESS_APPROVE: 'Xác nhận địa chỉ IO',
+  PLC_IO_WRITE_ALLOWED: 'Cho phép ghi tín hiệu IO',
+  PLC_TEST_WRITE: 'Ghi thử PLC',
+  PLC_SIMULATOR_SET_VALUE: 'Mô phỏng: đặt giá trị tín hiệu',
+  PLC_SIMULATOR_ONLINE: 'Mô phỏng: đổi trạng thái kết nối PLC',
+  PLC_SIMULATOR_STATION_FAULT: 'Mô phỏng: gây/khôi phục lỗi trạm',
 }, {
   AUTH_LOGIN: 'Sign in',
   AUTH_LOGOUT: 'Sign out',
@@ -376,4 +466,15 @@ export const AUDIT_ACTION_VI = localizedMap({
   SIMULATOR_ADVANCE: 'Simulation: run next step',
   SIMULATOR_RUN: 'Simulation: run all',
   SIMULATOR_STATION_REQUEST: 'Simulation: station request',
+  TASK_RECONCILE_CHECK_UNRESOLVED: 'Reconciliation check recorded: undetermined',
+  PLC_CONNECTION_UPDATE: 'Edit PLC connection',
+  PLC_CONNECTION_TEST: 'Test PLC connection',
+  PLC_IO_ADDRESS_SET: 'Set IO address',
+  PLC_IO_ADDRESS_CLEAR: 'Clear IO address',
+  PLC_IO_ADDRESS_APPROVE: 'Confirm IO address',
+  PLC_IO_WRITE_ALLOWED: 'Allow writing IO signal',
+  PLC_TEST_WRITE: 'PLC test write',
+  PLC_SIMULATOR_SET_VALUE: 'Simulation: set signal value',
+  PLC_SIMULATOR_ONLINE: 'Simulation: change PLC connection state',
+  PLC_SIMULATOR_STATION_FAULT: 'Simulation: set/clear station fault',
 })

@@ -93,8 +93,8 @@ public sealed class ConnectionConfigService(
             new(o, mode, msg, err, ms, clock.UtcNow);
 
         ConnectionTestResult result;
-        if (s is null) result = Done(ConnectionTestOutcome.NotExecuted, "None", "Chưa có cấu hình đã lưu. Hãy nhập và lưu cấu hình trước khi kiểm tra.");
-        else if (!s.Enabled) result = Done(ConnectionTestOutcome.NotExecuted, "None", "Kết nối đang ở trạng thái tắt nên không thực hiện kiểm tra.");
+        if (s is null) result = Done(ConnectionTestOutcome.NotExecuted, "None", "[NO_SAVED_CONFIG] Chưa có cấu hình đã lưu. Hãy nhập và lưu cấu hình trước khi kiểm tra.");
+        else if (!s.Enabled) result = Done(ConnectionTestOutcome.NotExecuted, "None", "[CONNECTION_DISABLED] Kết nối đang ở trạng thái tắt nên không thực hiện kiểm tra.");
         else
         {
             string? host; int? port; int? timeout; IReadOnlyList<FieldError> errors;
@@ -113,7 +113,7 @@ public sealed class ConnectionConfigService(
             }
 
             if (errors.Count > 0 || host is null || port is null || timeout is null)
-                result = Done(ConnectionTestOutcome.NotExecuted, "None", "Cấu hình chưa đầy đủ hoặc không hợp lệ nên không thực hiện kiểm tra.",
+                result = Done(ConnectionTestOutcome.NotExecuted, "None", "[CONFIG_INCOMPLETE] Cấu hình chưa đầy đủ hoặc không hợp lệ nên không thực hiện kiểm tra.",
                     string.Join("; ", errors.Select(x => x.Message)));
             else
             {

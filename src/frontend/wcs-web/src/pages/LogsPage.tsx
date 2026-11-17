@@ -6,9 +6,10 @@ import { Async, Button, EmptyState, Kpi, PageHeader, Panel, Pill } from '../comp
 import { DEMO_MODE } from '../config'
 import { useApi } from '../hooks/useApi'
 import { formatDateTime, formatNumber } from '../i18n/format'
+import { localizeLog } from '../i18n/logCatalog'
 import { useT, type MsgKey } from '../i18n'
 import { LOG_CATEGORY_HINT, LOG_CATEGORY_VI, LOG_LEVEL_TONE, LOG_LEVEL_VI } from '../i18n/logs'
-import { describeError } from '../i18n/vi'
+import { AUDIT_RESULT_VI, AUDIT_TARGET_VI, describeError } from '../i18n/vi'
 
 const PAGE_SIZES = [25, 50, 100, 200]
 const RANGES: { key: '1h' | '24h' | '7d' | '30d' | 'custom'; label: MsgKey; hours: number }[] = [
@@ -104,7 +105,7 @@ function LogsScreen() {
               {s.latestErrors.map((e) => (
                 <li key={e.id}><button type="button" onClick={() => setOpenId(e.id)}>
                   <LevelPill level={e.level} /> <span className="nowrap num muted">{formatDateTime(e.occurredAt)}</span> <small className="muted">{LOG_CATEGORY_VI[e.category]}{e.device ? ` · ${e.device}` : ''}</small>
-                  <span className="log-latest-msg">{e.message}</span>
+                  <span className="log-latest-msg" title={e.message}>{localizeLog(e).text}</span>
                 </button></li>
               ))}
             </ul>
@@ -172,7 +173,7 @@ function LogsScreen() {
                         <td className="small" title={e.source}>{e.source.split('.').slice(-1)[0]}</td>
                         <td className="nowrap">{e.device ?? <span className="muted">—</span>}</td>
                         <td className="mono nowrap">{e.event ?? <span className="muted">—</span>}</td>
-                        <td className="log-msg">{e.message}</td>
+                        <td className="log-msg" title={e.message}>{localizeLog(e).text}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -214,8 +215,8 @@ function LogDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
     [t('logs.dCorrelation'), detail.correlationId], [t('logs.dHost'), detail.host],
     [t('logs.dIp'), detail.ip], [t('logs.dPort'), detail.port],
     [t('logs.dPrevState'), detail.previousState], [t('logs.dNewState'), detail.newState], [t('logs.dFailureKind'), detail.failureKind], [t('logs.dEndCode'), detail.endCode], [t('logs.dReason'), detail.reason],
-    [t('logs.dActor'), detail.actor ? `${detail.actor}${detail.actorRole ? ` (${detail.actorRole})` : ''}` : null], [t('logs.dResult'), detail.result],
-    [t('logs.dTarget'), [detail.targetType, detail.targetId].filter(Boolean).join(' ') || null],
+    [t('logs.dActor'), detail.actor ? `${detail.actor}${detail.actorRole ? ` (${detail.actorRole})` : ''}` : null], [t('logs.dResult'), detail.result ? (AUDIT_RESULT_VI[detail.result] ?? detail.result) : null],
+    [t('logs.dTarget'), [detail.targetType ? (AUDIT_TARGET_VI[detail.targetType] ?? detail.targetType) : null, detail.targetId].filter(Boolean).join(' ') || null],
   ] : []
 
   return (
@@ -225,11 +226,12 @@ function LogDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
       {detail && (
         <div className="log-detail">
           <div className="log-detail-head"><LevelPill level={detail.level} /> <strong>{LOG_CATEGORY_VI[detail.category]}</strong></div>
-          <p className="log-detail-msg">{detail.message}</p>
+          <p className="log-detail-msg">{localizeLog({ ...detail, messageTemplate: detail.messageTemplate, detailsJson: detail.entryKind === 'audit' ? null : detail.detailsJson }).text}</p>
+          {localizeLog(detail).translated && <p className="muted small"><strong>{t('logs.rawMessage')}:</strong> <span className="mono">{detail.message}</span></p>}
           <dl className="kv2">
             {rows.filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => <><dt key={k + 'k'}>{k}</dt><dd key={k + 'v'}>{v}</dd></>)}
           </dl>
-          {detail.exception && <><strong>Exception / Stack trace</strong><pre className="log-pre">{detail.exception}</pre></>}
+          {detail.exception && <><strong>{t('logs.exceptionTrace')}</strong><pre className="log-pre">{detail.exception}</pre></>}
           {detail.beforeJson && <><strong>{t('logs.before')}</strong><pre className="log-pre">{pretty(detail.beforeJson)}</pre></>}
           {detail.afterJson && <><strong>{t('logs.after')}</strong><pre className="log-pre">{pretty(detail.afterJson)}</pre></>}
           {detail.detailsJson && <><strong>{t('logs.dProperties')}</strong><pre className="log-pre">{pretty(detail.detailsJson)}</pre></>}

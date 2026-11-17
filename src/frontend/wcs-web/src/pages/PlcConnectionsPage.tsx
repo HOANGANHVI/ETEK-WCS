@@ -6,6 +6,8 @@ import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useT, type MsgKey } from '../i18n'
 import { MISSING_PARAM_VI } from '../i18n/plc'
+import { describeCoded } from '../i18n/logCatalog'
+import { TEST_MODE_VI } from '../i18n/config'
 import { describeError } from '../i18n/vi'
 import { Field, Switch } from './config/FormKit'
 import { fromApiError, fromNum, toInt, toStr, type Errors } from './config/formUtils'
@@ -77,7 +79,7 @@ function ConnectionSummary({ c, onEdit, realMode, simulator }: { c: PlcConnectio
         <div className="notice notice-warn">{t('plc.missingParams', { list: c.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ') })}</div>
       )}
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
-      {probe && <div className={`notice ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>{t('plc.probeResult', { mode: probe.mode, message: probe.message, latency: probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : '' })}</div>}
+      {probe && <div className={`notice ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>{t('plc.probeResult', { mode: TEST_MODE_VI[probe.mode] ?? probe.mode, message: describeCoded(probe.message), latency: probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : '' })}</div>}
       <div className="btn-row">
         <Button variant="primary" onClick={onEdit}>{t('plc.edit')}</Button>
         <Button disabled={busy} onClick={() => void run(async () => setProbe(await api.plcTestConnection(c.plcId)))}>{t('plc.testConn')}</Button>

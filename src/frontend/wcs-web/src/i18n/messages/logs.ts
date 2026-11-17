@@ -100,6 +100,8 @@ export default defineMessages({
   dTarget: 'Đối tượng',
   dProperties: 'Thuộc tính',
   hidden: 'Thông tin bảo mật được ẩn khi hiển thị.',
+  rawMessage: 'Nội dung gốc',
+  exceptionTrace: 'Ngoại lệ / Stack trace',
 }, {
   auditTitle: 'Operation Logs',
   auditPanel: 'Log',
@@ -198,4 +200,6 @@ export default defineMessages({
   dTarget: 'Target',
   dProperties: 'Properties',
   hidden: 'Sensitive information is masked in this view.',
+  rawMessage: 'Original message',
+  exceptionTrace: 'Exception / Stack trace',
 })

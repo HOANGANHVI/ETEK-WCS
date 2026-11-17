@@ -23,13 +23,13 @@ public static partial class ConnectionValidator
     public static IReadOnlyList<FieldError> ValidatePlc(PlcSettings s, bool enabled)
     {
         var e = new List<FieldError>();
-        if (s.DeviceName is { Length: > 100 }) e.Add(new("deviceName", "Tên thiết bị tối đa 100 ký tự."));
+        if (s.DeviceName is { Length: > 100 }) e.Add(new("deviceName", "Tên thiết bị tối đa 100 ký tự.", "DEVICE_NAME_MAX"));
 
         if (s.IpAddress is not null)
         {
-            if (!IsStrictIp(s.IpAddress)) e.Add(new("ipAddress", "Địa chỉ IP không hợp lệ."));
+            if (!IsStrictIp(s.IpAddress)) e.Add(new("ipAddress", "Địa chỉ IP không hợp lệ.", "IP_INVALID"));
         }
-        else if (enabled) e.Add(new("ipAddress", "Cần nhập địa chỉ IP trước khi bật kết nối."));
+        else if (enabled) e.Add(new("ipAddress", "Cần nhập địa chỉ IP trước khi bật kết nối.", "IP_REQUIRED"));
 
         Port(e, "port", s.Port, enabled);
         Range(e, "networkNumber", s.NetworkNumber, 0, 255, "Network number");
@@ -39,9 +39,9 @@ public static partial class ConnectionValidator
 
         if (s.Protocol is not null)
         {
-            if (!ConnectionOptions.PlcProtocols.Contains(s.Protocol)) e.Add(new("protocol", "Giao thức không nằm trong danh sách được hỗ trợ."));
+            if (!ConnectionOptions.PlcProtocols.Contains(s.Protocol)) e.Add(new("protocol", "Giao thức không nằm trong danh sách được hỗ trợ.", "PROTOCOL_UNSUPPORTED"));
         }
-        else if (enabled) e.Add(new("protocol", "Cần chọn giao thức trước khi bật kết nối."));
+        else if (enabled) e.Add(new("protocol", "Cần chọn giao thức trước khi bật kết nối.", "PROTOCOL_REQUIRED"));
 
         Timeout(e, s.TimeoutMs, enabled, 100, 60_000);
         return e;
@@ -50,38 +50,38 @@ public static partial class ConnectionValidator
     public static IReadOnlyList<FieldError> ValidateRcs(RcsSettings s, bool enabled, bool hasPassword, bool hasToken)
     {
         var e = new List<FieldError>();
-        if (s.SystemName is { Length: > 100 }) e.Add(new("systemName", "Tên hệ thống tối đa 100 ký tự."));
+        if (s.SystemName is { Length: > 100 }) e.Add(new("systemName", "Tên hệ thống tối đa 100 ký tự.", "SYSTEM_NAME_MAX"));
 
         if (s.Host is not null)
         {
             var numericOnly = s.Host.All(ch => char.IsAsciiDigit(ch) || ch == '.');
             if (numericOnly ? !IsStrictIp(s.Host) : !HostnameRegex().IsMatch(s.Host))
-                e.Add(new("host", "Địa chỉ IP hoặc hostname không hợp lệ."));
+                e.Add(new("host", "Địa chỉ IP hoặc hostname không hợp lệ.", "HOST_INVALID"));
         }
-        else if (enabled) e.Add(new("host", "Cần nhập địa chỉ IP hoặc hostname trước khi bật kết nối."));
+        else if (enabled) e.Add(new("host", "Cần nhập địa chỉ IP hoặc hostname trước khi bật kết nối.", "HOST_REQUIRED"));
 
         Port(e, "port", s.Port, enabled);
 
         if (s.BaseUrl is not null)
         {
-            if (s.BaseUrl.Length > 300) e.Add(new("baseUrl", "Base URL tối đa 300 ký tự."));
+            if (s.BaseUrl.Length > 300) e.Add(new("baseUrl", "Base URL tối đa 300 ký tự.", "BASEURL_MAX"));
             else if (!Uri.TryCreate(s.BaseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                e.Add(new("baseUrl", "Base URL phải là địa chỉ tuyệt đối bắt đầu bằng http:// hoặc https://."));
-            else if (!string.IsNullOrEmpty(uri.UserInfo)) e.Add(new("baseUrl", "Không nhập tài khoản/mật khẩu trong Base URL."));
+                e.Add(new("baseUrl", "Base URL phải là địa chỉ tuyệt đối bắt đầu bằng http:// hoặc https://.", "BASEURL_ABSOLUTE"));
+            else if (!string.IsNullOrEmpty(uri.UserInfo)) e.Add(new("baseUrl", "Không nhập tài khoản/mật khẩu trong Base URL.", "BASEURL_CREDENTIALS"));
             else if (s.Host is not null && !string.Equals(uri.Host, s.Host, StringComparison.OrdinalIgnoreCase))
-                e.Add(new("baseUrl", "Host trong Base URL phải trùng với địa chỉ IP/hostname đã nhập."));
+                e.Add(new("baseUrl", "Host trong Base URL phải trùng với địa chỉ IP/hostname đã nhập.", "BASEURL_HOST"));
             else if (s.Port is not null && !uri.IsDefaultPort && uri.Port != s.Port)
-                e.Add(new("baseUrl", "Port trong Base URL phải trùng với Port đã nhập."));
+                e.Add(new("baseUrl", "Port trong Base URL phải trùng với Port đã nhập.", "BASEURL_PORT"));
         }
 
-        if (!ConnectionOptions.RcsAuthModes.Contains(s.AuthMode)) e.Add(new("authMode", "Phương thức xác thực không hợp lệ."));
-        if (s.Username is { Length: > 100 }) e.Add(new("username", "Tên đăng nhập tối đa 100 ký tự."));
+        if (!ConnectionOptions.RcsAuthModes.Contains(s.AuthMode)) e.Add(new("authMode", "Phương thức xác thực không hợp lệ.", "AUTHMODE_INVALID"));
+        if (s.Username is { Length: > 100 }) e.Add(new("username", "Tên đăng nhập tối đa 100 ký tự.", "USERNAME_MAX"));
         if (s.AuthMode == ConnectionOptions.AuthUserPassword)
         {
-            if (s.Username is null) e.Add(new("username", "Cần nhập tên đăng nhập."));
-            if (enabled && !hasPassword) e.Add(new("password", "Cần nhập mật khẩu trước khi bật kết nối."));
+            if (s.Username is null) e.Add(new("username", "Cần nhập tên đăng nhập.", "USERNAME_REQUIRED"));
+            if (enabled && !hasPassword) e.Add(new("password", "Cần nhập mật khẩu trước khi bật kết nối.", "PASSWORD_REQUIRED"));
         }
-        if (s.AuthMode == ConnectionOptions.AuthToken && enabled && !hasToken) e.Add(new("token", "Cần nhập token trước khi bật kết nối."));
+        if (s.AuthMode == ConnectionOptions.AuthToken && enabled && !hasToken) e.Add(new("token", "Cần nhập token trước khi bật kết nối.", "TOKEN_REQUIRED"));
 
         Timeout(e, s.TimeoutMs, enabled, 100, 120_000);
         return e;
@@ -89,18 +89,18 @@ public static partial class ConnectionValidator
 
     private static void Port(List<FieldError> e, string field, int? value, bool required)
     {
-        if (value is null) { if (required) e.Add(new(field, "Cần nhập cổng trước khi bật kết nối.")); }
-        else if (value is < 1 or > 65535) e.Add(new(field, "Cổng phải nằm trong khoảng 1–65535."));
+        if (value is null) { if (required) e.Add(new(field, "Cần nhập cổng trước khi bật kết nối.", "PORT_REQUIRED")); }
+        else if (value is < 1 or > 65535) e.Add(new(field, "Cổng phải nằm trong khoảng 1–65535.", "PORT_RANGE"));
     }
 
     private static void Range(List<FieldError> e, string field, int? value, int min, int max, string label)
     {
-        if (value is not null && (value < min || value > max)) e.Add(new(field, $"{label} phải nằm trong khoảng {min}–{max}."));
+        if (value is not null && (value < min || value > max)) e.Add(new(field, $"{label} phải nằm trong khoảng {min}–{max}.", "RANGE", FieldArgs.Of(("min", min), ("max", max))));
     }
 
     private static void Timeout(List<FieldError> e, int? value, bool required, int min, int max)
     {
-        if (value is null) { if (required) e.Add(new("timeoutMs", "Cần nhập timeout trước khi bật kết nối.")); }
-        else if (value < min || value > max) e.Add(new("timeoutMs", $"Timeout phải nằm trong khoảng {min}–{max} ms."));
+        if (value is null) { if (required) e.Add(new("timeoutMs", "Cần nhập timeout trước khi bật kết nối.", "TIMEOUT_REQUIRED")); }
+        else if (value < min || value > max) e.Add(new("timeoutMs", $"Timeout phải nằm trong khoảng {min}–{max} ms.", "TIMEOUT_RANGE", FieldArgs.Of(("min", min), ("max", max))));
     }
 }

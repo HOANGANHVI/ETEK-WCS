@@ -494,6 +494,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("MessageTemplate")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1083,6 +1087,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Device")
                         .HasColumnType("text");
 
@@ -1102,6 +1109,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Message")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("MessageTemplate")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset>("OccurredAt")

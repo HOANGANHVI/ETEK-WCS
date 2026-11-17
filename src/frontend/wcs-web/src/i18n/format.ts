@@ -4,6 +4,12 @@ import { t } from './index'
 /** Date/number locale follows the interface language. */
 const locale = () => (getLang() === 'en' ? 'en-GB' : 'vi-VN')
 
+/** Name shown for an account: the built-in default administrator name follows the language; any other name is shown exactly as entered. */
+export function displayNameOf(name: string): string {
+  return name === DEFAULT_ADMIN_NAME ? t('users.defaultAdminName') : name
+}
+const DEFAULT_ADMIN_NAME = 'Quản trị viên'   // the name the system gives the bootstrap administrator (AuthInfrastructure)
+
 export function formatNumber(n: number) {
   return n.toLocaleString(locale())
 }

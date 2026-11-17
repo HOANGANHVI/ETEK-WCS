@@ -109,7 +109,7 @@ public sealed class HandshakeCoordinator(IPlcRuntime runtime, IOptions<PlcRuntim
             {
                 var target = handler.Find(rule.Signal);
                 if (target is null || target.Direction != PlcSignalDirection.SoftwareToPlc || target.DataType != PlcDataType.Bool)
-                { lock (m) m.LastError = $"Rule {rule.Signal}: không phải tín hiệu BOOL chiều Phần mềm → PLC."; continue; }
+                { lock (m) m.LastError = $"[HANDSHAKE_RULE_INVALID] Rule {rule.Signal}: không phải tín hiệu BOOL chiều Phần mềm → PLC."; continue; }
                 var current = handler.Read(rule.Signal);
                 var setNow = Truthy(handler.Read(rule.SetWhenSignal), rule.SetWhenValue);
                 var resetNow = !string.IsNullOrEmpty(rule.ResetWhenSignal) && Truthy(handler.Read(rule.ResetWhenSignal), rule.ResetWhenValue);
@@ -127,8 +127,8 @@ public sealed class HandshakeCoordinator(IPlcRuntime runtime, IOptions<PlcRuntim
                         m.LastAction = $"{rule.Signal} = {(want.Value ? 1 : 0)}"; m.LastError = r.Success ? null : $"{r.Code}: {r.Message}";
                         if (r.Success) { if (want.Value) m.Active[rule.Signal] = clock.UtcNow; else { m.Active.Remove(rule.Signal); m.TimedOut.Remove(rule.Signal); } }
                     }
-                    if (!r.Success) events.Log(PlcLogLevel.Warning, snap.PlcId, snap.StationId, "HANDSHAKE_WRITE_REFUSED", $"{rule.Signal}: {r.Code}");
-                    else { writes++; events.Log(PlcLogLevel.Info, snap.PlcId, snap.StationId, "HANDSHAKE", $"{rule.Signal} = {(want.Value ? 1 : 0)}"); }
+                    if (!r.Success) events.Log(PlcLogLevel.Warning, snap.PlcId, snap.StationId, "HANDSHAKE_WRITE_REFUSED", $"{rule.Signal}: {r.Code}", WCS.Application.Logging.LogArgs.Of(("signal", rule.Signal), ("code", r.Code)));
+                    else { writes++; events.Log(PlcLogLevel.Info, snap.PlcId, snap.StationId, "HANDSHAKE", $"{rule.Signal} = {(want.Value ? 1 : 0)}", WCS.Application.Logging.LogArgs.Of(("signal", rule.Signal), ("value", want.Value ? 1 : 0))); }
                 }
                 else if (isSet && rule.TimeoutMs is { } t)
                 {
@@ -136,7 +136,7 @@ public sealed class HandshakeCoordinator(IPlcRuntime runtime, IOptions<PlcRuntim
                     {
                         m.Active.TryAdd(rule.Signal, clock.UtcNow);
                         if (clock.UtcNow - m.Active[rule.Signal] > TimeSpan.FromMilliseconds(t) && m.TimedOut.Add(rule.Signal))
-                            events.Log(PlcLogLevel.Warning, snap.PlcId, snap.StationId, "HANDSHAKE_TIMEOUT", $"{rule.Signal} vẫn bật sau {t} ms (chính sách retry chưa được phê duyệt: không tự xử lý).");
+                            events.Log(PlcLogLevel.Warning, snap.PlcId, snap.StationId, "HANDSHAKE_TIMEOUT", $"{rule.Signal} still on after {t} ms (retry policy not approved: no automatic handling).", WCS.Application.Logging.LogArgs.Of(("signal", rule.Signal), ("ms", t)));
                     }
                 }
                 else if (!isSet) lock (m) { m.Active.Remove(rule.Signal); m.TimedOut.Remove(rule.Signal); }

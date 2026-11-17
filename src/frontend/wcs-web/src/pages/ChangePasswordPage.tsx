@@ -6,6 +6,7 @@ import { checkPassword } from '../auth/passwordPolicy'
 import { Button, PageHeader, Panel } from '../components/ui'
 import { useT } from '../i18n'
 import { describeError } from '../i18n/vi'
+import { displayNameOf } from '../i18n/format'
 
 export function ChangePasswordPage({ forced = false }: { forced?: boolean }) {
   const t = useT()
@@ -53,7 +54,7 @@ export function ChangePasswordPage({ forced = false }: { forced?: boolean }) {
   )
 
   if (forced) {
-    return <div className="login-page"><div className="login-card"><h1>{t('auth.cpTitle')}</h1><p className="login-sub">{user?.displayName}</p>{form}</div></div>
+    return <div className="login-page"><div className="login-card"><h1>{t('auth.cpTitle')}</h1><p className="login-sub">{user ? displayNameOf(user.displayName) : ''}</p>{form}</div></div>
   }
   return (
     <>

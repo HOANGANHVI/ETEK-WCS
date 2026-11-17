@@ -97,7 +97,7 @@ export function PlcIoMappingPage() {
         <Async state={points} isEmpty={(d) => d.length === 0} empty={{ title: t('plc.noIo'), hint: t('plc.noIoHint') }}>
           {() => (
             <div className="table-wrap">
-              <table className="grid" aria-label="IO Mapping">
+              <table className="grid" aria-label={t('plc.mappingTable')}>
                 <thead>
                   <tr><th>{t('plc.colPlc')}</th><th>{t('plc.station')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colDescription')}</th><th>{t('plc.colDataType')}</th><th>{t('plc.colDevice')}</th><th>{t('plc.colActualAddress')}</th><th>{t('plc.colPollable')}</th><th>{t('plc.colApproval')}</th><th>{t('plc.colActions')}</th></tr>
                 </thead>

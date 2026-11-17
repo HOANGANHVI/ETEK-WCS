@@ -39,13 +39,13 @@ public sealed class PlcStationSignalService(IPlcRuntime runtime, IOptions<PlcRun
             if (id is not { Quality: PointQuality.Good or PointQuality.Simulated, Value: { Type: PlcDataType.String } s } || string.IsNullOrWhiteSpace((string)s.Value))
             {
                 if (_warned.TryAdd($"{map.Station}:{map.Signal}", true))
-                    events.Log(PlcLogLevel.Warning, handler.PlcId, map.Station, "REQUEST_ID_MISSING", $"{map.Signal} bật nhưng Request_ID chưa đọc được (NEEDS_CONFIRMATION: địa chỉ/encoding). Không tạo nhiệm vụ.");
+                    events.Log(PlcLogLevel.Warning, handler.PlcId, map.Station, "REQUEST_ID_MISSING", $"{map.Signal} is on but Request_ID could not be read (NEEDS_CONFIRMATION: address/encoding). No task created.", WCS.Application.Logging.LogArgs.Of(("signal", map.Signal)));
                 _high[key] = false;                                                                      // look again on the next cycle instead of losing the request
                 continue;
             }
             _warned.TryRemove($"{map.Station}:{map.Signal}", out _);
             result.Add(new StationRequest(map.Station, map.Flow, $"{handler.PlcId}:{map.Station}:{((string)s.Value).Trim()}"));
-            events.Log(PlcLogLevel.Info, handler.PlcId, map.Station, "REQUEST", $"{map.Signal} -> {map.Flow}, Request_ID {((string)s.Value).Trim()}");
+            events.Log(PlcLogLevel.Info, handler.PlcId, map.Station, "REQUEST", $"{map.Signal} -> {map.Flow}, Request_ID {((string)s.Value).Trim()}", WCS.Application.Logging.LogArgs.Of(("signal", map.Signal), ("flow", map.Flow.ToString()), ("requestId", ((string)s.Value).Trim())));
         }
         return Task.FromResult<IReadOnlyList<StationRequest>>(result);
     }
@@ -53,7 +53,7 @@ public sealed class PlcStationSignalService(IPlcRuntime runtime, IOptions<PlcRun
     public Task AcknowledgeRequestAsync(StationRequest request, CancellationToken ct = default)
     {
         // Writing Request_Ack is a handshake rule (NEEDS_CONFIRMATION). Without an approved rule nothing is written.
-        events.Log(PlcLogLevel.Info, null, request.StationCode, "REQUEST_HANDLED", $"{request.RequestKey} đã được WCS ghi nhận (Request_Ack không tự ghi: chưa có quy tắc handshake được duyệt).");
+        events.Log(PlcLogLevel.Info, null, request.StationCode, "REQUEST_HANDLED", $"{request.RequestKey} recorded by WCS (Request_Ack not written: no approved handshake rule).", WCS.Application.Logging.LogArgs.Of(("requestKey", request.RequestKey)));
         return Task.CompletedTask;
     }
 
@@ -61,7 +61,8 @@ public sealed class PlcStationSignalService(IPlcRuntime runtime, IOptions<PlcRun
     {
         // Setting Transfer_Permit is a motion-related control signal: its conditions are NOT approved, so it is never written here.
         events.Log(PlcLogLevel.Warning, null, stationCode, "TRANSFER_PERMIT_NOT_APPROVED",
-            $"Nhiệm vụ {taskId} xin phép {direction} tại {stationCode}: điều kiện bật Transfer_Permit chưa được phê duyệt (NEEDS_CONFIRMATION), không ghi tín hiệu.");
+            $"Task {taskId} requests {direction} permission at {stationCode}: Transfer_Permit conditions are not approved (NEEDS_CONFIRMATION); signal not written.",
+            WCS.Application.Logging.LogArgs.Of(("taskId", taskId), ("direction", direction.ToString()), ("station", stationCode)));
         return Task.CompletedTask;
     }
 }

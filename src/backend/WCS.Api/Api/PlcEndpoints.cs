@@ -46,11 +46,11 @@ public static partial class PlcEndpoints
             var opt = o.Value;
             ProbeResult result;
             if (opt.Mode == PlcRuntimeMode.Simulator)
-                result = new ProbeResult(ConnectionTestOutcome.Simulated, "Simulated", "Chế độ mô phỏng: không có kết nối vật lý, không dùng mạng.");
+                result = new ProbeResult(ConnectionTestOutcome.Simulated, "Simulated", "[PROBE_SIMULATOR_MODE] Chế độ mô phỏng: không có kết nối vật lý, không dùng mạng.");
             else if (!opt.AllowLiveConnection)
-                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "Plc:AllowLiveConnection = false: không mở kết nối tới PLC thật.");
+                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "[LIVE_CONNECTION_DISABLED] Plc:AllowLiveConnection = false: không mở kết nối tới PLC thật.");
             else if (conn.MissingParameters.Count > 0)
-                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "NEEDS_CONFIGURATION: thiếu " + string.Join(", ", conn.MissingParameters));
+                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "[PLC_PARAMS_MISSING] NEEDS_CONFIGURATION: thiếu " + string.Join(", ", conn.MissingParameters));
             else
                 result = await probe.ProbeAsync(ConnectionKind.Plc, conn.IpAddress, conn.Port!.Value, TimeSpan.FromMilliseconds(conn.TimeoutMs!.Value), ct);
             return ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_CONNECTION_TEST", "PlcConnection", plcId, null, () => Task.FromResult(result), res => new { res.Outcome, res.Mode }));

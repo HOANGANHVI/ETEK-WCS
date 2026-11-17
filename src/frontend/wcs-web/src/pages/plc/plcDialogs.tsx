@@ -42,7 +42,7 @@ export function AddressDialog({ point, onClose, onDone }: { point: DialogPoint; 
         <Field label={t('plc.deviceAddress')} error={errors.address} hint={t('plc.deviceAddressHint')}><input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={point.dataType === 'Bool' ? 'M…' : 'D… / W…'} /></Field>
         {isString && <>
           <Field label={t('plc.wordLength')} error={errors.wordLength} hint={t('plc.wordLengthHint')}><input value={words} onChange={(e) => setWords(e.target.value)} inputMode="numeric" /></Field>
-          <Field label="Encoding" error={errors.encoding} hint={t('plc.encodingHint')}><input value={encoding} onChange={(e) => setEncoding(e.target.value)} /></Field>
+          <Field label={t('plc.encodingLabel')} error={errors.encoding} hint={t('plc.encodingHint')}><input value={encoding} onChange={(e) => setEncoding(e.target.value)} /></Field>
         </>}
       </div>
     </Modal>

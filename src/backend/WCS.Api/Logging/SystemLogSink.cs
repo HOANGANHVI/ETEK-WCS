@@ -34,7 +34,7 @@ public static class LogClassifier
         var level = e.Level switch { LogEventLevel.Fatal => LogLevels.Critical, LogEventLevel.Error => LogLevels.Error, LogEventLevel.Warning => LogLevels.Warning, _ => LogLevels.Information };
         var device = Prop(e, "Device") ?? Prop(e, "PlcId") ?? Prop(e, "Agv") ?? Prop(e, "RobotCode");
         return new SystemLogEntry(e.Timestamp, Classify(e, source, eventCode, message), level, source, device, eventCode, message, exception,
-            Prop(e, "CorrelationId") ?? Prop(e, "TraceId"), Details(e), Prop(e, "Host"));
+            Prop(e, "CorrelationId") ?? Prop(e, "TraceId"), Details(e), Prop(e, "Host"), messageTemplate: e.MessageTemplate.Text);
     }
 
     public static string Classify(LogEvent e, string source, string? eventCode, string message)

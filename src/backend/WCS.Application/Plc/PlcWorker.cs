@@ -7,7 +7,8 @@ namespace WCS.Application.Plc;
 /// <summary>Fire-and-forget sink for diagnostics (persisted + pushed to Admin) and realtime events. Never blocks a PLC worker.</summary>
 public interface IPlcEvents
 {
-    void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message);
+    /// <param name="args">Parameters of the event (stored in the details JSON as <c>args</c>) so the UI can phrase the event in the user's language; <paramref name="message"/> stays the raw original text.</param>
+    void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message, IReadOnlyDictionary<string, object?>? args = null);
     void Publish(string name, object payload, bool adminOnly = false);
 }
 
@@ -105,7 +106,8 @@ public sealed class PlcWorker : IAsyncDisposable
         if (changed)
         {
             _events.Publish("PlcStatusChanged", new { plcId = _plcId, state = state.ToString(), mode = _mode.ToString(), reason });
-            _events.Log(state is EndpointState.Faulted ? PlcLogLevel.Warning : PlcLogLevel.Info, _plcId, null, "STATE", $"{_plcId}: {state}{(reason is null ? "" : " - " + reason)}");
+            _events.Log(state is EndpointState.Faulted ? PlcLogLevel.Warning : PlcLogLevel.Info, _plcId, null, "STATE", $"{_plcId}: {state}{(reason is null ? "" : " - " + reason)}",
+                WCS.Application.Logging.LogArgs.Of(("plc", _plcId), ("state", state.ToString()), ("reason", reason)));
         }
     }
 
@@ -127,19 +129,22 @@ public sealed class PlcWorker : IAsyncDisposable
             try
             {
                 await _endpoint.WritePointAsync(w.Point, w.Value, ct);
-                _events.Log(PlcLogLevel.Info, _plcId, w.Point.StationId, "WRITE", $"{w.Point.StationId}/{w.Point.SignalName} = {w.Value}");
+                _events.Log(PlcLogLevel.Info, _plcId, w.Point.StationId, "WRITE", $"{w.Point.StationId}/{w.Point.SignalName} = {w.Value}",
+                    WCS.Application.Logging.LogArgs.Of(("station", w.Point.StationId), ("signal", w.Point.SignalName), ("value", w.Value.ToString())));
                 w.Done.TrySetResult(new WriteResult(true));
             }
             catch (PlcWriteAmbiguousException ex)
             {
                 // Never retried: the PLC may already have executed it. The link was closed by the driver; the main loop reconnects.
-                _events.Log(PlcLogLevel.Error, _plcId, w.Point.StationId, "WRITE_AMBIGUOUS", $"{w.Point.StationId}/{w.Point.SignalName}: {ex.Message} KHÔNG tự động ghi lại; cần đọc lại giá trị để xác nhận.");
+                _events.Log(PlcLogLevel.Error, _plcId, w.Point.StationId, "WRITE_AMBIGUOUS", $"{w.Point.StationId}/{w.Point.SignalName}: {ex.Message} Not retried automatically; read the value back to confirm.",
+                    WCS.Application.Logging.LogArgs.Of(("station", w.Point.StationId), ("signal", w.Point.SignalName), ("error", ex.Message)));
                 w.Done.TrySetResult(new WriteResult(false, "WRITE_AMBIGUOUS", ex.Message, IsAmbiguous: true));
             }
             catch (OperationCanceledException) { w.Done.TrySetResult(new WriteResult(false, "CANCELLED", "Đã hủy.")); throw; }
             catch (Exception ex)
             {
-                _events.Log(PlcLogLevel.Error, _plcId, w.Point.StationId, "WRITE_FAILED", $"{w.Point.StationId}/{w.Point.SignalName}: {ex.Message}");
+                _events.Log(PlcLogLevel.Error, _plcId, w.Point.StationId, "WRITE_FAILED", $"{w.Point.StationId}/{w.Point.SignalName}: {ex.Message}",
+                    WCS.Application.Logging.LogArgs.Of(("station", w.Point.StationId), ("signal", w.Point.SignalName), ("error", ex.Message)));
                 w.Done.TrySetResult(new WriteResult(false, "WRITE_FAILED", ex.Message));
             }
         }
@@ -153,7 +158,7 @@ public sealed class PlcWorker : IAsyncDisposable
         {
             if (!_enabled)
             {
-                _events.Log(PlcLogLevel.Info, _plcId, null, "DISABLED", _disabledReason ?? "disabled");
+                _events.Log(PlcLogLevel.Info, _plcId, null, "DISABLED", _disabledReason ?? "disabled", WCS.Application.Logging.LogArgs.Of(("reason", _disabledReason)));
                 MarkAllDisconnected(null);
                 while (!ct.IsCancellationRequested) { FailPendingWrites("DISABLED", _disabledReason ?? "Kết nối PLC đang tắt."); await _wake.WaitAsync(TimeSpan.FromMilliseconds(500), ct); }
                 return;
@@ -188,10 +193,11 @@ public sealed class PlcWorker : IAsyncDisposable
                     catch (Exception ex)
                     {
                         lock (_gate) _failures++;
-                        SetState(EndpointState.Faulted, "Không kết nối được tới PLC.", ex.Message);
+                        SetState(EndpointState.Faulted, "[PLC_CONNECT_FAILED] Không kết nối được tới PLC.", ex.Message);
                         MarkAllDisconnected(ex.Message);
                         FailPendingWrites("NOT_CONNECTED", "PLC chưa kết nối.");
-                        LogLimited("CONNECT_FAILED", PlcLogLevel.Warning, null, $"Kết nối thất bại: {ex.Message}. Thử lại sau {backoff} ms.");
+                        LogLimited("CONNECT_FAILED", PlcLogLevel.Warning, null, $"Connection failed: {ex.Message}. Retrying in {backoff} ms.",
+                            WCS.Application.Logging.LogArgs.Of(("error", ex.Message), ("backoffMs", backoff)));
                         await _wake.WaitAsync(TimeSpan.FromMilliseconds(backoff), ct);
                         backoff = Math.Min(backoff * 2, _options.ReconnectMaxDelayMs);
                         continue;
@@ -210,14 +216,15 @@ public sealed class PlcWorker : IAsyncDisposable
                         if (changed.Count > 0) _events.Publish("StationIoChanged", station.Snapshot(false, changed));
                         if (readings.Any(r => r.Quality is PointQuality.Good or PointQuality.Simulated)) lock (_gate) _lastSuccess = _clock.UtcNow;
                         var bad = readings.Count(r => r.Quality == PointQuality.Bad);
-                        if (bad > 0) LogLimited("READ_BAD_" + station.StationId, PlcLogLevel.Warning, station.StationId, $"{bad} IO point đọc lỗi: {readings.First(r => r.Quality == PointQuality.Bad).Error}");
+                        if (bad > 0) LogLimited("READ_BAD_" + station.StationId, PlcLogLevel.Warning, station.StationId, $"{bad} IO point(s) failed to read: {readings.First(r => r.Quality == PointQuality.Bad).Error}",
+                            WCS.Application.Logging.LogArgs.Of(("count", bad), ("error", readings.First(r => r.Quality == PointQuality.Bad).Error)));
                     }
                     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                     catch (Exception ex)
                     {
                         // A failure inside one station must not stop the others.
                         station.Apply(station.Points.Select(p => new PointReading(p.Id, null, (p.Address is null || !p.Pollable) && _mode != PlcRuntimeMode.Simulator ? PointQuality.NotConfigured : PointQuality.Bad, ex.Message)).ToList(), _clock.UtcNow, false);
-                        LogLimited("STATION_ERROR_" + station.StationId, PlcLogLevel.Error, station.StationId, $"Lỗi xử lý trạm: {ex.Message}");
+                        LogLimited("STATION_ERROR_" + station.StationId, PlcLogLevel.Error, station.StationId, $"Station processing error: {ex.Message}", WCS.Application.Logging.LogArgs.Of(("error", ex.Message)));
                     }
                     if (_endpoint.State != EndpointState.Connected) { linkLost = true; break; }
                     await DrainWritesAsync(ct);
@@ -228,10 +235,11 @@ public sealed class PlcWorker : IAsyncDisposable
                 {
                     lock (_gate) _failures++;
                     var err = _endpoint.Diagnostics.LastError ?? "link lost";
-                    SetState(EndpointState.Faulted, "Mất kết nối PLC.", err);
+                    SetState(EndpointState.Faulted, "[PLC_LINK_LOST] Mất kết nối PLC.", err);
                     MarkAllDisconnected(err);
                     await _endpoint.DisconnectAsync();
-                    LogLimited("LINK_LOST", PlcLogLevel.Warning, null, $"Mất kết nối: {err}. Thử kết nối lại sau {backoff} ms.");
+                    LogLimited("LINK_LOST", PlcLogLevel.Warning, null, $"Connection lost: {err}. Reconnecting in {backoff} ms.",
+                        WCS.Application.Logging.LogArgs.Of(("error", err), ("backoffMs", backoff)));
                     await _wake.WaitAsync(TimeSpan.FromMilliseconds(backoff), ct);
                     backoff = Math.Min(backoff * 2, _options.ReconnectMaxDelayMs);
                     continue;
@@ -243,7 +251,7 @@ public sealed class PlcWorker : IAsyncDisposable
         catch (OperationCanceledException) { /* stopping */ }
         catch (Exception ex)
         {
-            SetState(EndpointState.Faulted, "Worker dừng do lỗi không mong đợi.", ex.Message);
+            SetState(EndpointState.Faulted, "[PLC_WORKER_CRASHED] Worker dừng do lỗi không mong đợi.", ex.Message);
             _events.Log(PlcLogLevel.Error, _plcId, null, "WORKER_CRASH", ex.ToString());
         }
         finally { FailPendingWrites("STOPPED", "Kết nối PLC đã dừng."); }
@@ -264,7 +272,7 @@ public sealed class PlcWorker : IAsyncDisposable
     }
 
     /// <summary>Same message at most once per minute per key, so a dead PLC does not flood the log.</summary>
-    private void LogLimited(string key, PlcLogLevel level, string? stationId, string message)
+    private void LogLimited(string key, PlcLogLevel level, string? stationId, string message, IReadOnlyDictionary<string, object?>? args = null)
     {
         var now = _clock.UtcNow;
         lock (_gate)
@@ -272,6 +280,6 @@ public sealed class PlcWorker : IAsyncDisposable
             if (_lastLogged.TryGetValue(key, out var t) && now - t < TimeSpan.FromSeconds(60)) return;
             _lastLogged[key] = now;
         }
-        _events.Log(level, _plcId, stationId, key, message);
+        _events.Log(level, _plcId, stationId, key, message, args);
     }
 }

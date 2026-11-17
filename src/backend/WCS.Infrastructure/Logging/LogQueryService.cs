@@ -45,7 +45,8 @@ public sealed class LogQueryService(WcsDbContext db, IClock clock) : ILogQuerySe
     }
 
     private static LogEntryView ToView(LogRow r) =>
-        new(r.EntryId, r.OccurredAt, r.Category, r.Level, r.Source, r.Device, r.Event, LogSanitizer.Redact(r.Message, 2000)!);
+        new(r.EntryId, r.OccurredAt, r.Category, r.Level, r.Source, r.Device, r.Event, LogSanitizer.Redact(r.Message, 2000)!,
+            r.MessageTemplate, LogSanitizer.Redact(r.DetailsJson, 4000));
 
     public async Task<LogPage> SearchAsync(LogSearchQuery query, CancellationToken ct = default)
     {
@@ -90,7 +91,7 @@ public sealed class LogQueryService(WcsDbContext db, IClock clock) : ILogQuerySe
                 if (e is null) return null;
                 var f = Facts(e.DetailsJson);
                 return new LogDetailView(id, "system", e.OccurredAt, e.Category, e.Level, e.Source, e.Device, f.Station, e.EventCode, S(e.Message, 2000)!, S(e.Exception), e.CorrelationId,
-                    f.Ip, f.Port, f.Previous, f.New, f.Kind, f.EndCode, f.Reason, e.Host, null, null, null, null, null, null, null, S(e.DetailsJson));
+                    f.Ip, f.Port, f.Previous, f.New, f.Kind, f.EndCode, f.Reason, e.Host, null, null, null, null, null, null, null, S(e.DetailsJson), e.MessageTemplate);
             }
             case "plc":
             {

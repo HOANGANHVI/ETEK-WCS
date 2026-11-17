@@ -8,6 +8,7 @@ import { DEMO_MODE } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useT, type MsgKey } from '../i18n'
 import { APPROVAL_VI, EXCHANGE_OUTCOME_VI, localizeDeviceMessage, MISSING_PARAM_VI, MODE_TONE, MODE_VI, PHASE_TONE, PHASE_VI } from '../i18n/plc'
+import { describeCoded } from '../i18n/logCatalog'
 import { PlcLogsTab } from './plc/PlcLogsTab'
 import { fmtTime, qualitySummary } from './plc/plcFormat'
 import { QualityBar, StatePill } from './plc/plcUi'
@@ -61,7 +62,7 @@ function RuntimeBanner({ rt }: { rt: PlcOverview['runtime'] }) {
       <Pill tone={MODE_TONE[rt.effectiveMode] ?? 'muted'}>{MODE_VI[rt.effectiveMode] ?? rt.effectiveMode}</Pill>
       {rt.mode !== rt.effectiveMode && <span className="muted">{t('plc.requested', { mode: MODE_VI[rt.mode] ?? rt.mode })}</span>}
       {!rt.running && <Pill tone="warn">{t('plc.runtimeStopped')}</Pill>}
-      <span className="plc-banner-notes">{rt.effectiveMode === 'Simulator' ? null : rt.notes.map((n) => <span key={n}>{n}</span>)}</span>
+      <span className="plc-banner-notes">{rt.effectiveMode === 'Simulator' ? null : rt.notes.map((n) => <span key={n} title={n}>{describeCoded(n)}</span>)}</span>
     </div>
   )
 }
@@ -115,9 +116,9 @@ function PlcCard({ w, isAdmin, real }: { w: PlcWorkerStatus; isAdmin: boolean; r
         {isAdmin && d && <><dt>{t('plc.rowReqFail')}</dt><dd>{d.requests} / {d.failures} / {d.timeouts}</dd><dt>{t('plc.rowLatency')}</dt><dd>{d.lastLatencyMs ?? '—'} ms · {d.lastEndCode === null ? '—' : '0x' + d.lastEndCode.toString(16).toUpperCase().padStart(4, '0')}</dd></>}
       </dl>
       {isAdmin && d && (d.lastFailedExchange || d.lastExchange) && <ExchangeBox last={d.lastExchange} failed={d.lastFailedExchange} />}
-      {w.reason && <div className="notice notice-warn">{localizeDeviceMessage(w.reason)}</div>}
+      {w.reason && <div className="notice notice-warn">{localizeDeviceMessage(describeCoded(w.reason))}</div>}
       {w.missingParameters.length > 0 && <div className="notice notice-warn">{t('plc.missingParams', { list: w.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ') })}</div>}
-      {isAdmin && w.lastError && <div className="notice notice-bad" role="status">{t('plc.lastError', { error: localizeDeviceMessage(w.lastError) })}</div>}
+      {isAdmin && w.lastError && <div className="notice notice-bad" role="status">{t('plc.lastError', { error: localizeDeviceMessage(describeCoded(w.lastError)) })}</div>}
       {real && <QualityBar good={w.goodPoints} configured={w.configuredPoints} total={w.totalPoints} />}
     </section>
   )

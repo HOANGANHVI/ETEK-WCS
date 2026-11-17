@@ -13,12 +13,12 @@ public static class PasswordPolicy
     public static IReadOnlyList<FieldError> Check(string? password, string username, string field = "password")
     {
         var errors = new List<FieldError>();
-        if (string.IsNullOrEmpty(password)) { errors.Add(new FieldError(field, "Cần nhập mật khẩu.")); return errors; }
-        if (password.Length < MinLength) errors.Add(new FieldError(field, $"Mật khẩu phải có ít nhất {MinLength} ký tự."));
-        if (password.Length > MaxLength) errors.Add(new FieldError(field, $"Mật khẩu không được dài quá {MaxLength} ký tự."));
-        if (!password.Any(char.IsLetter) || !password.Any(char.IsDigit)) errors.Add(new FieldError(field, "Mật khẩu phải gồm cả chữ và số."));
+        if (string.IsNullOrEmpty(password)) { errors.Add(new FieldError(field, "Cần nhập mật khẩu.", "PWD_REQUIRED")); return errors; }
+        if (password.Length < MinLength) errors.Add(new FieldError(field, $"Mật khẩu phải có ít nhất {MinLength} ký tự.", "PWD_TOO_SHORT", FieldArgs.Of(("min", MinLength))));
+        if (password.Length > MaxLength) errors.Add(new FieldError(field, $"Mật khẩu không được dài quá {MaxLength} ký tự.", "PWD_TOO_LONG", FieldArgs.Of(("max", MaxLength))));
+        if (!password.Any(char.IsLetter) || !password.Any(char.IsDigit)) errors.Add(new FieldError(field, "Mật khẩu phải gồm cả chữ và số.", "PWD_LETTER_DIGIT"));
         if (!string.IsNullOrEmpty(username) && password.Contains(username, StringComparison.OrdinalIgnoreCase))
-            errors.Add(new FieldError(field, "Mật khẩu không được chứa tên đăng nhập."));
+            errors.Add(new FieldError(field, "Mật khẩu không được chứa tên đăng nhập.", "PWD_CONTAINS_USERNAME"));
         return errors;
     }
 
