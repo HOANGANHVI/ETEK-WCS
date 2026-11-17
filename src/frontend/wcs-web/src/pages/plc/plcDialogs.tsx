@@ -34,10 +34,7 @@ export function AddressDialog({ point, onClose, onDone }: { point: DialogPoint; 
       <Button variant="primary" disabled={busy || !address.trim() || (isString && !words.trim())}
         onClick={() => void run(() => api.plcSetAddress(point.id, { address: address.trim(), wordLength: isString ? Number(words) : null, encoding: isString ? encoding : null }), 'Đã lưu địa chỉ (chưa được xác nhận).')}>Lưu địa chỉ</Button>
     </>}>
-      <p className="dialog-hint">
-        Chỉ nhập địa chỉ <strong>do kỹ sư PLC cấp</strong> cho riêng trạm này. Không dùng địa chỉ tham chiếu của file mẫu (ví dụ M9000, D1500: giống nhau ở mọi trạm).
-        Địa chỉ không được trùng với tín hiệu khác trên cùng PLC; có thể trùng trên PLC khác. Thiết bị hỗ trợ: M (bit) cho BOOL; D, W (word) cho INT/STRING. X/Y chưa được hỗ trợ (ngoài phạm vi, cần xác nhận cơ số với kỹ sư PLC). Địa chỉ W giữ đúng ký hiệu kỹ sư nhập; cơ số W phải được xác nhận ở màn hình Kết nối PLC trước. Nhập địa chỉ không làm tín hiệu được đọc từ PLC: chỉ khi được ghi nhận xác nhận thì mới được polling.
-      </p>
+      <p className="dialog-hint">Chỉ nhập địa chỉ do kỹ sư PLC cấp cho riêng trạm này.</p>
       {general && <div className="notice notice-bad" role="alert">{general}</div>}
       <div className="form-grid single">
         <Field label="Địa chỉ thiết bị" error={errors.address} hint="Ví dụ M100, D2000, W1A"><input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={point.dataType === 'Bool' ? 'M…' : 'D… / W…'} /></Field>

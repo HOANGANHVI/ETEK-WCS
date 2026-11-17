@@ -26,7 +26,7 @@ export function LogsPage() {
   if (DEMO_MODE) {
     return (
       <>
-        <PageHeader title="Nhật ký hệ thống" description="Logging & Diagnostics." />
+        <PageHeader title="Nhật ký hệ thống" />
         <EmptyState title="Không có dữ liệu" hint="Màn hình này đọc nhật ký từ Backend; chưa có kết nối Backend nên không có bản ghi nào để hiển thị." />
       </>
     )
@@ -72,7 +72,7 @@ function LogsScreen() {
 
   return (
     <>
-      <PageHeader title="Nhật ký hệ thống" description="Logging & Diagnostics: lỗi cài đặt và triển khai, khởi động, cơ sở dữ liệu, PLC, RCS/AGV, dịch vụ nền và các thao tác quản trị. Chỉ Admin được xem." actions={<Button onClick={refresh}>Làm mới</Button>} />
+      <PageHeader title="Nhật ký hệ thống" actions={<Button onClick={refresh}>Làm mới</Button>} />
 
       {/* ------------------------------------------------------------------ dashboard */}
       <div className="kpi-row logs-kpis" aria-label="Thống kê nhật ký">
@@ -85,7 +85,7 @@ function LogsScreen() {
       {stats.error && !s && <div className="notice notice-bad" role="alert">Không tải được thống kê: {stats.error}</div>}
 
       <div className="logs-dash">
-        <Panel title="Theo nhóm" subtitle="Chọn một nhóm để lọc bảng bên dưới">
+        <Panel title="Theo nhóm">
           <div className="log-groups">
             {LOG_CATEGORIES.map((c) => (
               <button key={c} type="button" className={`log-group ${category === c ? 'active' : ''}`} aria-pressed={category === c} onClick={() => { setCategory(category === c ? '' : c); setPage(1) }}>
@@ -95,7 +95,7 @@ function LogsScreen() {
             ))}
           </div>
         </Panel>
-        <Panel title="Lỗi gần nhất" subtitle="Mức Lỗi và Nghiêm trọng trong khoảng thời gian đã chọn">
+        <Panel title="Lỗi gần nhất">
           {!s ? <p className="muted pad">Đang tải…</p> : s.latestErrors.length === 0 ? <p className="muted pad">Không có lỗi trong khoảng thời gian này.</p> : (
             <ul className="log-latest">
               {s.latestErrors.map((e) => (
@@ -107,7 +107,7 @@ function LogsScreen() {
             </ul>
           )}
         </Panel>
-        <Panel title="Thiết bị đang có sự cố" subtitle="Thiết bị có cảnh báo/lỗi trong khoảng thời gian đã chọn (không phải trạng thái kết nối hiện tại)">
+        <Panel title="Thiết bị đang có sự cố">
           {!s ? <p className="muted pad">Đang tải…</p> : s.problemDevices.length === 0 ? <p className="muted pad">Không có thiết bị nào ghi nhận cảnh báo hoặc lỗi.</p> : (
             <div className="table-wrap"><table className="grid clickable">
               <thead><tr><th>Thiết bị</th><th>Nhóm</th><th>Lỗi</th><th>Cảnh báo</th><th>Gần nhất</th></tr></thead>

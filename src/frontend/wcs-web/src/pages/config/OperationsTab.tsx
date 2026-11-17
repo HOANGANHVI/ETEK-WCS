@@ -30,7 +30,7 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
   return (
     <div className="ops-stack">
       <div className="ops-two">
-        <Panel title="Chính sách điều phối AGV" subtitle="Chỉ đọc – lấy từ đặc tả và cấu hình triển khai">
+        <Panel title="Chính sách điều phối AGV">
           <table className="grid">
             <tbody>
               <tr><td>Số nhiệm vụ hoạt động trên mỗi AGV</td><td><strong>Tối đa 1 (PER_AGV)</strong></td><td>{approval(ops.policy.concurrencyApproved)}</td></tr>
@@ -40,7 +40,7 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
           </table>
         </Panel>
 
-        <Panel title="Tham số bộ lập lịch và timeout" subtitle="Chỉ đọc – cấu hình trong appsettings.json của Backend">
+        <Panel title="Tham số bộ lập lịch và timeout">
           <dl className="kv2">
             <dt>Chu kỳ quét</dt><dd>{ops.scheduler.tickIntervalMs} ms</dd>
             <dt>Số lần gửi RCS tối đa</dt><dd>{ops.scheduler.maxDispatchAttempts}</dd>
@@ -51,7 +51,7 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
         </Panel>
       </div>
 
-      <Panel title="Quy trình đã triển khai" subtitle="Chỉ đọc – BP-04, A3/A4 và D1/D2 không nằm trong hệ thống" flush>
+      <Panel title="Quy trình đã triển khai" flush>
         <div className="table-wrap">
           <table className="grid">
             <thead><tr><th>Quy trình</th><th>Rack</th><th>AGV</th><th>Trạm được yêu cầu</th><th>Nguồn</th><th>Đích</th><th>Không bind rack tại</th></tr></thead>
@@ -72,7 +72,7 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
         </div>
       </Panel>
 
-      <Panel title="AGV và RCS Robot Code" subtitle="Có thể chỉnh – lưu trong cơ sở dữ liệu" flush>
+      <Panel title="AGV và RCS Robot Code" flush>
         <div className="table-wrap">
           <table className="grid">
             <thead><tr><th>AGV</th><th>Vai trò</th><th>RCS Robot Code</th><th>Sử dụng</th><th>Thao tác</th></tr></thead>
@@ -81,7 +81,7 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
         </div>
       </Panel>
 
-      <Panel title="Cấu hình vị trí" subtitle="Sức chứa chưa có trong đặc tả: cần nhập theo thực tế" flush
+      <Panel title="Cấu hình vị trí" flush
         actions={<Button size="sm" variant="primary" onClick={() => setAdding((v) => !v)}>{adding ? 'Đóng' : 'Thêm vị trí'}</Button>}>
         {adding && <div className="pad"><LocationForm onDone={() => { setAdding(false); onChanged() }} onCancel={() => setAdding(false)} /></div>}
         {ops.locations.length === 0 && !adding ? (

@@ -23,7 +23,7 @@ export function AuditPage() {
 
   return (
     <>
-      <PageHeader title="Nhật ký thao tác" description="Ghi nhận đăng nhập, thao tác nhiệm vụ, thay đổi cấu hình và tài khoản. Không chứa mật khẩu hay thông tin bí mật." />
+      <PageHeader title="Nhật ký thao tác" />
       <Panel title="Nhật ký" flush actions={
         <>
           <input type="search" placeholder="Người thực hiện" aria-label="Lọc theo người thực hiện" value={actor} onChange={(e) => { setActor(e.target.value); setTake(PAGE) }} />

@@ -53,7 +53,6 @@ export function TasksPage() {
     <>
       <PageHeader
         title="Quản lý nhiệm vụ"
-        description="Theo dõi toàn bộ nhiệm vụ vận chuyển, vòng đời trạng thái và các sự kiện PLC/RCS liên quan."
         actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>Tạo nhiệm vụ</Button>}
       />
       <div className={`task-layout ${selectedId ? 'with-detail' : ''}`}>

@@ -15,7 +15,6 @@ export function ConfigPage() {
     <>
       <PageHeader
         title="Cấu hình hệ thống"
-        description="Khai báo kết nối HIK RCS-2000 và các tham số vận hành. Kết nối và địa chỉ PLC được quản lý ở nhóm menu 'Cấu hình PLC'. Cấu hình được lưu bền vững; thông tin xác thực được mã hóa và không bao giờ hiển thị lại."
       />
       <div className="tabs" role="tablist" aria-label="Nhóm cấu hình">
         {TABS.map((t) => (

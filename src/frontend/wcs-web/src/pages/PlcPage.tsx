@@ -32,7 +32,7 @@ export function PlcPage() {
   if (DEMO_MODE) {
     return (
       <>
-        <PageHeader title="Giám sát PLC" description="4 PLC · 16 trạm · 23 tín hiệu IO mỗi trạm." />
+        <PageHeader title="Giám sát PLC" />
         <EmptyState title="Không có dữ liệu PLC" hint="Màn hình này đọc dữ liệu từ Backend; chưa có kết nối Backend nên không có dữ liệu để hiển thị." />
       </>
     )
@@ -40,7 +40,7 @@ export function PlcPage() {
 
   return (
     <>
-      <PageHeader title="Giám sát PLC" description="4 PLC vật lý · 16 trạm · 23 tín hiệu IO mỗi trạm. Mỗi PLC có một kết nối TCP riêng phục vụ 4 trạm của nó." />
+      <PageHeader title="Giám sát PLC" />
       <div className="tabs" role="tablist" aria-label="Nhóm chức năng PLC">
         {TABS.filter((t) => !t.admin || isAdmin).map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'tab active' : 'tab'} onClick={() => setParams({ tab: t.key })}>{t.label}</button>
@@ -78,7 +78,7 @@ function Overview({ isAdmin }: { isAdmin: boolean }) {
           <div className="plc-cards">
             {o.plcs.map((w) => <PlcCard key={w.plcId} w={w} isAdmin={isAdmin} real={real} />)}
           </div>
-          <Panel title="16 trạm" subtitle="Chọn một trạm để xem 23 tín hiệu IO. Trạm chưa có quy trình WCS được duyệt chỉ để giám sát, không tạo nhiệm vụ.">
+          <Panel title="16 trạm">
             <div className="station-grid">
               {o.stations.map((s) => {
                 const state = hs.data?.find((h) => h.stationId === s.stationId)

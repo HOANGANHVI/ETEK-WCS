@@ -113,7 +113,7 @@ function RcsForm({ initial, onChanged }: { initial: RcsConfig; onChanged: () => 
         </div>
       </Panel>
 
-      <Panel title="Kiểm tra kết nối" subtitle="Dùng cấu hình đã lưu">
+      <Panel title="Kiểm tra kết nối">
         <div className="btn-row">
           <Button variant="primary" disabled={dirty || !initial.configured || busy !== null} onClick={() => void test()}>Kiểm tra kết nối</Button>
         </div>

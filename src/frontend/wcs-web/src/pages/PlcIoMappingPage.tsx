@@ -61,7 +61,7 @@ export function PlcIoMappingPage() {
 
   return (
     <>
-      <PageHeader title="Cấu hình địa chỉ IO" description="Địa chỉ PLC thực tế của 368 tín hiệu (4 PLC · 16 trạm · 23 tín hiệu). Khóa định danh: PLC + Trạm + Tín hiệu." />
+      <PageHeader title="Cấu hình địa chỉ IO" />
       {notice && <div className="notice notice-ok" role="status">{notice}</div>}
       <Panel title="Bộ lọc" subtitle={`${counts.total} tín hiệu · ${counts.configured} đã nhập địa chỉ · ${counts.pollable} được polling (Pollable)`}>
         <div className="form-grid">

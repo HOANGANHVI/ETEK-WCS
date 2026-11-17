@@ -22,7 +22,6 @@ export function AgvPage() {
     <>
       <PageHeader
         title="Giám sát AGV"
-        description="Trạng thái kết nối RCS, hoạt động và nhiệm vụ hiện tại của AGV1 (rack đầy) và AGV2 (rack rỗng). Hai AGV có thể chạy song song."
       />
       <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có AGV nào được cấu hình', hint: 'AGV1 và AGV2 được tạo khi khởi động Backend.' }}>
         {(list) => (

@@ -25,7 +25,6 @@ export function UsersPage() {
     <>
       <PageHeader
         title="Quản lý tài khoản"
-        description="Tạo tài khoản, gán vai trò Admin hoặc Operator, kích hoạt/vô hiệu hóa và đặt lại mật khẩu. Không có chức năng tự đăng ký."
         actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>Tạo tài khoản</Button>}
       />
       {message && <div className="notice notice-ok" role="status">{message}</div>}

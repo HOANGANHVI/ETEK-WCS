@@ -90,7 +90,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title={isAdmin ? "Tổng quan quản trị" : "Tổng quan vận hành"} description="Tình hình vận hành của hai AGV, nhiệm vụ vận chuyển và tồn kho rack trong thời gian thực." />
+      <PageHeader title={isAdmin ? "Tổng quan quản trị" : "Tổng quan vận hành"} />
 
       <div className="kpi-row">
         <Kpi label="Tổng số AGV" value={agvList ? kpi.totalAgv : '—'} hint="AGV1 · AGV2" icon={<IconAgv />} />
@@ -102,7 +102,7 @@ export function DashboardPage() {
       </div>
 
       <div className="dash-grid">
-        <Panel title="Giám sát AGV" subtitle="Mỗi AGV chỉ có tối đa một nhiệm vụ hoạt động" className="p-agv">
+        <Panel title="Giám sát AGV" className="p-agv">
           <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có AGV nào được cấu hình', hint: 'AGV1 và AGV2 được tạo khi khởi động Backend.' }}>
             {(list) => (
               <div className="agv-grid">
@@ -131,7 +131,7 @@ export function DashboardPage() {
           </Async>
         </Panel>
 
-        <Panel title="Tổng quan tồn kho" subtitle="Tồn kho do WCS quản lý" className="p-stock">
+        <Panel title="Tổng quan tồn kho" className="p-stock">
           <Async state={locations} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa cấu hình vị trí nào', hint: 'Vị trí và sức chứa là dữ liệu cấu hình.' }}>
             {(list) => (
               <>
@@ -160,7 +160,7 @@ export function DashboardPage() {
           </Async>
         </Panel>
 
-        <Panel title="Nhật ký hoạt động gần nhất" subtitle="Nhiệm vụ và giao dịch tồn kho" className="p-activity" flush>
+        <Panel title="Nhật ký hoạt động gần nhất" className="p-activity" flush>
           {tasks.data === null ? <Async state={tasks} empty={{ title: '' }}>{() => null}</Async> : activities.length === 0 ? (
             <EmptyState title="Chưa có hoạt động nào" hint="Nhật ký sẽ hiển thị khi có nhiệm vụ hoặc thay đổi tồn kho." />
           ) : (

@@ -55,7 +55,7 @@ export function ChangePasswordPage({ forced = false }: { forced?: boolean }) {
   }
   return (
     <>
-      <PageHeader title="Đổi mật khẩu" description="Mật khẩu chỉ được lưu dưới dạng băm một chiều; sau khi đổi, các phiên đăng nhập khác của bạn sẽ bị đăng xuất." />
+      <PageHeader title="Đổi mật khẩu" />
       <Panel title="Đổi mật khẩu của tôi"><div className="pad">{form}</div></Panel>
     </>
   )

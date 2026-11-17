@@ -69,11 +69,10 @@ export function InventoryPage() {
     <>
       <PageHeader
         title="Vị trí và tồn kho"
-        description="Tồn kho rack do WCS quản lý. Vị trí đích chỉ được giữ chỗ khi nhiệm vụ đang chạy và chỉ có rack sau khi xác nhận đã thả."
       />
 
       <div className="inv-top">
-        <Panel title="Sơ đồ vị trí" subtitle="Bấm vào một vị trí để xem chi tiết" className="inv-map">
+        <Panel title="Sơ đồ vị trí" className="inv-map">
           <div className="legend" aria-label="Chú giải">
             <span><i className="slot slot-full">Đ</i>Rack đầy</span>
             <span><i className="slot slot-empty">R</i>Rack rỗng</span>

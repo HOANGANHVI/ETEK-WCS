@@ -22,7 +22,7 @@ export function PlcConnectionsPage() {
   const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
   return (
     <>
-      <PageHeader title="Kết nối PLC" description="Thông số kết nối của 4 PLC vật lý. Địa chỉ từng tín hiệu IO được cấu hình ở màn hình 'Cấu hình địa chỉ IO'; trạng thái và giá trị ở màn hình 'Giám sát PLC'." />
+      <PageHeader title="Kết nối PLC" />
       <PlcConnectionsBody realMode={mode !== 'Simulator'} simulator={mode === 'Simulator'} />
     </>
   )
