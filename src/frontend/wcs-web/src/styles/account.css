@@ -30,3 +30,7 @@
 .profile-form, .pw-form .form-grid { margin-top: 4px; }
 .pw-form { max-width: 520px; }
 .block { display: block; }
+
+/* small avatar in the header account menu */
+.avatar-sm { width: 32px; height: 32px; font-size: 14px; }
+.avatar-sm svg { width: 18px; height: 18px; }

@@ -105,31 +105,26 @@
 .nav-link span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* An expanded sidebar keeps its 224px logo cell in the header, so the compact header starts earlier (<= 1200px) in that state. */
+/* An expanded sidebar keeps its wide logo cell in the header, so the compact header starts earlier (<= 1200px) in that state. */
 @media (max-width: 1200px) {
   .app[data-sidebar='expanded'] .topbar { gap: 10px; padding: 0 10px 0 0; }
-  .app[data-sidebar='expanded'] .conn .label, .app[data-sidebar='expanded'] .clock span, .app[data-sidebar='expanded'] .whoami .who-role, .app[data-sidebar='expanded'] .top-link span { display: none; }
+  .app[data-sidebar='expanded'] .conn .label, .app[data-sidebar='expanded'] .clock span, .app[data-sidebar='expanded'] .user-text .who-role { display: none; }
   .app[data-sidebar='expanded'] .clock { min-width: 0; padding-left: 10px; }
   .app[data-sidebar='expanded'] .clock strong { font-size: 16px; }
-  .app[data-sidebar='expanded'] .top-btn { padding: 0 8px; }
-  .app[data-sidebar='expanded'] .whoami { max-width: 130px; }
-  .app[data-sidebar='expanded'] .who-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
-/* Very narrow windows with the sidebar expanded: a slimmer sidebar that stays in the layout (never over the content), and the header gives up the name block
-   (the account name stays reachable on the User Configuration page) so that the connection status, language, sign-out and clock all still fit. */
+/* Very narrow windows with the sidebar expanded: a slimmer sidebar that stays in the layout (never over the content). */
 @media (max-width: 800px) {
   .app[data-sidebar='expanded'] { --sidebar-w: 184px; }
-  .app[data-sidebar='expanded'] .whoami { display: none; }
 }
 
-/* Narrow windows: the header keeps every control reachable (language, password, sign out) by dropping secondary labels instead of overflowing the page. */
+/* Narrow windows: the header keeps every control reachable (language, account menu) by dropping secondary labels instead of overflowing the page;
+   the account menu shrinks to the avatar (the name is in its tooltip / aria-label and in the dropdown). */
 @media (max-width: 1000px) {
   .topbar { gap: 10px; padding: 0 10px; }
-  .conn .label, .clock span, .whoami .who-role, .top-link span { display: none; }
+  .conn .label, .clock span, .user-text .who-role { display: none; }
+  .user-text { display: none; }
+  .user-btn { padding: 0 6px 0 10px; gap: 6px; }
   .clock { min-width: 0; padding-left: 10px; }
   .clock strong { font-size: 16px; }
-  .top-btn { padding: 0 8px; }
-  .whoami { max-width: 130px; }
-  .who-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }

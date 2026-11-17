@@ -1,15 +1,15 @@
 import { useCallback, useState, type ReactNode, type SyntheticEvent } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { hasRole, useAuth } from '../auth/AuthContext'
 import { DEMO_MODE } from '../config'
 import { DemoDock } from '../demo/DemoDock'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
-import { displayNameOf, formatDate, formatTime } from '../i18n/format'
+import { formatDate, formatTime } from '../i18n/format'
 import { useT, type MsgKey } from '../i18n'
-import { ROLE_SHORT_VI } from '../i18n/vi'
 import { LangSwitch } from './LangSwitch'
+import { UserMenu } from './UserMenu'
 import { plcView, rcsView, type LinkView } from './linkStatus'
 import { useRealtime } from '../realtime/RealtimeProvider'
 import { usePreferences } from '../preferences/PreferencesContext'
@@ -32,6 +32,11 @@ const NAV_PLC: NavItem[] = [
 ]
 
 // Shown to Admin only. Hiding them is a convenience: the API and the routes enforce the same rule independently.
+// Personal group (every role): the signed-in user's own page, kept apart from the WCS operation / configuration groups.
+const NAV_PERSONAL: NavItem[] = [
+  { to: '/account', label: 'nav.userConfig', icon: <IconUser /> },
+]
+
 const NAV_SYSTEM: NavItem[] = [
   { to: '/config', label: 'nav.config', icon: <IconSettings /> },
   { to: '/users', label: 'nav.users', icon: <IconUsers /> },
@@ -42,7 +47,6 @@ const NAV_SYSTEM: NavItem[] = [
 interface NavItem { to: string; label: MsgKey; end?: boolean; icon: ReactNode }
 function TopBar() {
   const t = useT()
-  const { user, logout } = useAuth()
   const now = useClock()
   const linkText = (m: LinkView['text']) => (typeof m === 'string' ? t(m) : m.raw)
   const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
@@ -63,15 +67,8 @@ function TopBar() {
       {DEMO_MODE && <span className="sim-chip" title={t('nav.simChipTitle')}><i />{t('nav.simChip')}</span>}
       <div className="conn" title={t('nav.plcLink')}><span className="label">PLC</span><span className={`led ${plc.tone}`} /><strong>{linkText(plc.text)}</strong></div>
       <div className="conn" title={t('nav.rcsLink')}><span className="label">RCS</span><span className={`led ${rcs.tone}`} /><strong>{linkText(rcs.text)}</strong></div>
-      {user && (
-        <div className="whoami" title={t('nav.loggedInAs', { user: user.username })}>
-          <span className="who-name">{displayNameOf(user.displayName)}</span>
-          <span className="who-role">{ROLE_SHORT_VI[user.role]}</span>
-        </div>
-      )}
-      <Link className="top-link" to="/account" title={t('nav.userConfig')} aria-label={t('nav.userConfig')}><IconUser /><span>{t('nav.userConfig')}</span></Link>
       <LangSwitch />
-      <button type="button" className="top-btn" onClick={() => void logout()}>{t('nav.logout')}</button>
+      <UserMenu />
       <div className="clock"><strong>{formatTime(now.toISOString())}</strong><span>{formatDate(now)}</span></div>
     </header>
   )
@@ -120,6 +117,8 @@ function SideBar() {
         {hasRole(user, 'Admin') && NAV_PLC.map(item)}
         {hasRole(user, 'Admin') && <div className="nav-title">{t('nav.groupSystem')}</div>}
         {hasRole(user, 'Admin') && NAV_SYSTEM.map(item)}
+        <div className="nav-title">{t('nav.groupPersonal')}</div>
+        {NAV_PERSONAL.map(item)}
       </nav>
       <div className="side-foot" title={collapsed ? t('nav.realtime', { status: t(RT_KEY[status]) }) : undefined}>
         <div className="row"><i className={`led ${tone}`} /><span>{t('nav.realtime', { status: t(RT_KEY[status]) })}</span></div>

@@ -6,6 +6,7 @@ import App from './App.tsx'
 import { DEMO_MODE } from './config'
 import { AuthProvider } from './auth/AuthContext'
 import { PreferencesProvider } from './preferences/PreferencesProvider'
+import { ProfileProvider } from './account/ProfileProvider'
 import { RealtimeProvider } from './realtime/RealtimeProvider'
 
 if (DEMO_MODE) {
@@ -28,9 +29,11 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <PreferencesProvider>
-          <RealtimeProvider>
-            <App />
-          </RealtimeProvider>
+          <ProfileProvider>
+            <RealtimeProvider>
+              <App />
+            </RealtimeProvider>
+          </ProfileProvider>
         </PreferencesProvider>
       </AuthProvider>
     </BrowserRouter>

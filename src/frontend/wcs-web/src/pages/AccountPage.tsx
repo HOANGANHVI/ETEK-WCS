@@ -1,11 +1,10 @@
-import { useCallback, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api/client'
+import { useProfile } from '../account/ProfileContext'
 import { ProfilePanel } from '../account/ProfilePanel'
 import { SecurityPanel } from '../account/SecurityPanel'
 import { hasRole, useAuth } from '../auth/AuthContext'
-import { Async, Button, PageHeader, Panel } from '../components/ui'
-import { useApi } from '../hooks/useApi'
+import { Button, PageHeader, Panel } from '../components/ui'
 import { IconMoon, IconPanelLeftClose, IconPanelLeftOpen, IconSun } from '../components/icons'
 import { useT, type MsgKey } from '../i18n'
 import { ROLE_VI } from '../i18n/vi'
@@ -52,18 +51,16 @@ export function AccountPage() {
   const t = useT()
   const { user } = useAuth()
   const prefs = usePreferences()
-  const profile = useApi(useCallback(() => api.profile(), []))
+  const { profile: p, reload } = useProfile()
   if (!user) return null
-  const refresh = () => profile.reload()
 
   return (
     <>
       <PageHeader title={t('account.title')} description={t('account.subtitle')} />
       <div className="account-grid">
-        <Async state={profile} empty={{ title: t('account.notProvided') }}>
-          {(p) => (
+        {!p ? <Panel title={t('account.secProfile')}><div className="pad muted">{t('common.loading')}</div></Panel> : (
             <>
-              <ProfilePanel profile={p} onChanged={refresh} />
+              <ProfilePanel profile={p} onChanged={reload} />
               <SecurityPanel />
               <Panel title={t('account.secRole')}>
                 <div className="pad">
@@ -75,7 +72,6 @@ export function AccountPage() {
               </Panel>
             </>
           )}
-        </Async>
 
         <Panel title={t('account.secPrefs')} className="account-prefs">
           <div className="pad">
