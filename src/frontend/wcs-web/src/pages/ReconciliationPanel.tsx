@@ -7,7 +7,8 @@ import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { Rich } from '../components/Rich'
 import { formatDateTime, formatTime } from '../i18n/format'
-import { describeError, HISTORY_EVENT_VI, RACK_STATUS_VI, reasonVi } from '../i18n/vi'
+import { describeHistory } from '../i18n/logCatalog'
+import { describeError, HISTORY_EVENT_VI, RACK_STATUS_VI } from '../i18n/vi'
 
 /**
  * CR-008B-3: Admin reconciliation of a task whose physical outcome is not proven (for example a cancellation that RCS never confirmed).
@@ -57,7 +58,7 @@ export function ReconciliationPanel({ task, onChanged }: { task: TransportTask; 
             <dl className="kv2">
               <dt>{t('tasks.rowRcsRequest')}</dt><dd className="mono">{d.task.rcsRequestCode}</dd>
               <dt>{t('tasks.rowRcsTask')}</dt><dd className="mono">{d.task.rcsTaskCode ?? t('tasks.rcsNotAccepted')}</dd>
-              <dt>{t('tasks.rcReason')}</dt><dd>{reasonVi(d.task.stateReason)}</dd>
+              <dt>{t('tasks.rcReason')}</dt><dd title={d.task.stateReason ?? undefined}>{describeHistory(d.task.stateReasonCode, d.task.stateReasonArgs, d.task.stateReason)}</dd>
               <dt>{t('tasks.rcRetries')}</dt><dd>{d.rcsRetryCount}{d.rcsLastAttemptAt ? t('tasks.rcLastAttempt', { time: formatDateTime(d.rcsLastAttemptAt) }) : ''}</dd>
               <dt>{t('tasks.rcRack')}</dt><dd>{d.rack ? t('tasks.rcRackInfo', { status: RACK_STATUS_VI[d.rack.status] ?? d.rack.status, location: d.rack.currentLocationCode ?? '—', time: formatDateTime(d.rack.lastConfirmedAt) }) : '—'}</dd>
               <dt>{t('tasks.rcReservations')}</dt>
@@ -69,7 +70,7 @@ export function ReconciliationPanel({ task, onChanged }: { task: TransportTask; 
             {d.rcsEvents.length === 0 ? <p className="muted">{t('tasks.rcNoEvents')}</p> : (
               <ul className="event-list">
                 {d.rcsEvents.map((h) => (
-                  <li key={h.id}><span className="num muted">{formatTime(h.occurredAt)}</span> <span>{HISTORY_EVENT_VI[h.event] ?? h.event}{h.detail ? ` · ${reasonVi(h.detail)}` : ''}</span></li>
+                  <li key={h.id}><span className="num muted">{formatTime(h.occurredAt)}</span> <span>{HISTORY_EVENT_VI[h.event] ?? h.event}{h.detail ? ` · ${describeHistory(h.detailCode, h.detailArgs, h.detail)}` : ''}</span></li>
                 ))}
               </ul>
             )}

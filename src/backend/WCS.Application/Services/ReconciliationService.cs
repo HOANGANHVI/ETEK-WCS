@@ -1,3 +1,4 @@
+using WCS.Domain.Tasks;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
 using WCS.Domain.Common;
@@ -67,7 +68,7 @@ public sealed class ReconciliationService(ITransportTaskRepository tasks, IReser
             var task = await tasks.GetAsync(taskId, t) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Task not found.");
             if (!task.IsTerminal) throw AppException.Rejected("TASK_NOT_FINISHED", "Only finished tasks can be reconciled.");
             if (!task.RequiresReconciliation) throw AppException.Rejected("NO_RECONCILIATION_NEEDED", "Task does not require reconciliation.");
-            task.Note(UnresolvedEvent, $"{actor}: {note}", "Operator", clock.UtcNow);
+            task.Note(UnresolvedEvent, $"{actor}: {note}", "Operator", clock.UtcNow, HistoryDetail.Of("RECONCILIATION_CHECK_UNRESOLVED", ("actor", actor), ("note", note)));
             return 0;
         }, ct);
 }

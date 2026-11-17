@@ -791,6 +791,13 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<string>("DetailArgsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DetailCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("EventName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -916,6 +923,13 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<string>("StateReason")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("StateReasonArgsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("StateReasonCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

@@ -11,9 +11,10 @@ import { DEMO_MODE, ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
 import { useT } from '../i18n'
+import { describeHistory } from '../i18n/logCatalog'
 import { formatDateTime, formatTime } from '../i18n/format'
 import {
-  AGV_ROLE_VI, DEVICE_EVENT_RE, describeError, flowInfo, HISTORY_EVENT_VI, LEG_VI, reasonVi, SOURCE_VI, TASK_STATE_VI, taskCode,
+  AGV_ROLE_VI, DEVICE_EVENT_RE, describeError, flowInfo, HISTORY_EVENT_VI, LEG_VI, SOURCE_VI, TASK_STATE_VI, taskCode,
 } from '../i18n/vi'
 
 const CANCELLABLE: TaskState[] = [
@@ -174,7 +175,7 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
                 <h3>{tr('tasks.secGeneral')}</h3>
                 <dl className="kv2">
                   <dt>{tr('tasks.rowFlow')}</dt><dd><strong>{flow.code}</strong> · {flow.label}</dd>
-                  <dt>{tr('tasks.rowState')}</dt><dd><TaskStatePill state={t.state} /> <span className="muted">{reasonVi(t.stateReason)}</span></dd>
+                  <dt>{tr('tasks.rowState')}</dt><dd><TaskStatePill state={t.state} /> <span className="muted" title={t.stateReason ?? undefined}>{describeHistory(t.stateReasonCode, t.stateReasonArgs, t.stateReason)}</span></dd>
                   <dt>{tr('tasks.rowStation')}</dt><dd>{codes.loc(t.requestLocationId)}</dd>
                   <dt>{tr('tasks.rowRequestKey')}</dt><dd className="mono">{t.requestKey}</dd>
                   <dt>{tr('tasks.rowCreated')}</dt><dd>{formatDateTime(t.createdAt)}</dd>
@@ -252,7 +253,7 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
                                   <TaskStatePill state={h.fromState as TaskState} /><span aria-hidden="true">➜</span><TaskStatePill state={h.toState as TaskState} />
                                 </span>
                               ) : <strong>{HISTORY_EVENT_VI[h.event] ?? h.event}</strong>}
-                              {h.detail && <small>{reasonVi(h.detail)} <span className="muted">· {SOURCE_VI[h.source] ?? h.source}</span></small>}
+                              {h.detail && <small title={h.detail}>{describeHistory(h.detailCode, h.detailArgs, h.detail)} <span className="muted">· {SOURCE_VI[h.source] ?? h.source}</span></small>}
                             </span>
                           </li>
                         )
@@ -272,7 +273,7 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
                       <li key={h.id}>
                         <span className="num muted">{formatTime(h.occurredAt)}</span>
                         <Pill tone="info" dot={false}>{SOURCE_VI[h.source] ?? h.source}</Pill>
-                        <span>{h.toState && h.fromState !== h.toState ? `→ ${TASK_STATE_VI[h.toState as TaskState] ?? h.toState}` : HISTORY_EVENT_VI[h.event] ?? h.event}{h.detail ? ` · ${reasonVi(h.detail)}` : ''}</span>
+                        <span>{h.toState && h.fromState !== h.toState ? `→ ${TASK_STATE_VI[h.toState as TaskState] ?? h.toState}` : HISTORY_EVENT_VI[h.event] ?? h.event}{h.detail ? ` · ${describeHistory(h.detailCode, h.detailArgs, h.detail)}` : ''}</span>
                       </li>
                     ))}
                   </ul>

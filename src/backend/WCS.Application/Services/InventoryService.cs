@@ -40,7 +40,7 @@ public sealed class InventoryService(
 
             reservations.Add(Reservation.ForSourceRack(task.Id, rack.Id, loc.Id, clock.UtcNow));
             task.AssignSource(loc.Id, rack.Id, clock.UtcNow);
-            task.Note("SOURCE_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow);
+            task.Note("SOURCE_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow, HistoryDetail.Of("SOURCE_RESERVED", ("location", loc.Code)));
             return new NoSourceResult(true, loc, rack);
         }
         return new NoSourceResult(false, null, null);
@@ -67,7 +67,7 @@ public sealed class InventoryService(
             reservations.Add(Reservation.ForDestination(task.Id, loc.Id, clock.UtcNow));
             loc.Touch(clock.UtcNow); // concurrency token: two tasks cannot take the last slot at once
             task.AssignDestination(loc.Id, clock.UtcNow);
-            task.Note("DESTINATION_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow);
+            task.Note("DESTINATION_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow, HistoryDetail.Of("DESTINATION_RESERVED", ("location", loc.Code)));
             return loc;
         }
         return null;
@@ -246,7 +246,7 @@ public sealed class InventoryService(
             foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId, actual.Id }.Where(x => x is not null).Distinct())
                 if (await locations.GetAsync(id!.Value, token) is { } l) l.SetReconciliationRequired(false, clock.UtcNow);
             task.MarkReconciled(clock.UtcNow);
-            task.Note("RECONCILED", $"actual={actual.Code}; by={user}; {note}", "Operator", clock.UtcNow);
+            task.Note("RECONCILED", $"actual={actual.Code}; by={user}; {note}", "Operator", clock.UtcNow, HistoryDetail.Of("RECONCILED", ("actual", actual.Code), ("by", user), ("note", note)));
             return true;
         }, ct);
         await notifier.PublishAsync([new WcsEvent("InventoryChanged", new { taskId, reason = "reconciled" })], ct);

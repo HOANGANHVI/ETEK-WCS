@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "i18n:check": "node scripts/check-i18n.mjs",
+    "i18n:test": "node scripts/run-i18n-smoke.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -94,6 +94,9 @@ export interface TransportTask {
   leg: string
   plcPermissionGranted: boolean
   stateReason: string | null
+  /** Stable code of the state reason and its parameters (null: show `stateReason` as it is). */
+  stateReasonCode?: string | null
+  stateReasonArgs?: Record<string, string> | null
   rcsRequestCode: string
   rcsTaskCode: string | null
   requiresReconciliation: boolean
@@ -122,6 +125,9 @@ export interface TaskHistory {
   toState: string | null
   event: string
   detail: string | null
+  /** Stable code of the detail + parameters (null: show `detail` as it is). */
+  detailCode?: string | null
+  detailArgs?: Record<string, string> | null
   source: string
   occurredAt: string
 }

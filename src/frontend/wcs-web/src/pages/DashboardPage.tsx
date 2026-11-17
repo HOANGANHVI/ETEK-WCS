@@ -10,6 +10,7 @@ import { useClock } from '../hooks/useClock'
 import { isActive, useCodeMaps } from '../hooks/useLookups'
 import { formatTime } from '../i18n/format'
 import { useT } from '../i18n'
+import { describeHistory } from '../i18n/logCatalog'
 import { flowInfo, INVENTORY_EVENT_VI, reasonVi, TASK_GROUPS, TASK_STATE_VI, taskCode, type Tone } from '../i18n/vi'
 
 const EVENTS_TASK = ['TaskCreated', 'TaskStateChanged'] as const
@@ -72,7 +73,7 @@ export function DashboardPage() {
         id: `t-${tk.id}-${tk.updatedAt}`, at: tk.updatedAt,
         tone: tk.state === 'Failed' ? 'bad' : tk.state === 'Completed' || tk.state === 'Executing' ? 'ok' : tk.state === 'Cancelled' ? 'muted' : 'warn',
         text: `${taskCode(tk.id)} · ${flowInfo(tk.flow).code} · ${codes.agv(tk.agvId)}: ${TASK_STATE_VI[tk.state]}`,
-        detail: reasonVi(tk.stateReason),
+        detail: describeHistory(tk.stateReasonCode, tk.stateReasonArgs, tk.stateReason),
       })
     }
     for (const x of (tx.data ?? []) as InventoryTransaction[]) {

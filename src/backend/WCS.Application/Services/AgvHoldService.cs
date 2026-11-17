@@ -1,3 +1,4 @@
+using WCS.Domain.Tasks;
 using Microsoft.Extensions.Logging;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
@@ -29,7 +30,8 @@ public sealed class AgvHoldService(IAgvRepository agvs, ITransportTaskRepository
                 throw AppException.Rejected("HOLD_TASK_NOT_FINISHED", "The task that caused the hold is still active; finish or cancel it first.");
             agv.ReleaseDispatchHold();
             if (taskId is { } tid && await tasks.GetAsync(tid, t) is { } task)
-                task.Note("AGV_DISPATCH_HOLD_RELEASED", $"{actor}: inventory reconciled=yes, AGV verified on site=yes. {note.Trim()}", "Operator", clock.UtcNow);
+                task.Note("AGV_DISPATCH_HOLD_RELEASED", $"{actor}: inventory reconciled=yes, AGV verified on site=yes. {note.Trim()}", "Operator", clock.UtcNow,
+                    HistoryDetail.Of("AGV_DISPATCH_HOLD_RELEASED", ("actor", actor), ("note", note.Trim())));
             return new AgvHoldReleaseResult(agv.ToDto(null), taskId, reason, at);
         }, ct);
         // The release is already committed. Starting the next task right away is a convenience: a failure here must not turn a successful release into an error (the scheduler retries on its next tick).

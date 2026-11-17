@@ -136,6 +136,8 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
         b.Property(x => x.RcsRequestCode).HasMaxLength(100).IsRequired();
         b.Property(x => x.RcsTaskCode).HasMaxLength(100);
         b.Property(x => x.StateReason).HasMaxLength(1000);
+        b.Property(x => x.StateReasonCode).HasMaxLength(100);
+        b.Property(x => x.StateReasonArgsJson).HasColumnType("text");
         b.Property(x => x.RequestedBy).HasMaxLength(100);
         b.Property(x => x.Version).IsRowVersion();
         b.Ignore(x => x.IsTerminal);
@@ -171,6 +173,8 @@ internal sealed class TaskHistoryConfiguration : IEntityTypeConfiguration<TaskHi
         b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.EventName).HasMaxLength(100).IsRequired();
         b.Property(x => x.Detail).HasMaxLength(2000);
+        b.Property(x => x.DetailCode).HasMaxLength(100);
+        b.Property(x => x.DetailArgsJson).HasColumnType("text");
         b.Property(x => x.Source).HasMaxLength(50).IsRequired();
         b.HasIndex(x => new { x.TaskId, x.OccurredAt });
     }

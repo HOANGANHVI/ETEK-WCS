@@ -10,6 +10,7 @@ import inventory from './messages/inventory'
 import logs from './messages/logs'
 import nav from './messages/nav'
 import plc from './messages/plc'
+import taskHistory from './messages/taskHistory'
 import tasks from './messages/tasks'
 import users from './messages/users'
 import validation from './messages/validation'
@@ -17,7 +18,7 @@ import validation from './messages/validation'
 export * from './core'
 
 /** One dictionary pair per domain. A key is `<domain>.<name>`; the English dictionary must contain exactly the Vietnamese keys. */
-const domains = { common, nav, auth, dashboard, agv, tasks, inventory, plc, config, users, logs, validation, codes }
+const domains = { common, nav, auth, dashboard, agv, tasks, inventory, plc, config, users, logs, validation, codes, taskHistory }
 
 type DomainKeys<D extends keyof typeof domains> = `${D}.${Extract<keyof (typeof domains)[D]['vi'], string>}`
 export type MsgKey = { [D in keyof typeof domains]: DomainKeys<D> }[keyof typeof domains]

@@ -27,7 +27,7 @@ const rel = (f) => path.relative(web, f).replaceAll('\\', '/')
 const messagesDir = path.join(src, 'i18n', 'messages')
 const feFiles = walk(src).filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes(`${path.sep}messages${path.sep}`))
 const feText = feFiles.map(read).join('\n')
-const dynamicPrefixes = ['codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_']
+const dynamicPrefixes = ['taskHistory.d_', 'codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_']
 const dictKeys = new Set()
 let keyCount = 0
 for (const f of fs.readdirSync(messagesDir)) {
@@ -48,7 +48,7 @@ for (const f of fs.readdirSync(messagesDir)) {
   }
   for (const k of Object.keys(en)) if (!(k in vi)) fail('dict', `${domain}.${k} missing in VI`)
 }
-for (const m of feText.matchAll(/\bt\(\s*'((?:common|nav|auth|dashboard|agv|tasks|inventory|plc|config|users|logs|validation|codes)\.\w+)'/g))
+for (const m of feText.matchAll(/\bt\(\s*'((?:common|nav|auth|dashboard|agv|tasks|inventory|plc|config|users|logs|validation|codes|taskHistory)\.\w+)'/g))
   if (!dictKeys.has(m[1])) fail('dict', `t('${m[1]}') has no dictionary entry`)
 
 /* ------------------------------------------------------------------ 2. hardcoded text */
@@ -140,6 +140,16 @@ if (!fs.existsSync(backend)) { notes.push('backend source not found: backend cod
   for (const c of fieldCodes) if (!codesText.includes(`field_${c}`)) fail('field-error', `field error code ${c} has no translation (messages/codes.ts field_${c})`)
   const codedTexts = grep(/"\[([A-Z][A-Z0-9_]+)\]/g)
   for (const c of codedTexts) if (!codesText.includes(`text_${c}:`)) fail('coded-text', `coded text [${c}] has no translation (messages/codes.ts text_${c})`)
+
+  // 3e2. task history detail codes (written by the backend as HistoryDetail codes; read-side formats in Domain/Tasks/HistoryDetail.cs)
+  const historyCodes = uniq([
+    ...grep(/HistoryDetail\.Of\(\s*"([A-Z][A-Z0-9_]+)"/g),
+    ...all.filter((x) => x.f.endsWith('HistoryDetail.cs')).flatMap(({ s }) => [...s.matchAll(/"([A-Z][A-Z0-9_]{3,})"/g)].map((m) => m[1])),
+    'RCS_REJECTED', 'RCS_CONTINUE_REJECTED', 'QUEUED_AGV_HOLD', 'QUEUED_AGV_BUSY',
+  ])
+  const historyText = read(path.join(src, 'i18n', 'messages', 'taskHistory.ts'))
+  for (const c of historyCodes) if (!historyText.includes(`d_${c}:`)) fail('history-detail', `task history detail code ${c} has no translation (messages/taskHistory.ts d_${c})`)
+  notes.push(`backend: ${historyCodes.length} task history detail codes`)
 
   // 3f. persisted system-log templates
   const tplFile = read(path.join(src, 'i18n', 'systemLogTemplates.ts'))

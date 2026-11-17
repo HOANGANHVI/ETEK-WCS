@@ -52,6 +52,9 @@ public class TransportTask
     public TaskLeg CurrentLeg { get; private set; }
     public bool PlcPermissionGranted { get; private set; }
     public string? StateReason { get; private set; }
+    /// <summary>Stable code of the state reason and its parameters (JSON); null when the reason is a raw external text. <see cref="StateReason"/> keeps the original English text.</summary>
+    public string? StateReasonCode { get; private set; }
+    public string? StateReasonArgsJson { get; private set; }
     public string? RequestedBy { get; private set; }
 
     /// <summary>Unique request code sent to RCS (idempotent task creation).</summary>
@@ -83,31 +86,33 @@ public class TransportTask
     public bool IsTerminal => TaskStateMachine.IsTerminal(State);
     public bool OccupiesAgv => TaskStateMachine.OccupiesAgv(State);
 
-    public void TransitionTo(TaskState next, string reason, string source, DateTimeOffset now)
+    public void TransitionTo(TaskState next, string reason, string source, DateTimeOffset now, HistoryDetail? code = null)
     {
+        code ??= HistoryDetail.FromCodedReason(reason);
         if (!TaskStateMachine.CanTransition(State, next)) throw new InvalidTaskTransitionException(State, next);
         var prev = State;
         State = next;
         // a terminal task keeps its final retry count / last attempt time (shown to the Admin who reconciles it); every other state starts a new series
         if (!TaskStateMachine.IsTerminal(next)) { RcsRetryCount = 0; RcsLastAttemptAt = null; }
         StateReason = reason;
+        StateReasonCode = code?.Code; StateReasonArgsJson = code?.ArgsJson;
         StateEnteredAt = now;
         UpdatedAt = now;
         if (TaskStateMachine.IsTerminal(next)) FinishedAt = now;
-        _history.Add(new TaskHistoryEntry(Id, prev, next, "STATE_CHANGED", reason, source, now));
+        _history.Add(new TaskHistoryEntry(Id, prev, next, "STATE_CHANGED", reason, source, now, code));
     }
 
-    public void Note(string eventName, string? detail, string source, DateTimeOffset now)
+    public void Note(string eventName, string? detail, string source, DateTimeOffset now, HistoryDetail? code = null)
     {
         UpdatedAt = now;
-        _history.Add(new TaskHistoryEntry(Id, State, State, eventName, detail, source, now));
+        _history.Add(new TaskHistoryEntry(Id, State, State, eventName, detail, source, now, code ?? HistoryDetail.FromCodedReason(detail)));
     }
 
     /// <summary>Most recent history entry (insertion order breaks ties between identical timestamps).</summary>
     public TaskHistoryEntry? LastHistory => _history.Select((h, i) => (h, i)).OrderByDescending(x => x.h.OccurredAt).ThenByDescending(x => x.i).Select(x => x.h).FirstOrDefault();
 
     /// <summary>CR-008A: records the note only when it differs from the latest history entry, so a repeated identical outcome never floods the history.</summary>
-    public bool NoteIfChanged(string eventName, string? detail, string source, DateTimeOffset now)
+    public bool NoteIfChanged(string eventName, string? detail, string source, DateTimeOffset now, HistoryDetail? code = null)
     {
         // compared with every entry of the most recent timestamp, so the result does not depend on the order the history was loaded in
         if (_history.Count > 0)
@@ -115,7 +120,7 @@ public class TransportTask
             var latest = _history.Max(h => h.OccurredAt);
             if (_history.Any(h => h.OccurredAt == latest && h.EventName == eventName && h.Detail == detail)) return false;
         }
-        Note(eventName, detail, source, now);
+        Note(eventName, detail, source, now, code);
         return true;
     }
 
@@ -184,10 +189,10 @@ public class TransportTask
         DropConfirmedAt = now; PlcPermissionGranted = false; UpdatedAt = now;
     }
 
-    public void RequireReconciliation(string detail, DateTimeOffset now)
+    public void RequireReconciliation(string detail, DateTimeOffset now, HistoryDetail? code = null)
     {
         RequiresReconciliation = true; UpdatedAt = now;
-        _history.Add(new TaskHistoryEntry(Id, State, State, "RECONCILIATION_REQUIRED", detail, "WCS", now));
+        _history.Add(new TaskHistoryEntry(Id, State, State, "RECONCILIATION_REQUIRED", detail, "WCS", now, code ?? HistoryDetail.FromCodedReason(detail)));
     }
 
     public void MarkReconciled(DateTimeOffset now)

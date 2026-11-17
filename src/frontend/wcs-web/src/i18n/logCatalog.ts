@@ -11,7 +11,7 @@ import type { FieldError } from '../api/configTypes'
 import { getLang, type Params } from './core'
 import { hasMessage, t, type MsgKey } from './index'
 import { SYSTEM_LOG_TEMPLATES } from './systemLogTemplates'
-import { AUDIT_ACTION_VI, errorTextForCode } from './vi'
+import { AUDIT_ACTION_VI, errorTextForCode, LEG_VI, TASK_STATE_VI } from './vi'
 
 const key = (k: string) => k as MsgKey
 
@@ -71,6 +71,27 @@ export function localizeAuditDetail(detail: string | null | undefined): string {
 
 /** Headline of an audit action (the action code is the stable event code). */
 export const auditActionLabel = (action: string) => AUDIT_ACTION_VI[action] ?? action
+
+/* ------------------------------------------------------------------ task history */
+/**
+ * Task history detail / state reason in the selected language, from the stable code and its parameters. Without a code (an external RCS message, or text that could not
+ * be identified reliably) the original text is returned unchanged. The same function serves entries written before and after codes existed.
+ */
+export function describeHistory(code: string | null | undefined, args: Record<string, string> | null | undefined, raw: string | null | undefined): string {
+  if (!code || !hasMessage(key(`taskHistory.d_${code}`))) return raw ?? ''
+  const p = str(args)
+  if (typeof p.leg === 'string') p.leg = LEG_VI[p.leg] ?? p.leg
+  if (typeof p.state === 'string') p.state = TASK_STATE_VI[p.state as keyof typeof TASK_STATE_VI] ?? p.state
+  // the hold reason is itself a reason code (e.g. RCS_ENDED_WITHOUT_DROP): shown in words when known
+  if (code === 'AGV_DISPATCH_HOLD' && typeof p.reason === 'string') p.reason = describeReasonCode(p.reason)
+  return t(key(`taskHistory.d_${code}`), p)
+}
+
+/** A reason that is itself a backend reason code (the AGV hold reason): translated when the code is known, otherwise as stored. */
+export function describeReasonCode(text: string | null | undefined): string {
+  if (!text) return ''
+  return /^[A-Z][A-Z0-9_]+$/.test(text) && hasMessage(key(`taskHistory.d_${text}`)) ? t(key(`taskHistory.d_${text}`)) : text
+}
 
 /* ------------------------------------------------------------------ log entries */
 export interface LogLike {
