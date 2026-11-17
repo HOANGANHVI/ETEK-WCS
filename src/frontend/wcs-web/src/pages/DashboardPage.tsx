@@ -103,7 +103,7 @@ export function DashboardPage() {
 
       <div className="dash-grid">
         <Panel title="Giám sát AGV" className="p-agv">
-          <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có AGV nào được cấu hình', hint: 'AGV1 và AGV2 được tạo khi khởi động Backend.' }}>
+          <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có AGV', hint: 'Danh sách AGV sẽ hiển thị khi hệ thống khởi tạo xong.' }}>
             {(list) => (
               <div className="agv-grid">
                 {list.map((a) => {
@@ -132,7 +132,7 @@ export function DashboardPage() {
         </Panel>
 
         <Panel title="Tổng quan tồn kho" className="p-stock">
-          <Async state={locations} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa cấu hình vị trí nào', hint: 'Vị trí và sức chứa là dữ liệu cấu hình.' }}>
+          <Async state={locations} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có vị trí lưu trữ', hint: 'Thiết lập vị trí và sức chứa tại mục Cấu hình.' }}>
             {(list) => (
               <>
                 <dl className="stat-grid">

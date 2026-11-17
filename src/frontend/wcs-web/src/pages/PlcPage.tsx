@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Async, EmptyState, PageHeader, Panel, Pill } from '../components/ui'
 import { DEMO_MODE } from '../config'
 import { useApi } from '../hooks/useApi'
-import { APPROVAL_VI, EXCHANGE_OUTCOME_VI, MISSING_PARAM_VI, MODE_TONE, MODE_VI, PHASE_TONE, PHASE_VI } from '../i18n/plc'
+import { APPROVAL_VI, EXCHANGE_OUTCOME_VI, localizeDeviceMessage, MISSING_PARAM_VI, MODE_TONE, MODE_VI, PHASE_TONE, PHASE_VI } from '../i18n/plc'
 import { PlcLogsTab } from './plc/PlcLogsTab'
 import { fmtTime, qualitySummary } from './plc/plcFormat'
 import { QualityBar, StatePill } from './plc/plcUi'
@@ -110,9 +110,9 @@ function PlcCard({ w, isAdmin, real }: { w: PlcWorkerStatus; isAdmin: boolean; r
         {isAdmin && d && <><dt>Yêu cầu / lỗi / timeout</dt><dd>{d.requests} / {d.failures} / {d.timeouts}</dd><dt>Độ trễ · End code</dt><dd>{d.lastLatencyMs ?? '—'} ms · {d.lastEndCode === null ? '—' : '0x' + d.lastEndCode.toString(16).toUpperCase().padStart(4, '0')}</dd></>}
       </dl>
       {isAdmin && d && (d.lastFailedExchange || d.lastExchange) && <ExchangeBox last={d.lastExchange} failed={d.lastFailedExchange} />}
-      {w.reason && <div className="notice notice-warn">{w.reason}</div>}
-      {w.missingParameters.length > 0 && <div className="notice notice-warn">NEEDS_CONFIGURATION: {w.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ')}</div>}
-      {isAdmin && w.lastError && <div className="notice notice-bad" role="status">Lỗi gần nhất: {w.lastError}</div>}
+      {w.reason && <div className="notice notice-warn">{localizeDeviceMessage(w.reason)}</div>}
+      {w.missingParameters.length > 0 && <div className="notice notice-warn">Cần bổ sung thông số: {w.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ')}</div>}
+      {isAdmin && w.lastError && <div className="notice notice-bad" role="status">Lỗi gần nhất: {localizeDeviceMessage(w.lastError)}</div>}
       {real && <QualityBar good={w.goodPoints} configured={w.configuredPoints} total={w.totalPoints} />}
     </section>
   )

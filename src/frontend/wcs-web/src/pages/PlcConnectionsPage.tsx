@@ -35,7 +35,7 @@ function PlcConnectionsBody({ realMode, simulator }: { realMode: boolean; simula
   return (
     <>
       {message && <div className="notice notice-ok" role="status">{message}</div>}
-      <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có PLC nào', hint: 'Danh mục IO chưa được nạp (kiểm tra migration và seeder).' }}>
+      <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có PLC nào', hint: 'Danh mục PLC chưa sẵn sàng. Vui lòng liên hệ quản trị hệ thống.' }}>
         {(rows) => (
           <div className="plc-config-grid">
             {rows.map((c) => (
@@ -58,7 +58,7 @@ function ConnectionSummary({ c, onEdit, realMode, simulator }: { c: PlcConnectio
   const [probe, setProbe] = useState<ProbeResultView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(describeError(e)) } finally { setBusy(false) } }
-  const row = (k: string, v: string | number | null) => <><dt>{k}</dt><dd>{v === null || v === '' ? <span className="muted">chưa cấu hình</span> : v}</dd></>
+  const row = (k: string, v: string | number | null) => <><dt>{k}</dt><dd>{v === null || v === '' ? <span className="muted">Chưa thiết lập</span> : v}</dd></>
   return (
     <>
       <dl className="kv2">
@@ -70,7 +70,7 @@ function ConnectionSummary({ c, onEdit, realMode, simulator }: { c: PlcConnectio
         <dt>Bật kết nối</dt><dd>{c.enabled ? <Pill tone="ok">Đã bật</Pill> : <Pill tone="muted">Đang tắt</Pill>}</dd>
       </dl>
       {c.missingParameters.length > 0 && (
-        <div className="notice notice-warn">NEEDS_CONFIGURATION – còn thiếu: {c.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ')}.</div>
+        <div className="notice notice-warn">Cần bổ sung thông số: {c.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ')}.</div>
       )}
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
       {probe && <div className={`notice ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>Kiểm tra ({probe.mode}): {probe.message}{probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : ''}</div>}
@@ -131,10 +131,10 @@ function ConnectionForm({ c, onCancel, onSaved, realMode }: { c: PlcConnection; 
         {num('Timeout kết nối (ms)', 'connectTimeout', 'connectTimeoutMs', 'Tùy chọn, 100–60000. Để trống = timeout chung.')}
         {num('Timeout đọc (ms)', 'readTimeout', 'readTimeoutMs', 'Tùy chọn, 100–60000. Để trống = timeout chung.')}
         {num('Timeout ghi (ms)', 'writeTimeout', 'writeTimeoutMs', 'Tùy chọn, 100–60000. Lệnh ghi không bao giờ tự gửi lại.')}
-        <Field label="Cơ số địa chỉ X/Y" error={errors.xyAddressBase} hint="NEEDS_CONFIRMATION. MELSEC-Q thường dùng thập lục phân; FX/iQ-F dùng bát phân. Không có mặc định.">
+        <Field label="Cơ số địa chỉ X/Y" error={errors.xyAddressBase} hint="Chờ kỹ sư PLC xác nhận. MELSEC-Q thường dùng thập lục phân; FX/iQ-F dùng bát phân.">
           <select value={f.xyBase} onChange={set('xyBase')}><option value="">— Chưa xác nhận —</option><option value="8">Bát phân (X10 = 8)</option><option value="16">Thập lục phân (X10 = 16)</option></select>
         </Field>
-        <Field label="Cơ số địa chỉ W" error={errors.wAddressBase} hint="NEEDS_CONFIRMATION. Cần cho địa chỉ thanh ghi liên kết W. Không có mặc định.">
+        <Field label="Cơ số địa chỉ W" error={errors.wAddressBase} hint="Chờ kỹ sư PLC xác nhận. Áp dụng cho địa chỉ thanh ghi liên kết W.">
           <select value={f.wBase} onChange={set('wBase')}><option value="">— Chưa xác nhận —</option><option value="10">Thập phân (W10 = 10)</option><option value="16">Thập lục phân (W10 = 16)</option></select>
         </Field>
         {num('Chu kỳ đọc (ms)', 'poll', 'pollingIntervalMs', '50–60000')}

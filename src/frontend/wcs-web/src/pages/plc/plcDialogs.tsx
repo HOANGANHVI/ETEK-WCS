@@ -88,7 +88,7 @@ export function SimDialog({ point, onClose, onDone }: { point: DialogPoint; onCl
     catch (e) { setError(describeError(e)) } finally { setBusy(false) }
   }
   return (
-    <Modal title={`Giả lập phía PLC: ${point.stationId}/${point.signalName}`} onClose={onClose} footer={<>
+    <Modal title={`Mô phỏng phía PLC: ${point.stationId}/${point.signalName}`} onClose={onClose} footer={<>
       <Button onClick={onClose}>Bỏ qua</Button>
       <Button variant="primary" disabled={busy || !parsed || !parsed.ok} onClick={() => void submit()}>Đặt giá trị mô phỏng</Button>
     </>}>

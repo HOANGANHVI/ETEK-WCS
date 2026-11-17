@@ -85,7 +85,7 @@ function OperationsView({ ops, onChanged }: { ops: OperationsView; onChanged: ()
         actions={<Button size="sm" variant="primary" onClick={() => setAdding((v) => !v)}>{adding ? 'Đóng' : 'Thêm vị trí'}</Button>}>
         {adding && <div className="pad"><LocationForm onDone={() => { setAdding(false); onChanged() }} onCancel={() => setAdding(false)} /></div>}
         {ops.locations.length === 0 && !adding ? (
-          <div className="state state-empty"><div><strong>Chưa có vị trí nào</strong><span>Bấm “Thêm vị trí” để khai báo A1, A2, B1… theo thực tế nhà máy.</span></div></div>
+          <div className="state state-empty"><div><strong>Chưa có vị trí nào</strong><span>Quản lý danh sách vị trí lưu trữ theo sơ đồ bố trí nhà máy.</span></div></div>
         ) : (
           <div className="table-wrap">
             <table className="grid">

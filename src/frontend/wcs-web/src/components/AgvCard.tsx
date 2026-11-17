@@ -29,7 +29,7 @@ export function AgvCard({ agv, task, lastTask, code, now, compact, onChanged }: 
       <header className="agv-head">
         <div className="agv-name">
           <span className={`agv-badge ${agv.role === 'FullRack' ? 'full' : 'empty'}`}>{agv.code}</span>
-          <div><strong>{AGV_ROLE_VI[agv.role]}</strong>{!compact && <small>Mã robot RCS: {agv.rcsRobotCode ?? 'chưa cấu hình'}</small>}</div>
+          <div><strong>{AGV_ROLE_VI[agv.role]}</strong>{!compact && <small>Mã robot RCS: {agv.rcsRobotCode ?? 'Chưa thiết lập'}</small>}</div>
         </div>
         <div className="agv-states">{activity(agv)}<ConnectionPill value={agv.connectionStatus} /></div>
       </header>

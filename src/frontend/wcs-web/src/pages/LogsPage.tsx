@@ -229,7 +229,7 @@ function LogDetailDialog({ id, onClose }: { id: string; onClose: () => void }) {
           {detail.beforeJson && <><strong>Trước</strong><pre className="log-pre">{pretty(detail.beforeJson)}</pre></>}
           {detail.afterJson && <><strong>Sau</strong><pre className="log-pre">{pretty(detail.afterJson)}</pre></>}
           {detail.detailsJson && <><strong>Thuộc tính</strong><pre className="log-pre">{pretty(detail.detailsJson)}</pre></>}
-          <p className="muted small">Nội dung nhạy cảm (mật khẩu, token, cookie) luôn được che bằng ***.</p>
+          <p className="muted small">Thông tin bảo mật được ẩn khi hiển thị.</p>
         </div>
       )}
     </Modal>

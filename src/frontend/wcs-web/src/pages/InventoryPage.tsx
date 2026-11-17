@@ -80,7 +80,7 @@ export function InventoryPage() {
             <span><i className="slot slot-free" />Vị trí trống</span>
             <span><i className="slot slot-unknown">?</i>Chưa xác định</span>
           </div>
-          <Async state={locations} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa cấu hình vị trí nào', hint: 'Vị trí và sức chứa là dữ liệu cấu hình, chưa có trong đặc tả.' }}>
+          <Async state={locations} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có vị trí lưu trữ', hint: 'Thiết lập vị trí và sức chứa theo nhu cầu vận hành thực tế.' }}>
             {() => (
               <div className="map-groups">
                 {groups.map((g) => (

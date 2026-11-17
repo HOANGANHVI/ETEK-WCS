@@ -14,22 +14,29 @@ export const MODE_VI: Record<string, string> = {
 export const MODE_TONE: Record<string, Tone> = { Simulator: 'warn', RealReadOnly: 'warn', RealReadWrite: 'bad' }
 
 export const QUALITY_VI: Record<string, string> = {
-  Unknown: 'Chưa đọc', NotConfigured: 'Chưa cấu hình', Good: 'Tốt', Bad: 'Lỗi đọc', Disconnected: 'Mất kết nối', Simulated: 'Không từ thiết bị thật',
+  Unknown: 'Chưa đọc', NotConfigured: 'Chưa thiết lập', Good: 'Tốt', Bad: 'Lỗi đọc', Disconnected: 'Mất kết nối', Simulated: 'Dữ liệu mô phỏng',
 }
 export const QUALITY_TONE: Record<string, Tone> = {
   Unknown: 'muted', NotConfigured: 'muted', Good: 'ok', Bad: 'bad', Disconnected: 'warn', Simulated: 'warn',
+}
+
+/** Maps raw backend device messages to operator-facing Vietnamese; unknown text is returned unchanged. */
+export function localizeDeviceMessage(msg: string | null | undefined): string {
+  if (!msg) return ''
+  if (/simulated PLC is offline/i.test(msg)) return 'PLC mô phỏng: Chưa kết nối'
+  return msg
 }
 
 export const DIRECTION_VI: Record<string, string> = { PlcToSoftware: 'PLC → Phần mềm', SoftwareToPlc: 'Phần mềm → PLC' }
 export const DATATYPE_VI: Record<string, string> = { Bool: 'BOOL', Int: 'INT', String: 'STRING' }
 
 export const CONFIG_STATUS_VI: Record<string, string> = {
-  NEEDS_CONFIGURATION: 'Cần cấu hình', CONFIGURED: 'Đã nhập địa chỉ', APPROVED: 'Đã xác nhận (kỹ sư PLC)',
+  NEEDS_CONFIGURATION: 'Cần thiết lập', CONFIGURED: 'Đã nhập địa chỉ', APPROVED: 'Đã xác nhận (kỹ sư PLC)',
 }
 export const CONFIG_STATUS_TONE: Record<string, Tone> = { NEEDS_CONFIGURATION: 'warn', CONFIGURED: 'info', APPROVED: 'ok' }
 
 export const PHASE_VI: Record<string, string> = {
-  Unknown: 'Chưa có dữ liệu', Offline: 'Trạm offline', Fault: 'Trạm lỗi', Idle: 'Rảnh', PickupRequested: 'Yêu cầu lấy rack',
+  Unknown: 'Chưa có dữ liệu', Offline: 'Trạm mất kết nối', Fault: 'Trạm lỗi', Idle: 'Rảnh', PickupRequested: 'Yêu cầu lấy rack',
   DeliveryRequested: 'Yêu cầu cấp rack', ConflictingRequests: 'Yêu cầu xung đột', TransferComplete: 'Báo chuyển giao xong',
 }
 export const PHASE_TONE: Record<string, Tone> = {
@@ -61,16 +68,16 @@ export const PLC_ERROR_VI: Record<string, string> = {
   WRITE_BLOCKED_SAFETY: 'Tín hiệu Safety/Interlock và Transfer/Departure Permit bị chặn ghi thử.',
   WRITE_DIRECTION: 'Chỉ ghi được tín hiệu chiều Phần mềm → PLC.',
   READ_ONLY: 'Hệ thống đang ở chế độ chỉ đọc: không được ghi.',
-  WRITE_NOT_ALLOWED: 'Tín hiệu chưa nằm trong danh sách được phép ghi.',
+  WRITE_NOT_ALLOWED: 'Tín hiệu không nằm trong danh sách được phép ghi.',
   NO_ADDRESS: 'Tín hiệu chưa có địa chỉ được xác nhận.',
   NOT_CONNECTED: 'PLC chưa kết nối.',
   NOT_SIMULATOR_MODE: 'Chức năng này không khả dụng.',
-  NOT_AVAILABLE_IN_PRODUCTION: 'Chức năng kỹ thuật này không khả dụng trong môi trường vận hành.',
+  NOT_AVAILABLE_IN_PRODUCTION: 'Chức năng này không khả dụng trong môi trường vận hành.',
   VALUE_INVALID: 'Giá trị không hợp lệ cho kiểu dữ liệu của tín hiệu.',
   TYPE_MISMATCH: 'Giá trị không đúng kiểu dữ liệu của tín hiệu.',
   WRITE_FAILED: 'Ghi xuống PLC thất bại.',
   WRITE_AMBIGUOUS: 'Lệnh ghi đã được gửi nhưng không nhận được xác nhận: KHÔNG được ghi lại tự động. Hãy đọc lại giá trị trên PLC để kiểm tra.',
-  RADIX_UNCONFIRMED: 'Cơ số địa chỉ X/Y/W chưa được kỹ sư PLC xác nhận (NEEDS_CONFIRMATION).',
+  RADIX_UNCONFIRMED: 'Cơ số địa chỉ X/Y/W đang chờ kỹ sư PLC xác nhận.',
   X_READ_ONLY: 'Thiết bị X là ngõ vào phần cứng, không được ghi.',
-  NEEDS_CONFIGURATION: 'Thiếu thông số PLC cần kỹ sư PLC xác nhận.',
+  NEEDS_CONFIGURATION: 'Thiếu thông số PLC, cần bổ sung và xác nhận bởi kỹ sư PLC.',
 }

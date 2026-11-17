@@ -23,7 +23,7 @@ export function AgvPage() {
       <PageHeader
         title="Giám sát AGV"
       />
-      <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có AGV nào được cấu hình', hint: 'AGV1 và AGV2 được tạo khi khởi động Backend.' }}>
+      <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có AGV', hint: 'Danh sách AGV sẽ hiển thị khi hệ thống khởi tạo xong.' }}>
         {(list) => (
           <div className="agv-grid wide">
             {list.map((a) => {

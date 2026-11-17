@@ -3,7 +3,7 @@ import { api } from '../../api/client'
 import type { HandshakeState } from '../../api/plcTypes'
 import { Async, Button, Panel, Pill } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
-import { APPROVAL_VI, DATATYPE_VI, DIRECTION_VI, PHASE_TONE, PHASE_VI } from '../../i18n/plc'
+import { APPROVAL_VI, DATATYPE_VI, DIRECTION_VI, localizeDeviceMessage, PHASE_TONE, PHASE_VI } from '../../i18n/plc'
 import { fmtTime } from './plcFormat'
 import { QualityPill, ValueCell } from './plcUi'
 
@@ -19,7 +19,7 @@ export function StationPanel({ stationId, isAdmin, handshake, onClose }: Props) 
         <div className="hs-strip">
           <span><small>Pha quan sát (kỹ thuật)</small> <Pill tone={PHASE_TONE[handshake.phase] ?? 'muted'}>{PHASE_VI[handshake.phase] ?? handshake.phase}</Pill></span>
           <span><small>Handshake</small> <Pill tone={handshake.approval === 'NEEDS_CONFIRMATION' ? 'warn' : 'ok'} dot={false}>{APPROVAL_VI[handshake.approval] ?? handshake.approval}</Pill></span>
-          {handshake.lastError && isAdmin && <span className="text-bad">Lần ghi gần nhất bị từ chối: {handshake.lastError}</span>}
+          {handshake.lastError && isAdmin && <span className="text-bad">Lần ghi gần nhất bị từ chối: {localizeDeviceMessage(handshake.lastError)}</span>}
         </div>
       )}
       <Async state={io} isEmpty={(d) => d.points.length === 0} empty={{ title: 'Trạm chưa có IO point' }}>

@@ -92,7 +92,7 @@ export function PlcIoMappingPage() {
       </Panel>
 
       <Panel title="Bảng IO Mapping" flush>
-        <Async state={points} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có IO point', hint: 'Danh mục IO chưa được nạp (kiểm tra migration và seeder).' }}>
+        <Async state={points} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có IO point', hint: 'Danh mục IO chưa sẵn sàng. Vui lòng liên hệ quản trị hệ thống.' }}>
           {() => (
             <div className="table-wrap">
               <table className="grid" aria-label="IO Mapping">
@@ -116,7 +116,7 @@ export function PlcIoMappingPage() {
                         <td><ConfigPill status={p.configStatus} />{p.approvedBy && <small className="muted"> {p.approvedBy}</small>}</td>
                         <td className="nowrap">
                           <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>Địa chỉ</Button>{' '}
-                          {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>Giả lập</Button>{' '}</>}
+                          {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>Mô phỏng</Button>{' '}</>}
                           {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'write', point: p })}>Ghi thử</Button>}
                           {ENGINEERING_TOOLS && !inbound && blocked && <small className="muted" title="Safety/Interlock và Transfer/Departure Permit không bao giờ được ghi thử">🔒 chặn ghi</small>}
                         </td>

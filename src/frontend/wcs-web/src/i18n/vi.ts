@@ -214,7 +214,7 @@ export function describeError(e: unknown): string {
 }
 
 export const CONNECTION_VI: Record<string, string> = {
-  connecting: 'Đang kết nối', connected: 'Đã kết nối', reconnecting: 'Đang kết nối lại', disconnected: 'Mất kết nối', demo: 'Cục bộ (mô phỏng)',
+  connecting: 'Đang kết nối', connected: 'Đã kết nối', reconnecting: 'Đang kết nối lại', disconnected: 'Mất kết nối', demo: 'Chế độ mô phỏng',
 }
 
 /** Display code of a task, derived from its id (not a stored business field). */

@@ -1,12 +1,12 @@
 import type { Tone } from './vi'
 
 export const TEST_OUTCOME_VI: Record<string, string> = {
-  Success: 'Thành công', Failed: 'Thất bại', Simulated: 'Chưa kiểm tra thiết bị', NotExecuted: 'Không thực hiện',
+  Success: 'Thành công', Failed: 'Thất bại', Simulated: 'Chưa kiểm tra với thiết bị', NotExecuted: 'Không thực hiện',
 }
 export const TEST_OUTCOME_TONE: Record<string, Tone> = { Success: 'ok', Failed: 'bad', Simulated: 'warn', NotExecuted: 'muted' }
 
 export const TEST_MODE_VI: Record<string, string> = {
-  Simulated: 'Không dùng mạng – chưa kiểm tra thiết bị thật',
+  Simulated: 'Chế độ mô phỏng – chưa kiểm tra với thiết bị thật',
   TcpReachability: 'Kiểm tra cổng TCP (không gửi dữ liệu)',
   None: 'Không thực hiện',
 }
