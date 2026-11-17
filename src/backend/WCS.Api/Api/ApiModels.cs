@@ -64,6 +64,9 @@ public sealed record LoginRequest(
     [property: Required, StringLength(100)] string Username,
     [property: Required, StringLength(200)] string Password);
 
+/// <summary>The caller's own preferences. There is deliberately no user id: the account is the authenticated session.</summary>
+public sealed record UserPreferencesRequest([property: Required, StringLength(10)] string Theme, bool SidebarCollapsed);
+
 public sealed record ChangePasswordRequest(
     [property: Required, StringLength(200)] string CurrentPassword,
     [property: Required, StringLength(200)] string NewPassword);

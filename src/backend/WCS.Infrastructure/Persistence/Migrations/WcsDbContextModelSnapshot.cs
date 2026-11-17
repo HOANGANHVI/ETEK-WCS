@@ -1014,6 +1014,18 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SecurityStamp")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("SidebarCollapsed")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("light");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 

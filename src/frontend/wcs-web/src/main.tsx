@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import { DEMO_MODE } from './config'
 import { AuthProvider } from './auth/AuthContext'
+import { PreferencesProvider } from './preferences/PreferencesProvider'
 import { RealtimeProvider } from './realtime/RealtimeProvider'
 
 if (DEMO_MODE) {
@@ -26,9 +27,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <RealtimeProvider>
-          <App />
-        </RealtimeProvider>
+        <PreferencesProvider>
+          <RealtimeProvider>
+            <App />
+          </RealtimeProvider>
+        </PreferencesProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

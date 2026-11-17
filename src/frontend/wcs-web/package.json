@@ -12,6 +12,7 @@
     "i18n:check": "node scripts/check-i18n.mjs",
     "i18n:test": "node scripts/run-i18n-smoke.mjs",
     "dashboard:test": "node scripts/run-i18n-smoke.mjs dashboard-smoke.ts",
+    "preferences:test": "node scripts/run-i18n-smoke.mjs preferences-smoke.ts",
     "preview": "vite preview"
   },
   "dependencies": {

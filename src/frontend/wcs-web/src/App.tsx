@@ -9,6 +9,7 @@ import { AgvPage } from './pages/AgvPage'
 import { AuditPage } from './pages/AuditPage'
 import { LogsPage } from './pages/LogsPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
+import { AccountPage } from './pages/AccountPage'
 import { ConfigPage } from './pages/ConfigPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { InventoryPage } from './pages/InventoryPage'
@@ -49,6 +50,7 @@ function App() {
         <Route path="plc" element={<PlcPage />} />
         <Route path="plc/connections" element={<RequireRole roles={['Admin']}><PlcConnectionsPage /></RequireRole>} />
         <Route path="plc/io-mapping" element={<RequireRole roles={['Admin']}><PlcIoMappingPage /></RequireRole>} />
+        <Route path="account" element={<AccountPage />} />
         <Route path="account/password" element={<ChangePasswordPage />} />
         <Route path="config" element={<RequireRole roles={['Admin']}><ConfigPage /></RequireRole>} />
         <Route path="users" element={<RequireRole roles={['Admin']}><UsersPage /></RequireRole>} />

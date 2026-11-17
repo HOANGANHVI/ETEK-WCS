@@ -44,3 +44,9 @@ export const IconUsers = (p: SVGProps<SVGSVGElement>) => (
 export const IconLog = (p: SVGProps<SVGSVGElement>) => (
   <Svg {...p}><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 12h7M9 16h7" /></Svg>
 )
+
+export const IconPanelLeftClose = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /><path d="m16 9-3 3 3 3" /></Svg>
+export const IconPanelLeftOpen = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /><path d="m13 9 3 3-3 3" /></Svg>
+export const IconSun = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Svg>
+export const IconMoon = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></Svg>
+export const IconUser = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></Svg>

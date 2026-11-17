@@ -4,6 +4,14 @@ namespace WCS.Domain.Users;
 
 public enum UserRole { Admin = 1, Operator = 2 }
 
+/// <summary>Valid values of the per-user interface preferences.</summary>
+public static class UserPreferences
+{
+    public const string DefaultTheme = "light";
+    public static readonly IReadOnlyList<string> Themes = ["light", "dark"];
+    public static bool IsValidTheme(string? theme) => theme is not null && Themes.Contains(theme);
+}
+
 /// <summary>
 /// Application account. The password is only ever stored as a salted hash (produced by the infrastructure hasher), never in plain text.
 /// <see cref="SecurityStamp"/> changes whenever credentials, role or activation change, which invalidates existing sessions.
@@ -48,6 +56,10 @@ public class AppUser
     public DateTimeOffset UpdatedAt { get; private set; }
     /// <summary>Incremented by <see cref="Touch"/> so a no-op "touch" is still a real UPDATE that moves the xmin token.</summary>
     public int Revision { get; private set; }
+    /// <summary>Personal interface preference (<see cref="UserPreferences.Themes"/>): owned by the user, never changed by an administrator editing the profile.</summary>
+    public string Theme { get; private set; } = UserPreferences.DefaultTheme;
+    /// <summary>Personal interface preference: the navigation sidebar is collapsed to icons.</summary>
+    public bool SidebarCollapsed { get; private set; }
     public uint Version { get; private set; }
 
     public static string NormalizeUsername(string? username) => (username ?? "").Trim().ToLowerInvariant();
@@ -67,6 +79,13 @@ public class AppUser
     public void RegisterSuccessfulLogin(DateTimeOffset now)
     {
         FailedLoginCount = 0; LockoutEnd = null; LastLoginAt = now; UpdatedAt = now;
+    }
+
+    /// <summary>Stores the user's own interface preferences. It is not a security change (sessions stay valid) and not a profile edit (<see cref="UpdatedAt"/> is untouched).</summary>
+    public void SetPreferences(string theme, bool sidebarCollapsed)
+    {
+        if (!UserPreferences.IsValidTheme(theme)) throw new DomainException("PREFERENCE_INVALID", "Invalid theme.");
+        Theme = theme; SidebarCollapsed = sidebarCollapsed;
     }
 
     /// <summary>Bumps the concurrency token (xmin) so two concurrent admin changes serialize (last-admin protection).</summary>

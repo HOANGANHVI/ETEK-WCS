@@ -2,7 +2,7 @@
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: var(--fs-md); line-height: 1.4; -webkit-font-smoothing: antialiased; }
 h1, h2, h3, h4, p { margin: 0; }
-a { color: var(--navy-500); text-decoration: none; }
+a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 button, select, input { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--navy-500); outline-offset: 2px; }
@@ -13,7 +13,7 @@ button, select, input { font: inherit; color: inherit; }
 .text-bad { color: var(--bad); }
 
 /* ---- buttons ---- */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--navy-700); border-radius: var(--radius); font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--accent-text-strong); border-radius: var(--radius); font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s; }
 .btn:hover:not(:disabled) { background: var(--navy-50); border-color: var(--navy-500); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-md { height: 36px; padding: 0 14px; font-size: var(--fs-sm); }
@@ -25,7 +25,7 @@ button, select, input { font: inherit; color: inherit; }
 .btn-ghost { border-color: transparent; background: transparent; }
 .btn svg { width: 16px; height: 16px; }
 
-select, input[type='search'] { height: 36px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); padding: 0 10px; font-size: var(--fs-sm); }
+select, input[type='search'] { height: 36px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--field-bg); padding: 0 10px; font-size: var(--fs-sm); }
 
 /* ---- tables ---- */
 .table-wrap { overflow: auto; }
@@ -56,3 +56,6 @@ table.grid td.right, table.grid th.right { text-align: right; }
 .state-empty { justify-content: center; text-align: center; padding: 28px 16px; color: var(--text-3); }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--navy-500); border-radius: 50%; animation: spin .8s linear infinite; margin-right: 8px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+textarea { width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--field-bg); padding: 8px 10px; font-size: var(--fs-sm); resize: vertical; }
+input::placeholder, textarea::placeholder { color: var(--text-3); }

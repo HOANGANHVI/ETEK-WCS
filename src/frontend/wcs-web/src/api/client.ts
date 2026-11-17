@@ -1,5 +1,6 @@
 import { DEMO_MODE } from '../config'
 import { demoDataApi } from '../demo/demoApi'
+import type { Preferences } from '../preferences/prefsStore'
 import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Role, UserRow } from './authTypes'
@@ -84,6 +85,8 @@ const realApi = {
   me: () => request<Me>('/api/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     request<Me>('/api/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+  preferences: () => request<Preferences>('/api/auth/preferences'),
+  savePreferences: (p: Preferences) => request<Preferences>('/api/auth/preferences', { method: 'PUT', body: JSON.stringify(p) }),
   users: (search?: string) => request<UserRow[]>(`/api/users${qs({ search })}`),
   createUser: (b: { username: string; displayName: string; role: Role; password: string; isActive: boolean }) =>
     request<UserRow>('/api/users', { method: 'POST', body: JSON.stringify(b) }),

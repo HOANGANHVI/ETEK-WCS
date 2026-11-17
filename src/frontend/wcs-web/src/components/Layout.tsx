@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { hasRole, useAuth } from '../auth/AuthContext'
@@ -12,7 +12,8 @@ import { ROLE_SHORT_VI } from '../i18n/vi'
 import { LangSwitch } from './LangSwitch'
 import { plcView, rcsView, type LinkView } from './linkStatus'
 import { useRealtime } from '../realtime/RealtimeProvider'
-import { IconAgv, IconLog, IconOverview, IconPlc, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
+import { usePreferences } from '../preferences/PreferencesContext'
+import { IconAgv, IconPanelLeftClose, IconPanelLeftOpen, IconUser, IconLog, IconOverview, IconPlc, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
 
 const SITE_NAME = (import.meta.env.VITE_SITE_NAME as string | undefined)?.trim()
 
@@ -68,7 +69,7 @@ function TopBar() {
           <span className="who-role">{ROLE_SHORT_VI[user.role]}</span>
         </div>
       )}
-      <Link className="top-link" to="/account/password">{t('nav.changePassword')}</Link>
+      <Link className="top-link" to="/account" title={t('nav.userConfig')} aria-label={t('nav.userConfig')}><IconUser /><span>{t('nav.userConfig')}</span></Link>
       <LangSwitch />
       <button type="button" className="top-btn" onClick={() => void logout()}>{t('nav.logout')}</button>
       <div className="clock"><strong>{formatTime(now.toISOString())}</strong><span>{formatDate(now)}</span></div>
@@ -78,37 +79,53 @@ function TopBar() {
 
 const RT_KEY: Record<string, MsgKey> = { connecting: 'nav.rtConnecting', connected: 'nav.rtConnected', reconnecting: 'nav.rtReconnecting', disconnected: 'nav.rtDisconnected', demo: 'nav.rtDemo' }
 
+interface Tip { label: string; top: number; left: number }
+
 function SideBar() {
   const t = useT()
   const { user } = useAuth()
   const { status } = useRealtime()
+  const { sidebarIsCollapsed: collapsed, sidebarForcedCollapsed: forced, sidebarCollapsed, update } = usePreferences()
+  const [tip, setTip] = useState<Tip | null>(null)
   const tone = status === 'connected' || status === 'demo' ? 'ok' : status === 'disconnected' ? 'bad' : 'warn'
+
+  // Collapsed menu items show a tooltip placed with fixed coordinates, so the scrolling sidebar can never clip it.
+  const showTip = (label: string) => (e: SyntheticEvent<HTMLElement>) => {
+    if (!collapsed) return
+    const r = e.currentTarget.getBoundingClientRect()
+    setTip({ label, top: r.top + r.height / 2, left: r.right + 10 })
+  }
+  const hideTip = () => setTip(null)
+  const toggleLabel = t(collapsed ? 'account.expandSidebar' : 'account.collapseSidebar')
+
+  const item = (n: NavItem) => (
+    <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+      aria-label={t(n.label)} title={collapsed ? undefined : t(n.label)}
+      onMouseEnter={showTip(t(n.label))} onMouseLeave={hideTip} onFocus={showTip(t(n.label))} onBlur={hideTip}>
+      {n.icon}<span>{t(n.label)}</span>
+    </NavLink>
+  )
   return (
     <aside className="sidebar">
+      <button type="button" className="side-toggle" aria-label={toggleLabel} aria-expanded={!collapsed}
+        disabled={forced} title={collapsed ? undefined : toggleLabel}
+        onMouseEnter={showTip(toggleLabel)} onMouseLeave={hideTip} onFocus={showTip(toggleLabel)} onBlur={hideTip}
+        onClick={() => { hideTip(); void update({ sidebarCollapsed: !sidebarCollapsed }) }}>
+        {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
+      </button>
       <nav aria-label={t('nav.mainNav')}>
         <div className="nav-title">{t('nav.groupOps')}</div>
-        {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={t(n.label)}>
-            {n.icon}<span>{t(n.label)}</span>
-          </NavLink>
-        ))}
+        {NAV.map(item)}
         {hasRole(user, 'Admin') && <div className="nav-title">{t('nav.groupPlc')}</div>}
-        {hasRole(user, 'Admin') && NAV_PLC.map((n) => (
-          <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={t(n.label)}>
-            {n.icon}<span>{t(n.label)}</span>
-          </NavLink>
-        ))}
+        {hasRole(user, 'Admin') && NAV_PLC.map(item)}
         {hasRole(user, 'Admin') && <div className="nav-title">{t('nav.groupSystem')}</div>}
-        {hasRole(user, 'Admin') && NAV_SYSTEM.map((n) => (
-          <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={t(n.label)}>
-            {n.icon}<span>{t(n.label)}</span>
-          </NavLink>
-        ))}
+        {hasRole(user, 'Admin') && NAV_SYSTEM.map(item)}
       </nav>
-      <div className="side-foot">
+      <div className="side-foot" title={collapsed ? t('nav.realtime', { status: t(RT_KEY[status]) }) : undefined}>
         <div className="row"><i className={`led ${tone}`} /><span>{t('nav.realtime', { status: t(RT_KEY[status]) })}</span></div>
         <span>ETEK WCS</span>
       </div>
+      {tip && <div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.label}</div>}
     </aside>
   )
 }
@@ -117,10 +134,11 @@ export function Layout() {
   const t = useT()
   const { user } = useAuth()
   const location = useLocation()
+  const { sidebarIsCollapsed } = usePreferences()
   const deniedKey = (location.state as { denied?: MsgKey } | null)?.denied
   const denied = deniedKey ? t(deniedKey) : null
   return (
-    <div className="app">
+    <div className="app" data-sidebar={sidebarIsCollapsed ? 'collapsed' : 'expanded'}>
       <TopBar />
       <SideBar />
       <main className="main">

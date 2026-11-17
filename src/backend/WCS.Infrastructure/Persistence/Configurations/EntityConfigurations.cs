@@ -205,6 +205,8 @@ internal sealed class AppUserConfiguration : IEntityTypeConfiguration<WCS.Domain
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.Username).HasMaxLength(50).IsRequired();
         b.Property(x => x.DisplayName).HasMaxLength(100).IsRequired();
+        b.Property(x => x.Theme).HasMaxLength(10).IsRequired().HasDefaultValue(WCS.Domain.Users.UserPreferences.DefaultTheme);
+        b.Property(x => x.SidebarCollapsed).HasDefaultValue(false);
         b.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired(); // salted hash only, never the password
         b.HasIndex(x => x.Username).IsUnique();
         b.Property(x => x.Version).IsRowVersion();

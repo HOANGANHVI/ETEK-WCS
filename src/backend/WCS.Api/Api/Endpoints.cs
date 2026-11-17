@@ -68,6 +68,11 @@ public static class Endpoints
         }).RequireAuthorization();
         auth.MapGet("me", (HttpContext c) =>
             ApiResults.Ok(c, Me(c.User.Identity!.Name!, c.User.DisplayName(), c.Actor().Role, c.User.MustChangePassword()))).RequireAuthorization();
+        // Personal interface preferences: any signed-in user, always the caller's own account (taken from the session).
+        auth.MapGet("preferences", async (HttpContext c, AuthService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.GetPreferencesAsync(c.Actor(), ct))).RequireAuthorization();
+        auth.MapPut("preferences", async (HttpContext c, UserPreferencesRequest r, AuthService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.SetPreferencesAsync(c.Actor(), r.Theme, r.SidebarCollapsed, ct))).RequireAuthorization();
         auth.MapPost("change-password", async (HttpContext c, ChangePasswordRequest r, AuthService svc, CancellationToken ct) =>
         {
             var user = await svc.ChangeOwnPasswordAsync(c.Actor(), r.CurrentPassword, r.NewPassword, ct);

@@ -90,5 +90,25 @@ public sealed class AuthService(IUserRepository users, IPasswordService password
         return result.User!;
     }
 
+    /// <summary>Interface preferences of the caller (the account is taken from the session, never from the request).</summary>
+    public async Task<UserPreferencesDto> GetPreferencesAsync(ActorInfo actor, CancellationToken ct = default) =>
+        await uow.ExecuteAsync(async t =>
+        {
+            var user = await users.GetAsync(actor.Id, t) ?? throw AppException.NotFound("USER_NOT_FOUND", "User not found.");
+            return new UserPreferencesDto(user.Theme, user.SidebarCollapsed);
+        }, ct);
+
+    /// <summary>Stores the caller's own preferences. Nothing else of the account changes (no audit: not a security or administrative action).</summary>
+    public async Task<UserPreferencesDto> SetPreferencesAsync(ActorInfo actor, string? theme, bool sidebarCollapsed, CancellationToken ct = default)
+    {
+        if (!UserPreferences.IsValidTheme(theme)) throw AppException.Validation("PREFERENCE_INVALID", "Theme must be 'light' or 'dark'.");
+        return await uow.ExecuteAsync(async t =>
+        {
+            var user = await users.GetAsync(actor.Id, t) ?? throw AppException.NotFound("USER_NOT_FOUND", "User not found.");
+            user.SetPreferences(theme!, sidebarCollapsed);
+            return new UserPreferencesDto(user.Theme, user.SidebarCollapsed);
+        }, ct);
+    }
+
     private static string Truncate(string s) => s.Length <= 50 ? s : s[..50];
 }

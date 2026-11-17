@@ -14,7 +14,7 @@
 .qbar { display: flex; height: 8px; border-radius: 4px; background: var(--muted-bg); overflow: hidden; width: 100%; }
 .qbar i { display: block; height: 100%; }
 .qbar .q-good { background: var(--ok); }
-.qbar .q-cfg { background: #e0a21a; }
+.qbar .q-cfg { background: var(--amber); }
 
 .station-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 4px 0; }
 .station-tile { text-align: left; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius); cursor: pointer; font: inherit; color: inherit; }

@@ -68,5 +68,8 @@ public sealed record AuthenticatedUser(Guid Id, string Username, string DisplayN
 public sealed record UserDto(Guid Id, string Username, string DisplayName, UserRole Role, bool IsActive, bool MustChangePassword,
     DateTimeOffset? LastLoginAt, DateTimeOffset? LockedUntil, DateTimeOffset CreatedAt);
 
+/// <summary>The caller's own interface preferences.</summary>
+public sealed record UserPreferencesDto(string Theme, bool SidebarCollapsed);
+
 public sealed record CreateUserCommand(string Username, string DisplayName, UserRole Role, string Password, bool IsActive = true);
 public sealed record UpdateUserCommand(string DisplayName, UserRole Role, bool IsActive);
