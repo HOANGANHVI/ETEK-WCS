@@ -186,9 +186,6 @@ export function DashboardPage() {
       {stats?.truncated && <div className="notice notice-warn">{t('dashboard.truncated', { n: 2000 })}</div>}
 
       <div className="dc-grid">
-        {/* Server resources: Admin only, real mode only (Demo Mode has no server to measure). */}
-        {isAdmin && !DEMO_MODE && <ServerResources />}
-
         <Panel title={t('dashboard.trendTitle')} className="dc-8" subtitle={range === 'today' ? t('dashboard.trendUnitHour') : t('dashboard.trendUnitDay')}>
           <Async state={finished} empty={{ title: t('dashboard.noData') }}>
             {() => !stats || !hasFinished ? <div className="chart-empty">{t('dashboard.noData')}</div> : (
@@ -319,6 +316,9 @@ export function DashboardPage() {
             )}
           </Async>
         </Panel>
+
+        {/* Server resources: secondary information, so it comes last. Admin only, real mode only (Demo Mode has no server to measure). */}
+        {isAdmin && !DEMO_MODE && <ServerResources />}
       </div>
     </>
   )
