@@ -9,6 +9,7 @@ import { useApi } from '../hooks/useApi'
 import { useT, type MsgKey } from '../i18n'
 import { APPROVAL_VI, EXCHANGE_OUTCOME_VI, localizeDeviceMessage, MISSING_PARAM_VI, MODE_TONE, MODE_VI, PHASE_TONE, PHASE_VI } from '../i18n/plc'
 import { describeCoded } from '../i18n/logCatalog'
+import { PlcIoMonitor } from './plc/PlcIoMonitor'
 import { PlcLogsTab } from './plc/PlcLogsTab'
 import { fmtTime, qualitySummary } from './plc/plcFormat'
 import { QualityBar, StatePill } from './plc/plcUi'
@@ -16,14 +17,15 @@ import { StationPanel } from './plc/StationPanel'
 
 const TABS: { key: string; label: MsgKey; admin: boolean }[] = [
   { key: 'overview', label: 'plc.tabOverview', admin: false },
+  { key: 'points', label: 'plc.tabPoints', admin: false },
   { key: 'logs', label: 'plc.tabLogs', admin: true },
 ]
 
 const EVENTS = ['PlcStatusChanged', 'StationIoChanged', 'HandshakePhaseChanged'] as const
 
 /**
- * PLC monitoring (4 PLC, 16 Station, 23 IO per Station) - strictly READ-ONLY (CR-004). Operators see status, values and quality; Admins additionally see
- * network details, diagnostics and logs. Connections and IO addresses are edited in the "Cấu hình PLC" screens. The real-mode safety state is always shown.
+ * PLC monitoring (4 PLC, 16 Station, 23 IO per Station). Operators see status, values and quality and may read a point; Admins additionally see network details, diagnostics and logs and,
+ * on the "I/O monitoring" tab, may write approved points (CR-020; the guards are those of CR-019). Nothing on the overview tab writes. Connections and IO addresses are edited in the "Cấu hình PLC" screens. The real-mode safety state is always shown.
  */
 export function PlcPage() {
   const t = useT()
@@ -50,9 +52,17 @@ export function PlcPage() {
         ))}
       </div>
       {tab === 'overview' && <Overview isAdmin={isAdmin} />}
+      {tab === 'points' && <PointsTab isAdmin={isAdmin} />}
       {tab === 'logs' && isAdmin && <PlcLogsTab />}
     </>
   )
+}
+
+/** CR-020: I/O monitoring and operations. Needs the runtime state (mode, PLC connections) to decide what each row may do, so it loads the overview itself. */
+function PointsTab({ isAdmin }: { isAdmin: boolean }) {
+  const t = useT()
+  const overview = useApi(useCallback(() => api.plcOverview(), []), [...EVENTS])
+  return <Async state={overview} empty={{ title: t('plc.noPlcDataShort') }}>{(o) => <PlcIoMonitor isAdmin={isAdmin} overview={o} />}</Async>
 }
 
 function RuntimeBanner({ rt }: { rt: PlcOverview['runtime'] }) {

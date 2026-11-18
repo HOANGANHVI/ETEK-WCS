@@ -15,6 +15,7 @@
     "preferences:test": "node scripts/run-i18n-smoke.mjs preferences-smoke.ts",
     "monitor:test": "node scripts/run-i18n-smoke.mjs monitor-smoke.ts",
     "plcwrite:test": "node scripts/run-i18n-smoke.mjs plc-write-smoke.ts",
+    "plcmonitor:test": "node scripts/run-i18n-smoke.mjs plc-monitor-smoke.ts",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -1,17 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AddressIssue, IoPointConfig } from '../api/plcTypes'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
-import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { localizeFieldError } from '../i18n/logCatalog'
 import { CONFIG_STATUS_VI, DATATYPE_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
-import { AddressDialog, SimDialog, type DialogPoint } from './plc/plcDialogs'
-import { TypedWriteDialog, WriteApprovalDialog } from './plc/writeDialogs'
+import { AddressDialog, type DialogPoint } from './plc/plcDialogs'
+import { WriteApprovalDialog } from './plc/writeDialogs'
 import { BLOCKED_SIGNALS, deviceOf, WRITE_TONE } from './plc/plcFormat'
-import { runtimeAllowsWrite, writeKeyChecklist, writeReadiness, type WriteBlock } from '../lib/plcWrite'
 import { ConfigPill } from './plc/plcUi'
 
 const PLCS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04'] as const
@@ -20,13 +19,14 @@ const STATIONS: Record<string, string[]> = {
 }
 const STATUSES = ['NEEDS_CONFIGURATION', 'CONFIGURED', 'APPROVED'] as const
 
-type Dialog = { kind: 'address' | 'write' | 'sim' | 'writeApproval'; point: IoPointConfig } | null
+type Dialog = { kind: 'address' | 'writeApproval'; point: IoPointConfig } | null
 
 const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
   id: p.id, plcId: p.plcId, stationId: p.stationId, signalName: p.signalName, dataType: p.dataType, address: p.actualAddress, configStatus: p.configStatus,
 })
 
 /**
+ * CR-020: configuration ONLY. Reading, watching values and writing I/O are done on the PLC Monitoring screen ("I/O monitoring" tab); the write approval of a point is still decided here.
  * CR-004: IO mapping - the actual PLC address of the 368 IO points (4 PLC x 4 Stations x 23 signals; key PLC_ID + Station_ID + Signal_Name).
  * Admin only (also enforced by the API). Addresses are NEVER generated or derived; a valid address makes the point pollable at once (CR-012);
  * the approval step now only concerns write permission and the port mapping of a process. Supported devices: D, W (word) and M (bit). X/Y are OUT_OF_SCOPE / NEEDS_CONFIRMATION.
@@ -34,7 +34,6 @@ const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
 export function PlcIoMappingPage() {
   const t = useT()
   const points = useApi(useCallback(() => api.plcPoints({}), []))
-  const overview = useApi(useCallback(() => api.plcOverview(), []))
   const [plc, setPlc] = useState('')
   const [station, setStation] = useState('')
   const [status, setStatus] = useState('')
@@ -43,26 +42,6 @@ export function PlcIoMappingPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [issues, setIssues] = useState<AddressIssue[] | null>(null)
   const [checkError, setCheckError] = useState<string | null>(null)
-
-  const runtime = overview.data?.runtime ?? null            // CR-016: never assume a write mode while the runtime state is unknown
-  const mode = runtime?.effectiveMode ?? 'Simulator'
-  const simulator = runtime?.effectiveMode === 'Simulator'
-  const plcState = (id: string) => overview.data?.plcs.find((w) => w.plcId === id)?.state
-  const reasonText = (b: WriteBlock, plcId: string): string => {
-    if (b.ok) return ''
-    switch (b.reason) {
-      case 'RUNTIME_UNKNOWN': return t('plc.wrLoading')
-      case 'READ_ONLY': return t('plc.wrReadOnly', { keys: b.missing && b.missing.length ? t('plc.wrReadOnlyKeys', { list: b.missing.join(', ') }) : '' })
-      case 'NO_ADDRESS': return t('plc.wrNoAddress')
-      case 'UNSUPPORTED': return t('plc.wrUnsupported')
-      case 'NOT_APPROVED': return t('plc.wrNotApproved')
-      case 'REJECTED': return t('plc.wrRejected')
-      default: return t('plc.wrNotConnected', { plc: plcId })
-    }
-  }
-  // CR-015/016: the write action is part of every build and is ALWAYS shown for a writable point: enabled when everything the backend will check is met, otherwise disabled with the
-  // concrete reason beside it (runtime read-only and which key is missing, no write approval, PLC not connected ...) - never silently hidden.
-  const writeOk = runtimeAllowsWrite(runtime)
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -73,7 +52,7 @@ export function PlcIoMappingPage() {
   const all = points.data ?? []
   const counts = { total: all.length, configured: all.filter((p) => p.configStatus !== 'NEEDS_CONFIGURATION').length, pollable: all.filter((p) => p.pollable).length }
   const stationOptions = plc ? STATIONS[plc] ?? [] : Object.values(STATIONS).flat()
-  const done = (msg: string) => { setDialog(null); setNotice(msg); setIssues(null); points.reload(); overview.reload() }   // the approval and the runtime state are re-read at once: no page reload needed
+  const done = (msg: string) => { setDialog(null); setNotice(msg); setIssues(null); points.reload() }   // the approval is re-read at once: no page reload needed
   const check = async () => {
     setCheckError(null)
     try { setIssues(await api.plcAddressCheck(plc)) } catch (e) { setCheckError(describeError(e)) }
@@ -83,17 +62,7 @@ export function PlcIoMappingPage() {
     <>
       <PageHeader title={t('plc.ioTitle')} />
       {notice && <div className="notice notice-ok" role="status">{notice}</div>}
-      <div className={`notice ${!runtime ? 'notice-info' : writeOk ? 'notice-ok' : 'notice-warn'}`} role="status" aria-label={t('plc.writeRtTitle')}>
-        <strong>{t('plc.writeRtTitle')}: </strong>
-        {!runtime ? t('plc.writeRtLoading') : writeOk ? t('plc.writeRtOk', { mode }) : (runtime.missingWriteKeys?.length ? t('plc.writeRtReadOnly', { list: runtime.missingWriteKeys.join(', ') }) : t('plc.writeRtReadOnlyNoList'))}
-        {runtime && !simulator && (
-          <div className="btn-row" style={{ marginTop: 8 }} aria-label={t('plc.writeKeysTitle')}>
-            {writeKeyChecklist(runtime).map((k) => (
-              <Pill key={k.key} tone={k.ok ? 'ok' : 'bad'} dot={false}>{k.ok ? '✓' : '✗'} {k.key}{k.current ? ' = ' + k.current : ''}</Pill>
-            ))}
-          </div>
-        )}
-      </div>
+      <div className="notice notice-info" role="note">{t('plc.mapOpsHint')} <Link to="/plc?tab=points">{t('plc.mapOpsLink')}</Link></div>
       <Panel title={t('plc.filters')} subtitle={t('plc.filterSummary', { total: counts.total, configured: counts.configured, pollable: counts.pollable })}>
         <div className="form-grid">
           <label className="field"><span className="field-label">PLC</span>
@@ -134,8 +103,6 @@ export function PlcIoMappingPage() {
                   {rows.map((p) => {
                     const inbound = p.direction === 'PlcToSoftware'
                     const blocked = BLOCKED_SIGNALS.includes(p.signalName)
-                    const gate = writeReadiness(runtime, plcState(p.plcId), p)
-                    const why = reasonText(gate, p.plcId)
                     return (
                       <tr key={p.id}>
                         <td className="nowrap">{p.plcId}</td>
@@ -153,9 +120,6 @@ export function PlcIoMappingPage() {
                         <td className="nowrap">
                           <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
                           {!inbound && !blocked && <><Button size="sm" disabled={!p.actualAddress} title={p.actualAddress ? undefined : t('plc.writeNoAddressTitle')} onClick={() => setDialog({ kind: 'writeApproval', point: p })}>{t('plc.btnWriteApproval')}</Button>{' '}</>}
-                          {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>{t('plc.btnSim')}</Button>{' '}</>}
-                          {!inbound && !blocked && <Button size="sm" variant="danger" disabled={!gate.ok} title={gate.ok ? undefined : why} onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnWrite')}</Button>}
-                          {!inbound && !blocked && !gate.ok && <><br /><small className="muted">{why}</small></>}
                           {!inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
                         </td>
                       </tr>
@@ -169,9 +133,7 @@ export function PlcIoMappingPage() {
         </Async>
       </Panel>
       {dialog?.kind === 'address' && <AddressDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
-      {dialog?.kind === 'write' && <TypedWriteDialog point={dialog.point} simulator={simulator} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'writeApproval' && <WriteApprovalDialog point={dialog.point} onClose={() => setDialog(null)} onDone={done} />}
-      {dialog?.kind === 'sim' && <SimDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
     </>
   )
 }

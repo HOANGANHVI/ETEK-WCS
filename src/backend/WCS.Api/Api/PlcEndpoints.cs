@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using WCS.Application.Abstractions;
 using WCS.Application.Common;
 using WCS.Application.Config;
 using WCS.Application.Plc;
@@ -159,6 +160,34 @@ public static partial class PlcEndpoints
         plc.MapGet("stations/{stationId}/io", (HttpContext c, string stationId, IPlcRuntime rt) =>
             rt.Station(stationId, IsAdmin(c)) is { } snap ? ApiResults.Ok(c, snap) : ApiResults.Fail(c, 404, "STATION_NOT_FOUND", $"Không tìm thấy trạm {stationId}."));
 
+        // CR-020: the PLC Monitoring list - every IO point of every PLC with its live value, communication status and (Admin only) address and write approval. It reads the values the workers already
+        // poll (no PLC traffic is generated here). Operators get no address and no approval data.
+        plc.MapGet("monitor/points", async (HttpContext c, string? plcId, string? stationId, PlcConfigService s, IPlcRuntime rt, IOptions<PlcRuntimeOptions> o, IClock clock, CancellationToken ct) =>
+        {
+            var adm = IsAdmin(c);
+            var now = clock.UtcNow; var staleAfter = TimeSpan.FromSeconds(Math.Max(1, o.Value.StaleAfterSeconds));
+            var config = (await s.ListPointsAsync(plcId, stationId, adm, ct)).ToDictionary(p => p.Id);
+            var rows = rt.Stations(adm).Where(st => (plcId is null || st.PlcId == plcId) && (stationId is null || st.StationId == stationId)).SelectMany(st => st.Points)
+                .Where(p => config.ContainsKey(p.Id)).Select(p =>
+                {
+                    var cfg = config[p.Id];
+                    return new MonitorPointView(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName, cfg.Description, p.Direction, p.DataType, p.Value, p.Quality,
+                        PlcMonitor.StatusOf(p.Quality, p.LastUpdated, now, staleAfter), p.LastUpdated, p.Address, p.Error,
+                        adm ? cfg.WriteApproval : null, adm ? cfg.WriteSupported : null, WritePolicy.IsBlockedSignal(p.SignalName, p.Group), cfg.WordLength, cfg.Encoding);
+                }).OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).ToList();
+            return ApiResults.Ok(c, new { serverTime = now, staleAfterSeconds = (int)staleAfter.TotalSeconds, points = rows });
+        });
+        // CR-020: immediate read of ONE point (Admin and Operator: it only reads). It goes through the PLC's own worker and connection (see PlcWorker.EnqueueReadAsync); concurrent requests for the
+        // same point share one PLC read. A failed read is a normal result (success=false with the cause), not an HTTP error.
+        plc.MapPost("stations/{stationId}/signals/{signal}/read", async (HttpContext c, string stationId, string signal, IPlcRuntime rt, CancellationToken ct) =>
+        {
+            var handler = rt.Handler(stationId) ?? throw AppException.NotFound("STATION_NOT_FOUND", $"Không tìm thấy trạm {stationId}.");
+            var point = handler.Find(signal) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            var r = await rt.ReadNowAsync(point.PlcId, stationId, signal, ct);
+            var snap = rt.Station(stationId, IsAdmin(c))?.Points.FirstOrDefault(p => p.Id == point.Id);
+            return ApiResults.Ok(c, new { success = r.Success, code = r.Code, message = r.Message, value = r.Value?.Value, quality = snap?.Quality, lastUpdated = snap?.LastUpdated });
+        });
+
         plc.MapGet("handshake", (HttpContext c, HandshakeCoordinator hs) => ApiResults.Ok(c, hs.States()));
         plc.MapGet("handshake/catalog", (HttpContext c) =>
         {
@@ -186,8 +215,10 @@ public static partial class PlcEndpoints
                 {
                     var w = await rt.WriteAsync(point.PlcId, stationId, signal, value, c.Actor().Username, ct);
                     if (!w.Success) throw AppException.Rejected(w.Code ?? "WRITE_REFUSED", w.Message ?? "Lệnh ghi bị từ chối.");
-                    return w;
-                }, _ => new { point.PlcId, stationId, signal, value = value.ToString() });
+                    // CR-020 read-back: a successful write request is not proof; read the point once from the PLC and compare. Never retries the write; a failed read-back is reported as UNAVAILABLE.
+                    var back = PlcMonitor.Verify(value, await rt.ReadNowAsync(point.PlcId, stationId, signal, ct));
+                    return new { success = w.Success, code = w.Code, message = w.Message, isAmbiguous = w.IsAmbiguous, readBack = back };
+                }, res => new { point.PlcId, stationId, signal, value = value.ToString(), readBack = res.readBack.Status });
             return ApiResults.Ok(c, result);
         }).RequireAuthorization(admin);
 

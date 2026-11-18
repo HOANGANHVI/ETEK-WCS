@@ -28,6 +28,8 @@ public interface IPlcRuntime
     /// <summary>Rebuilds one PLC's worker from the database (after a configuration change). Other PLCs keep running untouched.</summary>
     Task ReloadPlcAsync(string plcId, CancellationToken ct = default);
     Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default, bool handshake = false);
+    /// <summary>CR-020: reads ONE point from the PLC now (through the PLC's own worker/connection) and updates the station handler. Never writes.</summary>
+    Task<ReadResult> ReadNowAsync(string plcId, string stationId, string signal, CancellationToken ct = default);
 }
 
 /// <summary>Controls of the in-memory simulator (act as "the PLC side"). Only meaningful in Simulator mode.</summary>
@@ -186,5 +188,15 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         var shape = WriteValueValidator.Check(point.DataType, point.WordLength, point.Encoding, value);
         if (!shape.Ok) return new WriteResult(false, shape.Code, shape.Message);
         return await worker.EnqueueWriteAsync(point, value).WaitAsync(ct);
+    }
+
+    public async Task<ReadResult> ReadNowAsync(string plcId, string stationId, string signal, CancellationToken ct = default)
+    {
+        var worker = Worker(plcId);
+        var handler = worker?.Stations.FirstOrDefault(s => s.StationId == stationId);
+        var point = handler?.Find(signal);
+        if (worker is null || handler is null || point is null) return new ReadResult(false, "NOT_FOUND", "IO point not found.");
+        if (string.IsNullOrWhiteSpace(point.Address) || !point.Pollable) return new ReadResult(false, "NOT_CONFIGURED", "The IO has no valid address: nothing is read.");
+        return await worker.EnqueueReadAsync(handler, point).WaitAsync(ct);
     }
 }

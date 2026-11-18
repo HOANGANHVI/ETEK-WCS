@@ -42,6 +42,25 @@ export interface IoPointState {
   value: boolean | number | string | null; quality: string; lastUpdated: string | null; address: string | null; error: string | null
 }
 
+/** CR-020: communication status of one IO value. Good = last read OK and fresh; Stale = Good but not refreshed in time; Bad = last read failed; Offline = PLC link down; Unknown = never read; NotConfigured = no valid address; Simulated = simulator data. */
+export type MonitorStatus = 'Good' | 'Stale' | 'Bad' | 'Offline' | 'Unknown' | 'NotConfigured' | 'Simulated'
+
+/** One row of the PLC Monitoring list. address / writeApproval / wordLength / encoding are Admin-only (null for an Operator). */
+export interface MonitorPoint {
+  id: string; plcId: string; stationId: string; seq: number; group: string; signalName: string; description: string
+  direction: 'PlcToSoftware' | 'SoftwareToPlc'; dataType: 'Bool' | 'Int' | 'String'
+  value: boolean | number | string | null; quality: string; status: MonitorStatus; lastUpdated: string | null; address: string | null; error: string | null
+  writeApproval: 'NOT_APPROVED' | 'APPROVED' | 'REJECTED' | null; writeSupported: boolean | null; writeBlocked: boolean; wordLength: number | null; encoding: string | null
+}
+export interface MonitorList { serverTime: string; staleAfterSeconds: number; points: MonitorPoint[] }
+
+/** Result of an immediate read. A failed read is a normal answer (success=false + code), not an HTTP error. */
+export interface ReadNowResult { success: boolean; code: string | null; message: string | null; value: boolean | number | string | null; quality: string | null; lastUpdated: string | null }
+
+/** CR-020: VERIFIED = the PLC returned the written value; MISMATCH = it returned something else; UNAVAILABLE = the read-back itself failed (no evidence either way). */
+export interface ReadBack { status: 'VERIFIED' | 'MISMATCH' | 'UNAVAILABLE'; value: boolean | number | string | null; code: string | null; message: string | null }
+export interface TestWriteResult { success: boolean; code?: string | null; message?: string | null; isAmbiguous?: boolean; readBack?: ReadBack | null }
+
 export interface StationSnapshot { plcId: string; stationId: string; total: number; configured: number; good: number; points: IoPointState[] }
 
 export interface HandshakeState {

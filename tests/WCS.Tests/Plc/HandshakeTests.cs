@@ -51,6 +51,7 @@ public sealed class FakeRuntime : IPlcRuntime
     public Task StopAsync() => Task.CompletedTask;
     public Task ReloadPlcAsync(string plcId, CancellationToken ct = default) => Task.CompletedTask;
 
+    public Task<ReadResult> ReadNowAsync(string plcId, string stationId, string signal, CancellationToken ct = default) => Task.FromResult(new ReadResult(false, "NOT_SUPPORTED", "fake runtime"));
     public Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default, bool handshake = false)
     {
         var point = Handler(stationId)?.Find(signal);
