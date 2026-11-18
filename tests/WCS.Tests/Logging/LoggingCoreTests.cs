@@ -103,7 +103,8 @@ public class LoggingCoreTests
     public void Request_log_level_does_not_report_handled_4xx_as_errors_and_hides_probes()
     {
         static HttpContext Ctx(string path, int status) { var c = new DefaultHttpContext(); c.Request.Path = path; c.Response.StatusCode = status; return c; }
-        Assert.Equal(LogEventLevel.Information, LogSetup.RequestLevel(Ctx("/api/auth/login", 401), 1, null));
+        Assert.Equal(LogEventLevel.Warning, LogSetup.RequestLevel(Ctx("/api/auth/login", 401), 1, null));   // CR-021 (D7): 401/403 are stored
+        Assert.Equal(LogEventLevel.Warning, LogSetup.RequestLevel(Ctx("/api/tasks", 403), 1, null));
         Assert.Equal(LogEventLevel.Information, LogSetup.RequestLevel(Ctx("/api/tasks", 409), 1, null));
         Assert.Equal(LogEventLevel.Error, LogSetup.RequestLevel(Ctx("/api/tasks", 500), 1, null));
         Assert.Equal(LogEventLevel.Error, LogSetup.RequestLevel(Ctx("/api/tasks", 200), 1, new Exception("x")));

@@ -1393,6 +1393,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1474,6 +1478,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CorrelationId");
+
                     b.HasIndex("ProcessId");
 
                     b.HasIndex("ProcessVersionId");
@@ -1540,6 +1546,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("AgvId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1650,6 +1660,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_transport_tasks_one_active_per_agv")
                         .HasFilter("\"State\" IN ('Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending')");
+
+                    b.HasIndex("CorrelationId");
 
                     b.HasIndex("DestinationLocationId");
 

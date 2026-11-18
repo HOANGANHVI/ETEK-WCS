@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using WCS.Application.Diagnostics;
 using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
@@ -83,10 +84,13 @@ public sealed class StationRequestProcessor(IStationSignalService stations, ITas
         {
             if (p.Attempts > 0 && !RcsRetryPolicy.IsDue(p.Attempts, p.LastAttemptAt, clock.UtcNow, o)) continue;
             var request = new StationRequest(p.StationCode, p.Flow, p.RequestKey);
+            using var _frame = DiagnosticContext.Begin(DiagnosticContext.NewCorrelationId(), stationId: p.StationCode);   // CR-021: the task created for this PLC request keeps this id
             try
             {
                 var result = await orchestrator.CreateTaskAsync(new CreateTaskCommand(p.RequestKey, p.Flow, p.StationCode, "PLC"), ct);
                 await Decide(p.RequestKey, r => r.MarkAccepted(result.Task.Id, clock.UtcNow), ct);   // the task is already committed; this only records it
+                using (DiagnosticContext.Begin(null, taskId: result.Task.Id.ToString("D")))
+                    logger.LogInformation("Station request {Key} from {Station} accepted: flow {Flow}, task {TaskId}. {EventCode}", p.RequestKey, p.StationCode, p.Flow, result.Task.Id, "STATION_REQUEST_ACCEPTED");
                 await TryAckAsync(request);
                 handled++;
             }
@@ -98,7 +102,7 @@ public sealed class StationRequestProcessor(IStationSignalService stations, ITas
             catch (AppException ex)
             {
                 // permanent business rejection (unsupported flow / station, ...): decided, recorded and acknowledged
-                logger.LogWarning("Station request {Key} from {Station} rejected: {Code} {Message}", p.RequestKey, p.StationCode, ex.Code, ex.Message);
+                logger.LogWarning("Station request {Key} from {Station} rejected: {Code} {Message}. {EventCode}", p.RequestKey, p.StationCode, ex.Code, ex.Message, "STATION_REQUEST_REJECTED");
                 await Decide(p.RequestKey, r => r.MarkRejected(ex.Code, ex.Message, clock.UtcNow), ct);
                 await TryAckAsync(request);
             }
@@ -106,14 +110,14 @@ public sealed class StationRequestProcessor(IStationSignalService stations, ITas
             {
                 // technical failure of ONE request: it stays pending (backoff, bounded) and never stops the others
                 var attempts = p.Attempts + 1;
-                logger.LogError(ex, "Station request {Key} from {Station} failed (attempt {Attempt}); it stays pending", p.RequestKey, p.StationCode, attempts);
+                logger.LogError(ex, "Station request {Key} from {Station} failed (attempt {Attempt}); it stays pending. {EventCode}", p.RequestKey, p.StationCode, attempts, "STATION_REQUEST_FAILED");
                 var giveUp = attempts >= Math.Max(1, o.RcsMaxAttempts);
                 await Decide(p.RequestKey, r =>
                 {
                     r.RegisterFailure(ex.Message, clock.UtcNow);
                     if (giveUp) r.MarkFailed($"automatic processing stopped after {attempts} attempts: {ex.Message}", clock.UtcNow);
                 }, ct);
-                if (giveUp) logger.LogError("Station request {Key} stopped after {Attempts} attempts; an operator has to decide", p.RequestKey, attempts);
+                if (giveUp) logger.LogError("Station request {Key} stopped after {Attempts} attempts; an operator has to decide. {EventCode}", p.RequestKey, attempts, "STATION_REQUEST_ABANDONED");
             }
         }
         return handled;

@@ -94,6 +94,8 @@ internal sealed class TransportOrderConfiguration : IEntityTypeConfiguration<Tra
         b.Property(x => x.SnapshotJson).HasColumnType("text").IsRequired();
         b.Property(x => x.RequestLocationCode).HasMaxLength(50).IsRequired();
         b.Property(x => x.RequestedBy).HasMaxLength(100);
+        b.Property(x => x.CorrelationId).HasMaxLength(100);   // CR-021
+        b.HasIndex(x => x.CorrelationId);
         b.Property(x => x.StateReason).HasMaxLength(1000);
         b.Property(x => x.CurrentStepKey).HasMaxLength(60);
         b.Property(x => x.Version).IsRowVersion();
