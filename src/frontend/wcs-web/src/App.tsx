@@ -14,6 +14,7 @@ import { ConfigPage } from './pages/ConfigPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { LoginPage } from './pages/LoginPage'
+import { DiagnosticsPage } from './pages/DiagnosticsPage'
 import { PlcConnectionsPage } from './pages/PlcConnectionsPage'
 import { PlcIoMappingPage } from './pages/PlcIoMappingPage'
 import { PlcPage } from './pages/PlcPage'
@@ -53,6 +54,7 @@ function App() {
         <Route path="processes" element={<RequireRole roles={['Admin']}><ProcessesPage /></RequireRole>} />
         <Route path="plc" element={<PlcPage />} />
         <Route path="plc/connections" element={<RequireRole roles={['Admin']}><PlcConnectionsPage /></RequireRole>} />
+        <Route path="diagnostics" element={<RequireRole roles={['Admin']}><DiagnosticsPage /></RequireRole>} />
         <Route path="plc/io-mapping" element={<RequireRole roles={['Admin']}><PlcIoMappingPage /></RequireRole>} />
         <Route path="account" element={<AccountPage />} />
         <Route path="account/password" element={<Navigate to="/account" replace />} />

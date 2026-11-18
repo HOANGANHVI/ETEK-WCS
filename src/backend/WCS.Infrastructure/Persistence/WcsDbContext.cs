@@ -26,6 +26,8 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<WCS.Domain.Plc.PlcStation> PlcStations => Set<WCS.Domain.Plc.PlcStation>();
     public DbSet<WCS.Domain.Plc.StationIoPoint> StationIoPoints => Set<WCS.Domain.Plc.StationIoPoint>();
     public DbSet<WCS.Domain.Plc.PlcCommLogEntry> PlcCommLog => Set<WCS.Domain.Plc.PlcCommLogEntry>();
+    /// <summary>PLC diagnostics: latest MC request/response pairs per PLC.</summary>
+    public DbSet<WCS.Domain.Plc.PlcExchangeLogEntry> PlcExchangeLog => Set<WCS.Domain.Plc.PlcExchangeLogEntry>();
     public DbSet<WCS.Domain.Logging.SystemLogEntry> SystemLog => Set<WCS.Domain.Logging.SystemLogEntry>();
     // CR-010: configurable Business Process, multi-leg Transport Task and per-port Station Transaction (additive).
     public DbSet<WCS.Domain.Routing.BusinessProcess> BusinessProcesses => Set<WCS.Domain.Routing.BusinessProcess>();

@@ -9,7 +9,7 @@ namespace WCS.Infrastructure.Plc.Mc;
 /// <see cref="ConnectTimeout"/>, <see cref="ReadTimeout"/> and <see cref="WriteTimeout"/> are optional per-operation overrides of <see cref="Timeout"/>.
 /// </summary>
 public sealed record McClientSettings(string Host, int Port, McRoute Route, ushort MonitoringTimer, TimeSpan Timeout, int MaxReadRetries = 1, TimeSpan? RetryDelay = null,
-    TimeSpan? ConnectTimeout = null, TimeSpan? ReadTimeout = null, TimeSpan? WriteTimeout = null, string PlcId = "")
+    TimeSpan? ConnectTimeout = null, TimeSpan? ReadTimeout = null, TimeSpan? WriteTimeout = null, string PlcId = "", Action<PlcExchange>? OnExchange = null)
 {
     public TimeSpan EffectiveConnectTimeout => ConnectTimeout ?? Timeout;
     public TimeSpan EffectiveReadTimeout => ReadTimeout ?? Timeout;
@@ -34,13 +34,14 @@ public sealed class McTcpClient(McClientSettings settings) : IAsyncDisposable
     private long _requests, _failures, _timeouts, _reconnects, _bytesSent, _bytesReceived;
     private int? _lastEndCode; private string? _lastError; private long? _lastLatency; private DateTimeOffset? _lastOk, _lastErrAt;
     private PlcExchange? _lastExchange, _lastFailedExchange;
+    private string? _lastErrorCode, _lastSocketError;   // diagnostics only: standard code / SocketError of the last failure
 
     public McClientSettings Settings { get; } = settings;
     public EndpointState State { get; private set; } = EndpointState.Disconnected;
 
     public PlcDiagnostics Diagnostics
     {
-        get { lock (_diag) return new PlcDiagnostics(_requests, _failures, _timeouts, _reconnects, _lastEndCode, _lastError, _lastLatency, _lastOk, _lastErrAt, _bytesSent, _bytesReceived, _lastExchange, _lastFailedExchange); }
+        get { lock (_diag) return new PlcDiagnostics(_requests, _failures, _timeouts, _reconnects, _lastEndCode, _lastError, _lastLatency, _lastOk, _lastErrAt, _bytesSent, _bytesReceived, _lastExchange, _lastFailedExchange, _lastErrorCode, _lastSocketError); }
     }
 
     public async Task ConnectAsync(CancellationToken ct)
@@ -66,7 +67,7 @@ public sealed class McTcpClient(McClientSettings settings) : IAsyncDisposable
         cts.CancelAfter(Settings.EffectiveConnectTimeout);
         try { await tcp.ConnectAsync(Settings.Host, Settings.Port, cts.Token); }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { tcp.Dispose(); Fail("connect timeout", timeout: true); throw new TimeoutException($"connect to {Settings.Host}:{Settings.Port} timed out"); }
-        catch (Exception ex) when (ex is SocketException or IOException) { tcp.Dispose(); Fail(ex.Message); throw; }
+        catch (Exception ex) when (ex is SocketException or IOException) { tcp.Dispose(); Fail(ex.Message, ex: ex); throw; }
         _tcp = tcp; _stream = tcp.GetStream(); State = EndpointState.Connected;
     }
 
@@ -77,10 +78,13 @@ public sealed class McTcpClient(McClientSettings settings) : IAsyncDisposable
         _stream = null; _tcp = null;
     }
 
-    private void Fail(string error, bool timeout = false, int? endCode = null)
+    private void Fail(string error, bool timeout = false, int? endCode = null, Exception? ex = null)
     {
+        PlcDiagResult? cls = null;
+        try { cls = ex is null ? null : PlcDiagClassifier.Classify(ex, PlcDiagStages.Tcp); } catch (Exception) { /* diagnostics must never disturb the exchange */ }
         lock (_diag)
         {
+            _lastErrorCode = cls?.Code ?? PlcDiagClassifier.ClassifyText(error); _lastSocketError = cls?.SocketError;
             _failures++; if (timeout) _timeouts++;
             _lastError = error; _lastErrAt = DateTimeOffset.UtcNow; if (endCode is not null) _lastEndCode = endCode;
         }
@@ -133,7 +137,7 @@ public sealed class McTcpClient(McClientSettings settings) : IAsyncDisposable
                 catch (Exception ex) when (ex is TimeoutException or IOException or SocketException or McProtocolException or ObjectDisposedException)
                 {
                     lock (_diag) _requests++;
-                    Fail(ex.Message, timeout: ex is TimeoutException);
+                    Fail(ex.Message, timeout: ex is TimeoutException, ex: ex);
                     Close();
                     var ambiguous = !retryable && trace.Sent;
                     Record(frame, trace, sw, null, ambiguous ? "AMBIGUOUS" : ex is TimeoutException ? "TIMEOUT" : "FAILED", ex.Message, ambiguous);
@@ -199,6 +203,7 @@ public sealed class McTcpClient(McClientSettings settings) : IAsyncDisposable
         var entry = new PlcExchange(DateTimeOffset.UtcNow, Settings.PlcId, command == McFrame.CommandBatchWrite ? "WRITE" : "READ", $"0x{command:X4}", device, head, points,
             sw.ElapsedMilliseconds, endCode, outcome, error, Hex(frame), response, ambiguous);
         lock (_diag) { _lastExchange = entry; if (outcome != "OK") _lastFailedExchange = entry; }
+        try { Settings.OnExchange?.Invoke(entry); } catch (Exception) { /* storing the history must never disturb the PLC exchange */ }
     }
 
     /// <summary>Space separated upper-case hex, capped so a large write cannot bloat diagnostics.</summary>

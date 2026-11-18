@@ -15,7 +15,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
     private readonly AddressBases _bases;
     public string PlcId { get; }
 
-    public McPlcEndpoint(PlcEndpointConfig c)
+    public McPlcEndpoint(PlcEndpointConfig c, IPlcExchangeSink? exchangeSink = null)
     {
         var missing = new List<string>();
         if (c.Port is null) missing.Add("port");
@@ -33,7 +33,8 @@ public sealed class McPlcEndpoint : IPlcEndpoint
         _client = new McTcpClient(new McClientSettings(c.IpAddress, c.Port!.Value,
             new McRoute((byte)c.NetworkNumber!.Value, (byte)c.PcNumber!.Value, (ushort)c.ModuleIoNumber!.Value, (byte)c.PlcStationNumber!.Value),
             (ushort)c.MonitoringTimer!.Value, TimeSpan.FromMilliseconds(c.TimeoutMs!.Value),
-            ConnectTimeout: Ms(c.ConnectTimeoutMs), ReadTimeout: Ms(c.ReadTimeoutMs), WriteTimeout: Ms(c.WriteTimeoutMs), PlcId: c.PlcId));
+            ConnectTimeout: Ms(c.ConnectTimeoutMs), ReadTimeout: Ms(c.ReadTimeoutMs), WriteTimeout: Ms(c.WriteTimeoutMs), PlcId: c.PlcId,
+            OnExchange: exchangeSink is null ? null : exchangeSink.Record));
     }
 
     public EndpointState State => _client.State;

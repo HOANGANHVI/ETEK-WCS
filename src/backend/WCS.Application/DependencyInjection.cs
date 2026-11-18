@@ -13,6 +13,7 @@ public static class DependencyInjection
     {
         services.Configure<ProcessFlowOptions>(configuration.GetSection(ProcessFlowOptions.SectionName));
         services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
+        services.Configure<Diagnostics.DiagnosticExportOptions>(configuration.GetSection(Diagnostics.DiagnosticExportOptions.SectionName));
         services.Configure<Routing.RouteEngineOptions>(configuration.GetSection(Routing.RouteEngineOptions.SectionName));
 
         services.AddSingleton<IClock, SystemClock>();
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<ReconciliationService>();   // CR-008B-3
         services.AddScoped<AgvHoldService>();   // CR-008B-5
         services.AddScoped<AgvStatusService>();
+        services.AddScoped<Diagnostics.DiagnosticExportService>();   // PLC diagnostic export (P1)
         // CR-010
         services.AddScoped<Routing.RouteConditionEvaluator>();
         services.AddScoped<Routing.ProcessValidator>();

@@ -164,6 +164,7 @@ public static class Endpoints
         // ---- PLC topology, IO catalog, monitoring (CR-002)
         api.MapPlcApi();
         api.MapRoutingApi();   // CR-010
+        api.MapDiagnosticApi();   // PLC diagnostic export
 
         // ---- Process flows available for task requests (read-only view of the deployed configuration; lets the UI avoid hard-coding stations)
         api.MapGet("/flows", (HttpContext c, WCS.Application.Flows.IFlowCatalog flows) =>

@@ -44,6 +44,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body.data as T
 }
 
+/** Downloads the PLC diagnostic ZIP (binary, so it bypasses the JSON envelope of request()). Errors keep the same ApiRequestError shape. */
+async function downloadPlcDiagnostics(f: { plcId?: string; quick?: string; from?: string; to?: string }): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}/api/diagnostics/plc/export${qs(f)}`, { credentials: 'include', headers: { 'X-WCS-Client': 'web' } })
+  } catch {
+    throw new ApiRequestError(0, { code: 'NETWORK_ERROR', message: 'Cannot reach the WCS API.' })
+  }
+  if (!res.ok) {
+    let body: ApiResponse<unknown> | null = null
+    try { body = (await res.json()) as ApiResponse<unknown> } catch { /* non-JSON */ }
+    if (res.status === 401) window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+    throw new ApiRequestError(res.status, body?.error ?? { code: 'HTTP_' + res.status, message: res.statusText || 'Request failed' })
+  }
+  const name = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers.get('Content-Disposition') ?? '')?.[1]
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url; a.download = name ? decodeURIComponent(name) : 'WCS_Diagnostic.zip'
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
 const qs = (params: Record<string, string | number | undefined>) => {
   const s = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') s.set(k, String(v))
@@ -112,6 +134,7 @@ const realApi = {
     request<AuditRow[]>(`/api/audit${qs({ actor: f.actor, action: f.action, result: f.result, skip: f.skip ?? 0, take: f.take ?? 100 })}`),
 
   // PLC monitoring and configuration (CR-002)
+  downloadPlcDiagnostics,
   plcOverview: () => request<PlcOverview>('/api/plc/overview'),
   plcStationIo: (stationId: string) => request<StationSnapshot>(`/api/plc/stations/${encodeURIComponent(stationId)}/io`),
   plcHandshake: () => request<HandshakeState[]>('/api/plc/handshake'),
@@ -119,6 +142,9 @@ const realApi = {
   plcConnections: () => request<PlcConnection[]>('/api/plc/connections'),
   plcSaveConnection: (plcId: string, b: SavePlcConnectionBody) => request<PlcConnection>(`/api/plc/connections/${plcId}`, { method: 'PUT', body: JSON.stringify(b) }),
   plcTestConnection: (plcId: string) => request<ProbeResultView>(`/api/plc/connections/${plcId}/test`, { method: 'POST' }),
+  plcBulkApprovalPreview: (plcId: string) => request<BulkApprovalPreview>(`/api/plc/connections/${plcId}/bulk-approval`),
+  plcBulkApprove: (plcId: string, expectedEligible: number) =>
+    request<BulkApprovalResult>(`/api/plc/connections/${plcId}/bulk-approval`, { method: 'POST', body: JSON.stringify({ confirm: true, expectedEligible }) }),
   plcAddressCheck: (plcId: string) => request<AddressIssue[]>(`/api/plc/connections/${plcId}/address-check`),
   plcSetAddress: (id: string, b: { address: string; wordLength?: number | null; encoding?: string | null }) =>
     request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'PUT', body: JSON.stringify(b) }),
@@ -142,9 +168,6 @@ const realApi = {
   processCreate: (b: ProcessHeaderBody) => request<Process>('/api/processes', { method: 'POST', body: JSON.stringify(b) }),
   processUpdate: (id: string, b: ProcessHeaderBody) => request<Process>(`/api/processes/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   processNewVersion: (id: string, fromVersionId?: string) => request<ProcessVersion>(`/api/processes/${id}/versions`, { method: 'POST', body: JSON.stringify({ fromVersionId }) }),
-  plcBulkApprovalPreview: (plcId: string) => request<BulkApprovalPreview>(`/api/plc/connections/${plcId}/bulk-approval`),
-  plcBulkApprove: (plcId: string, expectedEligible: number) =>
-    request<BulkApprovalResult>(`/api/plc/connections/${plcId}/bulk-approval`, { method: 'POST', body: JSON.stringify({ confirm: true, expectedEligible }) }),
   processImportReference: () => request<ImportResult>('/api/processes/import-reference', { method: 'POST' }),
   processAudit: () => request<AuditRow[]>('/api/processes/audit?take=200'),
   processVersion: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}`),

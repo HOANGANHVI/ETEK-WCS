@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.0 – CR-013 PLC Diagnostic Logging and Export (2026-11-18)
+
+- Change Request: CR-013. Status: IMPLEMENTED (code); not deployed, not verified against a real PLC.
+- Added: standard diagnostic codes/stages, `plc_exchange_log` (300 per PLC), configuration snapshot, Admin ZIP export API and System > Diagnostics page; migration `AddPlcDiagnostics`.
+- Changed: instrumentation only in `PlcWorker`, `PlcRuntime`, `McTcpClient`, `McPlcEndpoint`.
+- Tests added: `PlcDiagnosticsTests` (25), `PlcDiagnosticsIntegrationTests` (11).
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v2.9 – CR-012 Pollable without approval (2026-11-18)
 
 - Change Request: CR-012. Status: IMPLEMENTED (code); not deployed.

@@ -77,10 +77,10 @@ public sealed class SimulatedPlcEndpoint(string plcId, SimulatedPlcNetwork netwo
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
-public sealed class PlcEndpointFactory(SimulatedPlcNetwork network) : IPlcEndpointFactory
+public sealed class PlcEndpointFactory(SimulatedPlcNetwork network, IPlcExchangeSink exchangeSink) : IPlcEndpointFactory
 {
     public IPlcEndpoint Create(PlcRuntimeMode mode, PlcEndpointConfig config) =>
-        mode == PlcRuntimeMode.Simulator ? new SimulatedPlcEndpoint(config.PlcId, network) : new McPlcEndpoint(config);
+        mode == PlcRuntimeMode.Simulator ? new SimulatedPlcEndpoint(config.PlcId, network) : new McPlcEndpoint(config, exchangeSink);
 }
 
 /// <summary>
@@ -124,6 +124,14 @@ public sealed class PlcEventDispatcher : IPlcEvents, IDisposable
 
         var entry = new PlcCommLogEntry(_clock.UtcNow, plcId, stationId, level, eventName, message);
         entry.WithDetails(MergeArgs(details is { IsEmpty: false } ? details.ToJson() : null, args));
+        try
+        {
+            var (inferredCode, inferredStage) = PlcDiag.Infer(eventName, message);
+            var code = args is not null && args.TryGetValue(PlcDiag.CodeKey, out var c) && c is string cs ? cs : inferredCode;
+            var stage = args is not null && args.TryGetValue(PlcDiag.StageKey, out var st) && st is string ss ? ss : inferredStage;
+            entry.WithDiag(code, stage);
+        }
+        catch (Exception) { /* diagnostics must never disturb the PLC worker */ }
         _channel.Writer.TryWrite(new LogItem(entry));
     }
 

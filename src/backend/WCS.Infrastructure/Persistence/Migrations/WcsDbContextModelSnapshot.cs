@@ -533,6 +533,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<string>("DetailsJson")
                         .HasColumnType("text");
 
+                    b.Property<string>("DiagCode")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
                     b.Property<string>("Event")
                         .IsRequired()
                         .HasMaxLength(60)
@@ -555,6 +559,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("Stage")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("StationId")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -564,6 +572,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("OccurredAt");
 
                     b.HasIndex("PlcId", "OccurredAt");
+
+                    b.HasIndex("PlcId", "Stage", "OccurredAt");
 
                     b.ToTable("plc_comm_log", (string)null);
                 });
@@ -646,6 +656,73 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("plc_connections", (string)null);
+                });
+
+            modelBuilder.Entity("WCS.Domain.Plc.PlcExchangeLogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Command")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<string>("Device")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("EndCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("IsAmbiguous")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PlcId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Points")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RequestHex")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("ResponseHex")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int>("StartAddress")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlcId", "OccurredAt");
+
+                    b.ToTable("plc_exchange_log", (string)null);
                 });
 
             modelBuilder.Entity("WCS.Domain.Plc.PlcStation", b =>

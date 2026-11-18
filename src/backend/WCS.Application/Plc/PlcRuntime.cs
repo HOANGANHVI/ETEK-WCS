@@ -128,8 +128,39 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
             var cfg = new PlcEndpointConfig(c.Id, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer, c.TimeoutMs, c.PollingIntervalMs,
                 c.ConnectTimeoutMs, c.ReadTimeoutMs, c.WriteTimeoutMs, c.XyAddressBase, c.WAddressBase);
             result.Add(new PlcWorker(c.Id, c.Name, mode, o, cfg, enabled, why, handlers, factory, events, clock));
+            LogConfigSnapshot(c, cfg, mode, enabled, why, handlers);
         }
         return result;
+    }
+
+    /// <summary>One structured line per PLC at start and at every reload: what is configured and why a connection will (not) be attempted. Contains no secret.</summary>
+    private void LogConfigSnapshot(WCS.Domain.Plc.PlcConnection c, PlcEndpointConfig cfg, PlcRuntimeMode mode, bool enabled, string? why, IReadOnlyList<StationIoHandler> handlers)
+    {
+        try
+        {
+            var o = Options;
+            var missing = c.MissingParameters();
+            var (whyCode, _) = PlcDiag.Infer("DISABLED", why ?? "");
+            var frame = (c.Protocol ?? "").Contains("3E", StringComparison.OrdinalIgnoreCase) ? "MC 3E" : (c.Protocol ?? "").Contains("4E", StringComparison.OrdinalIgnoreCase) ? "MC 4E" : null;
+            var encoding = (c.Protocol ?? "").Contains("Binary", StringComparison.OrdinalIgnoreCase) ? "Binary" : (c.Protocol ?? "").Contains("Ascii", StringComparison.OrdinalIgnoreCase) ? "ASCII" : null;
+            var points = handlers.SelectMany(h => h.Points).ToList();
+            var willConnect = enabled && mode != PlcRuntimeMode.Simulator && missing.Count == 0;
+            var reason = mode == PlcRuntimeMode.Simulator ? "simulator mode: no physical connection"
+                : !o.AllowLiveConnection ? PlcDiagCodes.LiveConnectionDisabled : !c.Enabled ? PlcDiagCodes.ConnectionNotEnabled
+                : missing.Count > 0 ? PlcDiagCodes.ConfigurationMissing : "connection will be attempted";
+            events.Log(PlcLogLevel.Info, c.Id, null, "CONFIG_SNAPSHOT",
+                $"{c.Id} ({c.Name}) {cfg.IpAddress}:{cfg.Port?.ToString() ?? "?"} protocol {c.Protocol ?? "?"}; adminEnabled={c.Enabled}; mode={mode}; allowLive={o.AllowLiveConnection}; {reason}.",
+                PlcDiag.Args(missing.Count > 0 && whyCode is null && mode != PlcRuntimeMode.Simulator ? PlcDiagCodes.ConfigurationMissing : whyCode, PlcDiagStages.Config,
+                    ("plcName", c.Name), ("ip", cfg.IpAddress), ("port", cfg.Port), ("protocol", c.Protocol), ("frame", frame), ("encoding", encoding),
+                    ("networkNo", cfg.NetworkNumber), ("pcNo", cfg.PcNumber), ("moduleIoNo", cfg.ModuleIoNumber), ("stationNo", cfg.PlcStationNumber),
+                    ("monitoringTimer", cfg.MonitoringTimer), ("timeoutMs", cfg.TimeoutMs), ("connectTimeoutMs", cfg.ConnectTimeoutMs), ("readTimeoutMs", cfg.ReadTimeoutMs),
+                    ("writeTimeoutMs", cfg.WriteTimeoutMs), ("pollingIntervalMs", cfg.PollingIntervalMs), ("adminEnabled", c.Enabled), ("workerEnabled", enabled),
+                    ("mode", Options.Mode.ToString()), ("effectiveMode", mode.ToString()), ("allowLiveConnection", o.AllowLiveConnection),
+                    ("writeEnabled", o.Write.Enabled), ("writeKeysComplete", WritePolicy.WriteKeysComplete(o)), ("willAttemptConnection", willConnect), ("reason", reason),
+                    ("missing", missing.Count == 0 ? null : string.Join(",", missing)), ("stations", handlers.Count), ("points", points.Count),
+                    ("pollable", points.Count(p => p.Pollable)), ("hasAddress", points.Count(p => !string.IsNullOrWhiteSpace(p.Address)))));
+        }
+        catch (Exception) { /* diagnostics must never disturb start-up */ }
     }
 
     public async Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default, bool handshake = false)
@@ -141,7 +172,8 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         var decision = WritePolicy.Evaluate(Options, point, handshake);
         if (!decision.Allowed)
         {
-            events.Log(PlcLogLevel.Warning, plcId, stationId, "WRITE_DENIED", $"{actor}: {stationId}/{signal} blocked ({decision.Code}).", WCS.Application.Logging.LogArgs.Of(("actor", actor), ("station", stationId), ("signal", signal), ("code", decision.Code)));
+            events.Log(PlcLogLevel.Warning, plcId, stationId, "WRITE_DENIED", $"{actor}: {stationId}/{signal} blocked ({decision.Code}).", PlcDiag.Args(PlcDiagCodes.WriteBlocked, PlcDiagStages.Write, ("actor", actor), ("station", stationId), ("signal", signal), ("code", decision.Code), ("blockedBy", decision.Code),
+                ("mode", WritePolicy.EffectiveMode(Options).ToString()), ("address", point.Address)));
             return new WriteResult(false, decision.Code, decision.Reason);
         }
         if (value.Type != point.DataType) return new WriteResult(false, "TYPE_MISMATCH", $"Tín hiệu kiểu {point.DataType}, giá trị kiểu {value.Type}.");

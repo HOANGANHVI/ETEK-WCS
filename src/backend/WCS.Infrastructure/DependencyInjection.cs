@@ -79,9 +79,12 @@ public static class DependencyInjection
         services.AddScoped<WCS.Infrastructure.Logging.DeploymentLogImporter>();
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
         services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
+        services.AddScoped<WCS.Application.Diagnostics.IPlcDiagnosticSource, WCS.Infrastructure.Plc.PlcDiagnosticSource>();
         services.AddSingleton<WCS.Application.Plc.IPlcTemplateProvider, WCS.Infrastructure.Plc.PlcTemplateProvider>();   // CR-010 Default IO Mapping Template
         services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
         services.AddSingleton<WCS.Application.Plc.ISimulatorControl>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.SimulatedPlcNetwork>());
+        services.AddSingleton<WCS.Infrastructure.Plc.PlcExchangeRecorder>();   // PLC diagnostics: stored MC exchange history
+        services.AddSingleton<WCS.Application.Plc.IPlcExchangeSink>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.PlcExchangeRecorder>());
         services.AddSingleton<WCS.Application.Plc.IPlcEndpointFactory, WCS.Infrastructure.Plc.PlcEndpointFactory>();
         services.AddSingleton<WCS.Application.Plc.IPlcEvents, WCS.Infrastructure.Plc.PlcEventDispatcher>();
 

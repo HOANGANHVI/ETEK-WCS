@@ -207,5 +207,46 @@ public class PlcCommLogEntry
     /// <summary>CR-007: structured facts (ip, port, previousState, newState, kind, endCode, reason) as JSON; null for events without such context.</summary>
     public string? DetailsJson { get; private set; }
 
+    /// <summary>Diagnostics: standard code (PlcDiagCodes) and stage (PlcDiagStages) as searchable columns. Null for events that carry neither.</summary>
+    public string? DiagCode { get; private set; }
+    public string? Stage { get; private set; }
+
+    public PlcCommLogEntry WithDiag(string? code, string? stage) { DiagCode = code; Stage = stage; return this; }
+
     public PlcCommLogEntry WithDetails(string? json) { DetailsJson = json is { Length: > 4000 } j ? j[..4000] : json; return this; }
+}
+
+/// <summary>
+/// One MC Protocol request/response pair of a PLC connection, kept in PostgreSQL (at most the latest 300 per PLC; older rows are pruned).
+/// Protocol data only: hex is capped, no secrets. ADMIN ONLY.
+/// </summary>
+public class PlcExchangeLogEntry
+{
+    private PlcExchangeLogEntry() { }
+
+    public PlcExchangeLogEntry(DateTimeOffset at, string plcId, string operation, string command, string device, int startAddress, int points, long durationMs,
+        int? endCode, string outcome, string? error, string? requestHex, string? responseHex, bool ambiguous)
+    {
+        Id = Guid.NewGuid(); OccurredAt = at; PlcId = plcId; Operation = operation; Command = command; Device = device; StartAddress = startAddress; Points = points;
+        DurationMs = durationMs; EndCode = endCode; Outcome = outcome; Error = Cut(error, 300); RequestHex = Cut(requestHex, MaxHex); ResponseHex = Cut(responseHex, MaxHex); IsAmbiguous = ambiguous;
+    }
+
+    public const int MaxHex = 400;
+    private static string? Cut(string? s, int n) => s is null ? null : s.Length <= n ? s : s[..n];
+
+    public Guid Id { get; private set; }
+    public DateTimeOffset OccurredAt { get; private set; }
+    public string PlcId { get; private set; } = default!;
+    public string Operation { get; private set; } = default!;
+    public string Command { get; private set; } = default!;
+    public string Device { get; private set; } = default!;
+    public int StartAddress { get; private set; }
+    public int Points { get; private set; }
+    public long DurationMs { get; private set; }
+    public int? EndCode { get; private set; }
+    public string Outcome { get; private set; } = default!;
+    public string? Error { get; private set; }
+    public string? RequestHex { get; private set; }
+    public string? ResponseHex { get; private set; }
+    public bool IsAmbiguous { get; private set; }
 }
