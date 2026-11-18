@@ -11,7 +11,7 @@ import { describeError } from '../i18n/vi'
 import { AddressDialog, SimDialog, type DialogPoint } from './plc/plcDialogs'
 import { TypedWriteDialog, WriteApprovalDialog } from './plc/writeDialogs'
 import { BLOCKED_SIGNALS, deviceOf, WRITE_TONE } from './plc/plcFormat'
-import { runtimeAllowsWrite, writeReadiness, type WriteBlock } from '../lib/plcWrite'
+import { runtimeAllowsWrite, writeKeyChecklist, writeReadiness, type WriteBlock } from '../lib/plcWrite'
 import { ConfigPill } from './plc/plcUi'
 
 const PLCS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04'] as const
@@ -86,6 +86,13 @@ export function PlcIoMappingPage() {
       <div className={`notice ${!runtime ? 'notice-info' : writeOk ? 'notice-ok' : 'notice-warn'}`} role="status" aria-label={t('plc.writeRtTitle')}>
         <strong>{t('plc.writeRtTitle')}: </strong>
         {!runtime ? t('plc.writeRtLoading') : writeOk ? t('plc.writeRtOk', { mode }) : (runtime.missingWriteKeys?.length ? t('plc.writeRtReadOnly', { list: runtime.missingWriteKeys.join(', ') }) : t('plc.writeRtReadOnlyNoList'))}
+        {runtime && !simulator && (
+          <div className="btn-row" style={{ marginTop: 8 }} aria-label={t('plc.writeKeysTitle')}>
+            {writeKeyChecklist(runtime).map((k) => (
+              <Pill key={k.key} tone={k.ok ? 'ok' : 'bad'} dot={false}>{k.ok ? '✓' : '✗'} {k.key}{k.current ? ' = ' + k.current : ''}</Pill>
+            ))}
+          </div>
+        )}
       </div>
       <Panel title={t('plc.filters')} subtitle={t('plc.filterSummary', { total: counts.total, configured: counts.configured, pollable: counts.pollable })}>
         <div className="form-grid">
