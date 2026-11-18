@@ -27,6 +27,7 @@ public sealed record PlcWorkerStatus(string PlcId, string Name, string State, st
 public sealed class PlcWorker : IAsyncDisposable
 {
     private sealed record WriteRequest(IoPointRef Point, PointValue Value, TaskCompletionSource<WriteResult> Done);
+    private sealed record ReadRequest(StationIoHandler Station, IoPointRef Point, TaskCompletionSource<ReadResult> Done);
 
     private readonly string _plcId, _name;
     private readonly PlcRuntimeMode _mode;
@@ -39,6 +40,8 @@ public sealed class PlcWorker : IAsyncDisposable
     private readonly IPlcEvents _events;
     private readonly IClock _clock;
     private readonly Channel<WriteRequest> _writes = Channel.CreateUnbounded<WriteRequest>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<ReadRequest> _reads = Channel.CreateUnbounded<ReadRequest>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Dictionary<Guid, Task<ReadResult>> _readsInFlight = [];      // CR-020: one pending on-demand read per point; further requests share it
     private readonly SemaphoreSlim _wake = new(0);
     private readonly object _gate = new();
     private readonly Dictionary<string, DateTimeOffset> _lastLogged = [];
@@ -79,8 +82,9 @@ public sealed class PlcWorker : IAsyncDisposable
         _cts?.Cancel();
         _wake.Release();
         if (_loop is not null) { try { await _loop; } catch (OperationCanceledException) { /* stopping */ } }
-        _writes.Writer.TryComplete();
+        _writes.Writer.TryComplete(); _reads.Writer.TryComplete();
         while (_writes.Reader.TryRead(out var w)) w.Done.TrySetResult(new WriteResult(false, "STOPPED", "Kết nối PLC đã dừng."));
+        while (_reads.Reader.TryRead(out var rr)) CompleteRead(rr, new ReadResult(false, "STOPPED", "The PLC connection is stopped."));
     }
 
     public async ValueTask DisposeAsync()
@@ -121,6 +125,57 @@ public sealed class PlcWorker : IAsyncDisposable
         if (!_writes.Writer.TryWrite(new WriteRequest(point, value, tcs))) return Task.FromResult(new WriteResult(false, "STOPPED", "Kết nối PLC đã dừng."));
         _wake.Release();
         return tcs.Task;
+    }
+
+    // -------------------------------------------------------------------------------------------------------------------- on-demand reads (CR-020)
+    /// <summary>
+    /// Queues an immediate read of ONE point. It runs on this worker's single connection between cycles (same driver, same socket, no second channel); a request for a point that already has
+    /// one pending shares that read, so repeated clicks never multiply PLC traffic. The handler is updated exactly like a polled value.
+    /// </summary>
+    public Task<ReadResult> EnqueueReadAsync(StationIoHandler station, IoPointRef point)
+    {
+        lock (_gate)
+        {
+            if (_readsInFlight.TryGetValue(point.Id, out var pending)) return pending;
+            var tcs = new TaskCompletionSource<ReadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!_reads.Writer.TryWrite(new ReadRequest(station, point, tcs))) return Task.FromResult(new ReadResult(false, "STOPPED", "The PLC connection is stopped."));
+            _readsInFlight[point.Id] = tcs.Task;
+            _wake.Release();
+            return tcs.Task;
+        }
+    }
+
+    private void CompleteRead(ReadRequest r, ReadResult result)
+    {
+        lock (_gate) _readsInFlight.Remove(r.Point.Id);
+        r.Done.TrySetResult(result);
+    }
+
+    private async Task DrainReadsAsync(CancellationToken ct)
+    {
+        while (_reads.Reader.TryRead(out var r))
+        {
+            if (_endpoint is null || _endpoint.State != EndpointState.Connected) { CompleteRead(r, new ReadResult(false, "NOT_CONNECTED", "The PLC is not connected.")); continue; }
+            try
+            {
+                var readings = await _endpoint.ReadStationAsync([r.Point], ct);
+                var changed = r.Station.Apply(readings, _clock.UtcNow, _mode == PlcRuntimeMode.Simulator);
+                if (changed.Count > 0) _events.Publish("StationIoChanged", r.Station.Snapshot(false, changed));
+                var x = readings[0];
+                CompleteRead(r, x.Quality switch
+                {
+                    PointQuality.Good or PointQuality.Simulated => new ReadResult(true, null, null, x.Value),
+                    PointQuality.NotConfigured => new ReadResult(false, "NOT_CONFIGURED", "The IO has no valid address: nothing is read."),
+                    _ => new ReadResult(false, "READ_FAILED", x.Error ?? "Reading the PLC failed."),
+                });
+            }
+            catch (OperationCanceledException) { CompleteRead(r, new ReadResult(false, "CANCELLED", "Cancelled.")); throw; }
+            catch (Exception ex)
+            {
+                r.Station.Apply([new PointReading(r.Point.Id, null, PointQuality.Bad, ex.Message)], _clock.UtcNow, false);
+                CompleteRead(r, new ReadResult(false, "READ_FAILED", ex.Message));
+            }
+        }
     }
 
     private async Task DrainWritesAsync(CancellationToken ct)
@@ -214,6 +269,7 @@ public sealed class PlcWorker : IAsyncDisposable
                 }
 
                 await DrainWritesAsync(ct);
+                await DrainReadsAsync(ct);
                 var linkLost = false;
                 foreach (var station in _stations)
                 {
@@ -239,6 +295,7 @@ public sealed class PlcWorker : IAsyncDisposable
                     }
                     if (_endpoint.State != EndpointState.Connected) { linkLost = true; break; }
                     await DrainWritesAsync(ct);
+                    await DrainReadsAsync(ct);
                 }
                 lock (_gate) { _cycles++; _lastPoll = _clock.UtcNow; }
 
@@ -272,6 +329,7 @@ public sealed class PlcWorker : IAsyncDisposable
     private void FailPendingWrites(string code, string message)
     {
         while (_writes.Reader.TryRead(out var w)) w.Done.TrySetResult(new WriteResult(false, code, message));
+        while (_reads.Reader.TryRead(out var r)) CompleteRead(r, new ReadResult(false, code, message));
     }
 
     private void MarkAllDisconnected(string? reason)

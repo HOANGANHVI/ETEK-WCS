@@ -187,6 +187,8 @@ public sealed class PlcRuntimeOptions
     public int ReconnectInitialDelayMs { get; set; } = 1000;
     public int ReconnectMaxDelayMs { get; set; } = 15000;
     public int LogRetentionDays { get; set; } = 30;
+    /// <summary>CR-020: a Good value not refreshed for longer than this is shown as Stale on the monitoring screen (polling normally refreshes it every cycle).</summary>
+    public int StaleAfterSeconds { get; set; } = 15;
     /// <summary>Diagnostics: MC request/response pairs kept per PLC in PostgreSQL (older rows are pruned).</summary>
     public int ExchangeHistoryPerPlc { get; set; } = 300;
     /// <summary>Diagnostics: successful exchanges are stored at most once per PLC per this many seconds (failures are always stored). 0 = store all.</summary>

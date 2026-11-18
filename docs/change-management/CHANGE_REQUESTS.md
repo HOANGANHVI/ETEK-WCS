@@ -36,6 +36,7 @@
 | CR-016 | PLC write UI: always show the write action with the concrete reason when it cannot be used; runtime write readiness | Project owner instruction (2026-11-18) | **IMPLEMENTED** (code; not deployed; no real PLC written) | 2026-11-18 | "Ghi PLC" button always shown for writable IO, readiness banner, runtime info with missing key names |
 | CR-017 | Why the Deploy runtime stays read-only: configuration chain, .env.example, diagnostics | Project owner instruction (2026-11-18) | **IMPLEMENTED** (code, configuration, tools; not deployed; no real PLC written) | 2026-11-18 | `.env.example` fixed, `plc-write-config.ps1`, `MissingWriteKeys`, key checklist in the banner, binding tests |
 | CR-019 | Simplify PLC write approval: remove PLC_WRITE_APPROVAL_REFERENCE and PLC_WRITE_HANDSHAKE_APPROVED | Project owner instruction (2026-11-18) | **IMPLEMENTED** (not deployed; no real PLC written) | 2026-11-18 | Single approval = Admin per-point write approval; runtime keys reduced to PLC_MODE, PLC_ALLOW_LIVE_CONNECTION, PLC_WRITE_ENABLED |
+| CR-020 | Unified PLC monitoring and I/O operations: Read/Write moved to PLC Monitoring; IO Address Mapping is configuration only | Project owner instruction (2026-11-18) | **IMPLEMENTED** (verified against the MC mock only; not deployed; no real PLC touched) | 2026-11-18 | New "I/O monitoring" tab, `monitor/points`, `signals/{s}/read`, read-back after write |
 
 ## New Change Request template
 
@@ -367,3 +368,14 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Kept unchanged:** Admin-only, per-point write approval, AddressValidator, WriteValueValidator, safety/permit ban, PLC->Software not writable, confirmation step, audit, WRITE_AMBIGUOUS / no automatic retry, no write on start/connect/open. The protocol handshake rules (`Handshake.cs`, Plc:Handshake) are a separate control function and were NOT touched.
 - **Database impact:** none (no migration; WriteApproval/WriteAllowed data and audit untouched).
 - **Note:** supersedes the key lists of CR-015 and CR-017; the earlier text is kept as history.
+
+### CR-020 – Unified PLC monitoring and I/O operations
+
+- **Status:** IMPLEMENTED. Verified with the MC mock server only. Not deployed. No real PLC was read or written.
+- **IO Address Mapping:** configuration only. Removed from it: the "Ghi PLC" button, the write-status banner, the simulator button. Kept: address, data type, direction, polling status, write approval (decision), all existing filters.
+- **PLC Monitoring:** new tab "I/O monitoring": PLC, station, signal, description, address (Admin), data type, current value, status (Good / Stale / Bad / Offline / Unknown, plus NotConfigured and Simulated), last update, write approval (Admin), Read, Write (Admin). Filter by PLC/station/status/text, sort by column.
+- **Read:** immediate read of one point through the PLC's own worker and connection (`PlcWorker.EnqueueReadAsync`; no second channel, no second polling loop). Concurrent requests for one point share one PLC read. Both roles may read (it never writes).
+- **Write:** the CR-019 dialog and `test-write` API, unchanged guards. New: after a successful write the point is read back once and compared (VERIFIED / MISMATCH / UNAVAILABLE); the outcome is audited and shown. A successful write request is never presented as proof. WRITE_AMBIGUOUS is not read back automatically and never resent.
+- **Status rules:** Good only when the last read succeeded and is not older than `Plc:StaleAfterSeconds` (default 15); the list is recomputed on the server each time it is read.
+- **Not changed:** MC protocol, register mapping, PLC configuration, polling mechanism, CR-019 guards, handshake, diagnostics. No migration. No new PLC traffic from the monitoring list (it reads values the workers already hold).
+- **Not verified against a real PLC:** read/write/read-back timing and values on real hardware.

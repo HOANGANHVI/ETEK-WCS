@@ -39,3 +39,7 @@
 @media (max-width: 640px) { .mon-cards, .mon-charts { grid-template-columns: 1fr; } .mon-actions { justify-content: flex-start; } }
 .mon-chart .ch-axis { fill: var(--text-3); font-size: 10px; }
 .ch-fill-info { fill: var(--navy-500); } .ch-fill-ok { fill: var(--ok); } .ch-fill-warn { fill: var(--amber); } .ch-fill-bad { fill: var(--bad); }
+
+/* CR-020: sortable column header of the PLC I/O monitoring table */
+.th-sort { all: unset; cursor: pointer; font: inherit; font-weight: inherit; color: inherit; }
+.th-sort:hover, .th-sort:focus-visible { text-decoration: underline; }

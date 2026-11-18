@@ -1,7 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { api } from '../../api/client'
 import { ApiRequestError } from '../../api/errors'
-import type { IoPointConfig } from '../../api/plcTypes'
+import type { IoPointConfig, ReadBack } from '../../api/plcTypes'
 import { useAuth } from '../../auth/AuthContext'
 import { Button, Pill } from '../../components/ui'
 import { Modal } from '../../components/Modal'
@@ -16,6 +16,8 @@ const MAX_ASCII = 0x7f
 const INT_MIN = -32768, INT_MAX = 32767
 
 type Details = Pick<IoPointConfig, 'plcId' | 'stationId' | 'signalName' | 'actualAddress' | 'dataType'>
+/** What the write dialog needs of a point: satisfied by an IO-mapping row and by a PLC Monitoring row (CR-020). */
+export type WritePoint = Details & Pick<IoPointConfig, 'wordLength' | 'encoding' | 'writeApproval' | 'writeSupported'>
 
 function PointDetails({ p, extra }: { p: Details; extra?: ReactNode }) {
   const t = useT()
@@ -67,7 +69,7 @@ type Draft = { kind: 'bool'; value: boolean | null } | { kind: 'int'; text: stri
 type Parsed = { ok: true; value: boolean | number | string } | { ok: false; message: string | null }
 
 /** Strict, per data type; the backend repeats every check. Nothing is converted: an invalid input is an error, never a guess. */
-function parseDraft(d: Draft, point: IoPointConfig, t: ReturnType<typeof useT>): Parsed {
+function parseDraft(d: Draft, point: WritePoint, t: ReturnType<typeof useT>): Parsed {
   if (d.kind === 'bool') return d.value === null ? { ok: false, message: null } : { ok: true, value: d.value }
   if (d.kind === 'int') {
     const s = d.text.trim()
@@ -88,7 +90,7 @@ const show = (v: boolean | number | string | null | undefined, t: ReturnType<typ
   v === null || v === undefined ? '—' : typeof v === 'boolean' ? t(v ? 'plc.on' : 'plc.off') : typeof v === 'string' ? `"${v}"` : String(v)
 
 /** Writes one value: a typed input, a confirmation of exactly what will be sent, then the real result. Needs the write approval AND a mode that allows writing (the API checks both). */
-export function TypedWriteDialog({ point, simulator, onClose, onDone }: { point: IoPointConfig; simulator: boolean; onClose: () => void; onDone: (m: string) => void }) {
+export function TypedWriteDialog({ point, simulator, onClose, onDone }: { point: WritePoint; simulator: boolean; onClose: () => void; onDone: (m: string) => void }) {
   const t = useT()
   const { user } = useAuth()
   const io = useApi(useCallback(() => api.plcStationIo(point.stationId), [point.stationId]))
@@ -98,6 +100,7 @@ export function TypedWriteDialog({ point, simulator, onClose, onDone }: { point:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [writtenValue, setWrittenValue] = useState<boolean | number | string | null>(null)
+  const [readBack, setReadBack] = useState<ReadBack | null>(null)
   const supported = point.writeSupported !== false
   const approved = point.writeApproval === 'APPROVED'
   const parsed = parseDraft(draft, point, t)
@@ -106,7 +109,7 @@ export function TypedWriteDialog({ point, simulator, onClose, onDone }: { point:
   const send = async () => {
     if (!parsed.ok) return
     setBusy(true); setError(null)
-    try { await api.plcTestWrite(point.stationId, point.signalName, parsed.value); setWrittenValue(parsed.value); setStep('done'); io.reload() }
+    try { const r = await api.plcTestWrite(point.stationId, point.signalName, parsed.value); setWrittenValue(parsed.value); setReadBack(r.readBack ?? null); setStep('done'); io.reload() }
     catch (e) {
       // WRITE_FAILED carries the PLC end code / driver reason, WRITE_AMBIGUOUS says the PLC may or may not have executed it: show both, never a bare success
       const detail = e instanceof ApiRequestError && (e.code === 'WRITE_FAILED' || e.code === 'WRITE_AMBIGUOUS') && e.message ? `  (${e.message})` : ''
@@ -171,6 +174,9 @@ export function TypedWriteDialog({ point, simulator, onClose, onDone }: { point:
             <div><dt>{t('plc.performedBy')}</dt><dd>{user?.username ?? '—'}</dd></div>
           </>} />
           {step === 'done' && <div className="notice notice-ok" role="status">{t('plc.writeAccepted')}</div>}
+          {step === 'done' && readBack?.status === 'VERIFIED' && <div className="notice notice-ok" role="status">{t('plc.wbVerified', { value: show(readBack.value, t) })}</div>}
+          {step === 'done' && readBack?.status === 'MISMATCH' && <div className="notice notice-bad" role="alert">{t('plc.wbMismatch', { value: show(readBack.value, t) })}</div>}
+          {step === 'done' && (!readBack || readBack.status === 'UNAVAILABLE') && <div className="notice notice-warn" role="alert">{t('plc.wbUnavailable', { reason: readBack?.message ?? readBack?.code ?? '—' })}</div>}
         </>
       )}
     </Modal>
