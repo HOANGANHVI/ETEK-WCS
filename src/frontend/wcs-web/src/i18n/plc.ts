@@ -28,6 +28,14 @@ export const QUALITY_TONE: Record<string, Tone> = {
   Unknown: 'muted', NotConfigured: 'muted', Good: 'ok', Bad: 'bad', Disconnected: 'warn', Simulated: 'warn',
 }
 
+/** CR-020: communication status of the monitoring screen. */
+export const MONITOR_STATUS_VI = localizedMap({
+  Good: 'Good', Stale: 'Stale', Bad: 'Bad', Offline: 'Offline', Unknown: 'Unknown', NotConfigured: 'Chưa thiết lập', Simulated: 'Mô phỏng',
+}, {
+  Good: 'Good', Stale: 'Stale', Bad: 'Bad', Offline: 'Offline', Unknown: 'Unknown', NotConfigured: 'Not set', Simulated: 'Simulated',
+})
+export const MONITOR_STATUS_TONE: Record<string, Tone> = { Good: 'ok', Stale: 'warn', Bad: 'bad', Offline: 'bad', Unknown: 'muted', NotConfigured: 'muted', Simulated: 'warn' }
+
 export const CONFIG_STATUS_VI = localizedMap({
   NEEDS_CONFIGURATION: 'Cần thiết lập', CONFIGURED: 'Đã nhập địa chỉ', APPROVED: 'Đã xác nhận (kỹ sư PLC)',
 }, {
@@ -98,6 +106,8 @@ export const PLC_ERROR_VI = localizedMap({
   WRITE_DECISION_INVALID: 'Quyết định phải là Approve hoặc Reject.',
   TYPE_MISMATCH: 'Giá trị không đúng kiểu dữ liệu của tín hiệu.',
   WRITE_FAILED: 'Ghi xuống PLC thất bại.',
+  READ_FAILED: 'Đọc PLC thất bại.',
+  NOT_CONFIGURED: 'IO chưa có địa chỉ hợp lệ nên không đọc được.',
   WRITE_AMBIGUOUS: 'Lệnh ghi đã được gửi nhưng không nhận được xác nhận: KHÔNG được ghi lại tự động. Hãy đọc lại giá trị trên PLC để kiểm tra.',
   RADIX_UNCONFIRMED: 'Cơ số địa chỉ X/Y/W đang chờ kỹ sư PLC xác nhận.',
   X_READ_ONLY: 'Thiết bị X là ngõ vào phần cứng, không được ghi.',
@@ -180,6 +190,8 @@ export const PLC_ERROR_VI = localizedMap({
   WRITE_DECISION_INVALID: 'The decision must be Approve or Reject.',
   TYPE_MISMATCH: 'The value does not match the signal data type.',
   WRITE_FAILED: 'Writing to the PLC failed.',
+  READ_FAILED: 'Reading the PLC failed.',
+  NOT_CONFIGURED: 'The IO has no valid address, so it cannot be read.',
   WRITE_AMBIGUOUS: 'The write command was sent but no confirmation was received: do NOT retry automatically. Read the value back from the PLC to verify.',
   RADIX_UNCONFIRMED: 'The X/Y/W address radix is awaiting confirmation by the PLC engineer.',
   X_READ_ONLY: 'Device X is a hardware input and cannot be written.',

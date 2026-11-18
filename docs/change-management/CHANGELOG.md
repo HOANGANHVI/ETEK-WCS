@@ -1,5 +1,12 @@
 # Change Log
 
+## v3.6 – CR-020 Unified PLC monitoring and operations (2026-11-18)
+
+- Change Request: CR-020. Status: IMPLEMENTED; mock-verified only; not deployed; no migration.
+- Added: I/O monitoring tab, `GET /api/plc/monitor/points`, `POST /api/plc/stations/{s}/signals/{sig}/read`, write read-back, `Plc:StaleAfterSeconds`. Changed: IO Address Mapping is configuration only.
+- Tests added: `PlcMonitoringTests` (7), `plc-monitor-smoke.ts` (29).
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.5 – CR-019 Simplified PLC write approval (2026-11-18)
 
 - Change Request: CR-019. Status: IMPLEMENTED; not deployed; no real PLC written; no migration.

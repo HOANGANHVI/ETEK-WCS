@@ -5,7 +5,7 @@ import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
-import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
+import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
 import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
@@ -136,6 +136,9 @@ const realApi = {
   // PLC monitoring and configuration (CR-002)
   downloadPlcDiagnostics,
   plcOverview: () => request<PlcOverview>('/api/plc/overview'),
+  plcMonitorPoints: (f: { plcId?: string; stationId?: string }) => request<MonitorList>(`/api/plc/monitor/points${qs({ plcId: f.plcId, stationId: f.stationId })}`),
+  plcReadNow: (stationId: string, signal: string) =>
+    request<ReadNowResult>(`/api/plc/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}/read`, { method: 'POST', body: JSON.stringify({}) }),
   plcStationIo: (stationId: string) => request<StationSnapshot>(`/api/plc/stations/${encodeURIComponent(stationId)}/io`),
   plcHandshake: () => request<HandshakeState[]>('/api/plc/handshake'),
   plcPoints: (f: { plcId?: string; stationId?: string }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId })}`),
@@ -189,7 +192,7 @@ const realApi = {
   plcLogs: (f: { plcId?: string; stationId?: string; minLevel?: string; take?: number }) =>
     request<PlcLogRow[]>(`/api/plc/logs${qs({ plcId: f.plcId, stationId: f.stationId, minLevel: f.minLevel, take: f.take ?? 100 })}`),
   plcTestWrite: (stationId: string, signal: string, value: boolean | number | string) =>
-    request<{ success: boolean }>(`/api/plc/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}/test-write`, { method: 'POST', body: JSON.stringify({ value }) }),
+    request<TestWriteResult>(`/api/plc/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}/test-write`, { method: 'POST', body: JSON.stringify({ value }) }),
   plcSimValue: (plcId: string, stationId: string, signal: string, value: boolean | number | string) =>
     request<unknown>('/api/plc/simulator/value', { method: 'POST', body: JSON.stringify({ plcId, stationId, signal, value }) }),
   plcSimOnline: (plcId: string, online: boolean) => request<unknown>('/api/plc/simulator/plc-online', { method: 'POST', body: JSON.stringify({ plcId, online }) }),
