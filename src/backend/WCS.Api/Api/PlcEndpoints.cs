@@ -12,6 +12,8 @@ public static partial class PlcEndpoints
 {
     private static bool IsAdmin(HttpContext c) => c.User.IsInRole(nameof(WCS.Domain.Users.UserRole.Admin));
 
+    private static void MarkDeprecated(HttpContext c) { c.Response.Headers["Deprecation"] = "true"; c.Response.Headers["Warning"] = "299 - Deprecated by CR-012: reading no longer requires approval"; }
+
     /// <summary>PLCs allowed to use the bulk read-approval: configuration <c>Plc:BulkApproval:AllowedPlcIds</c>, default PLC-04 only; an explicit empty list disables it.</summary>
     private static IReadOnlyList<string> BulkAllowed(IConfiguration cfg) =>
         cfg.GetSection(BulkApprovalPolicy.ConfigKey).Exists() ? cfg.GetSection(BulkApprovalPolicy.ConfigKey).Get<string[]>() ?? [] : BulkApprovalPolicy.Default;
@@ -45,10 +47,16 @@ public static partial class PlcEndpoints
 
         // Bulk READ approval of one commissioning PLC (default PLC-04 only; Plc:BulkApproval:AllowedPlcIds). It uses the existing approval (StationIoPoint.Approve):
         // it never changes an address or data type, never allows a write, never touches another PLC and sends nothing to the PLC. Never runs on its own.
+        // CR-012: DEPRECATED. Reading no longer needs approval (a valid address is pollable). Approval still governs write permission and port-mapping approval for processes.
+        // Kept for backward compatibility; the UI no longer offers it.
         plc.MapGet("connections/{plcId}/bulk-approval", async (HttpContext c, string plcId, PlcConfigService s, IConfiguration cfg, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.PreviewBulkApprovalAsync(plcId, BulkAllowed(cfg), ct))).RequireAuthorization(admin);
+        {
+            MarkDeprecated(c);
+            return ApiResults.Ok(c, await s.PreviewBulkApprovalAsync(plcId, BulkAllowed(cfg), ct));
+        }).RequireAuthorization(admin);
         plc.MapPost("connections/{plcId}/bulk-approval", async (HttpContext c, string plcId, BulkApprovalRequest r, PlcConfigService s, IConfiguration cfg, IServiceScopeFactory scopes, IPlcRuntime rt, CancellationToken ct) =>
         {
+            MarkDeprecated(c);
             if (r.Confirm != true || r.ExpectedEligible is null)
                 throw AppException.Validation("BULK_APPROVAL_NOT_CONFIRMED", "Cần xác nhận và số điểm đủ điều kiện đã xem ở bản xem trước.");
             var allowed = BulkAllowed(cfg);

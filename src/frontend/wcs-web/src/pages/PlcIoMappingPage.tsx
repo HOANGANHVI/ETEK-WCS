@@ -11,17 +11,14 @@ import { describeError } from '../i18n/vi'
 import { AddressDialog, SimDialog, WriteDialog, type DialogPoint } from './plc/plcDialogs'
 import { BLOCKED_SIGNALS, deviceOf } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
-import { BulkApprovalDialog } from './plc/BulkApprovalDialog'
 
 const PLCS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04'] as const
 const STATIONS: Record<string, string[]> = {
   'PLC-01': ['A1', 'A2', 'A3', 'A4'], 'PLC-02': ['B1', 'B2', 'D1', 'D2'], 'PLC-03': ['X1', 'X2', 'X3', 'X6'], 'PLC-04': ['E1', 'E2', 'G3', 'G7'],
 }
-/** PLC under commissioning that offers the bulk read approval. The backend decides (Plc:BulkApproval:AllowedPlcIds, default PLC-04) and refuses any other PLC. */
-const BULK_APPROVAL_PLC = 'PLC-04'
 const STATUSES = ['NEEDS_CONFIGURATION', 'CONFIGURED', 'APPROVED'] as const
 
-type Dialog = { kind: 'address' | 'write' | 'sim'; point: IoPointConfig } | { kind: 'bulk'; plcId: string } | null
+type Dialog = { kind: 'address' | 'write' | 'sim'; point: IoPointConfig } | null
 
 const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
   id: p.id, plcId: p.plcId, stationId: p.stationId, signalName: p.signalName, dataType: p.dataType, address: p.actualAddress, configStatus: p.configStatus,
@@ -29,8 +26,8 @@ const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
 
 /**
  * CR-004: IO mapping - the actual PLC address of the 368 IO points (4 PLC x 4 Stations x 23 signals; key PLC_ID + Station_ID + Signal_Name).
- * Admin only (also enforced by the API). Addresses are NEVER generated or derived; entering one does not make the point pollable -
- * only the existing approval step does (CR-003). Supported devices: D, W (word) and M (bit). X/Y are OUT_OF_SCOPE / NEEDS_CONFIRMATION.
+ * Admin only (also enforced by the API). Addresses are NEVER generated or derived; a valid address makes the point pollable at once (CR-012);
+ * the approval step now only concerns write permission and the port mapping of a process. Supported devices: D, W (word) and M (bit). X/Y are OUT_OF_SCOPE / NEEDS_CONFIRMATION.
  */
 export function PlcIoMappingPage() {
   const t = useT()
@@ -88,7 +85,6 @@ export function PlcIoMappingPage() {
         </div>
         <div className="btn-row">
           <Button disabled={!plc} onClick={() => void check()}>{t('plc.checkConflicts', { plc: plc || t('plc.choosePlc') })}</Button>
-          {plc === BULK_APPROVAL_PLC && <Button variant="primary" onClick={() => setDialog({ kind: 'bulk', plcId: plc })}>{t('plc.bulkButton', { plc })}</Button>}
           <Button onClick={() => { setPlc(''); setStation(''); setStatus(''); setSearch('') }}>{t('plc.clearFilters')}</Button>
           <span className="muted">{t('plc.showing', { shown: rows.length, total: counts.total })}</span>
         </div>
@@ -137,7 +133,6 @@ export function PlcIoMappingPage() {
           )}
         </Async>
       </Panel>
-      {dialog?.kind === 'bulk' && <BulkApprovalDialog plcId={dialog.plcId} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'address' && <AddressDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'write' && <WriteDialog point={asDialogPoint(dialog.point)} simulator={simulator} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'sim' && <SimDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}

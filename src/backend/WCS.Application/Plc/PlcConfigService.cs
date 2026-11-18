@@ -118,13 +118,23 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         }).ToList();
     }
 
-    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default) =>
-        (await repo.ListPointsAsync(plcId, stationId, ct)).OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).Select(p => ToView(p, includeConfiguration)).ToList();
+    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default)
+    {
+        var points = await repo.ListPointsAsync(plcId, stationId, ct);
+        // CR-012: Pollable = has an address that is valid and does not overlap another point of the same PLC (the other points of that PLC are needed for the overlap check)
+        var pollable = new HashSet<Guid>();
+        foreach (var group in points.GroupBy(p => p.PlcId))
+        {
+            var all = stationId is null ? group.ToList() : (await repo.ListPointsAsync(group.Key, null, ct)).ToList();
+            pollable.UnionWith(PlcPollablePolicy.Pollable(all, await BasesOfAsync(group.Key, ct)));
+        }
+        return points.OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).Select(p => ToView(p, includeConfiguration, pollable.Contains(p.Id))).ToList();
+    }
 
-    public static IoPointView ToView(StationIoPoint p, bool includeConfiguration) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
+    public static IoPointView ToView(StationIoPoint p, bool includeConfiguration, bool? pollable = null) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
         p.Direction.ToString(), p.DataType.ToString(), p.Description, PlcLabels.Status(p.Status),
         includeConfiguration ? p.TemplateAddressReference : null, includeConfiguration ? p.ActualAddress : null, includeConfiguration ? p.WordLength : null,
-        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? p.IsPollable : null);
+        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? pollable ?? p.IsPollable : null);
 
     /// <summary>Records an address confirmed by the PLC engineer. Conflicts with other points of the SAME PLC are rejected; other PLCs are independent.</summary>
     public Task<IoPointView> SetAddressAsync(Guid pointId, SetPointAddressCommand cmd, CancellationToken ct = default) =>

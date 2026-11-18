@@ -127,7 +127,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
     public async Task WritePointAsync(IoPointRef point, PointValue value, CancellationToken ct)
     {
         if (point.Direction != PlcSignalDirection.SoftwareToPlc) throw new InvalidOperationException("only Software -> PLC points can be written");
-        if (!point.Pollable) throw new InvalidOperationException("the address of this point is not approved");
+        if (!point.Pollable) throw new InvalidOperationException("the point has no valid address");   // CR-012: Pollable = valid address; the write itself still needs WriteAllowed (approval) and WritePolicy
         if (!DeviceAddress.TryParse(point.Address, _bases, out var a)) throw new InvalidOperationException("point has no confirmed address");
         if (AddressValidator.ValidateOne(new PointSpec(point.Id, point.StationId, point.SignalName, point.DataType, point.Address, point.WordLength, point.Direction), _bases) is { } issue)
             throw new InvalidOperationException(issue.Message);

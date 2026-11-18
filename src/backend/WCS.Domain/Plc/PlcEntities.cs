@@ -153,8 +153,12 @@ public class StationIoPoint
 
     public bool HasConfirmedAddress => Status != IoConfigStatus.NeedsConfiguration && !string.IsNullOrWhiteSpace(ActualAddress);
 
-    /// <summary>CR-003: only an address that was entered AND approved (confirmed by the PLC engineer) is ever sent to a real PLC.</summary>
-    public bool IsPollable => Status == IoConfigStatus.Approved && !string.IsNullOrWhiteSpace(ActualAddress);
+    /// <summary>
+    /// CR-012: an entered address makes the point readable (polled) - approval is no longer needed for READING. Only an address that passed the entry validation can be stored,
+    /// and the runtime additionally re-checks it with <c>AddressValidator</c> (see <c>PlcPollablePolicy</c>). Approval (<see cref="IoConfigStatus.Approved"/>) now only governs WRITE permission
+    /// (<see cref="SetWriteAllowed"/>) and the approval of a port mapping for Business Process publishing; it never grants a write by itself.
+    /// </summary>
+    public bool IsPollable => HasConfirmedAddress;
 
     public void ConfigureAddress(string address, int? wordLength, string? encoding, DateTimeOffset now)
     {

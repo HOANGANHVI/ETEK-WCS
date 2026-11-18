@@ -1,5 +1,13 @@
 # Change Log
 
+## v2.9 – CR-012 Pollable without approval (2026-11-18)
+
+- Change Request: CR-012. Status: IMPLEMENTED (code); not deployed.
+- Changed: `StationIoPoint.IsPollable` no longer needs `Approved`; `PlcPollablePolicy` (existing `AddressValidator`) decides in the runtime and the IO list; bulk-approval API marked deprecated (`Deprecation: true`), its UI removed.
+- Unchanged: write permission (still needs approval), WritePolicy, handshake approval, connection guards, MC Protocol, no migration.
+- Tests added/updated: `PlcPollingPolicyTests` (5); updated `McAddressTests`-area test, `PlcMcIntegrationTests`, `PlcCr004Tests`.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v2.8 – CR-011 Bulk READ approval of the PLC under commissioning (2026-11-18)
 
 - Change Request: CR-011. Status: IMPLEMENTED (code); not yet executed on the deployment database.

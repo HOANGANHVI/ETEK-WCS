@@ -120,9 +120,10 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
             else if (!c.Enabled) { enabled = false; why = "[CONNECTION_NOT_ENABLED] Admin chưa bật kết nối PLC này."; }
             else enabled = true;
 
+            var pollable = PlcPollablePolicy.Pollable(points.Where(p => p.PlcId == c.Id).ToList(), new AddressBases(c.XyAddressBase, c.WAddressBase));   // CR-012: valid address = readable
             var handlers = stations.Where(s => s.PlcId == c.Id && s.Enabled).OrderBy(s => s.Order).Select(s => new StationIoHandler(c.Id, s.Id,
                 points.Where(p => p.StationId == s.Id).Select(p => new PointInfo(
-                    new IoPointRef(p.Id, p.PlcId, p.StationId, p.SignalName, p.Direction, p.DataType, p.HasConfirmedAddress ? p.ActualAddress : null, p.WordLength, p.Encoding, p.WriteAllowed, p.Group, p.IsPollable),
+                    new IoPointRef(p.Id, p.PlcId, p.StationId, p.SignalName, p.Direction, p.DataType, p.HasConfirmedAddress ? p.ActualAddress : null, p.WordLength, p.Encoding, p.WriteAllowed, p.Group, pollable.Contains(p.Id)),
                     p.Seq, p.Status)))).ToList();
             var cfg = new PlcEndpointConfig(c.Id, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer, c.TimeoutMs, c.PollingIntervalMs,
                 c.ConnectTimeoutMs, c.ReadTimeoutMs, c.WriteTimeoutMs, c.XyAddressBase, c.WAddressBase);
