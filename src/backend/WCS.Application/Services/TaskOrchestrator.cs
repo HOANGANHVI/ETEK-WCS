@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
+using WCS.Application.Diagnostics;
 using WCS.Application.Flows;
 using WCS.Domain.Common;
 using WCS.Domain.Tasks;
@@ -65,6 +66,8 @@ public sealed class TaskOrchestrator(
             var existing = await tasks.GetByRequestKeyAsync(cmd.RequestKey.Trim(), t);
             if (existing is not null) return (Guid?)null;
             var task = TransportTask.Create(cmd.RequestKey, flow, rule.RackKind, agv.Id, station.Id, cmd.RequestedBy, clock.UtcNow);
+            task.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021: the task keeps the id of the request that created it (or a new one)
+            CorrelationCache.Remember(task.Id, task.CorrelationId);
             tasks.Add(task);
             events.Add(new WcsEvent("TaskCreated", task.ToDto()));
             return task.Id;
@@ -84,6 +87,7 @@ public sealed class TaskOrchestrator(
 
     public async Task ProcessTaskAsync(Guid taskId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
         var dispatch = await Tx(async (events, after, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
@@ -147,6 +151,7 @@ public sealed class TaskOrchestrator(
 
     public async Task DispatchToRcsAsync(Guid taskId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
         var link = rcsGuard.Check();
         if (!link.Allowed) { logger.LogDebug("Dispatch of {TaskId} skipped: {Code}", taskId, link.Code); return; }   // CR-008A: never call the simulator in Production
 
@@ -225,6 +230,8 @@ public sealed class TaskOrchestrator(
 
     public async Task<SignalResult> HandleSignalAsync(TaskSignal signal, CancellationToken ct = default)
     {
+        var signalTask = signal.TaskId ?? (signal.RcsTaskCode is not null ? (await tasks.GetByRcsTaskCodeAsync(signal.RcsTaskCode, ct))?.Id : null);
+        using var _frame = DiagnosticContext.Begin(signalTask is { } stId ? await CorrelationOfAsync(stId, ct) : null, taskId: signalTask?.ToString("D"));   // CR-021
         return await Tx<SignalResult>(async (events, after, t) =>
         {
             var task = signal.TaskId is { } id ? await tasks.GetAsync(id, t)
@@ -366,6 +373,7 @@ public sealed class TaskOrchestrator(
 
     public async Task TryResolveDestinationAsync(Guid taskId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
         var resolved = await Tx(async (events, _, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
@@ -380,6 +388,7 @@ public sealed class TaskOrchestrator(
 
     public async Task SendContinueAsync(Guid taskId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
         var plan = await Tx(async (_, _, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
@@ -459,6 +468,7 @@ public sealed class TaskOrchestrator(
 
     public async Task<TaskDto> CancelTaskAsync(Guid taskId, string reason, string? user, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
         var needsRcsCancel = await Tx(async (events, after, t) =>
         {
             var task = await tasks.GetAsync(taskId, t) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Task not found.");
@@ -608,6 +618,7 @@ public sealed class TaskOrchestrator(
     /// </summary>
     public async Task ReconcileCancelPendingAsync(Guid taskId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
         var plan = await Tx(async (events, after, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
@@ -699,6 +710,7 @@ public sealed class TaskOrchestrator(
 
     public async Task EnforceTimeoutAsync(Guid taskId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
         var cancelRcs = await Tx(async (events, after, t) =>
         {
             var task = await tasks.GetAsync(taskId, t);
@@ -766,6 +778,13 @@ public sealed class TaskOrchestrator(
             if (onlyIfChanged) task.NoteIfChanged(name, detail, Wcs, clock.UtcNow, code); else task.Note(name, detail, Wcs, clock.UtcNow, code);
             return true;
         }, ct);
+
+    /// <summary>
+    /// CR-021: the CorrelationId of a task (immutable, so read once and cached). The caller enters the frame ITSELF with <c>DiagnosticContext.Begin</c>: an AsyncLocal set inside an async helper would be
+    /// discarded when the helper returns, so a helper must never create the frame.
+    /// </summary>
+    private async Task<string?> CorrelationOfAsync(Guid taskId, CancellationToken ct) =>
+        await CorrelationCache.GetAsync(taskId, async () => (await tasks.GetAsync(taskId, ct))?.CorrelationId);
 
     private async Task<TaskDto> GetDto(Guid id, CancellationToken ct) =>
         (await Tx((_, _, t) => tasks.GetAsync(id, t), ct) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Task not found.")).ToDto();

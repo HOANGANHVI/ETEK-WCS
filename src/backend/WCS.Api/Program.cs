@@ -66,7 +66,10 @@ try
     // the exception handler so the logged status is the final one (a handled 401/409 is no longer reported as 500).
     app.Use(async (ctx, next) =>
     {
+        // CR-021: an id sent by the caller (header X-Correlation-Id, 8-64 harmless characters) is kept, so a call chain across systems shares one id; otherwise the request's own id is used.
+        if (WCS.Application.Diagnostics.DiagnosticContext.Accept(ctx.Request.Headers["X-Correlation-Id"].FirstOrDefault()) is { } incoming) ctx.TraceIdentifier = incoming;
         ctx.Response.OnStarting(() => { ctx.Response.Headers["X-Correlation-Id"] = ctx.TraceIdentifier; return Task.CompletedTask; });
+        using var diag = WCS.Application.Diagnostics.DiagnosticContext.Begin(ctx.TraceIdentifier);   // the ambient frame: tasks/orders created by this request keep this id
         using (LogContext.PushProperty("CorrelationId", ctx.TraceIdentifier)) await next();
     });
     app.UseSerilogRequestLogging(o => o.GetLevel = LogSetup.RequestLevel);

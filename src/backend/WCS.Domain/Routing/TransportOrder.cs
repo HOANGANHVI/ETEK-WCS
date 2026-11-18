@@ -44,6 +44,9 @@ public class TransportOrder
     public RackKind RackKind { get; private set; }
     public string RequestLocationCode { get; private set; } = default!;
     public string? RequestedBy { get; private set; }
+    /// <summary>CR-021: the id that ties every log event of this order's life (legs, station transactions) together; set once at creation, null for orders created before CR-021.</summary>
+    public string? CorrelationId { get; private set; }
+    public void SetCorrelation(string? correlationId) { if (CorrelationId is null && !string.IsNullOrWhiteSpace(correlationId)) CorrelationId = correlationId.Trim().Length > 100 ? correlationId.Trim()[..100] : correlationId.Trim(); }
     public Guid? RackId { get; private set; }
     public OrderState State { get; private set; }
     public WaitKind WaitKind { get; private set; }

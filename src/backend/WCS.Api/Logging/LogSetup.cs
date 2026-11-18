@@ -12,7 +12,7 @@ public static class LogSetup
 
     public static void Configure(IConfiguration configuration, IServiceProvider services, LoggerConfiguration cfg)
     {
-        cfg.ReadFrom.Configuration(configuration).Enrich.FromLogContext().Enrich.WithProperty("Host", Environment.MachineName);
+        cfg.ReadFrom.Configuration(configuration).Enrich.FromLogContext().Enrich.With<DiagnosticContextEnricher>().Enrich.WithProperty("Host", Environment.MachineName);
 
         var sinks = new List<ILogEventSink>
         {

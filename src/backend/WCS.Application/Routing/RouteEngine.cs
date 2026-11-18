@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
+using WCS.Application.Diagnostics;
 using WCS.Domain.Common;
 using WCS.Domain.Inventory;
 using WCS.Domain.Locations;
@@ -56,6 +57,8 @@ public sealed class RouteEngine(
             var (process, version) = await SelectProcessAsync(cmd, location.Code, t);
             var snapshot = ProcessSnapshot.Of(process, version);
             var order = TransportOrder.Create(cmd.RequestKey, snapshot, location.Code, cmd.RequestedBy, clock.UtcNow);
+            order.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021
+            CorrelationCache.Remember(order.Id, order.CorrelationId);
             routing.Add(order);
             if (cmd.TransactionId is { } txId) await stations.LinkToOrderAsync(txId, order.Id, t);
             Event(order, null, null, "ORDER_CREATED", $"process={process.Code} v{version.Number}");
@@ -95,10 +98,22 @@ public sealed class RouteEngine(
         };
     }
 
+    // ================================================================================ diagnostics (CR-021)
+    // (the caller enters the frame itself: an AsyncLocal set inside an async helper would not reach the caller)
+    private async Task<string?> CorrelationOfOrderAsync(Guid orderId, CancellationToken ct) =>
+        await CorrelationCache.GetAsync(orderId, async () => (await routing.GetOrderAsync(orderId, ct))?.CorrelationId);
+
+    private async Task<string?> CorrelationOfLegAsync(Guid legId, CancellationToken ct)
+    {
+        var leg = await routing.GetLegAsync(legId, ct);
+        return leg is null ? null : await CorrelationOfOrderAsync(leg.OrderId, ct);
+    }
+
     // ================================================================================ advance
 
     public async Task AdvanceAsync(Guid orderId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfOrderAsync(orderId, ct));   // CR-021
         var events = new List<WcsEvent>();
         var continues = new List<(string RequestCode, string? TaskCode, string Destination)>();
         await uow.ExecuteAsync(async t =>
@@ -344,6 +359,7 @@ public sealed class RouteEngine(
 
     public async Task DispatchLegAsync(Guid legId, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfLegAsync(legId, ct));   // CR-021
         var link = guard.Check();
         var plan = await uow.ExecuteAsync(async t =>
         {
@@ -435,6 +451,7 @@ public sealed class RouteEngine(
 
     public async Task<EventResult> ConfirmPickAsync(Guid legId, ConfirmationSource source, string? user, string? eventKey = null, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfLegAsync(legId, ct));   // CR-021
         var continues = new List<(string, string?, string)>();
         var result = await uow.ExecuteAsync(async t =>
         {
@@ -480,6 +497,7 @@ public sealed class RouteEngine(
 
     public async Task<EventResult> ConfirmDropAsync(Guid legId, ConfirmationSource source, string? user, string? externalRackId = null, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfLegAsync(legId, ct));   // CR-021
         var continues = new List<(string, string?, string)>();
         var result = await uow.ExecuteAsync(async t =>
         {
@@ -521,6 +539,7 @@ public sealed class RouteEngine(
 
     public async Task<OrderDto> CancelAsync(Guid orderId, string reason, string? user, CancellationToken ct = default)
     {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfOrderAsync(orderId, ct));   // CR-021
         await uow.ExecuteAsync(async t =>
         {
             var order = await routing.GetOrderAsync(orderId, t) ?? throw AppException.NotFound("ORDER_NOT_FOUND", "Transport Task not found.");

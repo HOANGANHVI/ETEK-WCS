@@ -1,5 +1,11 @@
 # Change Log
 
+## v3.8 – CR-021 batch B Correlation and tracing (2026-11-18)
+
+- Migration `AddCorrelationIds` (additive, nullable, indexed) on `transport_tasks` and `transport_orders`. `DiagnosticContext`, log enricher, inbound `X-Correlation-Id`, task/order frames. No business logic changed. Not deployed.
+- Tests added: `CorrelationTests` (9). Found by them: an AsyncLocal frame created inside an async helper is lost on return, so every step now enters its frame itself.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.7 – CR-021 batch A System diagnostic export (2026-11-18)
 
 - Change Request: CR-021 (in progress). Batch A: whole-system diagnostic export as a background job, normalised events, per-source status, masked configuration, Admin UI. No migration; PLC export unchanged; not deployed.

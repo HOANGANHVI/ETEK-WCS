@@ -27,6 +27,8 @@ internal abstract class EventSourceBase<T>(WcsDbContext db) : IDiagnosticEventSo
     /// <summary>Database-side narrowing by scope / related ids. Default: none (the exporter filters the mapped events).</summary>
     protected virtual IQueryable<T> Narrow(IQueryable<T> q, DiagQuery dq) => q;
     protected abstract DiagEvent Map(T row);
+    /// <summary>Loads what the mapping of one page needs from other tables (for example the CorrelationId of the tasks the rows belong to) in ONE query per page.</summary>
+    protected virtual Task PrepareAsync(IReadOnlyList<T> page, CancellationToken ct) => Task.CompletedTask;
     protected abstract (DateTimeOffset At, Guid Id) Key(T row);
 
     private static readonly Expression<Func<T, DateTimeOffset>> AtExpr = x => EF.Property<DateTimeOffset>(x, "OccurredAt");
@@ -67,6 +69,7 @@ internal abstract class EventSourceBase<T>(WcsDbContext db) : IDiagnosticEventSo
             if (tie.Count > 0) { var ids = tie.ToArray(); q = q.Where(x => !ids.Contains(EF.Property<Guid>(x, "Id"))); }
             var rows = await q.OrderBy(AtExpr).ThenBy(IdExpr).Take(pageSize).ToListAsync(ct);
             if (rows.Count == 0) yield break;
+            await PrepareAsync(rows, ct);
             foreach (var r in rows) yield return Map(r);
             var (lastAt, _) = Key(rows[^1]);
             if (last != lastAt) { last = lastAt; tie.Clear(); }
@@ -170,11 +173,23 @@ internal sealed class AuditLogSource(WcsDbContext db) : EventSourceBase<AuditEnt
     protected override IQueryable<AuditEntry> Table() => Db.AuditLog;
     protected override (DateTimeOffset, Guid) Key(AuditEntry r) => (r.OccurredAt, r.Id);
 
+    private Dictionary<string, string?> _corr = [];
+
+    protected override async Task PrepareAsync(IReadOnlyList<AuditEntry> page, CancellationToken ct)
+    {
+        var ids = page.Where(x => x.TargetType == "Task" && Guid.TryParse(x.TargetId, out _)).Select(x => Guid.Parse(x.TargetId!)).Distinct().ToArray();
+        _corr = (await Db.Tasks.AsNoTracking().Where(t => ids.Contains(t.Id)).Select(t => new { t.Id, t.CorrelationId }).ToListAsync(ct)).ToDictionary(x => x.Id.ToString("D"), x => x.CorrelationId);
+    }
+
     protected override IQueryable<AuditEntry> Narrow(IQueryable<AuditEntry> q, DiagQuery dq)
     {
-        if (dq.IsRelatedPass) { var t = dq.RelatedTaskIds?.ToArray() ?? []; return q.Where(x => x.TargetType == "Task" && x.TargetId != null && t.Contains(x.TargetId)); }
+        if (dq.IsRelatedPass)
+        {
+            var t = dq.RelatedTaskIds?.ToArray() ?? []; var corr = dq.RelatedCorrelationIds?.ToArray() ?? [];
+            return q.Where(x => x.TargetType == "Task" && x.TargetId != null && (t.Contains(x.TargetId) || Db.Tasks.Any(k => k.Id.ToString() == x.TargetId && k.CorrelationId != null && corr.Contains(k.CorrelationId))));
+        }
         var s = dq.Scope;
-        if (s.CorrelationId is not null) return q.Where(_ => false);
+        if (s.CorrelationId is { } c) q = q.Where(x => x.TargetType == "Task" && Db.Tasks.Any(k => k.Id.ToString() == x.TargetId && k.CorrelationId == c));
         if (s.TaskId is { } id) q = q.Where(x => x.TargetType == "Task" && x.TargetId == id);
         if (s.PlcId is { } p) q = q.Where(x => x.TargetId != null && x.TargetId == p);
         return q;
@@ -184,7 +199,7 @@ internal sealed class AuditLogSource(WcsDbContext db) : EventSourceBase<AuditEnt
     {
         TimestampUtc = r.OccurredAt, Level = r.Result == AuditResult.Success ? DiagLevels.Information : DiagLevels.Warning, EventName = r.Action,
         Category = LogCategories.SecurityAudit, Module = r.Action.StartsWith("AUTH_", StringComparison.Ordinal) ? DiagModules.Auth : DiagModules.Audit, Component = r.TargetType, Source = "audit_log",
-        Message = r.Detail, TaskId = r.TargetType == "Task" ? r.TargetId : null, PlcId = r.TargetType is "PlcConnection" ? r.TargetId : null, Actor = r.Actor, Operation = r.Action, Result = r.Result.ToString(),
+        Message = r.Detail, TaskId = r.TargetType == "Task" ? r.TargetId : null, CorrelationId = r.TargetType == "Task" && r.TargetId is { } tg ? _corr.GetValueOrDefault(tg) : null, PlcId = r.TargetType is "PlcConnection" ? r.TargetId : null, Actor = r.Actor, Operation = r.Action, Result = r.Result.ToString(),
         Context = JsonSerializer.Serialize(new { actorRole = r.ActorRole, targetType = r.TargetType, targetId = r.TargetId, ip = r.IpAddress, before = Cut(r.BeforeJson), after = Cut(r.AfterJson) }, DiagJson.Compact),
     };
 
@@ -200,19 +215,33 @@ internal sealed class TaskHistorySource(WcsDbContext db) : EventSourceBase<TaskH
     protected override IQueryable<TaskHistoryEntry> Table() => Db.TaskHistory;
     protected override (DateTimeOffset, Guid) Key(TaskHistoryEntry r) => (r.OccurredAt, r.Id);
 
+    private Dictionary<Guid, string?> _corr = [];
+
+    protected override async Task PrepareAsync(IReadOnlyList<TaskHistoryEntry> page, CancellationToken ct)
+    {
+        var ids = page.Select(x => x.TaskId).Distinct().ToArray();
+        _corr = await Db.Tasks.AsNoTracking().Where(t => ids.Contains(t.Id)).Select(t => new { t.Id, t.CorrelationId }).ToDictionaryAsync(x => x.Id, x => x.CorrelationId, ct);
+    }
+
     protected override IQueryable<TaskHistoryEntry> Narrow(IQueryable<TaskHistoryEntry> q, DiagQuery dq)
     {
-        if (dq.IsRelatedPass) { var ids = (dq.RelatedTaskIds ?? new HashSet<string>()).Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToArray(); return q.Where(x => ids.Contains(x.TaskId)); }
+        if (dq.IsRelatedPass)
+        {
+            var ids = (dq.RelatedTaskIds ?? new HashSet<string>()).Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToArray();
+            var corr = dq.RelatedCorrelationIds?.ToArray() ?? [];
+            return q.Where(x => ids.Contains(x.TaskId) || Db.Tasks.Any(t => t.Id == x.TaskId && t.CorrelationId != null && corr.Contains(t.CorrelationId)));
+        }
         var s = dq.Scope;
-        if (s.CorrelationId is not null || s.PlcId is not null) return q.Where(_ => false);
-        if (s.TaskId is { } t) { var g = Guid.TryParse(t, out var x) ? x : Guid.Empty; q = q.Where(h => h.TaskId == g); }
+        if (s.PlcId is not null) return q.Where(_ => false);
+        if (s.CorrelationId is { } c) q = q.Where(h => Db.Tasks.Any(t => t.Id == h.TaskId && t.CorrelationId == c));
+        if (s.TaskId is { } t2) { var g = Guid.TryParse(t2, out var x) ? x : Guid.Empty; q = q.Where(h => h.TaskId == g); }
         return q;
     }
 
     protected override DiagEvent Map(TaskHistoryEntry r) => new()
     {
         TimestampUtc = r.OccurredAt, Level = r.ToState == TaskState.Failed ? DiagLevels.Warning : DiagLevels.Information, EventName = r.EventName, Category = "TASK", Module = DiagModules.Task, Component = r.Source,
-        Source = "task_history", Message = r.Detail, TaskId = G(r.TaskId), Operation = r.FromState is null ? r.ToState?.ToString() : $"{r.FromState}->{r.ToState}", Result = r.ToState?.ToString(), ErrorCode = r.ToState == TaskState.Failed ? r.DetailCode : null,
+        Source = "task_history", Message = r.Detail, TaskId = G(r.TaskId), CorrelationId = _corr.GetValueOrDefault(r.TaskId), Operation = r.FromState is null ? r.ToState?.ToString() : $"{r.FromState}->{r.ToState}", Result = r.ToState?.ToString(), ErrorCode = r.ToState == TaskState.Failed ? r.DetailCode : null,
         Context = JsonSerializer.Serialize(new { fromState = r.FromState?.ToString(), toState = r.ToState?.ToString(), detailCode = r.DetailCode, detailArgs = r.DetailArgsJson }, DiagJson.Compact),
     };
 }
@@ -225,11 +254,26 @@ internal sealed class RoutingEventSource(WcsDbContext db) : EventSourceBase<Rout
     protected override IQueryable<RoutingEvent> Table() => Db.RoutingEvents;
     protected override (DateTimeOffset, Guid) Key(RoutingEvent r) => (r.OccurredAt, r.Id);
 
+    private Dictionary<Guid, string?> _corr = [];
+
+    protected override async Task PrepareAsync(IReadOnlyList<RoutingEvent> page, CancellationToken ct)
+    {
+        var ids = page.Select(x => x.OrderId).Distinct().ToArray();
+        _corr = await Db.TransportOrders.AsNoTracking().Where(o => ids.Contains(o.Id)).Select(o => new { o.Id, o.CorrelationId }).ToDictionaryAsync(x => x.Id, x => x.CorrelationId, ct);
+    }
+
     protected override IQueryable<RoutingEvent> Narrow(IQueryable<RoutingEvent> q, DiagQuery dq)
     {
-        if (dq.IsRelatedPass) return q.Where(_ => false);                       // routing rows carry no TaskId (batch B adds the order's CorrelationId)
+        // routing rows belong to an ORDER, not to a task: they link only through the order's CorrelationId (never through a TaskId, which they do not have)
+        if (dq.IsRelatedPass)
+        {
+            var corr = dq.RelatedCorrelationIds?.ToArray() ?? [];
+            return q.Where(e => Db.TransportOrders.Any(o => o.Id == e.OrderId && o.CorrelationId != null && corr.Contains(o.CorrelationId)));
+        }
         var s = dq.Scope;
-        return s.CorrelationId is not null || s.TaskId is not null || s.PlcId is not null ? q.Where(_ => false) : q;
+        if (s.TaskId is not null || s.PlcId is not null) return q.Where(_ => false);
+        if (s.CorrelationId is { } c) q = q.Where(e => Db.TransportOrders.Any(o => o.Id == e.OrderId && o.CorrelationId == c));
+        return q;
     }
 
     protected override DiagEvent Map(RoutingEvent r)
@@ -239,7 +283,7 @@ internal sealed class RoutingEventSource(WcsDbContext db) : EventSourceBase<Rout
         return new DiagEvent
         {
             TimestampUtc = r.OccurredAt, Level = problem ? DiagLevels.Warning : DiagLevels.Information, EventName = k, Category = "ROUTING", Module = k.Contains("STATION", StringComparison.OrdinalIgnoreCase) || r.TransactionId is not null ? DiagModules.Station : DiagModules.Routing,
-            Component = r.Source, Source = "routing_events", Message = r.Detail, ErrorCode = problem ? k : null,
+            Component = r.Source, Source = "routing_events", Message = r.Detail, ErrorCode = problem ? k : null, CorrelationId = _corr.GetValueOrDefault(r.OrderId),
             Context = JsonSerializer.Serialize(new { orderId = G(r.OrderId), legId = G(r.LegId), transactionId = G(r.TransactionId) }, DiagJson.Compact),
         };
     }
@@ -253,19 +297,33 @@ internal sealed class InventoryTransactionSource(WcsDbContext db) : EventSourceB
     protected override IQueryable<InventoryTransaction> Table() => Db.InventoryTransactions;
     protected override (DateTimeOffset, Guid) Key(InventoryTransaction r) => (r.OccurredAt, r.Id);
 
+    private Dictionary<Guid, string?> _corr = [];
+
+    protected override async Task PrepareAsync(IReadOnlyList<InventoryTransaction> page, CancellationToken ct)
+    {
+        var ids = page.Where(x => x.TaskId != null).Select(x => x.TaskId!.Value).Distinct().ToArray();
+        _corr = await Db.Tasks.AsNoTracking().Where(t => ids.Contains(t.Id)).Select(t => new { t.Id, t.CorrelationId }).ToDictionaryAsync(x => x.Id, x => x.CorrelationId, ct);
+    }
+
     protected override IQueryable<InventoryTransaction> Narrow(IQueryable<InventoryTransaction> q, DiagQuery dq)
     {
-        if (dq.IsRelatedPass) { var ids = (dq.RelatedTaskIds ?? new HashSet<string>()).Select(x => Guid.TryParse(x, out var g) ? (Guid?)g : null).Where(g => g != null).ToArray(); return q.Where(x => ids.Contains(x.TaskId)); }
+        if (dq.IsRelatedPass)
+        {
+            var ids = (dq.RelatedTaskIds ?? new HashSet<string>()).Select(x => Guid.TryParse(x, out var g) ? (Guid?)g : null).Where(g => g != null).ToArray();
+            var corr = dq.RelatedCorrelationIds?.ToArray() ?? [];
+            return q.Where(x => ids.Contains(x.TaskId) || Db.Tasks.Any(t => t.Id == x.TaskId && t.CorrelationId != null && corr.Contains(t.CorrelationId)));
+        }
         var s = dq.Scope;
-        if (s.CorrelationId is not null || s.PlcId is not null) return q.Where(_ => false);
-        if (s.TaskId is { } t) { Guid? g = Guid.TryParse(t, out var x) ? x : null; q = q.Where(h => h.TaskId == g); }
+        if (s.PlcId is not null) return q.Where(_ => false);
+        if (s.CorrelationId is { } c) q = q.Where(h => Db.Tasks.Any(t => t.Id == h.TaskId && t.CorrelationId == c));
+        if (s.TaskId is { } t2) { Guid? g = Guid.TryParse(t2, out var x) ? x : null; q = q.Where(h => h.TaskId == g); }
         return q;
     }
 
     protected override DiagEvent Map(InventoryTransaction r) => new()
     {
         TimestampUtc = r.OccurredAt, Level = DiagLevels.Information, EventName = r.EventType.ToString(), Category = "INVENTORY", Module = DiagModules.Inventory, Component = r.Source.ToString(), Source = "inventory_transactions",
-        Message = r.Note, TaskId = G(r.TaskId), RackId = G(r.RackId), Actor = r.UserName, Operation = $"{r.StatusBefore}->{r.StatusAfter}", Result = r.Bind.ToString(),
+        Message = r.Note, TaskId = G(r.TaskId), CorrelationId = r.TaskId is { } tid ? _corr.GetValueOrDefault(tid) : null, RackId = G(r.RackId), Actor = r.UserName, Operation = $"{r.StatusBefore}->{r.StatusAfter}", Result = r.Bind.ToString(),
         Context = JsonSerializer.Serialize(new { fromLocationId = G(r.FromLocationId), toLocationId = G(r.ToLocationId), statusBefore = r.StatusBefore?.ToString(), statusAfter = r.StatusAfter?.ToString(), bind = r.Bind.ToString() }, DiagJson.Compact),
     };
 }

@@ -134,6 +134,8 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
         b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.RequestKey).HasMaxLength(200).IsRequired();
         b.Property(x => x.RcsRequestCode).HasMaxLength(100).IsRequired();
+        b.Property(x => x.CorrelationId).HasMaxLength(100);   // CR-021
+        b.HasIndex(x => x.CorrelationId);
         b.Property(x => x.RcsTaskCode).HasMaxLength(100);
         b.Property(x => x.StateReason).HasMaxLength(1000);
         b.Property(x => x.StateReasonCode).HasMaxLength(100);
