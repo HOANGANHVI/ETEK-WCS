@@ -7,7 +7,12 @@ using WCS.Domain.Plc;
 
 namespace WCS.Application.Plc;
 
-public sealed record PlcRuntimeInfo(string Mode, string EffectiveMode, bool AllowLiveConnection, bool WriteEnabled, bool WriteKeysComplete, bool Running, IReadOnlyList<string> Notes);
+/// <summary>
+/// CR-016: besides the effective mode, WHICH write conditions are met - so the UI can say what is missing instead of hiding the write function. Only booleans and the NAMES of the missing
+/// deployment settings are returned; the engineer approval reference itself is never exposed.
+/// </summary>
+public sealed record PlcRuntimeInfo(string Mode, string EffectiveMode, bool AllowLiveConnection, bool WriteEnabled, bool WriteKeysComplete, bool Running, IReadOnlyList<string> Notes,
+    bool WriteApprovalReferenceSet = false, bool WriteHandshakeApproved = false, IReadOnlyList<string>? MissingWriteKeys = null);
 
 public interface IPlcRuntime
 {
@@ -56,7 +61,14 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         if (o.Mode == PlcRuntimeMode.RealReadWrite && effective != PlcRuntimeMode.RealReadWrite)
             notes.Add("[WRITE_KEYS_MISSING] REAL_READ_WRITE đã được yêu cầu nhưng thiếu khóa ghi (Write.Enabled, EngineerApprovalReference, HandshakeApproved): hệ thống chạy REAL_READ_ONLY.");
         if (o.Mode == PlcRuntimeMode.Simulator) notes.Add("[SIMULATOR_MODE] Chế độ mô phỏng: không có kết nối nào tới PLC vật lý.");
-        return new PlcRuntimeInfo(o.Mode.ToString(), effective.ToString(), o.AllowLiveConnection, o.Write.Enabled, WritePolicy.WriteKeysComplete(o), _running, notes);
+        var missing = new List<string>();
+        if (o.Mode != PlcRuntimeMode.RealReadWrite) missing.Add("PLC_MODE");
+        if (!o.AllowLiveConnection) missing.Add("PLC_ALLOW_LIVE_CONNECTION");
+        if (!o.Write.Enabled) missing.Add("PLC_WRITE_ENABLED");
+        if (string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference)) missing.Add("PLC_WRITE_APPROVAL_REFERENCE");
+        if (!o.Write.HandshakeApproved) missing.Add("PLC_WRITE_HANDSHAKE_APPROVED");
+        return new PlcRuntimeInfo(o.Mode.ToString(), effective.ToString(), o.AllowLiveConnection, o.Write.Enabled, WritePolicy.WriteKeysComplete(o), _running, notes,
+            !string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference), o.Write.HandshakeApproved, o.Mode == PlcRuntimeMode.Simulator ? [] : missing);
     }
 
     public IReadOnlyList<PlcWorkerStatus> Workers(bool admin) => _workers.Values.OrderBy(w => w.PlcId).Select(w => w.Status(admin)).ToList();

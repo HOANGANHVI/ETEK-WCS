@@ -11,6 +11,7 @@ import { describeError } from '../i18n/vi'
 import { AddressDialog, SimDialog, type DialogPoint } from './plc/plcDialogs'
 import { TypedWriteDialog, WriteApprovalDialog } from './plc/writeDialogs'
 import { BLOCKED_SIGNALS, deviceOf, WRITE_TONE } from './plc/plcFormat'
+import { runtimeAllowsWrite, writeReadiness, type WriteBlock } from '../lib/plcWrite'
 import { ConfigPill } from './plc/plcUi'
 
 const PLCS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04'] as const
@@ -43,11 +44,25 @@ export function PlcIoMappingPage() {
   const [issues, setIssues] = useState<AddressIssue[] | null>(null)
   const [checkError, setCheckError] = useState<string | null>(null)
 
-  const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
-  const simulator = mode === 'Simulator'
-  // CR-015: the write dialog is available in every build (Production included). It is offered only when the runtime really is in a write mode (the simulator, or REAL_READ_WRITE with every
-  // write key); in a read-only runtime the column says so instead of showing a button the backend would refuse.
-  const canWrite = simulator || mode === 'RealReadWrite'
+  const runtime = overview.data?.runtime ?? null            // CR-016: never assume a write mode while the runtime state is unknown
+  const mode = runtime?.effectiveMode ?? 'Simulator'
+  const simulator = runtime?.effectiveMode === 'Simulator'
+  const plcState = (id: string) => overview.data?.plcs.find((w) => w.plcId === id)?.state
+  const reasonText = (b: WriteBlock, plcId: string): string => {
+    if (b.ok) return ''
+    switch (b.reason) {
+      case 'RUNTIME_UNKNOWN': return t('plc.wrLoading')
+      case 'READ_ONLY': return t('plc.wrReadOnly', { keys: b.missing && b.missing.length ? t('plc.wrReadOnlyKeys', { list: b.missing.join(', ') }) : '' })
+      case 'NO_ADDRESS': return t('plc.wrNoAddress')
+      case 'UNSUPPORTED': return t('plc.wrUnsupported')
+      case 'NOT_APPROVED': return t('plc.wrNotApproved')
+      case 'REJECTED': return t('plc.wrRejected')
+      default: return t('plc.wrNotConnected', { plc: plcId })
+    }
+  }
+  // CR-015/016: the write action is part of every build and is ALWAYS shown for a writable point: enabled when everything the backend will check is met, otherwise disabled with the
+  // concrete reason beside it (runtime read-only and which key is missing, no write approval, PLC not connected ...) - never silently hidden.
+  const writeOk = runtimeAllowsWrite(runtime)
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -58,7 +73,7 @@ export function PlcIoMappingPage() {
   const all = points.data ?? []
   const counts = { total: all.length, configured: all.filter((p) => p.configStatus !== 'NEEDS_CONFIGURATION').length, pollable: all.filter((p) => p.pollable).length }
   const stationOptions = plc ? STATIONS[plc] ?? [] : Object.values(STATIONS).flat()
-  const done = (msg: string) => { setDialog(null); setNotice(msg); setIssues(null); points.reload() }
+  const done = (msg: string) => { setDialog(null); setNotice(msg); setIssues(null); points.reload(); overview.reload() }   // the approval and the runtime state are re-read at once: no page reload needed
   const check = async () => {
     setCheckError(null)
     try { setIssues(await api.plcAddressCheck(plc)) } catch (e) { setCheckError(describeError(e)) }
@@ -68,6 +83,10 @@ export function PlcIoMappingPage() {
     <>
       <PageHeader title={t('plc.ioTitle')} />
       {notice && <div className="notice notice-ok" role="status">{notice}</div>}
+      <div className={`notice ${!runtime ? 'notice-info' : writeOk ? 'notice-ok' : 'notice-warn'}`} role="status" aria-label={t('plc.writeRtTitle')}>
+        <strong>{t('plc.writeRtTitle')}: </strong>
+        {!runtime ? t('plc.writeRtLoading') : writeOk ? t('plc.writeRtOk', { mode }) : (runtime.missingWriteKeys?.length ? t('plc.writeRtReadOnly', { list: runtime.missingWriteKeys.join(', ') }) : t('plc.writeRtReadOnlyNoList'))}
+      </div>
       <Panel title={t('plc.filters')} subtitle={t('plc.filterSummary', { total: counts.total, configured: counts.configured, pollable: counts.pollable })}>
         <div className="form-grid">
           <label className="field"><span className="field-label">PLC</span>
@@ -108,6 +127,8 @@ export function PlcIoMappingPage() {
                   {rows.map((p) => {
                     const inbound = p.direction === 'PlcToSoftware'
                     const blocked = BLOCKED_SIGNALS.includes(p.signalName)
+                    const gate = writeReadiness(runtime, plcState(p.plcId), p)
+                    const why = reasonText(gate, p.plcId)
                     return (
                       <tr key={p.id}>
                         <td className="nowrap">{p.plcId}</td>
@@ -126,8 +147,8 @@ export function PlcIoMappingPage() {
                           <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
                           {!inbound && !blocked && <><Button size="sm" disabled={!p.actualAddress} title={p.actualAddress ? undefined : t('plc.writeNoAddressTitle')} onClick={() => setDialog({ kind: 'writeApproval', point: p })}>{t('plc.btnWriteApproval')}</Button>{' '}</>}
                           {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>{t('plc.btnSim')}</Button>{' '}</>}
-                          {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" disabled={p.writeApproval !== 'APPROVED' || p.writeSupported === false || !p.actualAddress} title={p.writeApproval !== 'APPROVED' ? t('plc.writeNotApproved') : p.writeSupported === false ? t('plc.writeUnsupported') : undefined} onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnWrite')}</Button>}
-                          {!inbound && !blocked && !canWrite && <small className="muted" title={t('plc.writeReadOnlyTitle')}>{t('plc.writeReadOnly')}</small>}
+                          {!inbound && !blocked && <Button size="sm" variant="danger" disabled={!gate.ok} title={gate.ok ? undefined : why} onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnWrite')}</Button>}
+                          {!inbound && !blocked && !gate.ok && <><br /><small className="muted">{why}</small></>}
                           {!inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
                         </td>
                       </tr>
