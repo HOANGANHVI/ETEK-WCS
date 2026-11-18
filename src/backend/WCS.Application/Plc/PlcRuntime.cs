@@ -61,14 +61,8 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         if (o.Mode == PlcRuntimeMode.RealReadWrite && effective != PlcRuntimeMode.RealReadWrite)
             notes.Add("[WRITE_KEYS_MISSING] REAL_READ_WRITE đã được yêu cầu nhưng thiếu khóa ghi (Write.Enabled, EngineerApprovalReference, HandshakeApproved): hệ thống chạy REAL_READ_ONLY.");
         if (o.Mode == PlcRuntimeMode.Simulator) notes.Add("[SIMULATOR_MODE] Chế độ mô phỏng: không có kết nối nào tới PLC vật lý.");
-        var missing = new List<string>();
-        if (o.Mode != PlcRuntimeMode.RealReadWrite) missing.Add("PLC_MODE");
-        if (!o.AllowLiveConnection) missing.Add("PLC_ALLOW_LIVE_CONNECTION");
-        if (!o.Write.Enabled) missing.Add("PLC_WRITE_ENABLED");
-        if (string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference)) missing.Add("PLC_WRITE_APPROVAL_REFERENCE");
-        if (!o.Write.HandshakeApproved) missing.Add("PLC_WRITE_HANDSHAKE_APPROVED");
         return new PlcRuntimeInfo(o.Mode.ToString(), effective.ToString(), o.AllowLiveConnection, o.Write.Enabled, WritePolicy.WriteKeysComplete(o), _running, notes,
-            !string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference), o.Write.HandshakeApproved, o.Mode == PlcRuntimeMode.Simulator ? [] : missing);
+            !string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference), o.Write.HandshakeApproved, WritePolicy.MissingWriteKeys(o));
     }
 
     public IReadOnlyList<PlcWorkerStatus> Workers(bool admin) => _workers.Values.OrderBy(w => w.PlcId).Select(w => w.Status(admin)).ToList();
@@ -86,7 +80,8 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
             foreach (var w in await BuildAsync(null, ct)) { _workers[w.PlcId] = w; w.Start(); }
             _running = true;
             logger.LogInformation("PLC runtime started: {Count} workers, mode {Mode}", _workers.Count, Options.Mode);
-            events.Log(PlcLogLevel.Info, null, null, "RUNTIME_START", $"PLC runtime started in mode {Info().EffectiveMode} with {_workers.Count} PLC workers.", WCS.Application.Logging.LogArgs.Of(("mode", Info().EffectiveMode), ("workers", _workers.Count)));
+            events.Log(PlcLogLevel.Info, null, null, "RUNTIME_START", $"PLC runtime started in mode {Info().EffectiveMode} with {_workers.Count} PLC workers. Requested mode {Options.Mode}; write settings missing: {(WritePolicy.MissingWriteKeys(Options) is { Count: > 0 } m ? string.Join(", ", m) : "none")} (approval reference: {(string.IsNullOrWhiteSpace(Options.Write.EngineerApprovalReference) ? "not set" : "set")}).",
+                WCS.Application.Logging.LogArgs.Of(("mode", Info().EffectiveMode), ("workers", _workers.Count), ("requestedMode", Options.Mode.ToString()), ("missingWriteKeys", string.Join(",", WritePolicy.MissingWriteKeys(Options)))));
         }
         finally { _sync.Release(); }
     }

@@ -26,3 +26,19 @@ check('only Simulator and RealReadWrite allow writing', runtimeAllowsWrite({ eff
 check('the approval alone is not enough in a read-only runtime (no hidden path)', ['APPROVED', 'NOT_APPROVED', 'REJECTED'].every((a) => reason(writeReadiness(readOnly, 'Connected', { ...approved, writeApproval: a })) === 'READ_ONLY'))
 
 console.log(results.join('\n'))
+
+// ---- CR-017: the checklist shows what the backend received, and agrees with the missing-key list the backend sends
+import { writeKeyChecklist } from '../src/lib/plcWrite.ts'
+const full = { mode: 'RealReadWrite', allowLiveConnection: true, writeEnabled: true, writeApprovalReferenceSet: true, writeHandshakeApproved: true }
+const missingOf = (r: Parameters<typeof writeKeyChecklist>[0]) => writeKeyChecklist(r).filter((k) => !k.ok).map((k) => k.key)
+check('every key received: nothing is reported missing', missingOf(full).length === 0)
+check('a key the backend DID receive is not reported missing', JSON.stringify(missingOf({ ...full, writeEnabled: false })) === JSON.stringify(['PLC_WRITE_ENABLED']))
+check('each key alone is named exactly', [
+  ['allowLiveConnection', 'PLC_ALLOW_LIVE_CONNECTION'], ['writeEnabled', 'PLC_WRITE_ENABLED'], ['writeApprovalReferenceSet', 'PLC_WRITE_APPROVAL_REFERENCE'], ['writeHandshakeApproved', 'PLC_WRITE_HANDSHAKE_APPROVED'],
+].every(([f, name]) => JSON.stringify(missingOf({ ...full, [f]: false })) === JSON.stringify([name])))
+check('the requested mode RealReadOnly is shown as PLC_MODE with its current value', JSON.stringify(writeKeyChecklist({ ...full, mode: 'RealReadOnly' }).filter((k) => !k.ok)) === JSON.stringify([{ key: 'PLC_MODE', ok: false, current: 'RealReadOnly' }]))
+check('an old backend (flags absent) is shown as missing, never as present', missingOf({ mode: 'RealReadWrite' }).length === 4)
+// the same list the backend sends (WritePolicy.MissingWriteKeys) for the same flags
+const backendList = ['PLC_ALLOW_LIVE_CONNECTION', 'PLC_WRITE_ENABLED', 'PLC_WRITE_APPROVAL_REFERENCE', 'PLC_WRITE_HANDSHAKE_APPROVED']
+check('an empty deployment: the checklist equals the backend missingWriteKeys', JSON.stringify(missingOf({ mode: 'RealReadWrite', allowLiveConnection: false, writeEnabled: false, writeApprovalReferenceSet: false, writeHandshakeApproved: false })) === JSON.stringify(backendList))
+console.log(results.slice(-6).join('\n'))
