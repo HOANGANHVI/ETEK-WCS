@@ -1,5 +1,12 @@
 # Change Log
 
+## v3.3 – CR-016 PLC write UI readiness (2026-11-18)
+
+- Change Request: CR-016. Status: IMPLEMENTED (code); not deployed; no real PLC written.
+- Changed: runtime info names the missing write keys; IO mapping shows a write-status banner and always shows "Ghi PLC" with the concrete reason when disabled; the approval refreshes points and runtime at once.
+- Tests added: `plc-write-smoke.ts` (13 checks), extra assertions in `PlcWriteEnablementTests`.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.2 – CR-015 Enable PLC write (2026-11-18)
 
 - Change Request: CR-015. Status: IMPLEMENTED (code, configuration); not deployed; no real PLC written.
