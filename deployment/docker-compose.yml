@@ -76,11 +76,18 @@ services:
       Plc__AllowSimulatorInProduction: ${PLC_ALLOW_SIMULATOR_IN_PRODUCTION:-false}
       # RCS has only a simulator adapter (project baseline): Integration:Mode must stay "Simulator"; no network probe unless enabled.
       Integration__Mode: Simulator
+      # CR-008A: Production refuses tasks (RCS_NOT_CONNECTED) while only the RCS simulator exists. true = supervised test with a simulated RCS (no AGV moves).
+      Rcs__AllowSimulatorInProduction: ${RCS_ALLOW_SIMULATOR_IN_PRODUCTION:-false}
       Integration__AllowNetworkProbe: ${WCS_ALLOW_NETWORK_PROBE:-false}
       Serilog__MinimumLevel__Default: ${WCS_LOG_LEVEL:-Information}
+      # CR-007: deployment events written by deployment/scripts/*.ps1 are imported (read-only) into Logging & Diagnostics; build label shown in the start-up summary
+      DeploymentLogs__Directory: /deploy-logs
+      WCS_BUILD: ${WCS_VERSION:-local}
       TZ: ${WCS_TIMEZONE:-Asia/Ho_Chi_Minh}
     volumes:
       - wcs_keys:/keys
+      # read-only: the backend can read deployment logs but never write to the host folder (scripts set WCS_LOG_DIR; default C:/ETEK-WCS/logs)
+      - ${WCS_LOG_DIR:-C:/ETEK-WCS/logs}:/deploy-logs:ro
     networks: [db_net, edge_net]
     logging: *logging
     deploy: { resources: { limits: { cpus: "${WCS_BACKEND_CPUS:-3}", memory: "${WCS_BACKEND_MEMORY:-3g}" } } }

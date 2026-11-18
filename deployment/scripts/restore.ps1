@@ -6,6 +6,7 @@ param(
     [switch]$NoSafetyBackup
 )
 . (Join-Path $PSScriptRoot '_common.ps1')
+Start-WcsRun 'restore.ps1'
 
 Assert-Docker
 $e = Assert-EnvFile
@@ -24,6 +25,7 @@ if ($KeysFile) { Write-Host "and REPLACE the key ring with: $KeysFile" -Foregrou
 Write-Host 'Everything written after that backup is lost (unless the safety backup below is kept).'
 $answer = Read-Host 'Type RESTORE (capitals) to continue'
 if ($answer -ne 'RESTORE') { Fail 'Cancelled. Nothing was changed.' }
+Write-WcsLog -Step 'confirmation' -Result 'INFO' -Message "RESTORE confirmed by the operator for backup file $(Split-Path -Leaf $BackupFile)"
 
 if (-not (Test-VolumeExists $script:PgVolume)) { Write-Warn2 'No existing database volume: this is a fresh restore.' }
 elseif (-not $NoSafetyBackup) {
@@ -67,3 +69,4 @@ if (-not (Wait-Healthy)) { Fail 'The stack did not become healthy after restore.
 Write-Ok 'Restore finished.'
 Write-Host 'Verify now: sign in as Admin; check tasks, locations/inventory, PLC connections (Ket noi PLC) and IO mapping; run status.ps1.'
 Write-Host 'If PLC/RCS passwords show as unreadable, the key ring does not match this database: restore the matching wcs-keys-*.tgz with -KeysFile.'
+Complete-WcsRun 0

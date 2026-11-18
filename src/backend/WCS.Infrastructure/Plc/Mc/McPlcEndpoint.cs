@@ -15,7 +15,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
     private readonly AddressBases _bases;
     public string PlcId { get; }
 
-    public McPlcEndpoint(PlcEndpointConfig c)
+    public McPlcEndpoint(PlcEndpointConfig c, IPlcExchangeSink? exchangeSink = null)
     {
         var missing = new List<string>();
         if (c.Port is null) missing.Add("port");
@@ -33,7 +33,8 @@ public sealed class McPlcEndpoint : IPlcEndpoint
         _client = new McTcpClient(new McClientSettings(c.IpAddress, c.Port!.Value,
             new McRoute((byte)c.NetworkNumber!.Value, (byte)c.PcNumber!.Value, (ushort)c.ModuleIoNumber!.Value, (byte)c.PlcStationNumber!.Value),
             (ushort)c.MonitoringTimer!.Value, TimeSpan.FromMilliseconds(c.TimeoutMs!.Value),
-            ConnectTimeout: Ms(c.ConnectTimeoutMs), ReadTimeout: Ms(c.ReadTimeoutMs), WriteTimeout: Ms(c.WriteTimeoutMs), PlcId: c.PlcId));
+            ConnectTimeout: Ms(c.ConnectTimeoutMs), ReadTimeout: Ms(c.ReadTimeoutMs), WriteTimeout: Ms(c.WriteTimeoutMs), PlcId: c.PlcId,
+            OnExchange: exchangeSink is null ? null : exchangeSink.Record));
     }
 
     public EndpointState State => _client.State;
@@ -115,7 +116,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
             case PlcDataType.Int: return new(p.Id, PointValue.OfInt((short)words[0]), PointQuality.Good, null);   // signed 16-bit INT (NEEDS_CONFIRMATION: signed vs unsigned)
             case PlcDataType.String:
                 if (!string.Equals(p.Encoding, "ASCII", StringComparison.OrdinalIgnoreCase))
-                    return new(p.Id, null, PointQuality.Bad, $"Encoding '{p.Encoding}' chưa được hỗ trợ (chỉ ASCII).");
+                    return new(p.Id, null, PointQuality.Bad, $"Encoding '{p.Encoding}' is not supported (ASCII only).");
                 var bytes = new byte[words.Length * 2];
                 for (var i = 0; i < words.Length; i++) { bytes[i * 2] = (byte)(words[i] & 0xFF); bytes[i * 2 + 1] = (byte)(words[i] >> 8); }   // low byte first
                 var end = Array.IndexOf(bytes, (byte)0); if (end < 0) end = bytes.Length;
@@ -127,7 +128,7 @@ public sealed class McPlcEndpoint : IPlcEndpoint
     public async Task WritePointAsync(IoPointRef point, PointValue value, CancellationToken ct)
     {
         if (point.Direction != PlcSignalDirection.SoftwareToPlc) throw new InvalidOperationException("only Software -> PLC points can be written");
-        if (!point.Pollable) throw new InvalidOperationException("the address of this point is not approved");
+        if (!point.Pollable) throw new InvalidOperationException("the point has no valid address");   // CR-012: Pollable = valid address; the write itself still needs WriteAllowed (approval) and WritePolicy
         if (!DeviceAddress.TryParse(point.Address, _bases, out var a)) throw new InvalidOperationException("point has no confirmed address");
         if (AddressValidator.ValidateOne(new PointSpec(point.Id, point.StationId, point.SignalName, point.DataType, point.Address, point.WordLength, point.Direction), _bases) is { } issue)
             throw new InvalidOperationException(issue.Message);

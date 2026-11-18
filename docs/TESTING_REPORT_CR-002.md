@@ -111,3 +111,30 @@ Everything in `docs/DEPLOYMENT_TEST_CHECKLIST.md` (A1-F2): image builds, compose
 - Backend **410 passed, 0 failed** (adds the forwarded-header trust test).
 - Outside containers (published app, Production environment, scratch DB, dropped afterwards): trust enabled without a proxy list -> process refuses to start; request with `X-Forwarded-For: 10.9.8.7` from a sender NOT in the trusted list -> audit IP stays the real peer (::1); from a trusted sender -> 10.9.8.7 recorded.
 - Still NOT run: Docker build/runtime, Nginx header overwrite, network isolation, persistence, backup/restore (checklist A-G).
+
+---
+
+# CR-007 – Centralized logging and diagnostics (2026-11-16)
+
+| Item | Status |
+|---|---|
+| SOURCE CODE IMPLEMENTED | YES |
+| AUTOMATED TESTS | YES |
+| BROWSER TEST (scratch environment) | YES |
+| DOCKER IMAGE / CONTAINER (import through the read-only mount) | **NOT VERIFIED** |
+| REAL PLC / REAL RCS | **NOT VERIFIED** |
+
+## Results
+- Backend: **438 passed, 0 failed** (410 + 15 `LoggingCoreTests` + 13 `LogStorageTests`). Repeated 3 times (no flakiness after the fixes below).
+- Frontend: eslint, `tsc -b`, `npm run build`, `npm run build:demo` clean.
+- Browser (Chrome headless, scratch database, scratch API with a deployment-log folder): **29/29** - menu, six groups, KPIs, filters, backend paging, detail dialog, empty state, deployment events imported from real script output, Operator denied (menu, route, API 403), no JS errors.
+- Runtime verification of the real application (scratch database): **16/16** - structured fatal start-up, start-up summary without secrets, wrong password logged as 401 (no ERR, no stack), `/healthz` only at Debug, PLC events on stdout, startup summary stored and searchable, API/`/healthz` unaffected when the log table is broken, database unreachable -> one `DB_LOST`, repeated scheduler failure throttled to one line, no password in any output.
+- Deployment scripts (no Docker needed): `tests/deployment/Test-DeploymentLogging.ps1` **20/20** - events, levels, unique ids, secret masking (6 secret forms), unwritable log folder does not break the script, prune dry run.
+- Migration on a throw-away database with existing PLC and audit history: Up, Down and Up again OK; history rows intact; view reads all three sources.
+- Query performance (450 000 rows: 200 000 system + 200 000 PLC + 50 000 audit): newest-first page 0.20 s, filtered page 0.08 s, 2-day device count 0.29 s, 24 h statistics 0.11 s, deep keyword page 0.34 s.
+
+## Defects found by these tests and fixed (commit "fix(logging)")
+Local-offset timestamps rejected by PostgreSQL (sink silently stored nothing); one un-storable entry blocking later entries; `IsEmpty` leaking into the PLC details JSON; empty "[]" prefix in imported messages.
+
+## Not verified
+Docker build/run of the mount and importer, `docker compose logs` capture on failure, real PLC events (End Code, timeouts) and real RCS/AGV events.

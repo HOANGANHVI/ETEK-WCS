@@ -12,6 +12,12 @@ public interface IUserRepository
     Task<bool> AnyAdminAsync(CancellationToken ct = default);
     void Add(AppUser user);
     void Remove(AppUser user);
+    /// <summary>The account's avatar (tracked), or null.</summary>
+    Task<UserAvatar?> GetAvatarAsync(Guid userId, CancellationToken ct = default);
+    /// <summary>When the avatar was last set (without loading the image), or null when there is none. Used as the cache-busting version.</summary>
+    Task<DateTimeOffset?> GetAvatarStampAsync(Guid userId, CancellationToken ct = default);
+    void AddAvatar(UserAvatar avatar);
+    void RemoveAvatar(UserAvatar avatar);
 }
 
 /// <summary>Password hashing (salted, slow hash). Implemented in infrastructure; the application never sees plain hashes' internals.</summary>
@@ -39,7 +45,7 @@ public interface IAuditLog
     Task<int> CountByActorAsync(string username, CancellationToken ct = default);
 }
 
-public sealed record AuditQuery(string? Actor, string? Action, AuditResult? Result, DateTimeOffset? From, DateTimeOffset? To, int Skip, int Take);
+public sealed record AuditQuery(string? Actor, string? Action, AuditResult? Result, DateTimeOffset? From, DateTimeOffset? To, int Skip, int Take, string? ActionPrefix = null);
 
 public sealed class AuthOptions
 {
@@ -66,7 +72,15 @@ public sealed record ActorInfo(Guid Id, string Username, UserRole Role, string? 
 public sealed record AuthenticatedUser(Guid Id, string Username, string DisplayName, UserRole Role, bool MustChangePassword, Guid SecurityStamp);
 
 public sealed record UserDto(Guid Id, string Username, string DisplayName, UserRole Role, bool IsActive, bool MustChangePassword,
-    DateTimeOffset? LastLoginAt, DateTimeOffset? LockedUntil, DateTimeOffset CreatedAt);
+    DateTimeOffset? LastLoginAt, DateTimeOffset? LockedUntil, DateTimeOffset CreatedAt,
+    string? Email = null, string? Position = null, string? Department = null);
+
+/// <summary>The caller's own profile. Email/Position/Department are null when nobody has provided them (never defaulted).</summary>
+public sealed record ProfileDto(string Username, string DisplayName, UserRole Role, string? Email, string? Position, string? Department,
+    bool HasAvatar, long AvatarVersion, DateTimeOffset? LastLoginAt);
+
+/// <summary>The caller's own interface preferences.</summary>
+public sealed record UserPreferencesDto(string Theme, bool SidebarCollapsed);
 
 public sealed record CreateUserCommand(string Username, string DisplayName, UserRole Role, string Password, bool IsActive = true);
 public sealed record UpdateUserCommand(string DisplayName, UserRole Role, bool IsActive);

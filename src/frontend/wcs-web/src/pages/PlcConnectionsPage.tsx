@@ -4,93 +4,97 @@ import type { PlcConnection, ProbeResultView } from '../api/plcTypes'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
 import { ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
+import { useT, type MsgKey } from '../i18n'
 import { MISSING_PARAM_VI } from '../i18n/plc'
+import { describeCoded } from '../i18n/logCatalog'
+import { TEST_MODE_VI } from '../i18n/config'
 import { describeError } from '../i18n/vi'
 import { Field, Switch } from './config/FormKit'
 import { fromApiError, fromNum, toInt, toStr, type Errors } from './config/formUtils'
 import { fmtTime } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
+import { PlcProvisioning } from './plc/PlcProvisioning'
 
-const PROTOCOLS = [{ value: 'McProtocol3EBinaryTcp', label: 'MC Protocol – 3E, Binary, TCP (dự kiến, cần xác nhận)' }]
+const PROTOCOLS: { value: string; label: MsgKey }[] = [{ value: 'McProtocol3EBinaryTcp', label: 'plc.protocolMc' }]
 
 /**
  * CR-004: the ONLY place where PLC connection parameters are edited (4 PLCs, one form each). Admin-only (also enforced by the API).
  * Nothing is pre-filled except what the catalog knows (name and IP); every other parameter is entered by the PLC engineer. IO addresses are NOT edited here.
  */
 export function PlcConnectionsPage() {
+  const t = useT()
   const overview = useApi(useCallback(() => api.plcOverview(), []))
   const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
   return (
     <>
-      <PageHeader title="Kết nối PLC" description="Thông số kết nối của 4 PLC vật lý. Địa chỉ từng tín hiệu IO được cấu hình ở màn hình 'Cấu hình địa chỉ IO'; trạng thái và giá trị ở màn hình 'Giám sát PLC'." />
+      <PageHeader title={t('plc.connTitle')} />
       <PlcConnectionsBody realMode={mode !== 'Simulator'} simulator={mode === 'Simulator'} />
     </>
   )
 }
 
 function PlcConnectionsBody({ realMode, simulator }: { realMode: boolean; simulator: boolean }) {
+  const t = useT()
   const list = useApi(useCallback(() => api.plcConnections(), []))
   const [editing, setEditing] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   return (
     <>
-      <div className="notice notice-info">
-        Thông số kết nối thật (cổng, giao thức, Network/PC/Module I/O/Station number, Monitoring timer, timeout, chu kỳ đọc) <strong>chưa được xác nhận</strong> và không có giá trị mặc định.
-        Chỉ nhập khi kỹ sư PLC đã cung cấp. Lần kết nối thật đầu tiên chỉ đọc.
-        {!realMode && ' Hệ thống chưa kết nối PLC thật nên các thông số này chưa được sử dụng.'}
-      </div>
       {message && <div className="notice notice-ok" role="status">{message}</div>}
-      <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có PLC nào', hint: 'Danh mục IO chưa được nạp (kiểm tra migration và seeder).' }}>
+      <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: t('plc.noPlc'), hint: t('plc.noPlcHint') }}>
         {(rows) => (
           <div className="plc-config-grid">
             {rows.map((c) => (
-              <Panel key={c.plcId} title={`${c.plcId} · ${c.stations.join(', ')}`} subtitle={`Cập nhật: ${fmtTime(c.updatedAt)}${c.updatedBy ? ` bởi ${c.updatedBy}` : ''}`}
+              <Panel key={c.plcId} title={`${c.plcId} · ${c.stations.join(', ')}`} subtitle={t('plc.updatedAt', { time: fmtTime(c.updatedAt) }) + (c.updatedBy ? t('plc.updatedBy', { user: c.updatedBy }) : '')}
                 actions={<ConfigPill status={c.configStatus} />}>
                 {editing === c.plcId
-                  ? <ConnectionForm c={c} realMode={realMode} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setMessage(`Đã lưu cấu hình ${c.plcId}.`); list.reload() }} />
+                  ? <ConnectionForm c={c} realMode={realMode} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setMessage(t('plc.saved', { id: c.plcId })); list.reload() }} />
                   : <ConnectionSummary c={c} realMode={realMode} simulator={simulator} onEdit={() => setEditing(c.plcId)} />}
               </Panel>
             ))}
           </div>
         )}
       </Async>
+      <PlcProvisioning onChanged={() => list.reload()} />
     </>
   )
 }
 
 function ConnectionSummary({ c, onEdit, realMode, simulator }: { c: PlcConnection; onEdit: () => void; realMode: boolean; simulator: boolean }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [probe, setProbe] = useState<ProbeResultView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(describeError(e)) } finally { setBusy(false) } }
-  const row = (k: string, v: string | number | null) => <><dt>{k}</dt><dd>{v === null || v === '' ? <span className="muted">chưa cấu hình</span> : v}</dd></>
+  const row = (k: string, v: string | number | null) => <><dt>{k}</dt><dd>{v === null || v === '' ? <span className="muted">{t('common.notSet')}</span> : v}</dd></>
   return (
     <>
       <dl className="kv2">
-        {row('Địa chỉ IP', c.ipAddress)}{row('Cổng TCP', c.port)}{row('Giao thức', c.protocol)}
-        {row('Network number', c.networkNumber)}{row('PC number', c.pcNumber)}{row('Module I/O number', c.moduleIoNumber)}{row('PLC station number', c.plcStationNumber)}
-        {row('Monitoring timer (×250 ms)', c.monitoringTimer)}{row('Timeout chung (ms)', c.timeoutMs)}{row('Timeout kết nối (ms)', c.connectTimeoutMs ?? (c.timeoutMs === null ? null : 'theo timeout chung'))}
-        {row('Timeout đọc (ms)', c.readTimeoutMs ?? (c.timeoutMs === null ? null : 'theo timeout chung'))}{row('Timeout ghi (ms)', c.writeTimeoutMs ?? (c.timeoutMs === null ? null : 'theo timeout chung'))}{row('Chu kỳ đọc (ms)', c.pollingIntervalMs)}
-        {row('Cơ số địa chỉ X/Y', c.xyAddressBase === 8 ? 'Bát phân (8)' : c.xyAddressBase === 16 ? 'Thập lục phân (16)' : null)}{row('Cơ số địa chỉ W', c.wAddressBase === 10 ? 'Thập phân (10)' : c.wAddressBase === 16 ? 'Thập lục phân (16)' : null)}
-        <dt>Bật kết nối</dt><dd>{c.enabled ? <Pill tone="ok">Đã bật</Pill> : <Pill tone="muted">Đang tắt</Pill>}</dd>
+        {row(t('plc.ipAddress'), c.ipAddress)}{row(t('plc.tcpPort'), c.port)}{row(t('plc.protocol'), c.protocol)}
+        {row(t('plc.networkNumber'), c.networkNumber)}{row(t('plc.pcNumber'), c.pcNumber)}{row(t('plc.moduleIo'), c.moduleIoNumber)}{row(t('plc.plcStation'), c.plcStationNumber)}
+        {row(t('plc.readMonitor'), c.monitoringTimer)}{row(t('plc.commonTimeout'), c.timeoutMs)}{row(t('plc.connectTimeout'), c.connectTimeoutMs ?? (c.timeoutMs === null ? null : t('plc.useCommonTimeout')))}
+        {row(t('plc.readTimeout'), c.readTimeoutMs ?? (c.timeoutMs === null ? null : t('plc.useCommonTimeout')))}{row(t('plc.writeTimeout'), c.writeTimeoutMs ?? (c.timeoutMs === null ? null : t('plc.useCommonTimeout')))}{row(t('plc.pollInterval'), c.pollingIntervalMs)}
+        {row(t('plc.xyBase'), c.xyAddressBase === 8 ? t('plc.octal8') : c.xyAddressBase === 16 ? t('plc.hex16') : null)}{row(t('plc.wBase'), c.wAddressBase === 10 ? t('plc.dec10') : c.wAddressBase === 16 ? t('plc.hex16') : null)}
+        <dt>{t('plc.enabled')}</dt><dd>{c.enabled ? <Pill tone="ok">{t('plc.enabledOn')}</Pill> : <Pill tone="muted">{t('plc.enabledOff')}</Pill>}</dd>
       </dl>
       {c.missingParameters.length > 0 && (
-        <div className="notice notice-warn">NEEDS_CONFIGURATION – còn thiếu: {c.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ')}.</div>
+        <div className="notice notice-warn">{t('plc.missingParams', { list: c.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ') })}</div>
       )}
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
-      {probe && <div className={`notice ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>Kiểm tra ({probe.mode}): {probe.message}{probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : ''}</div>}
+      {probe && <div className={`notice ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>{t('plc.probeResult', { mode: TEST_MODE_VI[probe.mode] ?? probe.mode, message: describeCoded(probe.message), latency: probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : '' })}</div>}
       <div className="btn-row">
-        <Button variant="primary" onClick={onEdit}>Sửa cấu hình</Button>
-        <Button disabled={busy} onClick={() => void run(async () => setProbe(await api.plcTestConnection(c.plcId)))}>Kiểm tra kết nối</Button>
-        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, false) })}>Mô phỏng mất kết nối</Button>}
-        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, true) })}>Khôi phục</Button>}
+        <Button variant="primary" onClick={onEdit}>{t('plc.edit')}</Button>
+        <Button disabled={busy} onClick={() => void run(async () => setProbe(await api.plcTestConnection(c.plcId)))}>{t('plc.testConn')}</Button>
+        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, false) })}>{t('plc.simDrop')}</Button>}
+        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, true) })}>{t('plc.simRestore')}</Button>}
       </div>
-      <p className="muted small">{realMode ? 'Kiểm tra kết nối chỉ mở/đóng cổng TCP, không gửi lệnh PLC.' : 'Chưa kết nối PLC thật: phép kiểm tra không gửi dữ liệu qua mạng.'}</p>
+      {realMode && <p className="muted small">{t('plc.probeNote')}</p>}
     </>
   )
 }
 
 function ConnectionForm({ c, onCancel, onSaved, realMode }: { c: PlcConnection; onCancel: () => void; onSaved: () => void; realMode: boolean }) {
+  const t = useT()
   const [f, setF] = useState({
     name: c.name, ip: c.ipAddress, port: fromNum(c.port), protocol: c.protocol ?? '', net: fromNum(c.networkNumber), pc: fromNum(c.pcNumber),
     module: fromNum(c.moduleIoNumber), station: fromNum(c.plcStationNumber), timer: fromNum(c.monitoringTimer), timeout: fromNum(c.timeoutMs),
@@ -121,37 +125,37 @@ function ConnectionForm({ c, onCancel, onSaved, realMode }: { c: PlcConnection; 
     <>
       {general && <div className="notice notice-bad" role="alert">{general}</div>}
       <div className="form-grid">
-        <Field label="Tên hiển thị" error={errors.name}><input value={f.name} onChange={set('name')} /></Field>
-        <Field label="Địa chỉ IP" error={errors.ipAddress}><input value={f.ip} onChange={set('ip')} /></Field>
-        {num('Cổng TCP', 'port', 'port', 'Do kỹ sư PLC cung cấp (QJ71E71-100)')}
-        <Field label="Giao thức" error={errors.protocol}>
-          <select value={f.protocol} onChange={set('protocol')}><option value="">— Chưa xác nhận —</option>{PROTOCOLS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select>
+        <Field label={t('plc.displayName')} error={errors.name}><input value={f.name} onChange={set('name')} /></Field>
+        <Field label={t('plc.ipAddress')} error={errors.ipAddress}><input value={f.ip} onChange={set('ip')} /></Field>
+        {num(t('plc.tcpPort'), 'port', 'port', t('plc.portHint'))}
+        <Field label={t('plc.protocol')} error={errors.protocol}>
+          <select value={f.protocol} onChange={set('protocol')}><option value="">{t('plc.notConfirmed')}</option>{PROTOCOLS.map((p) => <option key={p.value} value={p.value}>{t(p.label)}</option>)}</select>
         </Field>
-        {num('Network number', 'net', 'networkNumber')}
-        {num('PC number', 'pc', 'pcNumber')}
-        {num('Module I/O number', 'module', 'moduleIoNumber', 'Request destination module I/O')}
-        {num('PLC station number', 'station', 'plcStationNumber', 'Request destination module station')}
-        {num('Monitoring timer', 'timer', 'monitoringTimer', 'Đơn vị 250 ms')}
-        {num('Timeout chung (ms)', 'timeout', 'timeoutMs', '100–60000. Dùng cho kết nối/đọc/ghi nếu không đặt riêng.')}
-        {num('Timeout kết nối (ms)', 'connectTimeout', 'connectTimeoutMs', 'Tùy chọn, 100–60000. Để trống = timeout chung.')}
-        {num('Timeout đọc (ms)', 'readTimeout', 'readTimeoutMs', 'Tùy chọn, 100–60000. Để trống = timeout chung.')}
-        {num('Timeout ghi (ms)', 'writeTimeout', 'writeTimeoutMs', 'Tùy chọn, 100–60000. Lệnh ghi không bao giờ tự gửi lại.')}
-        <Field label="Cơ số địa chỉ X/Y" error={errors.xyAddressBase} hint="NEEDS_CONFIRMATION. MELSEC-Q thường dùng thập lục phân; FX/iQ-F dùng bát phân. Không có mặc định.">
-          <select value={f.xyBase} onChange={set('xyBase')}><option value="">— Chưa xác nhận —</option><option value="8">Bát phân (X10 = 8)</option><option value="16">Thập lục phân (X10 = 16)</option></select>
+        {num(t('plc.networkNumber'), 'net', 'networkNumber')}
+        {num(t('plc.pcNumber'), 'pc', 'pcNumber')}
+        {num(t('plc.moduleIo'), 'module', 'moduleIoNumber', t('plc.moduleIoHint'))}
+        {num(t('plc.plcStation'), 'station', 'plcStationNumber', t('plc.plcStationHint'))}
+        {num(t('plc.monitorTimer'), 'timer', 'monitoringTimer', t('plc.monitorTimerHint'))}
+        {num(t('plc.commonTimeout'), 'timeout', 'timeoutMs', t('plc.commonTimeoutHint'))}
+        {num(t('plc.connectTimeout'), 'connectTimeout', 'connectTimeoutMs', t('plc.connectTimeoutHint'))}
+        {num(t('plc.readTimeout'), 'readTimeout', 'readTimeoutMs', t('plc.readTimeoutHint'))}
+        {num(t('plc.writeTimeout'), 'writeTimeout', 'writeTimeoutMs', t('plc.writeTimeoutHint'))}
+        <Field label={t('plc.xyBase')} error={errors.xyAddressBase} hint={t('plc.xyHint')}>
+          <select value={f.xyBase} onChange={set('xyBase')}><option value="">{t('plc.notConfirmed')}</option><option value="8">{t('plc.octalOpt')}</option><option value="16">{t('plc.hexOptX')}</option></select>
         </Field>
-        <Field label="Cơ số địa chỉ W" error={errors.wAddressBase} hint="NEEDS_CONFIRMATION. Cần cho địa chỉ thanh ghi liên kết W. Không có mặc định.">
-          <select value={f.wBase} onChange={set('wBase')}><option value="">— Chưa xác nhận —</option><option value="10">Thập phân (W10 = 10)</option><option value="16">Thập lục phân (W10 = 16)</option></select>
+        <Field label={t('plc.wBase')} error={errors.wAddressBase} hint={t('plc.wHint')}>
+          <select value={f.wBase} onChange={set('wBase')}><option value="">{t('plc.notConfirmed')}</option><option value="10">{t('plc.decOptW')}</option><option value="16">{t('plc.hexOptW')}</option></select>
         </Field>
-        {num('Chu kỳ đọc (ms)', 'poll', 'pollingIntervalMs', '50–60000')}
+        {num(t('plc.pollInterval'), 'poll', 'pollingIntervalMs', t('plc.pollHint'))}
         <div className="field switches">
-          <Switch checked={f.enabled} onChange={(v) => setF((p) => ({ ...p, enabled: v }))} label="Bật kết nối PLC này" />
-          <span className="field-hint">{realMode ? 'Chỉ bật được khi đủ thông số. Kết nối thật còn cần khóa triển khai Plc:AllowLiveConnection.' : 'Chưa kết nối PLC thật: công tắc này chưa được sử dụng.'}</span>
+          <Switch checked={f.enabled} onChange={(v) => setF((p) => ({ ...p, enabled: v }))} label={t('plc.enableLabel')} />
+          {realMode && <span className="field-hint">{t('plc.enableHint')}</span>}
           {errors.enabled && <span className="field-error">{errors.enabled}</span>}
         </div>
       </div>
       <div className="btn-row">
-        <Button variant="primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu cấu hình'}</Button>
-        <Button disabled={busy} onClick={onCancel}>Hủy</Button>
+        <Button variant="primary" disabled={busy} onClick={() => void save()}>{busy ? t('common.saving') : t('plc.saveConfig')}</Button>
+        <Button disabled={busy} onClick={onCancel}>{t('plc.cancel')}</Button>
       </div>
     </>
   )

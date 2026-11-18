@@ -17,12 +17,22 @@ public interface IUnitOfWork
     Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default);
 }
 
+/// <summary>CR-008B-2: durable store of detected station requests (see <see cref="WCS.Domain.Intake.StationRequestRecord"/>).</summary>
+public interface IStationRequestRepository
+{
+    Task<WCS.Domain.Intake.StationRequestRecord?> GetByKeyAsync(string requestKey, CancellationToken ct = default);
+    Task<IReadOnlyList<WCS.Domain.Intake.StationRequestRecord>> ListPendingAsync(int take, CancellationToken ct = default);
+    void Add(WCS.Domain.Intake.StationRequestRecord record);
+}
+
 public interface IAgvRepository
 {
     Task<Agv?> GetAsync(Guid id, CancellationToken ct = default);
     Task<Agv?> GetByCodeAsync(string code, CancellationToken ct = default);
     Task<Agv?> GetByRoleAsync(AgvRole role, CancellationToken ct = default);
     Task<IReadOnlyList<Agv>> ListAsync(CancellationToken ct = default);
+    /// <summary>CR-008 closure: reads the CURRENT committed hold flag with a fresh query (never the tracked, possibly stale entity). Dispatch decisions call it AFTER the active-task check.</summary>
+    Task<bool> IsOnDispatchHoldAsync(Guid agvId, CancellationToken ct = default);
     void Add(Agv agv);
 }
 
@@ -78,6 +88,8 @@ public interface ITransportTaskRepository
     Task<IReadOnlyList<TransportTask>> ListByStatesAsync(IReadOnlyCollection<TaskState> states, int take, CancellationToken ct = default);
     Task<(IReadOnlyList<TransportTask> Items, int Total)> QueryAsync(TaskQuery query, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, Guid>> ActiveTaskIdByAgvAsync(CancellationToken ct = default);
+    /// <summary>CR-008B-3: tasks whose physical outcome still has to be reconciled by an Admin (newest first).</summary>
+    Task<IReadOnlyList<TransportTask>> ListRequiringReconciliationAsync(int take, CancellationToken ct = default);
 }
 
 public interface IProcessedEventRepository

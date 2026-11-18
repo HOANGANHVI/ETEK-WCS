@@ -13,7 +13,10 @@ public static class DependencyInjection
         {
             if (configuration.GetValue("Plc:RuntimeEnabled", true)) { services.AddHostedService<PlcRuntimeHostedService>(); services.AddHostedService<HandshakeHostedService>(); }
             services.AddHostedService<SchedulerHostedService>();
+            services.AddHostedService<RoutingHostedService>();   // CR-010
             services.AddHostedService<AgvStatusHostedService>();
+            services.AddHostedService<LogMaintenanceHostedService>();   // CR-007
+            services.AddHostedService<DbHealthMonitorHostedService>();  // CR-007
         }
         return services;
     }

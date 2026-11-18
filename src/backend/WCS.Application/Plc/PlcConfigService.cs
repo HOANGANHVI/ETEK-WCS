@@ -58,7 +58,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         return (await repo.ListConnectionsAsync(ct)).Select(c => ToView(c, stations.Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList())).ToList();
     }
 
-    private static PlcConnectionView ToView(PlcConnection c, IReadOnlyList<string> stations)
+    public static PlcConnectionView ToView(PlcConnection c, IReadOnlyList<string> stations)
     {
         var missing = c.MissingParameters();
         return new(c.Id, c.Name, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer,
@@ -69,7 +69,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     public async Task<PlcConnectionView> UpdateConnectionAsync(string plcId, UpdatePlcConnectionCommand cmd, PlcRuntimeOptions options, string? by, CancellationToken ct = default)
     {
         var errors = new List<FieldError>();
-        if (string.IsNullOrWhiteSpace(cmd.IpAddress) || !ConnectionValidator.IsStrictIp(cmd.IpAddress.Trim())) errors.Add(new("ipAddress", "Địa chỉ IP không hợp lệ."));
+        if (string.IsNullOrWhiteSpace(cmd.IpAddress) || !ConnectionValidator.IsStrictIp(cmd.IpAddress.Trim())) errors.Add(new("ipAddress", "Địa chỉ IP không hợp lệ.", "IP_INVALID"));
         Range(errors, "port", cmd.Port, 1, 65535, "Cổng TCP");
         Range(errors, "networkNumber", cmd.NetworkNumber, 0, 255, "Network number");
         Range(errors, "pcNumber", cmd.PcNumber, 0, 255, "PC number");
@@ -81,10 +81,10 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         Range(errors, "connectTimeoutMs", cmd.ConnectTimeoutMs, 100, 60_000, "Timeout kết nối (ms)");
         Range(errors, "readTimeoutMs", cmd.ReadTimeoutMs, 100, 60_000, "Timeout đọc (ms)");
         Range(errors, "writeTimeoutMs", cmd.WriteTimeoutMs, 100, 60_000, "Timeout ghi (ms)");
-        if (cmd.XyAddressBase is { } xb && !AddressBases.IsValidXy(xb)) errors.Add(new("xyAddressBase", "Cơ số địa chỉ X/Y chỉ có thể là 8 (bát phân) hoặc 16 (thập lục phân)."));
-        if (cmd.WAddressBase is { } wb && !AddressBases.IsValidW(wb)) errors.Add(new("wAddressBase", "Cơ số địa chỉ W chỉ có thể là 10 (thập phân) hoặc 16 (thập lục phân)."));
+        if (cmd.XyAddressBase is { } xb && !AddressBases.IsValidXy(xb)) errors.Add(new("xyAddressBase", "Cơ số địa chỉ X/Y chỉ có thể là 8 (bát phân) hoặc 16 (thập lục phân).", "XY_BASE_INVALID"));
+        if (cmd.WAddressBase is { } wb && !AddressBases.IsValidW(wb)) errors.Add(new("wAddressBase", "Cơ số địa chỉ W chỉ có thể là 10 (thập phân) hoặc 16 (thập lục phân).", "W_BASE_INVALID"));
         if (!string.IsNullOrWhiteSpace(cmd.Protocol) && !ConnectionOptions.PlcProtocols.Contains(cmd.Protocol.Trim()))
-            errors.Add(new("protocol", "Giao thức không được hỗ trợ."));
+            errors.Add(new("protocol", "Giao thức không được hỗ trợ.", "PROTOCOL_UNSUPPORTED"));
         if (errors.Count > 0) throw new ValidationFailedException(errors);
 
         return await uow.ExecuteAsync(async t =>
@@ -96,7 +96,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
                 cmd.ConnectTimeoutMs, cmd.ReadTimeoutMs, cmd.WriteTimeoutMs, cmd.XyAddressBase, cmd.WAddressBase);
             // Switching a REAL connection on needs the complete, confirmed parameter set. The simulator never needs them.
             if (cmd.Enabled && options.Mode != PlcRuntimeMode.Simulator && c.MissingParameters() is { Count: > 0 } missing)
-                throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).")).ToList());
+                throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).", "NEEDS_ENGINEER_CONFIRMATION")).ToList());
             var stations = (await repo.ListStationsAsync(t)).Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList();
             return ToView(c, stations);
         }, ct);
@@ -104,7 +104,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
 
     private static void Range(List<FieldError> e, string field, int? v, int min, int max, string label)
     {
-        if (v is { } x && (x < min || x > max)) e.Add(new(field, $"{label} phải nằm trong khoảng {min}–{max}."));
+        if (v is { } x && (x < min || x > max)) e.Add(new(field, $"{label} phải nằm trong khoảng {min}–{max}.", "RANGE", FieldArgs.Of(("min", min), ("max", max))));
     }
 
     public async Task<IReadOnlyList<PlcStationView>> ListStationsAsync(CancellationToken ct = default)
@@ -118,13 +118,23 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         }).ToList();
     }
 
-    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default) =>
-        (await repo.ListPointsAsync(plcId, stationId, ct)).OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).Select(p => ToView(p, includeConfiguration)).ToList();
+    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default)
+    {
+        var points = await repo.ListPointsAsync(plcId, stationId, ct);
+        // CR-012: Pollable = has an address that is valid and does not overlap another point of the same PLC (the other points of that PLC are needed for the overlap check)
+        var pollable = new HashSet<Guid>();
+        foreach (var group in points.GroupBy(p => p.PlcId))
+        {
+            var all = stationId is null ? group.ToList() : (await repo.ListPointsAsync(group.Key, null, ct)).ToList();
+            pollable.UnionWith(PlcPollablePolicy.Pollable(all, await BasesOfAsync(group.Key, ct)));
+        }
+        return points.OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).Select(p => ToView(p, includeConfiguration, pollable.Contains(p.Id))).ToList();
+    }
 
-    public static IoPointView ToView(StationIoPoint p, bool includeConfiguration) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
+    public static IoPointView ToView(StationIoPoint p, bool includeConfiguration, bool? pollable = null) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
         p.Direction.ToString(), p.DataType.ToString(), p.Description, PlcLabels.Status(p.Status),
         includeConfiguration ? p.TemplateAddressReference : null, includeConfiguration ? p.ActualAddress : null, includeConfiguration ? p.WordLength : null,
-        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? p.IsPollable : null);
+        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? pollable ?? p.IsPollable : null);
 
     /// <summary>Records an address confirmed by the PLC engineer. Conflicts with other points of the SAME PLC are rejected; other PLCs are independent.</summary>
     public Task<IoPointView> SetAddressAsync(Guid pointId, SetPointAddressCommand cmd, CancellationToken ct = default) =>
@@ -133,18 +143,18 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             // CR-004: X/Y are OUT_OF_SCOPE for IO mapping (radix NEEDS_CONFIRMATION). Only D, W, M may be entered. The driver is unchanged.
             if (!string.IsNullOrWhiteSpace(cmd.Address) && char.ToUpperInvariant(cmd.Address.Trim()[0]) is 'X' or 'Y')
-                throw new ValidationFailedException([new("address", "Thiết bị X/Y chưa được hỗ trợ trong cấu hình địa chỉ IO (OUT_OF_SCOPE, NEEDS_CONFIRMATION: cần xác nhận cơ số với kỹ sư PLC). Chỉ dùng M, D hoặc W.")]);
+                throw new ValidationFailedException([new("address", "Thiết bị X/Y chưa được hỗ trợ trong cấu hình địa chỉ IO (OUT_OF_SCOPE, NEEDS_CONFIRMATION: cần xác nhận cơ số với kỹ sư PLC). Chỉ dùng M, D hoặc W.", "ADDRESS_XY_UNSUPPORTED")]);
             var bases = await BasesOfAsync(p.PlcId, t);
             var address = string.IsNullOrWhiteSpace(cmd.Address) ? cmd.Address?.Trim() : DeviceAddress.Normalize(cmd.Address, bases);
             var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, address, cmd.WordLength, p.Direction);
-            if (AddressValidator.ValidateOne(spec, bases) is { } issue) throw new ValidationFailedException([new("address", issue.Message)]);
+            if (AddressValidator.ValidateOne(spec, bases) is { } issue) throw new ValidationFailedException([new("address", issue.Message, issue.Code, issue.Args)]);
             if (p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(cmd.Encoding))
-                throw new ValidationFailedException([new("encoding", "STRING cần encoding được xác nhận.")]);
+                throw new ValidationFailedException([new("encoding", "STRING cần encoding được xác nhận.", "ENCODING_REQUIRED")]);
 
             var others = (await repo.ListPointsAsync(p.PlcId, null, t)).Where(x => x.Id != p.Id)
                 .Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction));
             var conflict = AddressValidator.Validate(others.Append(spec), bases).FirstOrDefault(i => i.PointId == p.Id || i.ConflictWith == p.Id);
-            if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message)]);
+            if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message, conflict.Code, conflict.Args)]);
 
             p.ConfigureAddress(address!, p.DataType == PlcDataType.String ? cmd.WordLength : null, p.DataType == PlcDataType.String ? cmd.Encoding!.Trim() : null, clock.UtcNow);
             return ToView(p, true);
@@ -167,6 +177,89 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             p.Approve(approvedBy, clock.UtcNow);
             return ToView(p, true);
         }, ct);
+
+    // ---------------------------------------------------------------------------------------------- bulk READ approval (commissioning of one PLC)
+    /// <summary>Classifies every IO point of a PLC for a bulk read-approval without changing anything.</summary>
+    private static IReadOnlyList<BulkApprovalItem> Classify(IReadOnlyList<StationIoPoint> points, AddressBases bases)
+    {
+        var specs = points.Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction)).ToList();
+        var issues = AddressValidator.Validate(specs, bases);
+        AddressIssue? IssueOf(Guid id) => issues.FirstOrDefault(i => i.PointId == id) ?? issues.FirstOrDefault(i => i.ConflictWith == id);
+        return points.Select(p =>
+        {
+            BulkApprovalItem Item(string outcome, string? code = null, string? reason = null) =>
+                new(p.Id, p.StationId, p.SignalName, p.DataType.ToString(), p.ActualAddress, outcome, code, reason);
+            if (p.Status == IoConfigStatus.Approved) return Item(BulkOutcome.AlreadyApproved);
+            if (p.Status == IoConfigStatus.NeedsConfiguration || string.IsNullOrWhiteSpace(p.ActualAddress))
+                return Item(BulkOutcome.NotEligible, "NO_ADDRESS", "No address entered.");
+            if (IssueOf(p.Id) is { } issue) return Item(BulkOutcome.NotEligible, issue.Code, issue.Message);
+            if (p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(p.Encoding))
+                return Item(BulkOutcome.NotEligible, "ENCODING_REQUIRED", "STRING needs a confirmed encoding.");
+            return Item(BulkOutcome.Eligible);
+        }).ToList();
+    }
+
+    private static BulkApprovalPreview ToPreview(string plcId, IReadOnlyList<BulkApprovalItem> items) =>
+        new(plcId, items.Count, items.Count(i => !string.IsNullOrWhiteSpace(i.Address)), items.Count(i => i.Outcome == BulkOutcome.Eligible),
+            items.Count(i => i.Outcome == BulkOutcome.NotEligible), items.Count(i => i.Outcome == BulkOutcome.AlreadyApproved), items);
+
+    private async Task RequireBulkAllowedAsync(string plcId, IReadOnlyList<string> allowed, CancellationToken ct)
+    {
+        _ = await repo.GetConnectionAsync(plcId, ct) ?? throw AppException.NotFound("PLC_NOT_FOUND", $"Không tìm thấy {plcId}.");
+        if (!BulkApprovalPolicy.IsAllowed(allowed, plcId))
+            throw AppException.Rejected("BULK_APPROVAL_NOT_ALLOWED", $"Duyệt đọc hàng loạt không được bật cho {plcId}.");
+    }
+
+    /// <summary>What a bulk read-approval of <paramref name="plcId"/> would do. Read-only.</summary>
+    public async Task<BulkApprovalPreview> PreviewBulkApprovalAsync(string plcId, IReadOnlyList<string> allowedPlcIds, CancellationToken ct = default)
+    {
+        await RequireBulkAllowedAsync(plcId, allowedPlcIds, ct);
+        return ToPreview(plcId, Classify(await repo.ListPointsAsync(plcId, null, ct), await BasesOfAsync(plcId, ct)));
+    }
+
+    /// <summary>
+    /// Grants READ approval (the existing <see cref="StationIoPoint.Approve"/>) to every eligible IO point of one allowed PLC: status CONFIGURED, address present and valid
+    /// (format, type/device, no overlap on the PLC), STRING with encoding. Addresses, data types, write permission, handshake and every other PLC are untouched.
+    /// <paramref name="expectedEligible"/> (the count the Admin confirmed in the preview) guards against a changed state between preview and confirmation.
+    /// A point whose approval fails is reported and does not stop the others.
+    /// </summary>
+    public Task<BulkApprovalResult> BulkApproveAsync(string plcId, string approvedBy, IReadOnlyList<string> allowedPlcIds, int? expectedEligible, CancellationToken ct = default) =>
+        uow.ExecuteAsync(async t =>
+        {
+            await RequireBulkAllowedAsync(plcId, allowedPlcIds, t);
+            var points = await repo.ListPointsAsync(plcId, null, t);
+            var items = Classify(points, await BasesOfAsync(plcId, t)).ToList();
+            var eligible = items.Count(i => i.Outcome == BulkOutcome.Eligible);
+            if (expectedEligible is { } exp && exp != eligible)
+                throw AppException.Rejected("BULK_APPROVAL_PREVIEW_STALE", $"Số điểm đủ điều kiện đã thay đổi ({exp} → {eligible}). Hãy xem lại bản xem trước rồi xác nhận lại.");
+            var now = clock.UtcNow;
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (items[i].Outcome != BulkOutcome.Eligible) continue;
+                var p = points.First(x => x.Id == items[i].PointId);
+                try { p.Approve(approvedBy, now); items[i] = items[i] with { Outcome = BulkOutcome.Approved }; }
+                catch (WCS.Domain.Common.DomainException ex) { items[i] = items[i] with { Outcome = BulkOutcome.Failed, Code = ex.Code, Reason = ex.Message }; }
+            }
+            return Summarize(plcId, items, verified: 0);
+        }, ct);
+
+    private static BulkApprovalResult Summarize(string plcId, IReadOnlyList<BulkApprovalItem> items, int verified) =>
+        new(plcId, items.Count, items.Count(i => i.Outcome == BulkOutcome.Approved), items.Count(i => i.Outcome == BulkOutcome.AlreadyApproved),
+            items.Count(i => i.Outcome == BulkOutcome.NotEligible), items.Count(i => i.Outcome == BulkOutcome.Failed), verified, items);
+
+    /// <summary>
+    /// Re-reads the PLC's points (call it on a NEW scope so the database is read, not the tracker) and keeps "approved" only for points that really are
+    /// APPROVED and pollable now; anything else is reported as failed. Success is never taken from the number of requests sent.
+    /// </summary>
+    public async Task<BulkApprovalResult> VerifyBulkApprovalAsync(BulkApprovalResult result, CancellationToken ct = default)
+    {
+        var current = (await repo.ListPointsAsync(result.PlcId, null, ct)).ToDictionary(p => p.Id);
+        bool Pollable(Guid id) => current.TryGetValue(id, out var p) && p.Status == IoConfigStatus.Approved && p.IsPollable;
+        var items = result.Items.Select(i => i.Outcome == BulkOutcome.Approved && !Pollable(i.PointId)
+            ? i with { Outcome = BulkOutcome.Failed, Code = "VERIFY_FAILED", Reason = "After saving, the point is not Approved/Pollable." }
+            : i).ToList();
+        return Summarize(result.PlcId, items, items.Count(i => (i.Outcome is BulkOutcome.Approved or BulkOutcome.AlreadyApproved) && Pollable(i.PointId)));
+    }
 
     public Task<IoPointView> SetWriteAllowedAsync(Guid pointId, bool allowed, CancellationToken ct = default) =>
         uow.ExecuteAsync(async t =>

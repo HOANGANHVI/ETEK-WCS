@@ -123,3 +123,15 @@ This addendum supersedes only the earlier PLC topology statements in sections 1.
 - Do not infer register offsets or change the 23 source signal definitions without an approved change.
 
 The four-PLC topology does not alter the protected business rules: `PER_AGV`, BP-04 `REVIEW`, WCS inventory ownership, A3/A4 and D1/D2 `UNCHANGED`, and the “Không bind rack” constraints remain in force.
+
+---
+
+## 1.9. Addendum – Transport Task, Leg and Station Transaction (CR-010, 2026-11-18)
+
+This addendum adds concepts; it changes none of BR-01 .. BR-04.
+
+- A **Transport Task** is the whole transport job of one Business Process. It may contain several **Legs** and several **Station Transactions** (also across PLCs). It completes only when its process reaches its completion step.
+- A **Station Transaction** is one entry of an AMR into one port to pick or deliver a rack. A port has at most one active Station Transaction; ports are independent (also ports of one PLC). It ends after the handover and after the AMR left the port. Ending it does not complete the Transport Task.
+- A **Buffer** is a physical storage location: a confirmed drop there updates inventory. An **intermediate waiting position** is where an AMR waits while it still holds the rack; it is not a storage location and inventory is not updated for it.
+- BR-01 (`PER_AGV`) is applied to the AGV-holding leg: at most one leg per AGV holds the AGV. There is no system-wide task limit and no PLC-wide lock. The statement "only one task at a time" of the source slide 4 of `Process in detail` is not a system-wide limit (BR-01 prevails).
+- Routes, priorities, buffers, waiting and branches are configuration (`ADR-0008`); BP-04 stays `REVIEW`; A3/A4 and D1/D2 stay `UNCHANGED`; WCS keeps owning inventory and never overwrites it from PLC data.

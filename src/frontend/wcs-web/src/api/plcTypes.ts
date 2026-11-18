@@ -62,10 +62,10 @@ export interface SavePlcConnectionBody {
 }
 
 export interface PlcLogRow {
-  id: string; occurredAt: string; plcId: string | null; stationId: string | null; level: 'Info' | 'Warning' | 'Error'; event: string; message: string
+  id: string; occurredAt: string; plcId: string | null; stationId: string | null; level: 'Info' | 'Warning' | 'Error'; event: string; message: string; detailsJson?: string | null
 }
 
-export interface AddressIssue { pointId: string; stationId: string; signal: string; code: string; message: string }
+export interface AddressIssue { pointId: string; stationId: string; signal: string; code: string; message: string; args?: Record<string, unknown> | null }
 
 export interface ProbeResultView { outcome: string; mode: string; message: string; error: string | null; latencyMs: number | null }
 
@@ -75,3 +75,8 @@ export interface IoPointConfig {
   dataType: 'Bool' | 'Int' | 'String'; description: string; configStatus: string; templateAddressReference: string | null; actualAddress: string | null
   wordLength: number | null; encoding: string | null; writeAllowed: boolean | null; approvedBy: string | null; approvedAt: string | null; pollable: boolean | null
 }
+
+/** Bulk READ approval of a commissioning PLC (Admin). Outcome: ELIGIBLE (preview only) | APPROVED | ALREADY_APPROVED | NOT_ELIGIBLE | FAILED. */
+export interface BulkApprovalItem { pointId: string; stationId: string; signalName: string; dataType: string; address: string | null; outcome: string; code: string | null; reason: string | null }
+export interface BulkApprovalPreview { plcId: string; total: number; withAddress: number; eligible: number; notEligible: number; alreadyApproved: number; items: BulkApprovalItem[] }
+export interface BulkApprovalResult { plcId: string; total: number; approved: number; alreadyApproved: number; notEligible: number; failed: number; verifiedPollable: number; items: BulkApprovalItem[] }

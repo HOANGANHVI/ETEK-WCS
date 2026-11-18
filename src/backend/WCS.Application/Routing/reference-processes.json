@@ -1,0 +1,748 @@
+[
+  {
+    "code": "BP-01",
+    "name": "A1/A2 has a full rack",
+    "description": "Pick the full rack at A1/A2; destination B1/B2, else F1/F2, else F5 (process-flows.md BP-01). No bind rack when dropping at B1/B2.",
+    "requestType": "PickupRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "A1",
+      "A2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / Process in detail.pptx slide 5",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "B1",
+              "noBind": true
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "B2",
+              "noBind": true
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "F1"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "F2"
+            },
+            {
+              "role": "Destination",
+              "priority": 3,
+              "order": 1,
+              "locationCode": "F5"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "BP-02",
+    "name": "A1/A2 needs an empty rack",
+    "description": "Source: empty rack at B1/B2, else F3/F4; destination = the requesting A1/A2.",
+    "requestType": "DeliveryRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "A1",
+      "A2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / Process in detail.pptx slide 6",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "B1"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "B2"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "F3"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "F4"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "BP-03",
+    "name": "B1/B2 has an empty rack",
+    "description": "Pick the empty rack at B1/B2; destination A1/A2 (no bind rack), else F3/F4.",
+    "requestType": "PickupRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "B1",
+      "B2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / Process in detail.pptx slide 7",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "A1",
+              "noBind": true
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "A2",
+              "noBind": true
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "F3"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "F4"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "BP-04",
+    "name": "B1/B2 needs a full rack",
+    "description": "REVIEW: slide 8 is inconsistent about AGV1/AGV2 (BR-02). Draft kept for traceability only; it can never be published.",
+    "requestType": "DeliveryRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "B1",
+      "B2"
+    ],
+    "reviewBlocked": true,
+    "reviewReason": "BP-04 is REVIEW (BR-02); not approved for implementation.",
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / Process in detail.pptx slide 8",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "A1"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "A2"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "F1"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "F2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "BP-05",
+    "name": "F5 requests a full rack",
+    "description": "Operator call at F5: take a full rack from F1/F2 to F5 (F5 must have a free slot). The branch that may cancel the AGV1 task is NOT modelled (NEEDS_CONFIRMATION).",
+    "requestType": "ManualRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "F5"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / Process in detail.pptx slide 9",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "F1"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "F2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "BP-06",
+    "name": "F5 returns an empty rack",
+    "description": "Operator call at F5: take the empty rack to A1/A2 (no bind rack), else F3/F4.",
+    "requestType": "ManualRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "F5"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / Process in detail.pptx slide 10",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "A1",
+              "noBind": true
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "A2",
+              "noBind": true
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "F3"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "F4"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "PH2-01",
+    "name": "Phase 2: A1/A2 has a full rack",
+    "description": "B1/B2, then P1/P2 (buffer), then M5 (manual QC). P1/P2/M5 are not locations of the Phase 1 baseline: define them before validating.",
+    "requestType": "PickupRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "A1",
+      "A2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / ETEK Process AGV Phase 2.pptx slide 4",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "B1"
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "B2"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "P1"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "P2"
+            },
+            {
+              "role": "Destination",
+              "priority": 3,
+              "order": 1,
+              "locationCode": "M5"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "PH2-02",
+    "name": "Phase 2: A1/A2 needs an empty rack",
+    "description": "Source: B1/B2, else P1/P2; destination = the requesting A1/A2.",
+    "requestType": "DeliveryRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "A1",
+      "A2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / ETEK Process AGV Phase 2.pptx slide 5",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "B1"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "B2"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "P1"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "P2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "PH2-03",
+    "name": "Phase 2: B1/B2 has an empty rack",
+    "description": "Pick at B1/B2; destination A1/A2, else P1/P2. The intermediate waiting position of the slides has no declared location yet (NEEDS_CONFIRMATION).",
+    "requestType": "PickupRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "B1",
+      "B2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / ETEK Process AGV Phase 2.pptx slide 6",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "A1"
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "A2"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "P1"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "P2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "PH2-04",
+    "name": "Phase 2: B1/B2 needs a full rack",
+    "description": "REVIEW (same scenario as BP-04): source A1/A2, else P1/P2. Never publishable.",
+    "requestType": "DeliveryRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "B1",
+      "B2"
+    ],
+    "reviewBlocked": true,
+    "reviewReason": "Same scenario as BP-04 (REVIEW); not approved for implementation.",
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / ETEK Process AGV Phase 2.pptx slide 7",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "A1"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "A2"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "P1"
+            },
+            {
+              "role": "Source",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "P2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "PH2-05",
+    "name": "Phase 2: return an empty rack from M5",
+    "description": "Pick at M5; destination A1/A2, else P1/P2; if none, the AMR waits holding the rack (slide: intermediate waiting position).",
+    "requestType": "ManualRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "M5"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / ETEK Process AGV Phase 2.pptx slide 8",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "A1"
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "A2"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "P1"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "P2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  },
+  {
+    "code": "PH2-06",
+    "name": "Phase 2: bring a full rack to M5",
+    "description": "Take a full rack from P1/P2 to M5; no full rack at P1/P2 is an error (WaitBehavior=Fail).",
+    "requestType": "ManualRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "M5"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / ETEK Process AGV Phase 2.pptx slide 9",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Fail",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "P1"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "P2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
+    }
+  }
+]

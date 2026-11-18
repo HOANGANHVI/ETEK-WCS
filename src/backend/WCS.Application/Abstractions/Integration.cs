@@ -58,3 +58,12 @@ public interface IRcsClient
     Task<(RcsTaskStatus Status, string? RcsTaskCode)> QueryTaskStatusAsync(string requestCode, CancellationToken ct = default);
     Task<RcsAgvStatus?> QueryAgvStatusAsync(string robotCode, CancellationToken ct = default);
 }
+
+/// <summary>CR-008A: whether tasks may currently be sent to the RCS adapter. Code is a stable identifier (RCS_NOT_CONNECTED when only the simulator exists in Production).</summary>
+public sealed record RcsDispatchStatus(bool Allowed, string Code, string Message);
+
+/// <summary>CR-008A (AUDIT-001): Production must never dispatch a task to the RCS simulator. Business code asks this guard before creating/dispatching a task.</summary>
+public interface IRcsDispatchGuard
+{
+    RcsDispatchStatus Check();
+}

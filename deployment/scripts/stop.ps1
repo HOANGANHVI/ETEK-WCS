@@ -2,6 +2,7 @@
 # -Remove additionally removes the stopped containers (still keeps volumes). There is no option that deletes data.
 param([switch]$Remove)
 . (Join-Path $PSScriptRoot '_common.ps1')
+Start-WcsRun 'stop.ps1'
 Assert-Docker
 Assert-EnvFile | Out-Null
 Write-Step 'Stopping frontend and backend'
@@ -13,4 +14,5 @@ if ($Remove) {
     if ((Invoke-Compose @('down')) -ne 0) { Fail 'docker compose down failed.' }
 }
 Write-Ok 'Stopped. Database and key-ring volumes are untouched.'
+Complete-WcsRun 0
 exit 0

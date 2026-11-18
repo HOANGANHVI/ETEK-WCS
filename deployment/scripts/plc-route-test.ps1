@@ -8,6 +8,7 @@ param(
     [int]$TimeoutSec = 3
 )
 . (Join-Path $PSScriptRoot '_common.ps1')
+Start-WcsRun 'plc-route-test.ps1'
 Assert-Docker
 $id = Get-ContainerId 'backend'
 if (-not $id) { Fail 'The backend container is not running. Start the system first (start.ps1).' }
@@ -21,7 +22,9 @@ foreach ($h in $Hosts) {
 }
 if ($failed -gt 0) {
     Write-Host 'Check: PLC powered and on 192.168.10.x, the port is the one confirmed by the PLC engineer, Windows firewall, and whether the PLC accepts connections from this machine''s IP (the PLC sees the Windows host address, not the container).'
+    Complete-WcsRun 2
     exit 2
 }
 Write-Host 'TCP reachability only. This is NOT a PLC communication test and does not make the connection "tested": that needs the PLC engineer''s read-only commissioning.'
+Complete-WcsRun 0
 exit 0

@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
 import type { Agv, TransportTask } from '../api/types'
 import { formatDateTime, timeAgo } from '../i18n/format'
+import { t, useT } from '../i18n'
 import { AGV_ROLE_VI, flowInfo, LEG_VI, taskCode } from '../i18n/vi'
+import { AgvHoldPanel } from './AgvHoldPanel'
 import { ConnectionPill, FlowStepper, Pill, TaskStatePill } from './ui'
 
 interface Props {
@@ -11,25 +13,30 @@ interface Props {
   code: (locationId: string | null) => string
   now: number
   compact?: boolean
+  onChanged?: () => void
 }
 
 function activity(agv: Agv) {
-  if (agv.connectionStatus === 'Offline' || agv.connectionStatus === 'Error') return <Pill tone="bad">Không khả dụng</Pill>
-  return agv.busy ? <Pill tone="ok">Đang hoạt động</Pill> : <Pill tone="warn">Đang chờ nhiệm vụ</Pill>
+  if (agv.dispatchHold) return <Pill tone="bad">{t('agv.dispatchHold')}</Pill>
+  if (agv.connectionStatus === 'Offline' || agv.connectionStatus === 'Error') return <Pill tone="bad">{t('agv.unavailable')}</Pill>
+  return agv.busy ? <Pill tone="ok">{t('agv.active')}</Pill> : <Pill tone="warn">{t('agv.awaitingTask')}</Pill>
 }
 
 /** Operational card of one AGV. No position is shown: the API does not provide AGV coordinates yet. */
-export function AgvCard({ agv, task, lastTask, code, now, compact }: Props) {
+export function AgvCard({ agv, task, lastTask, code, now, compact, onChanged }: Props) {
+  const t = useT()
   const flow = task ? flowInfo(task.flow) : null
   return (
     <article className={`agv-card ${compact ? 'compact' : ''}`}>
       <header className="agv-head">
         <div className="agv-name">
           <span className={`agv-badge ${agv.role === 'FullRack' ? 'full' : 'empty'}`}>{agv.code}</span>
-          <div><strong>{AGV_ROLE_VI[agv.role]}</strong>{!compact && <small>Mã robot RCS: {agv.rcsRobotCode ?? 'chưa cấu hình'}</small>}</div>
+          <div><strong>{AGV_ROLE_VI[agv.role]}</strong>{!compact && <small>{t('agv.rcsRobotCode', { code: agv.rcsRobotCode ?? t('common.notSet') })}</small>}</div>
         </div>
         <div className="agv-states">{activity(agv)}<ConnectionPill value={agv.connectionStatus} /></div>
       </header>
+
+      <AgvHoldPanel agv={agv} onChanged={onChanged} compact={compact} />
 
       {task && flow ? (
         <div className="agv-task">
@@ -39,20 +46,19 @@ export function AgvCard({ agv, task, lastTask, code, now, compact }: Props) {
             <TaskStatePill state={task.state} />
           </div>
           <div className="route">
-            <div><small>Điểm xuất phát</small><strong>{code(task.sourceLocationId ?? task.requestLocationId)}</strong></div>
+            <div><small>{t('agv.from')}</small><strong>{code(task.sourceLocationId ?? task.requestLocationId)}</strong></div>
             <span className="route-arrow" aria-hidden="true">➜</span>
-            <div><small>Điểm đích</small><strong>{code(task.destinationLocationId)}</strong></div>
-            <div className="route-leg"><small>Công đoạn</small><strong>{LEG_VI[task.leg] ?? task.leg}</strong></div>
+            <div><small>{t('agv.to')}</small><strong>{code(task.destinationLocationId)}</strong></div>
+            <div className="route-leg"><small>{t('agv.leg')}</small><strong>{LEG_VI[task.leg] ?? task.leg}</strong></div>
           </div>
           {!compact && <FlowStepper task={task} />}
         </div>
       ) : (
-        <div className="agv-idle">Không có nhiệm vụ đang thực hiện.</div>
+        <div className="agv-idle">{t('agv.idle')}</div>
       )}
 
       <footer className="agv-foot">
-        <span title={formatDateTime(lastTask?.updatedAt ?? agv.lastStatusAt)}>Hoạt động gần nhất: {timeAgo(lastTask?.updatedAt ?? agv.lastStatusAt, now)}</span>
-        <span className="muted">Vị trí hiện tại: chưa có dữ liệu định vị</span>
+        <span title={formatDateTime(lastTask?.updatedAt ?? agv.lastStatusAt)}>{t('agv.lastActivity', { when: timeAgo(lastTask?.updatedAt ?? agv.lastStatusAt, now) })}</span>
       </footer>
     </article>
   )

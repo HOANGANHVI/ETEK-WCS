@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using WCS.Application.Plc;
+using WCS.Domain.Plc;
 using WCS.Domain.Users;
 using WCS.Infrastructure.Persistence;
 using WCS.Infrastructure.Plc;
@@ -123,7 +124,7 @@ public class PlcMcIntegrationTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Only_approved_addresses_are_polled_diagnostics_are_Admin_only_and_the_exchange_hex_matches_the_wire()
+    public async Task Entered_addresses_are_polled_without_approval_diagnostics_are_Admin_only_and_the_exchange_hex_matches_the_wire()
     {
         await using var plc = new MelsecMcMockServer { ExpectedRoute = Route }; plc.Start();
         plc.SetBit(100, true); plc.SetWord(1500, 42);
@@ -134,18 +135,14 @@ public class PlcMcIntegrationTests(DatabaseFixture fixture)
 
         var pickup = await Id(h, "A1", "Pickup_Request"); var rack = await Id(h, "A1", "Rack_Full");
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{pickup}/address", new { address = "M100" })).Status);
-        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{pickup}/approve")).Status);
-        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{rack}/address", new { address = "D1500" })).Status);      // entered, NOT approved
+        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{rack}/address", new { address = "D1500" })).Status);      // CR-012: entered = polled, nobody approved anything
 
         Assert.True(await WaitFor(async () => (await Point(admin, "A1", "Pickup_Request"))?.GetProperty("quality").GetString() == "Good"));
         await Task.Delay(300);                                                                                                                         // several more poll cycles
-        Assert.Equal("NotConfigured", (await Point(admin, "A1", "Rack_Full"))!.Value.GetProperty("quality").GetString());
+        Assert.Equal("NotConfigured", (await Point(admin, "A1", "Station_Online"))!.Value.GetProperty("quality").GetString());                          // no address: still not read
         var heads = plc.ReceivedFrames.Select(x => McFrame.ParseRequest(x).Head).ToList();
         Assert.Contains(new DeviceAddress(PlcDevice.M, 100), heads);
-        Assert.DoesNotContain(heads, a => a.Device == PlcDevice.D);                                                                                    // D1500 never touched
-
-        // approving it makes it pollable
-        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{rack}/approve")).Status);
+        Assert.Equal(0, await h.Db(db => db.StationIoPoints.CountAsync(p => p.Status == IoConfigStatus.Approved)));                                    // nothing was approved
         Assert.True(await WaitFor(async () => (await Point(admin, "A1", "Rack_Full"))?.GetProperty("quality").GetString() == "Good"));
         Assert.Equal(42, (await Point(admin, "A1", "Rack_Full"))!.Value.GetProperty("value").GetInt32());
 

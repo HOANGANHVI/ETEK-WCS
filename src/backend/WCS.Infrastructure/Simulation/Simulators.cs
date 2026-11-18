@@ -76,6 +76,8 @@ public sealed class RcsSimulator : IRcsClient
     private int _counter;
 
     public RcsFault NextFault { get; set; }
+    /// <summary>CR-008A: simulates an RCS outage - create/continue/cancel return an unknown outcome and queries are inconclusive until reset.</summary>
+    public bool Unreachable { get; set; }
     public int CreateCalls { get; private set; }
     public int ContinueCalls { get; private set; }
     public int CancelCalls { get; private set; }
@@ -90,6 +92,7 @@ public sealed class RcsSimulator : IRcsClient
         {
             CreateCalls++;
             var fault = Take();
+            if (Unreachable) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Unknown, null, "Simulated RCS outage"));
             if (fault == RcsFault.RejectNextCreate) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Rejected, null, "Simulated rejection"));
             if (fault == RcsFault.TimeoutBeforeCreate) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Unknown, null, "Simulated timeout (not created)"));
             if (!_tasks.TryGetValue(request.RequestCode, out var task))
@@ -106,6 +109,7 @@ public sealed class RcsSimulator : IRcsClient
         {
             ContinueCalls++;
             var fault = Take();
+            if (Unreachable) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Unknown, null, "Simulated RCS outage"));
             if (fault == RcsFault.RejectNextContinue) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Rejected, null, "Simulated rejection"));
             if (!_tasks.TryGetValue(requestCode, out var t)) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Rejected, null, "Unknown task"));
             if (fault == RcsFault.TimeoutNextContinue)
@@ -120,6 +124,7 @@ public sealed class RcsSimulator : IRcsClient
         lock (_gate)
         {
             CancelCalls++;
+            if (Unreachable) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Unknown, null, "Simulated RCS outage"));
             if (!_tasks.TryGetValue(requestCode, out var t)) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Rejected, null, "Unknown task"));
             if (t.Status is RcsTaskStatus.Completed or RcsTaskStatus.Cancelled) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Rejected, null, "Already finished"));
             t.Status = RcsTaskStatus.Cancelling;
@@ -132,6 +137,7 @@ public sealed class RcsSimulator : IRcsClient
         lock (_gate)
         {
             QueryCalls++;
+            if (Unreachable) return Task.FromResult((RcsTaskStatus.Unknown, (string?)null));
             return Task.FromResult(_tasks.TryGetValue(requestCode, out var t) ? (t.Status, t.RcsTaskCode) : (RcsTaskStatus.NotFound, (string?)null));
         }
     }
@@ -141,6 +147,10 @@ public sealed class RcsSimulator : IRcsClient
 
     /// <summary>Simulates the RCS finishing the cancellation (what a real callback / status poll would report).</summary>
     public void ConfirmCancel(string requestCode) { lock (_gate) { if (_tasks.TryGetValue(requestCode, out var t)) t.Status = RcsTaskStatus.Cancelled; } }
+    /// <summary>CR-008A: force the status RCS reports for a task (Completed, Interrupted, ...), as a real status poll would.</summary>
+    public void SetStatus(string requestCode, RcsTaskStatus status) { lock (_gate) { if (_tasks.TryGetValue(requestCode, out var t)) t.Status = status; } }
+    /// <summary>CR-008A: RCS forgets the task (query then answers NotFound).</summary>
+    public void Forget(string requestCode) { lock (_gate) _tasks.Remove(requestCode); }
     public void MarkExecuting(string requestCode) { lock (_gate) { if (_tasks.TryGetValue(requestCode, out var t)) t.Status = RcsTaskStatus.Executing; } }
 
     private RcsFault Take() { var f = NextFault; NextFault = RcsFault.None; return f; }

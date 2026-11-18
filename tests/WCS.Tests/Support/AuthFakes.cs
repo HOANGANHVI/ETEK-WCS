@@ -18,6 +18,11 @@ public sealed class InMemoryUserRepository : IUserRepository
     public Task<bool> AnyAdminAsync(CancellationToken ct = default) => Task.FromResult(Users.Any(u => u is { Role: UserRole.Admin, IsActive: true }));
     public void Add(AppUser user) => Users.Add(user);
     public void Remove(AppUser user) => Users.Remove(user);
+    public List<UserAvatar> Avatars { get; } = [];
+    public Task<UserAvatar?> GetAvatarAsync(Guid userId, CancellationToken ct = default) => Task.FromResult(Avatars.FirstOrDefault(a => a.UserId == userId));
+    public Task<DateTimeOffset?> GetAvatarStampAsync(Guid userId, CancellationToken ct = default) => Task.FromResult(Avatars.Where(a => a.UserId == userId).Select(a => (DateTimeOffset?)a.UpdatedAt).FirstOrDefault());
+    public void AddAvatar(UserAvatar avatar) => Avatars.Add(avatar);
+    public void RemoveAvatar(UserAvatar avatar) => Avatars.Remove(avatar);
 }
 
 public sealed class RecordingAuditLog : IAuditLog

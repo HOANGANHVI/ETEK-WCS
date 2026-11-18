@@ -18,6 +18,8 @@ internal sealed class AgvConfiguration : IEntityTypeConfiguration<Agv>
         b.Property(x => x.Code).HasMaxLength(50).IsRequired();
         b.Property(x => x.RcsRobotCode).HasMaxLength(100);
         b.Property(x => x.StatusDetail).HasMaxLength(500);
+        b.Property(x => x.DispatchHold).HasDefaultValue(false);   // CR-008B-5 (additive)
+        b.Property(x => x.DispatchHoldReason).HasMaxLength(200);
         b.Property(x => x.Version).IsRowVersion(); // PostgreSQL xmin
         b.Ignore(x => x.CarriedRackKind);
         b.HasIndex(x => x.Code).IsUnique();
@@ -92,6 +94,24 @@ internal sealed class InventoryTransactionConfiguration : IEntityTypeConfigurati
     }
 }
 
+internal sealed class StationRequestConfiguration : IEntityTypeConfiguration<WCS.Domain.Intake.StationRequestRecord>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Intake.StationRequestRecord> b)
+    {
+        b.ToTable("station_requests");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.RequestKey).HasMaxLength(300).IsRequired();
+        b.Property(x => x.StationCode).HasMaxLength(50).IsRequired();
+        b.Property(x => x.Flow).HasMaxLength(50).IsRequired();
+        b.Property(x => x.LastError).HasMaxLength(500);
+        b.Property(x => x.Version).IsRowVersion();
+        b.Ignore(x => x.IsPending);
+        b.HasIndex(x => x.RequestKey).IsUnique();            // request idempotency: one record per PlcId:Station:Request_ID
+        b.HasIndex(x => new { x.Status, x.FirstSeenAt });
+    }
+}
+
 internal sealed class ProcessedEventConfiguration : IEntityTypeConfiguration<ProcessedEvent>
 {
     public void Configure(EntityTypeBuilder<ProcessedEvent> b)
@@ -116,6 +136,8 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
         b.Property(x => x.RcsRequestCode).HasMaxLength(100).IsRequired();
         b.Property(x => x.RcsTaskCode).HasMaxLength(100);
         b.Property(x => x.StateReason).HasMaxLength(1000);
+        b.Property(x => x.StateReasonCode).HasMaxLength(100);
+        b.Property(x => x.StateReasonArgsJson).HasColumnType("text");
         b.Property(x => x.RequestedBy).HasMaxLength(100);
         b.Property(x => x.Version).IsRowVersion();
         b.Ignore(x => x.IsTerminal);
@@ -151,6 +173,8 @@ internal sealed class TaskHistoryConfiguration : IEntityTypeConfiguration<TaskHi
         b.Property(x => x.Id).ValueGeneratedNever(); // ids are assigned by the application; without this EF treats a new child with a preset Guid as Modified (UPDATE hits 0 rows)
         b.Property(x => x.EventName).HasMaxLength(100).IsRequired();
         b.Property(x => x.Detail).HasMaxLength(2000);
+        b.Property(x => x.DetailCode).HasMaxLength(100);
+        b.Property(x => x.DetailArgsJson).HasColumnType("text");
         b.Property(x => x.Source).HasMaxLength(50).IsRequired();
         b.HasIndex(x => new { x.TaskId, x.OccurredAt });
     }
@@ -181,9 +205,28 @@ internal sealed class AppUserConfiguration : IEntityTypeConfiguration<WCS.Domain
         b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.Username).HasMaxLength(50).IsRequired();
         b.Property(x => x.DisplayName).HasMaxLength(100).IsRequired();
+        b.Property(x => x.Theme).HasMaxLength(10).IsRequired().HasDefaultValue(WCS.Domain.Users.UserPreferences.DefaultTheme);
+        b.Property(x => x.SidebarCollapsed).HasDefaultValue(false);
+        b.Property(x => x.Email).HasMaxLength(WCS.Domain.Users.AppUser.EmailMax);
+        b.Property(x => x.Position).HasMaxLength(WCS.Domain.Users.AppUser.OrganizationMax);
+        b.Property(x => x.Department).HasMaxLength(WCS.Domain.Users.AppUser.OrganizationMax);
         b.Property(x => x.PasswordHash).HasMaxLength(500).IsRequired(); // salted hash only, never the password
         b.HasIndex(x => x.Username).IsUnique();
         b.Property(x => x.Version).IsRowVersion();
+    }
+}
+
+internal sealed class UserAvatarConfiguration : IEntityTypeConfiguration<WCS.Domain.Users.UserAvatar>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Users.UserAvatar> b)
+    {
+        b.ToTable("user_avatars");
+        b.HasKey(x => x.UserId);
+        b.Property(x => x.UserId).ValueGeneratedNever();
+        b.Property(x => x.ContentType).HasMaxLength(30).IsRequired();
+        b.Property(x => x.Data).IsRequired();
+        // The avatar belongs to the account and goes with it; the account is never touched when the image changes.
+        b.HasOne<WCS.Domain.Users.AppUser>().WithOne().HasForeignKey<WCS.Domain.Users.UserAvatar>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

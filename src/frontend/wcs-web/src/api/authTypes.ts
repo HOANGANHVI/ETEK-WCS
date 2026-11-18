@@ -19,6 +19,24 @@ export interface UserRow {
   lastLoginAt: string | null
   lockedUntil: string | null
   createdAt: string
+  /** null = nobody has provided it yet (never defaulted). */
+  email: string | null
+  position: string | null
+  department: string | null
+}
+
+/** The signed-in user's own profile. Email / position / department are null until somebody provides them. */
+export interface Profile {
+  username: string
+  displayName: string
+  role: Role
+  email: string | null
+  position: string | null
+  department: string | null
+  hasAvatar: boolean
+  /** Changes whenever the avatar changes (cache-busting query value); 0 when there is none. */
+  avatarVersion: number
+  lastLoginAt: string | null
 }
 
 export type AuditResult = 'Success' | 'Denied' | 'Failed'

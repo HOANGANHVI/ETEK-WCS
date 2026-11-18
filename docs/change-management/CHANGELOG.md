@@ -1,5 +1,97 @@
 # Change Log
 
+## v3.0 – CR-013 PLC Diagnostic Logging and Export (2026-11-18)
+
+- Change Request: CR-013. Status: IMPLEMENTED (code); not deployed, not verified against a real PLC.
+- Added: standard diagnostic codes/stages, `plc_exchange_log` (300 per PLC), configuration snapshot, Admin ZIP export API and System > Diagnostics page; migration `AddPlcDiagnostics`.
+- Changed: instrumentation only in `PlcWorker`, `PlcRuntime`, `McTcpClient`, `McPlcEndpoint`.
+- Tests added: `PlcDiagnosticsTests` (25), `PlcDiagnosticsIntegrationTests` (11).
+- Approved by: project owner. Date: 2026-11-18.
+
+## v2.9 – CR-012 Pollable without approval (2026-11-18)
+
+- Change Request: CR-012. Status: IMPLEMENTED (code); not deployed.
+- Changed: `StationIoPoint.IsPollable` no longer needs `Approved`; `PlcPollablePolicy` (existing `AddressValidator`) decides in the runtime and the IO list; bulk-approval API marked deprecated (`Deprecation: true`), its UI removed.
+- Unchanged: write permission (still needs approval), WritePolicy, handshake approval, connection guards, MC Protocol, no migration.
+- Tests added/updated: `PlcPollingPolicyTests` (5); updated `McAddressTests`-area test, `PlcMcIntegrationTests`, `PlcCr004Tests`.
+- Approved by: project owner. Date: 2026-11-18.
+
+## v2.8 – CR-011 Bulk READ approval of the PLC under commissioning (2026-11-18)
+
+- Change Request: CR-011. Status: IMPLEMENTED (code); not yet executed on the deployment database.
+- Added: Admin-only `GET/POST /api/plc/connections/{plcId}/bulk-approval`, dialog on the IO mapping page, audit action `PLC_IO_BULK_APPROVE`, configuration `Plc:BulkApproval:AllowedPlcIds` (default PLC-04).
+- Changed: none. The existing single-point approval, `IsPollable` and the PLC driver are unchanged; no migration.
+- Tests added: `PlcBulkApprovalTests` (7).
+- Approved by: project owner. Date: 2026-11-18.
+
+## v2.7 – CR-008B-5 AGV dispatch hold (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-5). Status: IMPLEMENTED on `develop`; not merged. Owner decisions D-5 (M2), D-6, D-7 (P2), D-8 applied.
+- Added: `agvs.DispatchHold` / `DispatchHoldReason` / `DispatchHoldAt` / `DispatchHoldTaskId` (migration `AddAgvDispatchHold`, additive); the hold is set in the same transaction as the terminal transition for Interrupted, Completed-while-cancelling without a drop, NotFound after accept, cancel retry limit, RCS_DISPATCH_UNCERTAIN, and on RcsEnded without a drop. `ProcessTaskAsync`, `TryDispatchNextAsync` and `DispatchToRcsAsync` honour it; queued tasks stay queued and are never moved to the other AGV.
+- Added: Admin-only `POST /api/agvs/{id}/release-hold` (both confirmations + note, audited `AGV_DISPATCH_HOLD_RELEASE`), AGV card banner and Admin release form.
+- Changed (owner decision): the cancel retry limit (D-1) now also marks the rack Unknown and the locations ReconciliationRequired (D-5/D-6); `InventoryService.ConfirmDropAsync` accepts a PLC drop for a rack that is Unknown but still belongs to the task (needed after RcsEnded).
+- Unchanged: TaskStateMachine, PER_AGV, FlowOptions, priority, PLC/MC/handshake, retry defaults, StateTimeoutsSeconds, Agv.Enabled semantics.
+- Tests: `Cr008b5AgvDispatchHoldTests` (15); four earlier tests updated to the new decisions; backend 506/506.
+- Approved by: project owner (2026-11-17).
+
+## v2.6 – CR-008B-4 Rack and inventory uncertainty (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-4). Status: IMPLEMENTED on `develop`; not merged. No migration. Touches the protected `InventoryService` (one added method) with the owner's approval of CR-008B section 7.
+- Added: `IInventoryService.MarkPhysicalUnprovenAsync`: when RCS reports Completed / Interrupted / no record after accepting a task and WCS cannot prove the physical result, the rack becomes `Unknown` (its WCS location kept) and the source / destination locations require reconciliation; nothing is released. Called through `FinishAsync(physicalUnproven: true)`.
+- Unchanged: reservation rules, pick/drop/reconcile logic, `MarkUncertainAsync`, the cancel-confirmed and normal-completion paths, the retry-limit outcome (D-1: resource state kept), `Rack`/`Location`, no new state.
+- Open: decisions D-5/D-6 (model and scope) were not chosen explicitly; the narrowest reading of CR-008B section 7 was applied. `RcsEnded` signal and `RCS_DISPATCH_UNCERTAIN` keep the old behaviour.
+- Tests: `Cr008b4InventoryUncertaintyTests` (9); backend 491/491.
+- Approved by: project owner (2026-11-17).
+
+## v2.5 – CR-008B-3 CancelPending reconciliation (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-3). Status: IMPLEMENTED on `develop`; not merged. No migration.
+- Decision applied: D-1 - a task in CancelPending that reaches 30 automatic attempts stops retrying and becomes `Failed` with `RequiresReconciliation=true` (reason `CANCEL_RETRY_LIMIT_REACHED`); reservations, rack and location state are kept; `Failed` is not evidence that RCS cancelled.
+- Removed: "two consecutive NotFound answers = Cancelled" (D-9 not approved; `task-state-machine.md` 3.9). NotFound is recorded (`RCS_CANCEL_NOTFOUND_NOT_CONFIRMED`) and never turned into Cancelled.
+- Added: Admin reconciliation - `GET /api/tasks/reconciliation`, `GET /api/tasks/{id}/reconciliation`, `POST /api/tasks/{id}/reconciliation-check` (records an inconclusive check, releases nothing); web `ReconciliationPanel` + "Cần đối soát" filter; terminal tasks keep their final retry counter. The existing `POST /api/tasks/{id}/reconcile` is unchanged.
+- Unchanged: `TaskStateMachine`, `TaskScheduler`, `InventoryService`, PER_AGV, `StateTimeoutsSeconds`, retry values.
+- Tests: `Cr008b3CancelReconciliationTests` (7) + adapted CR-008A tests.
+- Approved by: project owner (2026-11-17).
+
+## v2.4 – CR-008B-2 PLC station intake reliability (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-2). Status: IMPLEMENTED on `develop`; not merged.
+- Added: `StationRequestRecord` + table `station_requests` (migration `AddStationRequests`, additive); `IStationRequestRepository`; every detected station request is stored before processing and kept until a task exists.
+- Changed: `StationRequestProcessor` processes from the store: RCS not connected keeps the request (no attempt used); technical failures retry with backoff up to `Scheduler:RcsMaxAttempts`; accepted only after the task is committed; permanent business rejections unchanged (rejected + acknowledged).
+- Unchanged: PLC handshake, addresses, `Request_Ack` (still not written), MC protocol, `PlcStationSignalService`, `TaskOrchestrator`.
+- Tests: `Cr008b2PlcIntakeTests` (12); backend 474/474.
+- Approved by: project owner (2026-11-17).
+
+## v2.3 – CR-008B-1 Documentation correction (2026-11-17)
+
+- Change Request: CR-008B (sub-CR B-1). Documentation only; no source, schema or configuration change.
+- Corrected (history kept, corrections marked): CR-008A dispatch retry time (about 62 s, not 30 s) and continue/cancel limit (about 25 minutes); the false statement that an unacknowledged PLC station request is presented again by the PLC (`PlcStationSignalService` is edge-based, acknowledgement only logs); the unapproved "two NotFound = Cancelled" rule (decision D-9, withdrawn by B-3).
+- Added: CR-008B entry with the owner's decisions (D-1 taken; D-7, D-9, REV-005 open).
+- Files: CHANGE_REQUESTS.md, CHANGELOG.md, ADR-0007, CR-008A report, `docs/reviews/CR008B-1_DOCUMENTATION_CORRECTION.md`.
+- Approved by: project owner (2026-11-17).
+
+## v2.2 – CR-008A WCS dispatch and scheduler reliability (2026-11-16)
+
+- Change Request: CR-008A (AUDIT-001, 002, 003, 004, 006 of `report/ETEK_WCS_FULL_CODE_REVIEW_2026-11-16.md`). Status: IMPLEMENTED on `develop`; not merged.
+- Added: `IRcsDispatchGuard` / `RcsDispatchGuard` (Production + simulator => `RCS_NOT_CONNECTED`); `RcsRetryPolicy` (spaced retries); `TransportTask.RcsRetryCount/RcsLastAttemptAt/NoteIfChanged/HasHistory`; options `RcsRetryInitialDelayMs`, `RcsRetryMaxDelayMs`, `RcsMaxAttempts`; `Rcs:AllowSimulatorInProduction`; RCS simulator switches (`Unreachable`, `SetStatus`, `Forget`); migration `AddRcsRetryTracking`; health field `integration.rcs`.
+- Changed: scheduler hosted service runs station intake and scheduler pass in separate exception scopes; station intake isolates each request; dispatch / continue / cancel follow-up is spaced and bounded; cancel reconciliation handles every RCS status explicitly; AGV status is Unknown (`RCS_NOT_CONNECTED`) instead of the simulator's Online when Production has no RCS adapter.
+- Unchanged by design: TaskStateMachine, InventoryService rules, PER_AGV, FlowOptions, priority, PLC handshake/polling/timeout/retry, MC protocol, AGV Offline policy, `StateTimeoutsSeconds`.
+- Software components affected: WCS.Domain (TransportTask), WCS.Application (TaskOrchestrator, StationRequestProcessor, AgvStatusService, options, guard interface), WCS.Infrastructure (guard, simulator, migration, DI), WCS.Runtime (SchedulerHostedService), WCS.Api (health, start-up warning), deployment/docker-compose.yml (one optional variable).
+- Tests added/updated: `Cr008aReliabilityTests` (25); Harness gains `configure` hook and spacing 0 default for the pre-existing tests. Full backend suite 463/463.
+- Approved by: project owner ("EXECUTE CR-008A"). Date: 2026-11-16.
+
+## v2.1 – CR-007 Centralized logging and diagnostics (2026-11-16)
+
+- Change Request: CR-007 (IMPLEMENTED on `develop`; Docker runtime, real PLC and real RCS NOT VERIFIED).
+- **Screen:** *Logging & Diagnostics / Nhật ký hệ thống* (`/logs`, Admin only): dashboard (total, Information/Warning/Error/Critical, six groups, latest errors, devices with problems), filters (time, group, level, device, source, event code, keyword), backend-paged table and detail dialog (exception/stack trace, correlation id, PLC IP/port and previous/new state, audit before/after).
+- **API (Admin only, read-only):** `GET /api/logs`, `GET /api/logs/stats`, `GET /api/logs/{id}`.
+- **Database (migration `AddSystemLog`, additive):** table `system_log` (SYSTEM, DATABASE, DEPLOYMENT, RCS_AGV events), nullable `plc_comm_log.DetailsJson`, read-only view `v_log_entries` over `system_log` + `plc_comm_log` + `audit_log` (no data copied). Retention of `system_log` 90 days (floor 7); `audit_log` and `plc_comm_log` retention unchanged.
+- **Logging core:** bootstrap logger + structured `STARTUP_FATAL`, `STARTUP_SUMMARY` (no secrets), `SHUTDOWN`, correlation id (`X-Correlation-Id`); request log written before the exception handler (handled 4xx are no longer logged as 500; `/healthz` is Debug); repeated Warning+ failures throttled (60 s) with a suppressed count; secret masking (`LogSanitizer`) on write and on read; database monitor (`DB_LOST` / `DB_RESTORED`, pending migrations).
+- **PLC:** every PLC event also goes to the application log (stdout) with PLC id, station, IP/port, previous/new state, timeout / MC end-code classification and reconnect duration; overflow and persist-failure warnings. Implemented in `PlcEventDispatcher`; `PlcWorker`, MC driver, polling, timeout, retry and reconnect are unchanged.
+- **Deployment logging:** scripts write `deploy-YYYYMMDD.log` and `deployment-events-YYYYMMDD.jsonl` to `C:\ETEK-WCS\logs`, save last-command and container logs on failure, mask secrets, never fail a deployment because of logging; the folder is mounted read-only into the backend, which imports the events (no network endpoint). `prune-logs.ps1` is manual and dry-run by default.
+- Tests: backend 438/438 (410 + 28); `tests/deployment/Test-DeploymentLogging.ps1` 20/20; frontend lint/tsc/build/build:demo clean.
+- Not changed: TaskStateMachine, TaskOrchestrator, InventoryService, TaskScheduler, FlowOptions, RCS client, PlcWorker, McPlcEndpoint/McTcpClient, StationIoHandler, HandshakeCoordinator, `HostedServices.cs`.
+
 ## v2.0 – CR-006 Dockerization and Windows 11 deployment (2026-11-07)
 
 - Change Request: CR-006 (IMPLEMENTED as source; Docker build/runtime NOT yet executed - no Docker on the development machine; REAL PLC TESTED = NO).
@@ -79,6 +171,20 @@
 - A3/A4 and D1/D2: `UNCHANGED`.
 - One PLC connection; no station clustering.
 - Process flows BP-01 to BP-06 documented with unresolved source ambiguities retained.
+
+## v2.8 – CR-010: Configurable Business Process, Route Engine, multi-leg Transport Task and per-port Station Transaction (2026-11-18)
+
+- Change Request: CR-010 (IMPLEMENTED – PARTIAL).
+- Status: scope approved by the project owner instruction of 2026-11-18; PLC live signalling and a real RCS leg adapter remain open.
+- Source: owner instruction of 2026-11-18; `Process in detail.pptx`, `ETEK Process AGV Phase 2 12.08.26.pptx`, `AGV_PLC_IO_Interface_List_10_11_2026.xlsx`, `WCS_BP_Port_PLC_Transaction_Matrix.xlsx` (working reference).
+- Added: Transport Task with Legs; Station Transaction per port (one active per port, database-enforced); Business Process / Route Step / Candidate / condition configuration with versions (Draft, Validated, Published, Disabled), publish validation and snapshots on every task; Route Engine; leg-level PER_AGV; inventory updates for legs and buffers; PLC disconnect/restart recovery; PLC provisioning (any number of PLCs, independent copy of the default IO template per port); Admin API and UI; reference process drafts; migration `AddRoutingEngine`; ADR-0008.
+- Changed: `LocationType` gained WaitingPosition, PickupLocation, DeliveryLocation (additive); audit query gained an optional action prefix; `PlcConfigService.ToView` made public. No existing behaviour was changed.
+- Deprecated: none.
+- Specification files changed: `decisions/ADR/ADR-0008` (new), `specification/business-rules.md` (addendum 1.9), `specification/process-flows.md` (addendum 2.4), `specification/integration-requirements.md` (addendum), PLC specification drafts (statuses).
+- Software components affected: Domain (Routing), Application (Routing, Plc provisioning), Infrastructure (repository, simulator leg dispatcher, template provider), Runtime (RoutingHostedService), API (RoutingEndpoints), Frontend (Routing, Processes, PLC provisioning). Not touched: TaskStateMachine, TransportTask, InventoryService, TaskOrchestrator, FlowOptions, Scheduler, RCS client, PLC worker/driver.
+- Tests added/updated: 50 CR-010 tests (domain, integration, API); existing suites unchanged.
+- Approved by: Project owner (implementation instruction).
+- Date: 2026-11-18.
 
 ## Change log entry template
 

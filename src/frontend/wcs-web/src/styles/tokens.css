@@ -37,6 +37,67 @@
   --gap-1: 6px; --gap-2: 10px; --gap-3: 14px; --gap-4: 20px;
   --radius: 5px;
   --header-h: 56px;
-  --sidebar-w: 224px;
+  --sidebar-w: 236px;
   --shadow: 0 1px 2px rgba(9, 26, 48, .08);
+
+  /* theme-dependent helpers (overridden for the dark theme below) */
+  --heading: var(--navy-800);
+  --accent-text: var(--navy-600);
+  --accent-text-strong: var(--navy-700);
+  --link: var(--navy-500);
+  --amber: #e0a21a;
+  --muted-solid: #9aa6b6;
+  --stripe-b: #f5cf7a; --stripe-c: #fbe6b0; --stripe-d: #fff6dd;
+  --on-status: #fff;
+  --scrim: rgba(9, 26, 48, .55);
+  --field-bg: var(--surface);
+  color-scheme: light;
+
+  /* semantic names (aliases: they follow whichever theme is active) */
+  --app-bg: var(--bg);
+  --surface-secondary: var(--surface-2);
+  --text-primary: var(--text);
+  --text-secondary: var(--text-2);
+  --border-color: var(--line);
+  --accent: var(--navy-500);
+  --success: var(--ok);
+  --warning: var(--warn);
+  --danger: var(--bad);
 }
+
+/* Dark theme: industrial navy / charcoal. Only token values change – components keep using the same variables. */
+:root[data-theme='dark'] {
+  --navy-500: #4c8fe0;
+  --navy-600: #2f6fbf;
+  --navy-100: #1d3556;
+  --navy-50: #1a2a42;
+
+  --bg: #0d141d;
+  --surface: #151e2b;
+  --surface-2: #1b2636;
+  --line: #26344a;
+  --line-strong: #3a4c68;
+  --text: #e4eaf3;
+  --text-2: #b0bdcf;
+  --text-3: #8b9cb4;
+
+  --ok: #3fc383;       --ok-bg: #12301f;     --ok-line: #1f5a3a;
+  --warn: #f0b64a;     --warn-bg: #3a2a0c;   --warn-line: #6b4c12;
+  --bad: #f26d64;      --bad-bg: #3a1816;    --bad-line: #7a2f2b;
+  --info: #6fb0f3;     --info-bg: #12294a;   --info-line: #2a5287;
+  --muted: #a3b1c4;    --muted-bg: #222d3d;  --muted-line: #35445a;
+
+  --shadow: 0 1px 3px rgba(0, 0, 0, .45);
+  --heading: #e8eef8;
+  --accent-text: #8fbaf0;
+  --accent-text-strong: #a9cbf5;
+  --link: #8fbaf0;
+  --amber: #e0a21a;
+  --muted-solid: #5d6e86;
+  --stripe-b: #5a4a1d; --stripe-c: #6b551c; --stripe-d: #3c3114;
+  --on-status: #0d141d;
+  --scrim: rgba(0, 0, 0, .65);
+  --field-bg: #101926;
+  color-scheme: dark;
+}
+

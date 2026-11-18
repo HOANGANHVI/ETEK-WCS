@@ -8,12 +8,22 @@ using WCS.Domain.Tasks;
 
 namespace WCS.Infrastructure.Persistence.Repositories;
 
+internal sealed class StationRequestRepository(WcsDbContext db) : IStationRequestRepository
+{
+    public Task<WCS.Domain.Intake.StationRequestRecord?> GetByKeyAsync(string requestKey, CancellationToken ct) =>
+        db.StationRequests.FirstOrDefaultAsync(x => x.RequestKey == requestKey, ct);
+    public async Task<IReadOnlyList<WCS.Domain.Intake.StationRequestRecord>> ListPendingAsync(int take, CancellationToken ct) =>
+        await db.StationRequests.AsNoTracking().Where(x => x.Status == WCS.Domain.Intake.StationRequestStatus.Pending).OrderBy(x => x.FirstSeenAt).Take(take).ToListAsync(ct);
+    public void Add(WCS.Domain.Intake.StationRequestRecord record) => db.StationRequests.Add(record);
+}
+
 internal sealed class AgvRepository(WcsDbContext db) : IAgvRepository
 {
     public Task<Agv?> GetAsync(Guid id, CancellationToken ct) => db.Agvs.FirstOrDefaultAsync(x => x.Id == id, ct);
     public Task<Agv?> GetByCodeAsync(string code, CancellationToken ct) => db.Agvs.FirstOrDefaultAsync(x => x.Code == code, ct);
     public Task<Agv?> GetByRoleAsync(AgvRole role, CancellationToken ct) => db.Agvs.FirstOrDefaultAsync(x => x.Role == role, ct);
     public async Task<IReadOnlyList<Agv>> ListAsync(CancellationToken ct) => await db.Agvs.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public Task<bool> IsOnDispatchHoldAsync(Guid agvId, CancellationToken ct) => db.Agvs.AsNoTracking().Where(x => x.Id == agvId).Select(x => x.DispatchHold).FirstOrDefaultAsync(ct);
     public void Add(Agv agv) => db.Agvs.Add(agv);
 }
 
@@ -138,6 +148,9 @@ internal sealed class TransportTaskRepository(WcsDbContext db) : ITransportTaskR
         db.Tasks.AnyAsync(x => x.AgvId == agvId && x.State == TaskState.Queued, ct);
     public Task<TransportTask?> NextQueuedForAgvAsync(Guid agvId, CancellationToken ct) =>
         WithHistory.Where(x => x.AgvId == agvId && x.State == TaskState.Queued).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<TransportTask>> ListRequiringReconciliationAsync(int take, CancellationToken ct) =>
+        await db.Tasks.AsNoTracking().Where(x => x.RequiresReconciliation).OrderByDescending(x => x.UpdatedAt).Take(take).ToListAsync(ct);
 
     public async Task<IReadOnlyList<TransportTask>> ListByStatesAsync(IReadOnlyCollection<TaskState> states, int take, CancellationToken ct)
     {

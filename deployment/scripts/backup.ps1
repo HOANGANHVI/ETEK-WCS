@@ -2,6 +2,7 @@
 # Usage: .\backup.ps1 [-Label pre-update] [-Keep 14]
 param([string]$Label = 'manual', [int]$Keep = 14)
 . (Join-Path $PSScriptRoot '_common.ps1')
+Start-WcsRun 'backup.ps1'
 
 Assert-Docker
 $e = Assert-EnvFile
@@ -49,4 +50,5 @@ Get-ChildItem -LiteralPath $script:BackupDir -Filter 'wcs-db-*.dump' | Sort-Obje
 }
 Write-Warn2 "The .env file ($($script:EnvFile)) holds secrets and is NOT in the backup: store a copy securely."
 Write-Output $dump
+Complete-WcsRun 0
 exit 0

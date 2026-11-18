@@ -232,3 +232,11 @@ The following remain `NEEDS_CONFIGURATION` / `NEEDS_CONFIRMATION` until confirme
 - Handshake set/reset ownership, transition conditions, timeout and retry policy.
 
 Do not derive actual addresses by applying offsets to the template reference addresses. Commission with read-only communication first. Enable PLC writes only after the PLC engineer approves the signal list and safe test procedure. Do not write safety/interlock or transfer-permit signals merely to test connectivity.
+
+---
+
+## Addendum – port-level Station Transaction and PLC provisioning (CR-010, 2026-11-18)
+
+- The unit of PLC-side independence is the **port** (PLC Station). One Station Transaction is active per port; two ports of one PLC may be active together. The CR-002 baseline (4 PLCs, 16 Station IO sets) stays; the number of PLCs is data and a new PLC receives an independent copy of the default IO template, disabled and unapproved.
+- WCS does **not** write any PLC signal for the 9-step exchange yet. M9101 / M9120 timing, M9003 / M9004 / M9005 mapping to pick/drop, destination-port handshake, reset ownership, D1500 layout, D1514 and Rack_Type encodings, timeouts, retries and heartbeat remain open.
+- WCS reads (model and validation implemented, live reading not wired): D1500 Request_ID, D1510 Rack_Full, D1512 Rack_Empty, D1514, D1520. Only the codes 1..4 = A1..A4 are known; no other code is accepted and no substitute position is ever chosen.

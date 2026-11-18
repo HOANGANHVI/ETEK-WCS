@@ -153,7 +153,25 @@ Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.1
 - **Forwarded headers:** backend chỉ chấp nhận `X-Forwarded-For/Proto` từ địa chỉ Nginx được chỉ định (`Deployment:TrustedProxyNetworks`, mặc định `172.30.0.10/32`); từ nguồn khác header bị bỏ qua. Nginx ghi đè `X-Forwarded-For` bằng địa chỉ thật của client (không nối thêm giá trị client gửi). Bật tin cậy mà không có danh sách proxy, hoặc dùng `0.0.0.0/0`, thì backend từ chối khởi động. Backend không được publish ra LAN: **không bao giờ thêm `ports:` cho `backend`/`postgres` trong Compose.**
 - **Khóa mã hóa (Data Protection key ring):** nằm trong volume `etek_wcs_keys` (`/keys`) và dùng để giải mã mật khẩu/token PLC–RCS đã lưu trong database. ASP.NET ghi cảnh báo "No XML encryptor configured": các file khóa **không được mã hóa thêm** khi lưu trên volume. Vì vậy: (1) bảo vệ máy triển khai (tài khoản Windows riêng, khóa màn hình, BitLocker cho ổ đĩa, giới hạn người có quyền Docker/Administrator); (2) coi `wcs-keys-*.tgz` và `.env` là **bí mật**: lưu ở nơi hạn chế quyền, không đưa vào Git/email; (3) luôn giữ backup khóa cùng bản backup database tương ứng, vì mất khóa = không giải mã được mật khẩu/token đã lưu (phải nhập lại). Cơ chế mã hóa hiện tại **chưa được thay đổi**; việc mã hóa key ring (chứng chỉ/DPAPI) cần đánh giá ảnh hưởng tới khả năng giải mã dữ liệu cũ trước khi làm.
 
-## 10. Xử lý sự cố
+## 10. Nhật ký và chẩn đoán (CR-007)
+
+| Nơi | Nội dung | Cách xem |
+|---|---|---|
+| Màn hình **Logging & Diagnostics** (menu *Hệ thống*, chỉ Admin) | Lỗi khởi động/hệ thống, cơ sở dữ liệu, PLC (mất kết nối, timeout, MC End Code, lỗi đọc/ghi, WRITE_AMBIGUOUS), RCS/AGV, **sự kiện triển khai**, thao tác bảo mật/quản trị | Trình duyệt → `/logs`; lọc theo thời gian, nhóm, mức độ, thiết bị, nguồn, mã sự kiện, từ khóa; bấm một dòng để xem chi tiết (stack trace, IP/cổng PLC, trạng thái trước/sau) |
+| stdout của container | Toàn bộ log ứng dụng (kể cả khi database lỗi) | `docker compose -p etek-wcs logs backend` (Docker giữ 5 × 10 MB mỗi container) |
+| `C:\ETEK-WCS\logs\deploy-YYYYMMDD.log` | Mỗi lần chạy script: thời điểm, script, bước, kết quả, exit code, lỗi, output của `docker compose` | Mở bằng trình soạn thảo |
+| `C:\ETEK-WCS\logs\deployment-events-YYYYMMDD.jsonl` | Cùng sự kiện ở dạng JSON, **backend tự nhập vào màn hình** (nhóm *Triển khai*) | Màn hình `/logs` |
+| `C:\ETEK-WCS\logs\failure-<run>-*.log` | Khi một script thất bại: output lệnh cuối (kể cả migrator) và log container (`backend`, `postgres`, `frontend`, `migrator`) | Mở bằng trình soạn thảo |
+
+- Thư mục log nằm **ngoài repository**, được gắn **chỉ-đọc** vào backend. Backend không mở endpoint nào để nhận log từ bên ngoài.
+- **Không bao giờ ghi mật khẩu/token/giá trị `.env`**: giá trị bí mật trong `.env` và các mẫu password/token/cookie bị thay bằng `***`. Việc ghi log không bao giờ làm script thất bại.
+- Log script **không tự xóa**. Dọn thủ công (mặc định chỉ liệt kê): `deployment\scripts\prune-logs.ps1 -OlderThanDays 90` rồi thêm `-Execute` để xóa (phải gõ `DELETE`).
+- Bản ghi `system_log` trong database giữ 90 ngày (cấu hình `Logging:SystemLog:RetentionDays`, tối thiểu 7). Nhật ký PLC 30 ngày; nhật ký thao tác (audit) không tự xóa.
+- Lỗi lặp lại (ví dụ database mất kết nối) chỉ được ghi 1 lần/phút kèm số lần bị bỏ qua; trạng thái mất/khôi phục database có sự kiện riêng (`DB_LOST`, `DB_RESTORED`).
+- Kiểm tra nhanh các script ghi log mà không cần Docker: `powershell -ExecutionPolicy Bypass -File tests\deployment\Test-DeploymentLogging.ps1`.
+- **Chưa kiểm chứng trên Docker thật:** việc gắn thư mục log chỉ-đọc vào container và nhập sự kiện trong container (checklist H1–H4 trong `docs/DEPLOYMENT_TEST_CHECKLIST.md`).
+
+## 11. Xử lý sự cố
 
 | Triệu chứng | Cách xử lý |
 |---|---|
@@ -167,3 +185,7 @@ Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.1
 | Mất kết nối giữa chừng sau khi Windows ngủ | `status.ps1`; nếu cần `stop.ps1` rồi `start.ps1`. |
 
 Đã chạy `docker compose -p etek-wcs ...` thủ công thì luôn kèm `--env-file C:\ETEK-WCS\config\.env`.
+
+## Giám sát tài nguyên máy chủ (trang Overview, chỉ Admin)
+
+Backend tự đọc cgroup của chính container (CPU, RAM theo giới hạn `WCS_BACKEND_CPUS` / `WCS_BACKEND_MEMORY`, uptime, ổ chứa volume dữ liệu) và hiển thị trên Overview. **Không cần đổi Compose, không cần `privileged`, Docker socket hay mount ổ đĩa host.** Trên Docker Desktop, số đo "Máy chủ" là của VM Linux chạy container (được gắn nhãn rõ), không phải máy Windows; số đo Windows thật cần Host Agent (chưa cài, xem `docs/reviews/SERVER_RESOURCE_MONITORING_REPORT.md`). Cấu hình (tùy chọn, biến môi trường backend): `ResourceMonitoring__Enabled`, `ResourceMonitoring__SampleIntervalSeconds`, `ResourceMonitoring__CpuWarning/CpuCritical`, `...MemoryWarning/MemoryCritical`, `...DiskWarning/DiskCritical`, `ResourceMonitoring__DiskPath`.

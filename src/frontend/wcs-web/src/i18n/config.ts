@@ -1,25 +1,32 @@
+import { localizedMap } from './core'
 import type { Tone } from './vi'
 
-export const TEST_OUTCOME_VI: Record<string, string> = {
-  Success: 'Thành công', Failed: 'Thất bại', Simulated: 'Chưa kiểm tra thiết bị', NotExecuted: 'Không thực hiện',
-}
+export const TEST_OUTCOME_VI = localizedMap(
+  { Success: 'Thành công', Failed: 'Thất bại', Simulated: 'Chưa kiểm tra với thiết bị', NotExecuted: 'Không thực hiện' },
+  { Success: 'Success', Failed: 'Failed', Simulated: 'Not tested against the device', NotExecuted: 'Not performed' })
 export const TEST_OUTCOME_TONE: Record<string, Tone> = { Success: 'ok', Failed: 'bad', Simulated: 'warn', NotExecuted: 'muted' }
 
-export const TEST_MODE_VI: Record<string, string> = {
-  Simulated: 'Không dùng mạng – chưa kiểm tra thiết bị thật',
+export const TEST_MODE_VI = localizedMap({
+  Simulated: 'Chế độ mô phỏng – chưa kiểm tra với thiết bị thật',
   TcpReachability: 'Kiểm tra cổng TCP (không gửi dữ liệu)',
   None: 'Không thực hiện',
-}
+}, {
+  Simulated: 'Simulation mode – not tested against the real device',
+  TcpReachability: 'TCP port check (no data sent)',
+  None: 'Not performed',
+})
 
-export const PLC_PROTOCOL_VI: Record<string, string> = {
-  McProtocol3EBinaryTcp: 'MC Protocol – khung 3E, nhị phân, TCP/IP (dự kiến, cần xác nhận)',
-}
+export const PLC_PROTOCOL_VI = localizedMap(
+  { McProtocol3EBinaryTcp: 'MC Protocol – khung 3E, nhị phân, TCP/IP (dự kiến, cần xác nhận)' },
+  { McProtocol3EBinaryTcp: 'MC Protocol – 3E frame, binary, TCP/IP (proposed, to be confirmed)' })
 
-export const AUTH_MODE_VI: Record<string, string> = {
-  None: 'Không xác thực',
-  Token: 'Token',
-  UsernamePassword: 'Tên đăng nhập và mật khẩu',
-}
+export const AUTH_MODE_VI = localizedMap(
+  { None: 'Không xác thực', Token: 'Token', UsernamePassword: 'Tên đăng nhập và mật khẩu' },
+  { None: 'No authentication', Token: 'Token', UsernamePassword: 'Username and password' })
 
-export const NO_SOURCE_VI: Record<string, string> = { Fail: 'Báo lỗi ngay (Fail)', Wait: 'Chờ có rack nguồn (Wait)' }
-export const MODE_VI: Record<string, string> = { Request: 'Trạm yêu cầu', Search: 'Tìm theo thứ tự nhóm' }
+export const NO_SOURCE_VI = localizedMap(
+  { Fail: 'Báo lỗi ngay (Fail)', Wait: 'Chờ có rack nguồn (Wait)' },
+  { Fail: 'Fail immediately (Fail)', Wait: 'Wait for a source rack (Wait)' })
+export const MODE_VI = localizedMap(
+  { Request: 'Trạm yêu cầu', Search: 'Tìm theo thứ tự nhóm' },
+  { Request: 'Requesting station', Search: 'Search in group order' })

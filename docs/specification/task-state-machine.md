@@ -91,3 +91,10 @@ Các mã trạng thái RCS từng được ghi nhận trong tài liệu API:
 ## Sửa / xóa nhiệm vụ bởi người dùng (CR-001, đã phê duyệt 2026-11-06)
 
 Bảng chuyển trạng thái **không đổi**. Nhiệm vụ còn chờ (Pending, Validating, Queued) và chưa được AGV/RCS tiếp nhận có thể được người dùng sửa thông tin yêu cầu hoặc **xóa cứng** (bản ghi bị xóa, không chuyển sang Cancelled); nhật ký thao tác được giữ. Chi tiết: access-control.md mục 3–4.
+
+## Làm rõ không đổi quy tắc (CR-008B-3, 2026-11-17)
+
+Bảng chuyển trạng thái và các quy tắc ở 3.1–3.9 **không thay đổi**. Chỉ ghi nhận cách triển khai tuân thủ 3.9 và quyết định D-1 của chủ dự án:
+- Khi hủy nhiệm vụ (`CANCEL_PENDING`) mà RCS không xác nhận sau 30 lần thử tự động: dừng thử, chuyển `FAILED`, đánh dấu cần đối soát, giữ nguyên reservation và trạng thái rack/vị trí. `FAILED` không có nghĩa RCS đã hủy.
+- RCS báo "không tìm thấy" (NotFound) **không** được xem là xác nhận hủy; `CANCELLED` chỉ khi RCS xác nhận hoặc có cơ chế đối soát tương đương **đã được chủ dự án phê duyệt** (chưa có).
+- Giải phóng reservation chỉ xảy ra khi Admin nêu vị trí thực tế đã xác minh (đối soát theo `inventory-management.md` 4.8).

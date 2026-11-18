@@ -122,18 +122,19 @@ public class McAddressTests
     }
 
     [Fact]
-    public void A_point_is_polled_only_when_it_has_an_address_and_is_approved()
+    public void A_point_is_polled_when_it_has_an_address_and_approval_is_not_needed_for_reading()   // CR-012 (was: only when approved, CR-003)
     {
         var now = DateTimeOffset.UtcNow;
         var p = new StationIoPoint("PLC-01", "A1", 1, "Status", "Pickup_Request", PlcSignalDirection.PlcToSoftware, PlcDataType.Bool, "M100", "", now);
         Assert.False(p.IsPollable);                                  // template only
         p.ConfigureAddress("M200", null, null, now);
-        Assert.True(p.HasConfirmedAddress); Assert.False(p.IsPollable);   // entered but not approved by the engineer
-        p.Approve("admin", now);
-        Assert.True(p.IsPollable);
-        p.ConfigureAddress("M201", null, null, now);                // changing the address withdraws the approval
-        Assert.False(p.IsPollable);
-        p.Approve("admin", now); p.ClearAddress(now);
+        Assert.True(p.HasConfirmedAddress); Assert.True(p.IsPollable);    // entered: readable at once, no approval
+        Assert.Equal(IoConfigStatus.Configured, p.Status);
+        p.Approve("admin", now);                                     // approval is a separate permission (write / process mapping)
+        Assert.True(p.IsPollable); Assert.False(p.WriteAllowed);
+        p.ConfigureAddress("M201", null, null, now);                // changing the address withdraws the approval and any write permission, NOT the reading
+        Assert.True(p.IsPollable); Assert.Equal(IoConfigStatus.Configured, p.Status); Assert.False(p.WriteAllowed);
+        p.ClearAddress(now);
         Assert.False(p.IsPollable);
     }
 }
@@ -290,7 +291,7 @@ public class McCr003SocketTests
         server.Mute = true;
         await using var c = Client(server, timeoutMs: 400, retries: 3, writeMs: 200);
         var ex = await Assert.ThrowsAsync<PlcWriteAmbiguousException>(() => c.WriteWordsAsync(A(PlcDevice.D, 5), [7], default));
-        Assert.Contains("KHÔNG", ex.Message);
+        Assert.Contains("NOT retried", ex.Message);   // diagnostic text is English; the UI phrases it from the event code
         await Task.Delay(500);
         Assert.Equal(1, server.RequestCount);                                              // MaxReadRetries = 3 does not apply to writes
         var f = c.Diagnostics.LastFailedExchange!;

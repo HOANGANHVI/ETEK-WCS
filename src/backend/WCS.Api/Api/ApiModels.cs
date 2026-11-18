@@ -23,6 +23,12 @@ public sealed record ReconcileTaskRequest(
     [property: Required, StringLength(100)] string User,
     [property: StringLength(1000)] string? Note);
 
+/// <summary>CR-008B-3: the Admin checked on site and could not establish the physical location: record it, release nothing.</summary>
+public sealed record ReconciliationCheckRequest([property: Required, StringLength(1000, MinimumLength = 3)] string Note);
+
+/// <summary>CR-008B-5 (D-8): both confirmations are mandatory to lift an AGV dispatch hold.</summary>
+public sealed record ReleaseAgvHoldRequest(bool InventoryReconciled, bool AgvPhysicallyVerified, [property: Required, StringLength(1000, MinimumLength = 3)] string Note);
+
 public sealed record InitialStockRequest(
     [property: Required, StringLength(50)] string LocationCode,
     RackKind RackKind,
@@ -58,6 +64,15 @@ public sealed record LoginRequest(
     [property: Required, StringLength(100)] string Username,
     [property: Required, StringLength(200)] string Password);
 
+/// <summary>The caller's own preferences. There is deliberately no user id: the account is the authenticated session.</summary>
+public sealed record UserPreferencesRequest([property: Required, StringLength(10)] string Theme, bool SidebarCollapsed);
+
+/// <summary>The caller's own profile (full name, e-mail). No user id, no position/department/role: those are not self-service.</summary>
+public sealed record UpdateProfileRequest([property: Required, StringLength(100)] string DisplayName, [property: StringLength(254)] string? Email);
+
+/// <summary>Administrator-managed organization data of an account (blank = not provided).</summary>
+public sealed record UpdateOrganizationRequest([property: StringLength(100)] string? Position, [property: StringLength(100)] string? Department);
+
 public sealed record ChangePasswordRequest(
     [property: Required, StringLength(200)] string CurrentPassword,
     [property: Required, StringLength(200)] string NewPassword);
@@ -88,6 +103,9 @@ public sealed record UpdatePlcConnectionRequest(string? Name, [property: Require
     int? ConnectTimeoutMs = null, int? ReadTimeoutMs = null, int? WriteTimeoutMs = null, int? XyAddressBase = null, int? WAddressBase = null);
 
 public sealed record SetPointAddressRequest([property: Required, StringLength(20)] string Address, int? WordLength, [property: StringLength(40)] string? Encoding);
+
+/// <summary>Bulk READ approval: the Admin confirms the number of eligible points shown by the preview (the call is refused if it changed meanwhile).</summary>
+public sealed record BulkApprovalRequest([property: Required] bool? Confirm, [property: Required] int? ExpectedEligible);
 
 public sealed record SetWriteAllowedRequest(bool Allowed);
 

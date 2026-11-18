@@ -77,7 +77,29 @@ internal sealed class PlcCommLogConfiguration : IEntityTypeConfiguration<PlcComm
         b.Property(x => x.StationId).HasMaxLength(20);
         b.Property(x => x.Event).HasMaxLength(60).IsRequired();
         b.Property(x => x.Message).HasMaxLength(1000).IsRequired();
+        b.Property(x => x.DiagCode).HasMaxLength(60);
+        b.Property(x => x.Stage).HasMaxLength(20);
         b.HasIndex(x => x.OccurredAt);
+        b.HasIndex(x => new { x.PlcId, x.OccurredAt });
+        b.HasIndex(x => new { x.PlcId, x.Stage, x.OccurredAt });   // diagnostics: "PLC-01, stage TCP, last hour"
+    }
+}
+
+internal sealed class PlcExchangeLogConfiguration : IEntityTypeConfiguration<PlcExchangeLogEntry>
+{
+    public void Configure(EntityTypeBuilder<PlcExchangeLogEntry> b)
+    {
+        b.ToTable("plc_exchange_log");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.PlcId).HasMaxLength(20).IsRequired();
+        b.Property(x => x.Operation).HasMaxLength(10).IsRequired();
+        b.Property(x => x.Command).HasMaxLength(12).IsRequired();
+        b.Property(x => x.Device).HasMaxLength(10).IsRequired();
+        b.Property(x => x.Outcome).HasMaxLength(20).IsRequired();
+        b.Property(x => x.Error).HasMaxLength(300);
+        b.Property(x => x.RequestHex).HasMaxLength(PlcExchangeLogEntry.MaxHex);
+        b.Property(x => x.ResponseHex).HasMaxLength(PlcExchangeLogEntry.MaxHex);
         b.HasIndex(x => new { x.PlcId, x.OccurredAt });
     }
 }

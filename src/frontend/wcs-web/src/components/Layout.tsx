@@ -1,73 +1,57 @@
-import { useCallback } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useCallback, useState, type ReactNode, type SyntheticEvent } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Agv, SystemHealth } from '../api/types'
 import { hasRole, useAuth } from '../auth/AuthContext'
 import { DEMO_MODE } from '../config'
 import { DemoDock } from '../demo/DemoDock'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
 import { formatDate, formatTime } from '../i18n/format'
-import { CONNECTION_VI, ROLE_SHORT_VI, type Tone } from '../i18n/vi'
+import { useT, type MsgKey } from '../i18n'
+import { LangSwitch } from './LangSwitch'
+import { UserMenu } from './UserMenu'
+import { plcView, rcsView, type LinkView } from './linkStatus'
 import { useRealtime } from '../realtime/RealtimeProvider'
-import { IconAgv, IconLog, IconOverview, IconPlc, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
+import { usePreferences } from '../preferences/PreferencesContext'
+import { IconAgv, IconPanelLeftClose, IconPanelLeftOpen, IconUser, IconLog, IconOverview, IconPlc, IconSettings, IconTasks, IconUsers, IconWarehouse } from './icons'
 
 const SITE_NAME = (import.meta.env.VITE_SITE_NAME as string | undefined)?.trim()
 
-const NAV = [
-  { to: '/', label: 'Tổng quan', end: true, icon: <IconOverview /> },
-  { to: '/agvs', label: 'Giám sát AGV', icon: <IconAgv /> },
-  { to: '/tasks', label: 'Quản lý nhiệm vụ', icon: <IconTasks /> },
-  { to: '/inventory', label: 'Vị trí và tồn kho', icon: <IconWarehouse /> },
-  { to: '/plc', label: 'Giám sát PLC', end: true, icon: <IconPlc /> },
+const NAV: NavItem[] = [
+  { to: '/', label: 'nav.dashboard', end: true, icon: <IconOverview /> },
+  { to: '/agvs', label: 'nav.agv', icon: <IconAgv /> },
+  { to: '/tasks', label: 'nav.tasks', icon: <IconTasks /> },
+  { to: '/inventory', label: 'nav.inventory', icon: <IconWarehouse /> },
+  ...(DEMO_MODE ? [] : [{ to: '/routing', label: 'routing.navRouting' as MsgKey, icon: <IconTasks /> }]),   // CR-010 (not part of the browser-only simulation)
+  { to: '/plc', label: 'nav.plcMonitor', end: true, icon: <IconPlc /> },
 ]
 
 // PLC configuration (CR-004). Admin only; the API enforces the same rule.
-const NAV_PLC = [
-  { to: '/plc/connections', label: 'Kết nối PLC', icon: <IconSettings /> },
-  { to: '/plc/io-mapping', label: 'Cấu hình địa chỉ IO', icon: <IconPlc /> },
+const NAV_PLC: NavItem[] = [
+  ...(DEMO_MODE ? [] : [{ to: '/processes', label: 'routing.navProcesses' as MsgKey, icon: <IconSettings /> }]),   // CR-010 route configuration
+  { to: '/plc/connections', label: 'nav.plcConnections', icon: <IconSettings /> },
+  { to: '/plc/io-mapping', label: 'nav.plcIoMapping', icon: <IconPlc /> },
 ]
 
 // Shown to Admin only. Hiding them is a convenience: the API and the routes enforce the same rule independently.
-const NAV_SYSTEM = [
-  { to: '/config', label: 'Cấu hình hệ thống', icon: <IconSettings /> },
-  { to: '/users', label: 'Quản lý tài khoản', icon: <IconUsers /> },
-  { to: '/audit', label: 'Nhật ký thao tác', icon: <IconLog /> },
+// Personal group (every role): the signed-in user's own page, kept apart from the WCS operation / configuration groups.
+const NAV_PERSONAL: NavItem[] = [
+  { to: '/account', label: 'nav.userConfig', icon: <IconUser /> },
 ]
 
-interface LinkView { tone: Tone; text: string }
+const NAV_SYSTEM: NavItem[] = [
+  { to: '/config', label: 'nav.config', icon: <IconSettings /> },
+  { to: '/users', label: 'nav.users', icon: <IconUsers /> },
+  { to: '/audit', label: 'nav.audit', icon: <IconLog /> },
+  { to: '/logs', label: 'nav.logs', icon: <IconLog /> },
+  ...(DEMO_MODE ? [] : [{ to: '/diagnostics', label: 'nav.diagnostics' as MsgKey, icon: <IconPlc /> }]),   // PLC diagnostic export (Admin)
+]
 
-/** PLC link, from the API health. With no real controller attached the label is "Chưa kết nối" - never a healthy-looking state. */
-function plcView(health: SystemHealth | null): LinkView {
-  if (!health) return { tone: 'bad', text: 'Không có dữ liệu' }
-  const rt = health.integration.plcRuntime
-  if (rt) {
-    if (rt.mode === 'Simulator') return { tone: 'warn', text: 'Chưa kết nối' }
-    if (!rt.running) return { tone: 'warn', text: 'Chưa chạy' }
-    if (rt.connected === 0) return { tone: 'bad', text: `0/${rt.total} PLC` }
-    return { tone: rt.connected === rt.total ? 'ok' : 'warn', text: `${rt.connected}/${rt.total} PLC` }
-  }
-  if (health.integration.mode === 'Simulator') return { tone: 'warn', text: 'Chưa kết nối' }
-  switch (health.integration.plc) {
-    case 'Connected': return { tone: 'ok', text: 'Đã kết nối' }
-    case 'Connecting': return { tone: 'warn', text: 'Đang kết nối' }
-    case 'Faulted': return { tone: 'bad', text: 'Lỗi' }
-    default: return { tone: 'bad', text: 'Mất kết nối' }
-  }
-}
-
-/** RCS link: there is no dedicated RCS health yet, so it is derived from AGV statuses reported through RCS. */
-function rcsView(health: SystemHealth | null, agvs: Agv[] | null): LinkView {
-  if (!health) return { tone: 'bad', text: 'Không có dữ liệu' }
-  if (health.integration.mode === 'Simulator') return { tone: 'warn', text: 'Chưa kết nối' }
-  const withRobot = (agvs ?? []).filter((a) => a.rcsRobotCode)
-  if (withRobot.length === 0) return { tone: 'warn', text: 'Chưa cấu hình' }
-  return withRobot.some((a) => a.connectionStatus === 'Online') ? { tone: 'ok', text: 'Đã kết nối' } : { tone: 'bad', text: 'Mất kết nối' }
-}
-
+interface NavItem { to: string; label: MsgKey; end?: boolean; icon: ReactNode }
 function TopBar() {
-  const { user, logout } = useAuth()
+  const t = useT()
   const now = useClock()
+  const linkText = (m: LinkView['text']) => (typeof m === 'string' ? t(m) : m.raw)
   const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
   const agvs = useApi(useCallback(() => api.agvs(), []), ['AgvStatusChanged'])
   const plc = plcView(health.error && !health.data ? null : health.data)
@@ -80,77 +64,87 @@ function TopBar() {
         <span className="brand-text">ETEK <b>WCS</b></span>
       </div>
       {SITE_NAME && (
-        <div className="site"><small>Khu vực</small><span>{SITE_NAME}</span></div>
+        <div className="site"><small>{t('nav.area')}</small><span>{SITE_NAME}</span></div>
       )}
       <div className="topbar-spacer" />
-      {DEMO_MODE && <span className="sim-chip" title="Dữ liệu hiển thị là dữ liệu giả, chạy trong trình duyệt"><i />Chế độ mô phỏng</span>}
-      <div className="conn" title="Kết nối tới PLC"><span className="label">PLC</span><span className={`led ${plc.tone}`} /><strong>{plc.text}</strong></div>
-      <div className="conn" title="Kết nối tới RCS"><span className="label">RCS</span><span className={`led ${rcs.tone}`} /><strong>{rcs.text}</strong></div>
-      {user && (
-        <div className="whoami" title={`Đăng nhập: ${user.username}`}>
-          <span className="who-name">{user.displayName}</span>
-          <span className="who-role">{ROLE_SHORT_VI[user.role]}</span>
-        </div>
-      )}
-      <Link className="top-link" to="/account/password">Đổi mật khẩu</Link>
-      <button type="button" className="top-btn" onClick={() => void logout()}>Đăng xuất</button>
+      {DEMO_MODE && <span className="sim-chip" title={t('nav.simChipTitle')}><i />{t('nav.simChip')}</span>}
+      <div className="conn" title={t('nav.plcLink')}><span className="label">PLC</span><span className={`led ${plc.tone}`} /><strong>{linkText(plc.text)}</strong></div>
+      <div className="conn" title={t('nav.rcsLink')}><span className="label">RCS</span><span className={`led ${rcs.tone}`} /><strong>{linkText(rcs.text)}</strong></div>
+      <LangSwitch />
+      <UserMenu />
       <div className="clock"><strong>{formatTime(now.toISOString())}</strong><span>{formatDate(now)}</span></div>
     </header>
   )
 }
 
+const RT_KEY: Record<string, MsgKey> = { connecting: 'nav.rtConnecting', connected: 'nav.rtConnected', reconnecting: 'nav.rtReconnecting', disconnected: 'nav.rtDisconnected', demo: 'nav.rtDemo' }
+
+interface Tip { label: string; top: number; left: number }
+
 function SideBar() {
+  const t = useT()
   const { user } = useAuth()
   const { status } = useRealtime()
+  const { sidebarCollapsed: collapsed, update } = usePreferences()
+  const [tip, setTip] = useState<Tip | null>(null)
   const tone = status === 'connected' || status === 'demo' ? 'ok' : status === 'disconnected' ? 'bad' : 'warn'
+
+  // Collapsed menu items show a tooltip placed with fixed coordinates, so the scrolling sidebar can never clip it.
+  const showTip = (label: string) => (e: SyntheticEvent<HTMLElement>) => {
+    if (!collapsed) return
+    const r = e.currentTarget.getBoundingClientRect()
+    setTip({ label, top: r.top + r.height / 2, left: r.right + 10 })
+  }
+  const hideTip = () => setTip(null)
+  const toggleLabel = t(collapsed ? 'account.expandSidebar' : 'account.collapseSidebar')
+
+  const item = (n: NavItem) => (
+    <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+      aria-label={t(n.label)} title={collapsed ? undefined : t(n.label)}
+      onMouseEnter={showTip(t(n.label))} onMouseLeave={hideTip} onFocus={showTip(t(n.label))} onBlur={hideTip}>
+      {n.icon}<span>{t(n.label)}</span>
+    </NavLink>
+  )
   return (
     <aside className="sidebar">
-      <nav aria-label="Điều hướng chính">
-        <div className="nav-title">Vận hành</div>
-        {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
-            {n.icon}<span>{n.label}</span>
-          </NavLink>
-        ))}
-        {hasRole(user, 'Admin') && <div className="nav-title">Cấu hình PLC</div>}
-        {hasRole(user, 'Admin') && NAV_PLC.map((n) => (
-          <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
-            {n.icon}<span>{n.label}</span>
-          </NavLink>
-        ))}
-        {hasRole(user, 'Admin') && <div className="nav-title">Hệ thống</div>}
-        {hasRole(user, 'Admin') && NAV_SYSTEM.map((n) => (
-          <NavLink key={n.to} to={n.to} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')} title={n.label}>
-            {n.icon}<span>{n.label}</span>
-          </NavLink>
-        ))}
+      <button type="button" className="side-toggle" aria-label={toggleLabel} aria-expanded={!collapsed}
+        title={collapsed ? undefined : toggleLabel}
+        onMouseEnter={showTip(toggleLabel)} onMouseLeave={hideTip} onFocus={showTip(toggleLabel)} onBlur={hideTip}
+        onClick={() => { hideTip(); void update({ sidebarCollapsed: !collapsed }) }}>
+        {collapsed ? <IconPanelLeftOpen /> : <IconPanelLeftClose />}
+      </button>
+      <nav aria-label={t('nav.mainNav')}>
+        <div className="nav-title">{t('nav.groupOps')}</div>
+        {NAV.map(item)}
+        {hasRole(user, 'Admin') && <div className="nav-title">{t('nav.groupPlc')}</div>}
+        {hasRole(user, 'Admin') && NAV_PLC.map(item)}
+        {hasRole(user, 'Admin') && <div className="nav-title">{t('nav.groupSystem')}</div>}
+        {hasRole(user, 'Admin') && NAV_SYSTEM.map(item)}
+        <div className="nav-title">{t('nav.groupPersonal')}</div>
+        {NAV_PERSONAL.map(item)}
       </nav>
-      <div className="side-foot">
-        <div className="row"><i className={`led ${tone}`} /><span>Thời gian thực: {CONNECTION_VI[status]}</span></div>
-        <span>ETEK WCS · Giai đoạn 1</span>
+      <div className="side-foot" title={collapsed ? t('nav.realtime', { status: t(RT_KEY[status]) }) : undefined}>
+        <div className="row"><i className={`led ${tone}`} /><span>{t('nav.realtime', { status: t(RT_KEY[status]) })}</span></div>
+        <span>ETEK WCS</span>
       </div>
+      {tip && <div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.label}</div>}
     </aside>
   )
 }
 
-/** RCS has only a simulator adapter (project baseline): say so on every screen, so nothing looks like a real AGV/RCS link. */
-function IntegrationNotice() {
-  const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
-  if (health.data?.integration.mode !== 'Simulator') return null
-  return <div className="notice notice-warn" role="status">Hệ thống chưa kết nối RCS và PLC thật: nhiệm vụ không được gửi tới AGV thật và dữ liệu PLC không lấy từ thiết bị.</div>
-}
-
 export function Layout() {
+  const t = useT()
   const { user } = useAuth()
   const location = useLocation()
-  const denied = (location.state as { denied?: string } | null)?.denied
+  const { sidebarCollapsed: sidebarIsCollapsed } = usePreferences()
+  const deniedKey = (location.state as { denied?: MsgKey } | null)?.denied
+  const denied = deniedKey ? t(deniedKey) : null
   return (
-    <div className="app">
+    <div className="app" data-sidebar={sidebarIsCollapsed ? 'collapsed' : 'expanded'}>
       <TopBar />
       <SideBar />
       <main className="main">
         {denied && <div className="notice notice-warn" role="alert">{denied}</div>}
-        {!DEMO_MODE && <IntegrationNotice />}
         <Outlet />
       </main>
       {DEMO_MODE && hasRole(user, 'Admin') && <DemoDock />}

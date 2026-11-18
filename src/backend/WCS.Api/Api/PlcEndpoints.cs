@@ -12,6 +12,12 @@ public static partial class PlcEndpoints
 {
     private static bool IsAdmin(HttpContext c) => c.User.IsInRole(nameof(WCS.Domain.Users.UserRole.Admin));
 
+    private static void MarkDeprecated(HttpContext c) { c.Response.Headers["Deprecation"] = "true"; c.Response.Headers["Warning"] = "299 - Deprecated by CR-012: reading no longer requires approval"; }
+
+    /// <summary>PLCs allowed to use the bulk read-approval: configuration <c>Plc:BulkApproval:AllowedPlcIds</c>, default PLC-04 only; an explicit empty list disables it.</summary>
+    private static IReadOnlyList<string> BulkAllowed(IConfiguration cfg) =>
+        cfg.GetSection(BulkApprovalPolicy.ConfigKey).Exists() ? cfg.GetSection(BulkApprovalPolicy.ConfigKey).Get<string[]>() ?? [] : BulkApprovalPolicy.Default;
+
     /// <summary>
     /// PLC topology, IO catalog and monitoring API. Configuration, addresses, diagnostics, logs and every write facility are Admin-only;
     /// the monitoring views (state, station list, IO values and quality without addresses or network details) are open to both roles.
@@ -39,6 +45,36 @@ public static partial class PlcEndpoints
         plc.MapGet("connections/{plcId}/address-check", async (HttpContext c, string plcId, PlcConfigService s, CancellationToken ct) =>
             ApiResults.Ok(c, await s.CheckPlcAsync(plcId, ct))).RequireAuthorization(admin);
 
+        // Bulk READ approval of one commissioning PLC (default PLC-04 only; Plc:BulkApproval:AllowedPlcIds). It uses the existing approval (StationIoPoint.Approve):
+        // it never changes an address or data type, never allows a write, never touches another PLC and sends nothing to the PLC. Never runs on its own.
+        // CR-012: DEPRECATED. Reading no longer needs approval (a valid address is pollable). Approval still governs write permission and port-mapping approval for processes.
+        // Kept for backward compatibility; the UI no longer offers it.
+        plc.MapGet("connections/{plcId}/bulk-approval", async (HttpContext c, string plcId, PlcConfigService s, IConfiguration cfg, CancellationToken ct) =>
+        {
+            MarkDeprecated(c);
+            return ApiResults.Ok(c, await s.PreviewBulkApprovalAsync(plcId, BulkAllowed(cfg), ct));
+        }).RequireAuthorization(admin);
+        plc.MapPost("connections/{plcId}/bulk-approval", async (HttpContext c, string plcId, BulkApprovalRequest r, PlcConfigService s, IConfiguration cfg, IServiceScopeFactory scopes, IPlcRuntime rt, CancellationToken ct) =>
+        {
+            MarkDeprecated(c);
+            if (r.Confirm != true || r.ExpectedEligible is null)
+                throw AppException.Validation("BULK_APPROVAL_NOT_CONFIRMED", "Cần xác nhận và số điểm đủ điều kiện đã xem ở bản xem trước.");
+            var allowed = BulkAllowed(cfg);
+            var result = await Audited.RunAsync(c, "PLC_IO_BULK_APPROVE", "PlcConnection", plcId, null, async () =>
+            {
+                var applied = await s.BulkApproveAsync(plcId, c.Actor().Username, allowed, r.ExpectedEligible, ct);
+                await using var scope = scopes.CreateAsyncScope();                  // a fresh context: the result is checked against the database, not the tracker
+                return await scope.ServiceProvider.GetRequiredService<PlcConfigService>().VerifyBulkApprovalAsync(applied, ct);
+            }, res => new
+            {
+                res.Total, res.Approved, res.AlreadyApproved, res.NotEligible, res.Failed, res.VerifiedPollable,
+                approved = res.Items.Where(i => i.Outcome == BulkOutcome.Approved).Select(i => $"{i.StationId}/{i.SignalName}={i.Address}").ToList(),
+                failed = res.Items.Where(i => i.Outcome == BulkOutcome.Failed).Select(i => $"{i.StationId}/{i.SignalName}:{i.Code}").ToList(),
+            }, detail: $"expectedEligible={r.ExpectedEligible}");
+            await rt.ReloadPlcAsync(plcId, ct);
+            return ApiResults.Ok(c, result);
+        }).RequireAuthorization(admin);
+
         // Read-only reachability check: never sends a PLC command. Simulator mode and an unconfirmed configuration never touch the network.
         plc.MapPost("connections/{plcId}/test", async (HttpContext c, string plcId, PlcConfigService s, IOptions<PlcRuntimeOptions> o, IConnectionProbe probe, CancellationToken ct) =>
         {
@@ -46,11 +82,11 @@ public static partial class PlcEndpoints
             var opt = o.Value;
             ProbeResult result;
             if (opt.Mode == PlcRuntimeMode.Simulator)
-                result = new ProbeResult(ConnectionTestOutcome.Simulated, "Simulated", "Chế độ mô phỏng: không có kết nối vật lý, không dùng mạng.");
+                result = new ProbeResult(ConnectionTestOutcome.Simulated, "Simulated", "[PROBE_SIMULATOR_MODE] Chế độ mô phỏng: không có kết nối vật lý, không dùng mạng.");
             else if (!opt.AllowLiveConnection)
-                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "Plc:AllowLiveConnection = false: không mở kết nối tới PLC thật.");
+                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "[LIVE_CONNECTION_DISABLED] Plc:AllowLiveConnection = false: không mở kết nối tới PLC thật.");
             else if (conn.MissingParameters.Count > 0)
-                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "NEEDS_CONFIGURATION: thiếu " + string.Join(", ", conn.MissingParameters));
+                result = new ProbeResult(ConnectionTestOutcome.NotExecuted, "None", "[PLC_PARAMS_MISSING] " + string.Join(", ", conn.MissingParameters));
             else
                 result = await probe.ProbeAsync(ConnectionKind.Plc, conn.IpAddress, conn.Port!.Value, TimeSpan.FromMilliseconds(conn.TimeoutMs!.Value), ct);
             return ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_CONNECTION_TEST", "PlcConnection", plcId, null, () => Task.FromResult(result), res => new { res.Outcome, res.Mode }));

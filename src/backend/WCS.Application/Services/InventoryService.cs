@@ -40,7 +40,7 @@ public sealed class InventoryService(
 
             reservations.Add(Reservation.ForSourceRack(task.Id, rack.Id, loc.Id, clock.UtcNow));
             task.AssignSource(loc.Id, rack.Id, clock.UtcNow);
-            task.Note("SOURCE_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow);
+            task.Note("SOURCE_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow, HistoryDetail.Of("SOURCE_RESERVED", ("location", loc.Code)));
             return new NoSourceResult(true, loc, rack);
         }
         return new NoSourceResult(false, null, null);
@@ -67,7 +67,7 @@ public sealed class InventoryService(
             reservations.Add(Reservation.ForDestination(task.Id, loc.Id, clock.UtcNow));
             loc.Touch(clock.UtcNow); // concurrency token: two tasks cannot take the last slot at once
             task.AssignDestination(loc.Id, clock.UtcNow);
-            task.Note("DESTINATION_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow);
+            task.Note("DESTINATION_RESERVED", $"location={loc.Code}", "WCS", clock.UtcNow, HistoryDetail.Of("DESTINATION_RESERVED", ("location", loc.Code)));
             return loc;
         }
         return null;
@@ -84,6 +84,14 @@ public sealed class InventoryService(
         // Only when the rack has physically left the source and was not confirmed at the destination.
         if (task.PickConfirmedAt is null || task.DropConfirmedAt is not null) return;
         if (task.RackId is { } rid && await racks.GetAsync(rid, ct) is { } rack) rack.MarkUnknown(clock.UtcNow);
+        foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId }.Where(x => x is not null).Distinct())
+            if (await locations.GetAsync(id!.Value, ct) is { } loc) loc.SetReconciliationRequired(true, clock.UtcNow);
+    }
+
+    public async Task MarkPhysicalUnprovenAsync(TransportTask task, CancellationToken ct = default)
+    {
+        if (task.DropConfirmedAt is not null) return;      // delivered and confirmed: nothing is uncertain
+        if (task.RackId is { } rid && await racks.GetAsync(rid, ct) is { } rack && rack.Status != RackStatus.Unknown) rack.MarkUnknown(clock.UtcNow);
         foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId }.Where(x => x is not null).Distinct())
             if (await locations.GetAsync(id!.Value, ct) is { } loc) loc.SetReconciliationRequired(true, clock.UtcNow);
     }
@@ -112,7 +120,8 @@ public sealed class InventoryService(
     {
         var rack = await racks.GetAsync(task.RackId ?? Guid.Empty, ct)
                    ?? throw AppException.Conflict("RACK_NOT_FOUND", "The task rack no longer exists.");
-        if (rack.Status != RackStatus.InTransit || rack.CurrentTaskId != task.Id)
+        // CR-008B-5: after "RCS ended" the rack is Unknown but still belongs to this task; a PLC drop confirmation is physical evidence and is accepted
+        if (rack.CurrentTaskId != task.Id || rack.Status is not (RackStatus.InTransit or RackStatus.Unknown))
             throw AppException.Conflict("RACK_NOT_IN_TRANSIT", "Drop cannot be confirmed: the rack is not in transit for this task.");
         var dest = await locations.GetAsync(task.DestinationLocationId ?? Guid.Empty, ct)
                    ?? throw AppException.Conflict("DESTINATION_NOT_ASSIGNED", "The task has no destination.");
@@ -237,7 +246,7 @@ public sealed class InventoryService(
             foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId, actual.Id }.Where(x => x is not null).Distinct())
                 if (await locations.GetAsync(id!.Value, token) is { } l) l.SetReconciliationRequired(false, clock.UtcNow);
             task.MarkReconciled(clock.UtcNow);
-            task.Note("RECONCILED", $"actual={actual.Code}; by={user}; {note}", "Operator", clock.UtcNow);
+            task.Note("RECONCILED", $"actual={actual.Code}; by={user}; {note}", "Operator", clock.UtcNow, HistoryDetail.Of("RECONCILED", ("actual", actual.Code), ("by", user), ("note", note)));
             return true;
         }, ct);
         await notifier.PublishAsync([new WcsEvent("InventoryChanged", new { taskId, reason = "reconciled" })], ct);

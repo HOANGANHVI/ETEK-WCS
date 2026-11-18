@@ -34,6 +34,12 @@ public interface IInventoryService
     Task ReleaseReservationsAsync(TransportTask task, CancellationToken ct = default);
     /// <summary>Mark racks/locations uncertain after a failure/cancel with physical uncertainty (4.8 steps 1-2).</summary>
     Task MarkUncertainAsync(TransportTask task, CancellationToken ct = default);
+    /// <summary>
+    /// CR-008B-4: RCS reported an outcome (Completed / Interrupted / no record after accepting) that WCS cannot prove physically, whether or not a pick was confirmed.
+    /// Neither "still at the source" nor "arrived" may be claimed: the rack becomes UNKNOWN (its WCS-recorded location is kept so it still counts against capacity) and the
+    /// source / destination locations require reconciliation, so no new task is allocated to them. Reservations are NOT released. Nothing is done once the drop is confirmed.
+    /// </summary>
+    Task MarkPhysicalUnprovenAsync(TransportTask task, CancellationToken ct = default);
 
     // API-level operations (own transaction)
     Task<IReadOnlyList<Guid>> DeclareInitialStockAsync(string locationCode, RackKind kind, int quantity, string user, CancellationToken ct = default);
@@ -99,7 +105,13 @@ public sealed class SchedulerOptions
 {
     public const string SectionName = "Scheduler";
     public int TickIntervalMs { get; set; } = 1000;
+    /// <summary>Maximum RCS create attempts before the dispatch is declared uncertain. Attempts are spaced by the retry backoff below (CR-008A).</summary>
     public int MaxDispatchAttempts { get; set; } = 5;
+    /// <summary>CR-008A technical retry spacing (NOT a business timeout): first retry after this delay, doubling each attempt up to the maximum.</summary>
+    public int RcsRetryInitialDelayMs { get; set; } = 2000;
+    public int RcsRetryMaxDelayMs { get; set; } = 60000;
+    /// <summary>CR-008A: automatic continue/cancel RCS attempts per state. After this many the automatic retry stops, the task is flagged for reconciliation and an operator decides.</summary>
+    public int RcsMaxAttempts { get; set; } = 30;
     /// <summary>Per-state timeouts in seconds. Null/absent = disabled. Real values must be agreed with PLC/RCS teams (5.3).</summary>
     public Dictionary<string, int> StateTimeoutsSeconds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

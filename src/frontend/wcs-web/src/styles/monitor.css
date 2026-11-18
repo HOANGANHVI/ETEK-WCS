@@ -1,0 +1,41 @@
+/* ---- Server Resource Monitoring (Overview). Colours come from the shared tokens, so Light and Dark follow the theme. ---- */
+.mon-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.mon-body { display: flex; flex-direction: column; gap: 12px; }
+.mon-body .notice { margin: 0; }
+.mon-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.mon-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--ok); border-radius: var(--radius); }
+.mon-card.mon-warning { border-top-color: var(--warn); }
+.mon-card.mon-critical { border-top-color: var(--bad); }
+.mon-card.mon-unavailable, .mon-card.mon-lost { border-top-color: var(--line-strong); }
+.mon-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mon-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-2); }
+.mon-src { padding: 1px 8px; border: 1px solid var(--line-strong); border-radius: 10px; font-size: 11px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.mon-src-dockervm { border-color: var(--warn-line); color: var(--warn); background: var(--warn-bg); }
+.mon-value { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--heading); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mon-na { color: var(--text-3); }
+.mon-bar { height: 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.mon-bar > span { display: block; height: 100%; background: var(--ok); transition: width .4s ease; }
+.mon-warning .mon-bar > span { background: var(--warn); }
+.mon-critical .mon-bar > span { background: var(--bad); }
+.mon-bar-off { background: transparent; border-style: dashed; }
+.mon-hint { font-size: var(--fs-xs); color: var(--text-2); min-height: 32px; overflow-wrap: anywhere; }
+.mon-note { display: block; color: var(--text-3); }
+.mon-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.mon-lower { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.mon-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mon-chart-box { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.mon-chart-title { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-sm); color: var(--heading); margin-bottom: 4px; }
+.mon-chart-title span { color: var(--text-3); font-size: var(--fs-xs); }
+.mon-chart { width: 100%; height: auto; }
+.mon-area { opacity: .16; stroke: none; }
+.mon-hit { fill: transparent; }
+.mon-dim { opacity: .35; }
+.mon-sysbox { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.mon-sys { display: grid; gap: 6px; margin: 6px 0 0; }
+.mon-sys > div { display: grid; grid-template-columns: minmax(90px, 40%) minmax(0, 1fr); gap: 8px; font-size: var(--fs-sm); }
+.mon-sys dt { color: var(--text-2); }
+.mon-sys dd { margin: 0; overflow-wrap: anywhere; color: var(--text); }
+@media (max-width: 1100px) { .mon-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mon-lower { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .mon-cards, .mon-charts { grid-template-columns: 1fr; } .mon-actions { justify-content: flex-start; } }
+.mon-chart .ch-axis { fill: var(--text-3); font-size: 10px; }
+.ch-fill-info { fill: var(--navy-500); } .ch-fill-ok { fill: var(--ok); } .ch-fill-warn { fill: var(--amber); } .ch-fill-bad { fill: var(--bad); }

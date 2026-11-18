@@ -1,15 +1,15 @@
 /* ---- system configuration page ---- */
 .tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--line-strong); margin-bottom: 14px; }
 .tab { height: 42px; padding: 0 20px; border: 1px solid transparent; border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: transparent; color: var(--text-2); font-size: var(--fs-md); font-weight: 600; cursor: pointer; margin-bottom: -2px; }
-.tab:hover { background: var(--navy-50); color: var(--navy-700); }
-.tab.active { background: var(--surface); color: var(--navy-800); border-color: var(--line-strong); border-bottom: 2px solid var(--surface); }
+.tab:hover { background: var(--navy-50); color: var(--accent-text-strong); }
+.tab.active { background: var(--surface); color: var(--heading); border-color: var(--line-strong); border-bottom: 2px solid var(--surface); }
 
 .cfg-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; margin: 14px 0; }
 .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .field.wide { grid-column: 1 / -1; }
 .field-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
-.field input:not([type='checkbox']), .field select, .inline-input { height: 38px; width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); padding: 0 10px; font-size: var(--fs-md); }
+.field input:not([type='checkbox']), .field select, .inline-input { height: 38px; width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--field-bg); padding: 0 10px; font-size: var(--fs-md); }
 .field input:focus, .field select:focus, .inline-input:focus { outline: 2px solid var(--navy-500); outline-offset: 0; border-color: var(--navy-500); }
 .field input:disabled, .field select:disabled { background: var(--surface-2); color: var(--text-3); }
 .field-hint { font-size: var(--fs-xs); color: var(--text-3); }

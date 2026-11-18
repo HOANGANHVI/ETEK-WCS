@@ -54,7 +54,7 @@ public class PlcCr004Tests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task IO_mapping_lists_368_points_with_pollable_false_and_entering_an_address_does_not_make_it_pollable()
+    public async Task IO_mapping_lists_368_points_with_pollable_false_and_a_valid_address_makes_a_point_pollable_without_approval()
     {
         var (h, f) = await ArrangeAsync(); await using var _h = h; await using var _f = f;
         var admin = await As(f, "admin1");
@@ -66,12 +66,13 @@ public class PlcCr004Tests(DatabaseFixture fixture)
         var id = await Id(h, "PLC-01", "A1", "Station_Online");
         var set = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{id}/address", new { address = "M100" });
         Assert.Equal(200, set.Status);
-        Assert.False(set.Root.GetProperty("data").GetProperty("pollable").GetBoolean());            // entered, NOT approved -> not pollable
+        Assert.True(set.Root.GetProperty("data").GetProperty("pollable").GetBoolean());             // CR-012: a valid address is pollable at once, NOT approved
         Assert.Equal("CONFIGURED", set.Root.GetProperty("data").GetProperty("configStatus").GetString());
         var approved = await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{id}/approve");
-        Assert.True(approved.Root.GetProperty("data").GetProperty("pollable").GetBoolean());         // only the approval mechanism makes it pollable
+        Assert.True(approved.Root.GetProperty("data").GetProperty("pollable").GetBoolean());         // approval (write permission / process mapping) does not change reading
         var changed = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{id}/address", new { address = "M101" });
-        Assert.False(changed.Root.GetProperty("data").GetProperty("pollable").GetBoolean());        // changing the address withdraws the approval
+        Assert.True(changed.Root.GetProperty("data").GetProperty("pollable").GetBoolean());         // a new valid address stays pollable
+        Assert.Equal("CONFIGURED", changed.Root.GetProperty("data").GetProperty("configStatus").GetString());   // ... and the approval is withdrawn
     }
 
     [Theory]

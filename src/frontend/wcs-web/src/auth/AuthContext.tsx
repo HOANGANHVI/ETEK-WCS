@@ -1,3 +1,4 @@
+import type { MsgKey } from '../i18n'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api, UNAUTHORIZED_EVENT } from '../api/client'
 import type { Me, Role } from '../api/authTypes'
@@ -8,7 +9,7 @@ interface AuthValue {
   status: AuthStatus
   user: Me | null
   /** Message shown on the sign-in screen (e.g. the session expired). */
-  notice: string | null
+  notice: MsgKey | null
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
   refresh: () => Promise<void>
@@ -32,9 +33,9 @@ export const hasRole = (user: Me | null, ...roles: Role[]) => !!user && roles.in
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [user, setUserState] = useState<Me | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<MsgKey | null>(null)
 
-  const apply = useCallback((u: Me | null, message: string | null = null) => {
+  const apply = useCallback((u: Me | null, message: MsgKey | null = null) => {
     setUserState(u)
     setStatus(u ? 'authenticated' : 'anonymous')
     setNotice(u ? null : message)
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const onUnauthorized = (e: Event) => {
       if ((e as CustomEvent).detail === 'password') { void refresh(); return }
       setUserState((prev) => {
-        if (prev) { setStatus('anonymous'); setNotice('Phiên đăng nhập đã hết hạn hoặc tài khoản không còn hiệu lực. Vui lòng đăng nhập lại.') }
+        if (prev) { setStatus('anonymous'); setNotice('auth.sessionExpired') }
         return null
       })
     }

@@ -68,7 +68,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await using var c = new NpgsqlConnection(ConnectionString);
         await c.OpenAsync();
         await using var cmd = new NpgsqlCommand(
-            "TRUNCATE task_history, transport_tasks, reservations, inventory_transactions, racks, processed_events, locations, agvs, connection_settings, app_users, audit_log, plc_comm_log, station_io_points, plc_stations, plc_connections CASCADE", c);
+            "TRUNCATE routing_events, station_transactions, transport_legs, transport_orders, route_candidates, route_steps, business_process_versions, business_processes, station_requests, task_history, transport_tasks, reservations, inventory_transactions, racks, processed_events, locations, agvs, connection_settings, app_users, audit_log, plc_comm_log, system_log, station_io_points, plc_stations, plc_connections CASCADE", c);
         await cmd.ExecuteNonQueryAsync();
     }
 }
@@ -85,14 +85,34 @@ public sealed class TestClock : IClock
 /// <summary>Business-level test harness around the real application services, PostgreSQL and the simulators.</summary>
 public sealed class Harness : IAsyncDisposable
 {
-    public ServiceProvider Services { get; }
+    public ServiceProvider Services { get; private set; } = default!;
+    private readonly DatabaseFixture _db;
+    private readonly Action<IServiceCollection>? _configure;
     public TestClock Clock { get; } = new();
     public RcsSimulator Rcs => Services.GetRequiredService<RcsSimulator>();
     public StationSignalSimulator Stations => Services.GetRequiredService<StationSignalSimulator>();
     public SchedulerOptions SchedulerOptions => Services.GetRequiredService<IOptions<SchedulerOptions>>().Value;
 
-    private Harness(DatabaseFixture db)
+    private Harness(DatabaseFixture db, Action<IServiceCollection>? configure)
     {
+        _db = db; _configure = configure;
+        Build();
+    }
+
+    /// <summary>CR-008B-2: simulates a backend restart - a NEW service provider (all in-memory state such as the station signal queue is gone) on the SAME database and clock.</summary>
+    public async Task RestartAsync()
+    {
+        var keep = SchedulerOptions;
+        var (initial, max, maxAttempts, maxDispatch) = (keep.RcsRetryInitialDelayMs, keep.RcsRetryMaxDelayMs, keep.RcsMaxAttempts, keep.MaxDispatchAttempts);
+        await Services.DisposeAsync();
+        Build();
+        SchedulerOptions.RcsRetryInitialDelayMs = initial; SchedulerOptions.RcsRetryMaxDelayMs = max;
+        SchedulerOptions.RcsMaxAttempts = maxAttempts; SchedulerOptions.MaxDispatchAttempts = maxDispatch;
+    }
+
+    private void Build()
+    {
+        var db = _db; var configure = _configure;
         var config = new ConfigurationBuilder()
             .AddConfiguration(db.Configuration)
             .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:WcsDatabase"] = db.ConnectionString })
@@ -102,13 +122,17 @@ public sealed class Harness : IAsyncDisposable
         services.AddWcsApplication(config);
         services.AddWcsInfrastructure(config);
         services.AddSingleton<IClock>(Clock);
+        configure?.Invoke(services);   // CR-008A: lets a test replace a registration (e.g. a Production host environment)
         Services = services.BuildServiceProvider();
+        // CR-008A: the production default spaces RCS retries (2 s, doubling). The pre-existing tests exercise one retry per scheduler tick, so the harness starts with NO
+        // spacing; the CR-008A tests set the delays they need explicitly.
+        SchedulerOptions.RcsRetryInitialDelayMs = 0;
     }
 
-    public static async Task<Harness> CreateAsync(DatabaseFixture db)
+    public static async Task<Harness> CreateAsync(DatabaseFixture db, Action<IServiceCollection>? configure = null)
     {
         await db.ResetAsync();
-        return new Harness(db);
+        return new Harness(db, configure);
     }
 
     public ValueTask DisposeAsync() => Services.DisposeAsync();
@@ -163,6 +187,9 @@ public sealed class Harness : IAsyncDisposable
             new TaskSignal(kind, taskId, EventKey: eventKey, Source: ConfirmationSource.Simulator, User: "test", ExternalRackId: externalRackId)));
 
     public async Task RunAsync(Func<IServiceProvider, Task> action) { await using var scope = Services.CreateAsyncScope(); await action(scope.ServiceProvider); }
+
+    /// <summary>One station-intake pass (what the scheduler hosted service runs before the scheduler pass). Returns the number of accepted requests.</summary>
+    public Task<int> IntakeAsync() => Scoped(sp => sp.GetRequiredService<StationRequestProcessor>().RunOnceAsync());
 
     public Task TickAsync() => Scoped(async sp => { await sp.GetRequiredService<ITaskScheduler>().RunOnceAsync(); return 0; });
 

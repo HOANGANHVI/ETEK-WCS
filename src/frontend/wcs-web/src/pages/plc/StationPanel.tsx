@@ -3,7 +3,9 @@ import { api } from '../../api/client'
 import type { HandshakeState } from '../../api/plcTypes'
 import { Async, Button, Panel, Pill } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
-import { APPROVAL_VI, DATATYPE_VI, DIRECTION_VI, PHASE_TONE, PHASE_VI } from '../../i18n/plc'
+import { useT } from '../../i18n'
+import { APPROVAL_VI, DATATYPE_VI, DIRECTION_VI, localizeDeviceMessage, PHASE_TONE, PHASE_VI } from '../../i18n/plc'
+import { describeCoded } from '../../i18n/logCatalog'
 import { fmtTime } from './plcFormat'
 import { QualityPill, ValueCell } from './plcUi'
 
@@ -11,26 +13,26 @@ interface Props { stationId: string; isAdmin: boolean; handshake: HandshakeState
 
 /** CR-004: the 23 IO of one station, strictly READ-ONLY. Addresses are edited in the IO-mapping screen, connections in the PLC-connection screen. */
 export function StationPanel({ stationId, isAdmin, handshake, onClose }: Props) {
+  const t = useT()
   const io = useApi(useCallback(() => api.plcStationIo(stationId), [stationId]), ['StationIoChanged', 'PlcStatusChanged'])
   return (
-    <Panel title={`Trạm ${stationId} – 23 tín hiệu IO`} subtitle={io.data ? `${io.data.good} tốt / ${io.data.configured} đã cấu hình / ${io.data.total} IO` : undefined}
-      actions={<Button size="sm" onClick={onClose}>Đóng</Button>} flush>
+    <Panel title={t('plc.stationTitle', { id: stationId })} subtitle={io.data ? t('plc.qualitySummary', { good: io.data.good, configured: io.data.configured, total: io.data.total }) : undefined}
+      actions={<Button size="sm" onClick={onClose}>{t('common.close')}</Button>} flush>
       {handshake && (
         <div className="hs-strip">
-          <span><small>Pha quan sát (kỹ thuật)</small> <Pill tone={PHASE_TONE[handshake.phase] ?? 'muted'}>{PHASE_VI[handshake.phase] ?? handshake.phase}</Pill></span>
-          <span><small>Handshake</small> <Pill tone={handshake.approval === 'NEEDS_CONFIRMATION' ? 'warn' : 'ok'} dot={false}>{APPROVAL_VI[handshake.approval] ?? handshake.approval}</Pill></span>
-          <span className="muted">{handshake.signalsAwaitingConfirmation} tín hiệu chưa có quy tắc set/reset được duyệt (NEEDS_CONFIRMATION)</span>
-          {handshake.lastError && isAdmin && <span className="text-bad">Lần ghi gần nhất bị từ chối: {handshake.lastError}</span>}
+          <span><small>{t('plc.phaseLabel')}</small> <Pill tone={PHASE_TONE[handshake.phase] ?? 'muted'}>{PHASE_VI[handshake.phase] ?? handshake.phase}</Pill></span>
+          <span><small>{t('plc.handshake')}</small> <Pill tone={handshake.approval === 'NEEDS_CONFIRMATION' ? 'warn' : 'ok'} dot={false}>{APPROVAL_VI[handshake.approval] ?? handshake.approval}</Pill></span>
+          {handshake.lastError && isAdmin && <span className="text-bad">{t('plc.lastWriteRefused', { error: localizeDeviceMessage(describeCoded(handshake.lastError)) })}</span>}
         </div>
       )}
-      <Async state={io} isEmpty={(d) => d.points.length === 0} empty={{ title: 'Trạm chưa có IO point' }}>
+      <Async state={io} isEmpty={(d) => d.points.length === 0} empty={{ title: t('plc.noIoPoints') }}>
         {(snap) => (
           <div className="table-wrap">
             <table className="grid">
               <thead>
                 <tr>
-                  <th>#</th><th>Tín hiệu</th><th>Chiều</th><th>Kiểu</th>
-                  <th>Giá trị</th><th>Chất lượng</th><th>Cập nhật</th>
+                  <th>#</th><th>{t('plc.colSignal')}</th><th>{t('plc.colDirection')}</th><th>{t('plc.colType')}</th>
+                  <th>{t('plc.colValue')}</th><th>{t('plc.colQuality')}</th><th>{t('plc.colUpdated')}</th>
                 </tr>
               </thead>
               <tbody>

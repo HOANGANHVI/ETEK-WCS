@@ -128,7 +128,7 @@ public enum EndpointState { Disconnected = 0, Connecting = 1, Connected = 2, Fau
 /// <summary>Communication counters of one PLC connection (diagnostics; no payloads).</summary>
 public sealed record PlcDiagnostics(long Requests, long Failures, long Timeouts, long Reconnects, int? LastEndCode, string? LastError,
     long? LastLatencyMs, DateTimeOffset? LastSuccessAt, DateTimeOffset? LastErrorAt, long BytesSent, long BytesReceived,
-    PlcExchange? LastExchange = null, PlcExchange? LastFailedExchange = null);
+    PlcExchange? LastExchange = null, PlcExchange? LastFailedExchange = null, string? LastErrorCode = null, string? LastSocketError = null);
 
 /// <summary>
 /// Technical record of one request/response pair on a PLC connection (CR-003). Contains protocol data only (hex of the frames, no secrets).
@@ -187,6 +187,10 @@ public sealed class PlcRuntimeOptions
     public int ReconnectInitialDelayMs { get; set; } = 1000;
     public int ReconnectMaxDelayMs { get; set; } = 15000;
     public int LogRetentionDays { get; set; } = 30;
+    /// <summary>Diagnostics: MC request/response pairs kept per PLC in PostgreSQL (older rows are pruned).</summary>
+    public int ExchangeHistoryPerPlc { get; set; } = 300;
+    /// <summary>Diagnostics: successful exchanges are stored at most once per PLC per this many seconds (failures are always stored). 0 = store all.</summary>
+    public int ExchangeOkSampleSeconds { get; set; } = 5;
     public PlcIntegrationOptions Integration { get; set; } = new();
     public PlcHandshakeOptions Handshake { get; set; } = new();
 }

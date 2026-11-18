@@ -5,6 +5,7 @@
 #        .\deploy.ps1 -NoPull    (rebuild/redeploy the commit that is already checked out; still requires branch main)
 param([switch]$NoPull, [switch]$SkipBackup)
 . (Join-Path $PSScriptRoot '_common.ps1')
+Start-WcsRun 'deploy.ps1'
 
 Write-Step 'Checking prerequisites'
 Assert-Docker
@@ -70,4 +71,5 @@ Write-Host ("   healthz: " + (Get-HealthzReport))
 Write-Host ("   open:    http://localhost:" + (Get-HttpPort))
 $mode = if ($e['PLC_MODE']) { $e['PLC_MODE'] } else { 'RealReadOnly' }
 Write-Host "   PLC mode: $mode, live connection allowed: $(if ($e['PLC_ALLOW_LIVE_CONNECTION']) { $e['PLC_ALLOW_LIVE_CONNECTION'] } else { 'false' }). RCS: simulator adapter only (no real RCS)."
+Complete-WcsRun 0
 exit 0

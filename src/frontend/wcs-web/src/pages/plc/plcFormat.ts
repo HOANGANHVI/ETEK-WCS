@@ -1,10 +1,11 @@
 import type { IoPointState, PlcWorkerStatus } from '../../api/plcTypes'
 import { formatDateTime } from '../../i18n/format'
+import { t } from '../../i18n'
 
 export const fmtTime = (iso: string | null) => (iso ? formatDateTime(iso) : '—')
 
 export function qualitySummary(w: Pick<PlcWorkerStatus, 'goodPoints' | 'configuredPoints' | 'totalPoints'>) {
-  return `${w.goodPoints} tốt / ${w.configuredPoints} đã cấu hình / ${w.totalPoints} IO`
+  return t('plc.qualitySummary', { good: w.goodPoints, configured: w.configuredPoints, total: w.totalPoints })
 }
 
 
@@ -13,12 +14,12 @@ export function parseTyped(type: IoPointState['dataType'], text: string): { ok: 
   if (type === 'Bool') {
     if (['1', 'true', 'bật', 'on'].includes(text.trim().toLowerCase())) return { ok: true, value: true }
     if (['0', 'false', 'tắt', 'off'].includes(text.trim().toLowerCase())) return { ok: true, value: false }
-    return { ok: false, message: 'Nhập 1/0 hoặc BẬT/TẮT.' }
+    return { ok: false, message: t('plc.enterBool') }
   }
   if (type === 'Int') {
-    if (!/^-?\d+$/.test(text.trim())) return { ok: false, message: 'Nhập một số nguyên.' }
+    if (!/^-?\d+$/.test(text.trim())) return { ok: false, message: t('plc.enterInt') }
     const n = Number(text.trim())
-    if (n < -32768 || n > 32767) return { ok: false, message: 'INT phải nằm trong khoảng −32768…32767.' }
+    if (n < -32768 || n > 32767) return { ok: false, message: t('plc.intRange') }
     return { ok: true, value: n }
   }
   return { ok: true, value: text }

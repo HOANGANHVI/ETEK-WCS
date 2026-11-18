@@ -5,7 +5,9 @@ import { useAuth } from '../auth/AuthContext'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { useApi } from '../hooks/useApi'
-import { formatDateTime } from '../i18n/format'
+import { useT } from '../i18n'
+import { Rich } from '../components/Rich'
+import { displayNameOf, formatDateTime } from '../i18n/format'
 import { ROLE_SHORT_VI } from '../i18n/vi'
 import { checkPassword } from '../auth/passwordPolicy'
 import { Field } from './config/FormKit'
@@ -14,6 +16,7 @@ import { fromApiError, type Errors } from './config/formUtils'
 type Dialog = { kind: 'create' } | { kind: 'edit'; user: UserRow } | { kind: 'reset'; user: UserRow } | { kind: 'delete'; user: UserRow } | null
 
 export function UsersPage() {
+  const t = useT()
   const { user: me } = useAuth()
   const [search, setSearch] = useState('')
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -24,36 +27,36 @@ export function UsersPage() {
   return (
     <>
       <PageHeader
-        title="Quản lý tài khoản"
-        description="Tạo tài khoản, gán vai trò Admin hoặc Operator, kích hoạt/vô hiệu hóa và đặt lại mật khẩu. Không có chức năng tự đăng ký."
-        actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>Tạo tài khoản</Button>}
+        title={t('users.title')}
+        actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>{t('users.create')}</Button>}
       />
       {message && <div className="notice notice-ok" role="status">{message}</div>}
-      <Panel title="Danh sách tài khoản" flush actions={
-        <input type="search" placeholder="Tìm tên đăng nhập hoặc họ tên" aria-label="Tìm tài khoản" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <Panel title={t('users.listPanel')} flush actions={
+        <input type="search" placeholder={t('users.searchPh')} aria-label={t('users.searchAria')} value={search} onChange={(e) => setSearch(e.target.value)} />
       }>
-        <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: 'Không có tài khoản nào', hint: search ? 'Thử từ khóa khác.' : undefined }}>
+        <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: t('users.none'), hint: search ? t('users.noneHint') : undefined }}>
           {(rows) => (
             <div className="table-wrap">
               <table className="grid">
-                <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Vai trò</th><th>Trạng thái</th><th>Thời điểm tạo</th><th>Đăng nhập gần nhất</th><th>Thao tác</th></tr></thead>
+                <thead><tr><th>{t('users.colUsername')}</th><th>{t('users.colName')}</th><th>{t('users.colOrg')}</th><th>{t('users.colRole')}</th><th>{t('users.colStatus')}</th><th>{t('users.colCreated')}</th><th>{t('users.colLastLogin')}</th><th>{t('users.colActions')}</th></tr></thead>
                 <tbody>
                   {rows.map((u) => (
                     <tr key={u.id}>
-                      <td className="mono"><strong>{u.username}</strong>{u.username === me?.username && <span className="muted"> (bạn)</span>}</td>
-                      <td>{u.displayName}</td>
+                      <td className="mono"><strong>{u.username}</strong>{u.username === me?.username && <span className="muted">{t('users.you')}</span>}</td>
+                      <td>{displayNameOf(u.displayName)}{u.email && <small className="muted block">{u.email}</small>}</td>
+                      <td>{u.position || u.department ? <>{u.position ?? <span className="muted">{t('users.notProvided')}</span>}<small className="muted block">{u.department ?? t('users.notProvided')}</small></> : <span className="muted">{t('users.notProvided')}</span>}</td>
                       <td><Pill tone={u.role === 'Admin' ? 'info' : 'muted'} dot={false}>{ROLE_SHORT_VI[u.role]}</Pill></td>
                       <td>
-                        {u.isActive ? <Pill tone="ok">Đang hoạt động</Pill> : <Pill tone="bad">Đã vô hiệu hóa</Pill>}
-                        {u.lockedUntil && <span className="flag" title={`Khóa tạm đến ${formatDateTime(u.lockedUntil)}`}> 🔒</span>}
-                        {u.mustChangePassword && <small className="muted"> · chờ đổi mật khẩu</small>}
+                        {u.isActive ? <Pill tone="ok">{t('users.active')}</Pill> : <Pill tone="bad">{t('users.disabled')}</Pill>}
+                        {u.lockedUntil && <span className="flag" title={t('users.lockedUntil', { time: formatDateTime(u.lockedUntil) })}> 🔒</span>}
+                        {u.mustChangePassword && <small className="muted">{t('users.mustChange')}</small>}
                       </td>
                       <td className="nowrap">{formatDateTime(u.createdAt)}</td>
-                      <td className="nowrap">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Chưa đăng nhập'}</td>
+                      <td className="nowrap">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : t('users.neverLoggedIn')}</td>
                       <td className="nowrap">
-                        <Button size="sm" onClick={() => setDialog({ kind: 'edit', user: u })}>Sửa</Button>{' '}
-                        <Button size="sm" onClick={() => setDialog({ kind: 'reset', user: u })}>Đặt lại mật khẩu</Button>{' '}
-                        <Button size="sm" variant="danger" disabled={u.username === me?.username} title={u.username === me?.username ? 'Không thể tự xóa tài khoản của mình' : undefined} onClick={() => setDialog({ kind: 'delete', user: u })}>Xóa</Button>
+                        <Button size="sm" onClick={() => setDialog({ kind: 'edit', user: u })}>{t('users.edit')}</Button>{' '}
+                        <Button size="sm" onClick={() => setDialog({ kind: 'reset', user: u })}>{t('users.resetPassword')}</Button>{' '}
+                        <Button size="sm" variant="danger" disabled={u.username === me?.username} title={u.username === me?.username ? t('users.cannotDeleteSelf') : undefined} onClick={() => setDialog({ kind: 'delete', user: u })}>{t('users.delete')}</Button>
                       </td>
                     </tr>
                   ))}
@@ -64,19 +67,20 @@ export function UsersPage() {
         </Async>
       </Panel>
 
-      {dialog?.kind === 'create' && <CreateDialog onClose={() => setDialog(null)} onDone={() => done('Đã tạo tài khoản. Người dùng phải đổi mật khẩu ở lần đăng nhập đầu tiên.')} />}
-      {dialog?.kind === 'edit' && <EditDialog user={dialog.user} isSelf={dialog.user.username === me?.username} onClose={() => setDialog(null)} onDone={() => done('Đã cập nhật tài khoản.')} />}
-      {dialog?.kind === 'delete' && <DeleteDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => done(`Đã xóa tài khoản ${dialog.user.username}.`)} />}
-      {dialog?.kind === 'reset' && <ResetDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => done(`Đã đặt lại mật khẩu của ${dialog.user.username}. Mọi phiên đăng nhập hiện tại của tài khoản này đã bị đăng xuất.`)} />}
+      {dialog?.kind === 'create' && <CreateDialog onClose={() => setDialog(null)} onDone={() => done(t('users.createdMsg'))} />}
+      {dialog?.kind === 'edit' && <EditDialog user={dialog.user} isSelf={dialog.user.username === me?.username} onClose={() => setDialog(null)} onDone={() => done(t('users.updatedMsg'))} />}
+      {dialog?.kind === 'delete' && <DeleteDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => done(t('users.deletedMsg', { user: dialog.user.username }))} />}
+      {dialog?.kind === 'reset' && <ResetDialog user={dialog.user} onClose={() => setDialog(null)} onDone={() => done(t('users.resetMsg', { user: dialog.user.username }))} />}
     </>
   )
 }
 
 function RoleSelect({ value, onChange, disabled }: { value: Role; onChange: (r: Role) => void; disabled?: boolean }) {
+  const t = useT()
   return (
     <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value as Role)}>
-      <option value="Operator">Operator – vận hành</option>
-      <option value="Admin">Admin – quản trị</option>
+      <option value="Operator">{t('users.roleOperator')}</option>
+      <option value="Admin">{t('users.roleAdmin')}</option>
     </select>
   )
 }
@@ -95,6 +99,7 @@ function useSubmit(action: () => Promise<unknown>, onDone: () => void) {
 }
 
 function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const t = useT()
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState<Role>('Operator')
@@ -102,62 +107,73 @@ function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const [confirm, setConfirm] = useState('')
   const [active, setActive] = useState(true)
   const pwProblem = password ? checkPassword(password, username) : null
-  const mismatch = confirm && confirm !== password ? 'Mật khẩu xác nhận không khớp.' : null
+  const mismatch = confirm && confirm !== password ? t('users.fMismatch') : null
   const s = useSubmit(() => api.createUser({ username: username.trim(), displayName: displayName.trim(), role, password, isActive: active }), onDone)
   return (
-    <Modal title="Tạo tài khoản" onClose={onClose} footer={<>
-      <Button onClick={onClose}>Bỏ qua</Button>
-      <Button variant="primary" disabled={s.busy || !username.trim() || !displayName.trim() || !password || !!pwProblem || confirm !== password} onClick={() => void s.run()}>Tạo tài khoản</Button>
+    <Modal title={t('users.create')} onClose={onClose} footer={<>
+      <Button onClick={onClose}>{t('users.skip')}</Button>
+      <Button variant="primary" disabled={s.busy || !username.trim() || !displayName.trim() || !password || !!pwProblem || confirm !== password} onClick={() => void s.run()}>{t('users.create')}</Button>
     </>}>
       {s.general && <div className="notice notice-bad" role="alert">{s.general}</div>}
       <div className="form-grid single">
-        <Field label="Tên đăng nhập" error={s.errors.username} hint="Chữ thường, số, dấu chấm, gạch dưới hoặc gạch ngang (3–50 ký tự).">
+        <Field label={t('users.fUsername')} error={s.errors.username} hint={t('users.fUsernameHint')}>
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" /></Field>
-        <Field label="Họ tên hiển thị" error={s.errors.displayName}><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
-        <Field label="Vai trò" error={s.errors.role}><RoleSelect value={role} onChange={setRole} /></Field>
-        <Field label="Mật khẩu ban đầu" error={s.errors.password ?? pwProblem ?? undefined} hint="Người dùng bắt buộc đổi mật khẩu khi đăng nhập lần đầu.">
+        <Field label={t('users.fDisplayName')} error={s.errors.displayName}><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
+        <Field label={t('users.fRole')} error={s.errors.role}><RoleSelect value={role} onChange={setRole} /></Field>
+        <Field label={t('users.fInitialPassword')} error={s.errors.password ?? pwProblem ?? undefined} hint={t('users.fInitialPasswordHint')}>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></Field>
-        <Field label="Xác nhận mật khẩu" error={mismatch ?? undefined}>
+        <Field label={t('users.fConfirm')} error={mismatch ?? undefined}>
           <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" /></Field>
-        <label className="check"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Kích hoạt tài khoản (được phép đăng nhập)</label>
+        <label className="check"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> {t('users.fActivate')}</label>
       </div>
     </Modal>
   )
 }
 
 function EditDialog({ user, isSelf, onClose, onDone }: { user: UserRow; isSelf: boolean; onClose: () => void; onDone: () => void }) {
+  const t = useT()
   const [displayName, setDisplayName] = useState(user.displayName)
   const [role, setRole] = useState<Role>(user.role)
   const [active, setActive] = useState(user.isActive)
-  const s = useSubmit(() => api.updateUser(user.id, { displayName: displayName.trim(), role, isActive: active }), onDone)
+  const [position, setPosition] = useState(user.position ?? '')
+  const [department, setDepartment] = useState(user.department ?? '')
+  const s = useSubmit(async () => {
+    await api.updateUser(user.id, { displayName: displayName.trim(), role, isActive: active })
+    // position / department are separate administrator-managed data (blank = not provided); the preferences, e-mail and avatar are never part of this dialog
+    if (position.trim() !== (user.position ?? '') || department.trim() !== (user.department ?? ''))
+      await api.setUserOrganization(user.id, { position: position.trim() || null, department: department.trim() || null })
+  }, onDone)
   return (
-    <Modal title={`Sửa tài khoản ${user.username}`} onClose={onClose} footer={<>
-      <Button onClick={onClose}>Bỏ qua</Button>
-      <Button variant="primary" disabled={s.busy || !displayName.trim()} onClick={() => void s.run()}>Lưu thay đổi</Button>
+    <Modal title={t('users.editTitle', { user: user.username })} onClose={onClose} footer={<>
+      <Button onClick={onClose}>{t('users.skip')}</Button>
+      <Button variant="primary" disabled={s.busy || !displayName.trim()} onClick={() => void s.run()}>{t('users.save')}</Button>
     </>}>
       {s.general && <div className="notice notice-bad" role="alert">{s.general}</div>}
-      {isSelf && <div className="notice notice-info">Đây là tài khoản của bạn: không thể tự đổi vai trò hoặc tự vô hiệu hóa.</div>}
+      {isSelf && <div className="notice notice-info">{t('users.selfNotice')}</div>}
       <div className="form-grid single">
-        <Field label="Họ tên hiển thị" error={s.errors.displayName}><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
-        <Field label="Vai trò" error={s.errors.role}><RoleSelect value={role} onChange={setRole} disabled={isSelf} /></Field>
-        <label className="check"><input type="checkbox" checked={active} disabled={isSelf} onChange={(e) => setActive(e.target.checked)} /> Tài khoản đang hoạt động. Bỏ chọn để khóa tài khoản (không đăng nhập được, phiên hiện tại bị ngắt).</label>
+        <Field label={t('users.fDisplayName')} error={s.errors.displayName}><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
+        <Field label={t('users.fPosition')} error={s.errors.position}><input value={position} maxLength={100} onChange={(e) => setPosition(e.target.value)} /></Field>
+        <Field label={t('users.fDepartment')} error={s.errors.department} hint={t('users.fOrgHint')}><input value={department} maxLength={100} onChange={(e) => setDepartment(e.target.value)} /></Field>
+        <Field label={t('users.fRole')} error={s.errors.role}><RoleSelect value={role} onChange={setRole} disabled={isSelf} /></Field>
+        <label className="check"><input type="checkbox" checked={active} disabled={isSelf} onChange={(e) => setActive(e.target.checked)} /> {t('users.fActiveCheck')}</label>
       </div>
     </Modal>
   )
 }
 
 function ResetDialog({ user, onClose, onDone }: { user: UserRow; onClose: () => void; onDone: () => void }) {
+  const t = useT()
   const [password, setPassword] = useState('')
   const problem = password ? checkPassword(password, user.username) : null
   const s = useSubmit(() => api.resetPassword(user.id, password), onDone)
   return (
-    <Modal title={`Đặt lại mật khẩu: ${user.username}`} onClose={onClose} footer={<>
-      <Button onClick={onClose}>Bỏ qua</Button>
-      <Button variant="primary" disabled={s.busy || !password || !!problem} onClick={() => void s.run()}>Đặt lại mật khẩu</Button>
+    <Modal title={t('users.resetTitle', { user: user.username })} onClose={onClose} footer={<>
+      <Button onClick={onClose}>{t('users.skip')}</Button>
+      <Button variant="primary" disabled={s.busy || !password || !!problem} onClick={() => void s.run()}>{t('users.resetPassword')}</Button>
     </>}>
       {s.general && <div className="notice notice-bad" role="alert">{s.general}</div>}
       <div className="form-grid single">
-        <Field label="Mật khẩu tạm thời mới" error={s.errors.newPassword ?? problem ?? undefined} hint="Người dùng phải đổi mật khẩu ở lần đăng nhập kế tiếp; các phiên hiện tại bị đăng xuất.">
+        <Field label={t('users.fTempPassword')} error={s.errors.newPassword ?? problem ?? undefined} hint={t('users.fTempPasswordHint')}>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /></Field>
       </div>
     </Modal>
@@ -165,16 +181,16 @@ function ResetDialog({ user, onClose, onDone }: { user: UserRow; onClose: () => 
 }
 
 function DeleteDialog({ user, onClose, onDone }: { user: UserRow; onClose: () => void; onDone: () => void }) {
+  const t = useT()
   const s = useSubmit(() => api.deleteUser(user.id), onDone)
   return (
-    <Modal title={`Xóa tài khoản ${user.username}`} onClose={onClose} footer={<>
-      <Button onClick={onClose}>Bỏ qua</Button>
-      <Button variant="danger" disabled={s.busy} onClick={() => void s.run()}>Xác nhận xóa</Button>
+    <Modal title={t('users.deleteTitle', { user: user.username })} onClose={onClose} footer={<>
+      <Button onClick={onClose}>{t('users.skip')}</Button>
+      <Button variant="danger" disabled={s.busy} onClick={() => void s.run()}>{t('users.confirmDelete')}</Button>
     </>}>
       {s.general && <div className="notice notice-bad" role="alert">{s.general}</div>}
       <p className="dialog-hint">
-        Bạn sắp xóa vĩnh viễn tài khoản <strong>{user.username}</strong> ({user.displayName}). Thao tác không thể hoàn tác.
-        Tài khoản đã có lịch sử thao tác, hoặc là Admin đang hoạt động cuối cùng, sẽ không xóa được; khi đó hãy khóa (vô hiệu hóa) tài khoản.
+        <Rich text={t('users.deleteBody', { name: displayNameOf(user.displayName) })} parts={{ user: <strong>{user.username}</strong> }} />
       </p>
     </Modal>
   )

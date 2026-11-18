@@ -11,9 +11,13 @@ public sealed class FakeEvents : IPlcEvents
 {
     public List<(PlcLogLevel Level, string? Plc, string? Station, string Event, string Message)> Logs { get; } = [];
     public List<(string Name, object Payload, bool AdminOnly)> Events { get; } = [];
-    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message) { lock (Logs) Logs.Add((level, plcId, stationId, eventName, message)); }
+    /// <summary>Structured args of every log call (diagnostics), in the same order as <see cref="Logs"/>.</summary>
+    public List<IReadOnlyDictionary<string, object?>?> LogArgs { get; } = [];
+    public void Log(PlcLogLevel level, string? plcId, string? stationId, string eventName, string message, IReadOnlyDictionary<string, object?>? args = null) { lock (Logs) LogArgs.Add(args); lock (Logs) Logs.Add((level, plcId, stationId, eventName, message)); }
     public void Publish(string name, object payload, bool adminOnly = false) { lock (Events) Events.Add((name, payload, adminOnly)); }
     public bool HasLog(string evt) { lock (Logs) return Logs.Any(l => l.Event == evt); }
+    /// <summary>Args of the most recent log call of an event (null when none).</summary>
+    public IReadOnlyDictionary<string, object?>? ArgsOf(string evt) { lock (Logs) { for (var i = Logs.Count - 1; i >= 0; i--) if (Logs[i].Event == evt) return LogArgs[i]; return null; } }
 }
 
 /// <summary>Builds the real MC driver for a worker. The worker itself is the production class.</summary>

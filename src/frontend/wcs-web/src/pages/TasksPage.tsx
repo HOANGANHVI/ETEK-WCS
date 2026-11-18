@@ -4,14 +4,17 @@ import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
 import { CreateTaskDialog, DeleteTaskDialog, EditTaskDialog } from './TaskDialogs'
+import { ReconciliationPanel } from './ReconciliationPanel'
 import { USER_EDITABLE } from './taskRules'
 import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
-import { ENGINEERING_TOOLS } from '../config'
+import { DEMO_MODE, ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
+import { useT } from '../i18n'
+import { describeHistory } from '../i18n/logCatalog'
 import { formatDateTime, formatTime } from '../i18n/format'
 import {
-  AGV_ROLE_VI, DEVICE_EVENT_RE, describeError, flowInfo, HISTORY_EVENT_VI, LEG_VI, reasonVi, SOURCE_VI, TASK_STATE_VI, taskCode,
+  AGV_ROLE_VI, DEVICE_EVENT_RE, describeError, flowInfo, HISTORY_EVENT_VI, LEG_VI, SOURCE_VI, TASK_STATE_VI, taskCode,
 } from '../i18n/vi'
 
 const CANCELLABLE: TaskState[] = [
@@ -22,6 +25,7 @@ const EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted'] as const
 type Dialog = { kind: 'create' } | { kind: 'edit'; task: TransportTask } | { kind: 'delete'; task: TransportTask } | null
 
 export function TasksPage() {
+  const tr = useT()
   const { user } = useAuth()
   const isAdmin = user?.role === 'Admin'
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -29,6 +33,7 @@ export function TasksPage() {
   const [stateFilter, setStateFilter] = useState<TaskState | ''>('')
   const [agvFilter, setAgvFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [reconOnly, setReconOnly] = useState(false)
   const [cancelFor, setCancelFor] = useState<string | null>(null)
   const urlId = params.get('id')
 
@@ -39,8 +44,8 @@ export function TasksPage() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return (tasks.data?.items ?? []).filter((t) => (!agvFilter || t.agvId === agvFilter) && (!q || taskCode(t.id).toLowerCase().includes(q)))
-  }, [tasks.data, agvFilter, search])
+    return (tasks.data?.items ?? []).filter((t) => (!agvFilter || t.agvId === agvFilter) && (!reconOnly || t.requiresReconciliation) && (!q || taskCode(t.id).toLowerCase().includes(q)))
+  }, [tasks.data, agvFilter, search, reconOnly])
 
   // Nothing chosen yet: show the newest task so the detail area is never an empty void.
   const selectedId = urlId ?? rows[0]?.id ?? null
@@ -50,37 +55,37 @@ export function TasksPage() {
   return (
     <>
       <PageHeader
-        title="Quản lý nhiệm vụ"
-        description="Theo dõi toàn bộ nhiệm vụ vận chuyển, vòng đời trạng thái và các sự kiện PLC/RCS liên quan."
-        actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>Tạo nhiệm vụ</Button>}
+        title={tr('tasks.title')}
+        actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>{tr('tasks.create')}</Button>}
       />
       <div className={`task-layout ${selectedId ? 'with-detail' : ''}`}>
         <Panel
-          title="Danh sách nhiệm vụ"
-          subtitle={tasks.data ? `${rows.length} / ${tasks.data.total} nhiệm vụ` : undefined}
+          title={tr('tasks.listPanel')}
+          subtitle={tasks.data ? tr('tasks.listCount', { shown: rows.length, total: tasks.data.total }) : undefined}
           flush
           actions={
             <>
-              <input type="search" placeholder="Tìm mã nhiệm vụ" aria-label="Tìm mã nhiệm vụ" value={search} onChange={(e) => setSearch(e.target.value)} />
-              <select aria-label="Lọc theo AGV" value={agvFilter} onChange={(e) => setAgvFilter(e.target.value)}>
-                <option value="">Tất cả AGV</option>
+              <input type="search" placeholder={tr('tasks.searchCode')} aria-label={tr('tasks.searchCode')} value={search} onChange={(e) => setSearch(e.target.value)} />
+              {isAdmin && !DEMO_MODE && <label className="inline-check"><input type="checkbox" checked={reconOnly} onChange={(e) => setReconOnly(e.target.checked)} /> {tr('tasks.needsRecon')}</label>}
+              <select aria-label={tr('tasks.filterAgv')} value={agvFilter} onChange={(e) => setAgvFilter(e.target.value)}>
+                <option value="">{tr('tasks.allAgv')}</option>
                 {(agvs.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.code}</option>)}
               </select>
-              <select aria-label="Lọc theo trạng thái" value={stateFilter} onChange={(e) => setStateFilter(e.target.value as TaskState | '')}>
-                <option value="">Tất cả trạng thái</option>
+              <select aria-label={tr('tasks.filterState')} value={stateFilter} onChange={(e) => setStateFilter(e.target.value as TaskState | '')}>
+                <option value="">{tr('tasks.allStates')}</option>
                 {TASK_STATES.map((s) => <option key={s} value={s}>{TASK_STATE_VI[s]}</option>)}
               </select>
             </>
           }
         >
-          <Async state={tasks} isEmpty={(d) => d.items.length === 0} empty={{ title: 'Chưa có nhiệm vụ nào', hint: stateFilter ? 'Thử chọn trạng thái khác.' : 'Nhiệm vụ xuất hiện khi trạm yêu cầu vận chuyển.' }}>
+          <Async state={tasks} isEmpty={(d) => d.items.length === 0} empty={{ title: tr('tasks.none'), hint: stateFilter ? tr('tasks.noneHintFiltered') : tr('tasks.noneHint') }}>
             {() => rows.length === 0 ? (
-              <div className="state state-empty"><div><strong>Không có nhiệm vụ khớp bộ lọc</strong></div></div>
+              <div className="state state-empty"><div><strong>{tr('tasks.noMatch')}</strong></div></div>
             ) : (
               <div className="table-wrap task-table">
                 <table className="grid clickable">
                   <thead>
-                    <tr><th>Mã nhiệm vụ</th><th>Thời gian tạo</th><th>Quy trình</th><th>AGV</th><th>Xuất phát</th><th>Đích</th><th>Trạng thái</th><th>Thao tác</th></tr>
+                    <tr><th>{tr('tasks.colCode')}</th><th>{tr('tasks.colCreated')}</th><th>{tr('tasks.colFlow')}</th><th>{tr('tasks.colAgv')}</th><th>{tr('tasks.colSource')}</th><th>{tr('tasks.colDestination')}</th><th>{tr('tasks.colState')}</th><th>{tr('tasks.colActions')}</th></tr>
                   </thead>
                   <tbody>
                     {rows.map((t) => (
@@ -91,11 +96,11 @@ export function TasksPage() {
                         <td>{codes.agv(t.agvId)}</td>
                         <td>{codes.loc(t.sourceLocationId ?? t.requestLocationId)}</td>
                         <td>{codes.loc(t.destinationLocationId)}</td>
-                        <td><TaskStatePill state={t.state} />{t.requiresReconciliation && <span className="flag" title="Cần đối soát vị trí rack"> ⚠</span>}</td>
+                        <td><TaskStatePill state={t.state} />{t.requiresReconciliation && <span className="flag" title={tr('tasks.reconFlag')}> ⚠</span>}</td>
                         <td className="nowrap" onClick={(e) => e.stopPropagation()}>
-                          <Button size="sm" onClick={() => select(t.id)}>Chi tiết</Button>{' '}
-                          {USER_EDITABLE.includes(t.state) && <><Button size="sm" onClick={() => setDialog({ kind: 'edit', task: t })}>Sửa</Button>{' '}<Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'delete', task: t })}>Xóa</Button>{' '}</>}
-                          {isAdmin && !USER_EDITABLE.includes(t.state) && CANCELLABLE.includes(t.state) && <Button size="sm" variant="danger" onClick={() => select(t.id, true)}>Hủy</Button>}
+                          <Button size="sm" onClick={() => select(t.id)}>{tr('tasks.btnDetail')}</Button>{' '}
+                          {USER_EDITABLE.includes(t.state) && <><Button size="sm" onClick={() => setDialog({ kind: 'edit', task: t })}>{tr('tasks.btnEdit')}</Button>{' '}<Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'delete', task: t })}>{tr('tasks.btnDelete')}</Button>{' '}</>}
+                          {isAdmin && !USER_EDITABLE.includes(t.state) && CANCELLABLE.includes(t.state) && <Button size="sm" variant="danger" onClick={() => select(t.id, true)}>{tr('tasks.btnCancel')}</Button>}
                         </td>
                       </tr>
                     ))}
@@ -130,6 +135,7 @@ interface DetailProps {
 }
 
 function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDelete }: DetailProps) {
+  const tr = useT()
   const task = useApi(useCallback(() => api.task(id), [id]), [...EVENTS])
   const history = useApi(useCallback(() => api.taskHistory(id), [id]), [...EVENTS])
   const health = useApi(useCallback(() => api.health(), []))
@@ -148,8 +154,8 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
   }
 
   return (
-    <Panel title={`Chi tiết nhiệm vụ ${taskCode(id)}`} className="task-detail">
-      <Async state={task} empty={{ title: 'Không tìm thấy nhiệm vụ' }}>
+    <Panel title={tr('tasks.detailTitle', { code: taskCode(id) })} className="task-detail">
+      <Async state={task} empty={{ title: tr('tasks.notFound') }}>
         {(t: TransportTask) => {
           const agv = (agvs.data ?? []).find((a) => a.id === t.agvId)
           const flow = flowInfo(t.flow)
@@ -162,64 +168,64 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
           return (
             <>
               {t.requiresReconciliation && (
-                <div className="notice notice-warn">Cần đối soát vị trí rack thực tế trước khi giải phóng giữ chỗ và tài nguyên (tồn kho không tự điều chỉnh).</div>
+                <div className="notice notice-warn">{tr('tasks.reconNotice')}</div>
               )}
 
               <section className="detail-sec">
-                <h3>Thông tin chung</h3>
+                <h3>{tr('tasks.secGeneral')}</h3>
                 <dl className="kv2">
-                  <dt>Quy trình</dt><dd><strong>{flow.code}</strong> · {flow.label}</dd>
-                  <dt>Trạng thái</dt><dd><TaskStatePill state={t.state} /> <span className="muted">{reasonVi(t.stateReason)}</span></dd>
-                  <dt>Trạm yêu cầu</dt><dd>{codes.loc(t.requestLocationId)}</dd>
-                  <dt>Khóa yêu cầu</dt><dd className="mono">{t.requestKey}</dd>
-                  <dt>Thời gian tạo</dt><dd>{formatDateTime(t.createdAt)}</dd>
-                  <dt>Cập nhật gần nhất</dt><dd>{formatDateTime(t.updatedAt)}</dd>
-                  <dt>Kết thúc</dt><dd>{formatDateTime(t.finishedAt)}</dd>
+                  <dt>{tr('tasks.rowFlow')}</dt><dd><strong>{flow.code}</strong> · {flow.label}</dd>
+                  <dt>{tr('tasks.rowState')}</dt><dd><TaskStatePill state={t.state} /> <span className="muted" title={t.stateReason ?? undefined}>{describeHistory(t.stateReasonCode, t.stateReasonArgs, t.stateReason)}</span></dd>
+                  <dt>{tr('tasks.rowStation')}</dt><dd>{codes.loc(t.requestLocationId)}</dd>
+                  <dt>{tr('tasks.rowRequestKey')}</dt><dd className="mono">{t.requestKey}</dd>
+                  <dt>{tr('tasks.rowCreated')}</dt><dd>{formatDateTime(t.createdAt)}</dd>
+                  <dt>{tr('tasks.rowUpdated')}</dt><dd>{formatDateTime(t.updatedAt)}</dd>
+                  <dt>{tr('tasks.rowFinished')}</dt><dd>{formatDateTime(t.finishedAt)}</dd>
                 </dl>
               </section>
 
               <section className="detail-sec">
-                <h3>AGV thực hiện</h3>
+                <h3>{tr('tasks.secAgv')}</h3>
                 <dl className="kv2">
-                  <dt>AGV</dt><dd><strong>{codes.agv(t.agvId)}</strong>{agv && <> · {AGV_ROLE_VI[agv.role]}</>}</dd>
-                  <dt>Công đoạn hiện tại</dt><dd>{LEG_VI[t.leg] ?? t.leg}</dd>
-                  <dt>PLC cho phép</dt><dd>{t.plcPermissionGranted ? <Pill tone="ok">Đã cho phép</Pill> : <Pill tone="muted">Chưa cấp</Pill>}</dd>
-                  <dt>Mã yêu cầu RCS</dt><dd className="mono">{t.rcsRequestCode}</dd>
-                  <dt>Mã nhiệm vụ RCS</dt><dd className="mono">{t.rcsTaskCode ?? 'RCS chưa tiếp nhận'}</dd>
+                  <dt>{tr('tasks.rowAgv')}</dt><dd><strong>{codes.agv(t.agvId)}</strong>{agv && <> · {AGV_ROLE_VI[agv.role]}</>}</dd>
+                  <dt>{tr('tasks.rowLeg')}</dt><dd>{LEG_VI[t.leg] ?? t.leg}</dd>
+                  <dt>{tr('tasks.rowPlcPermission')}</dt><dd>{t.plcPermissionGranted ? <Pill tone="ok">{tr('tasks.plcGranted')}</Pill> : <Pill tone="muted">{tr('tasks.plcNotGranted')}</Pill>}</dd>
+                  <dt>{tr('tasks.rowRcsRequest')}</dt><dd className="mono">{t.rcsRequestCode}</dd>
+                  <dt>{tr('tasks.rowRcsTask')}</dt><dd className="mono">{t.rcsTaskCode ?? tr('tasks.rcsNotAccepted')}</dd>
                 </dl>
               </section>
 
               <section className="detail-sec">
-                <h3>Luồng xử lý</h3>
+                <h3>{tr('tasks.secFlow')}</h3>
                 <FlowStepper task={t} />
                 <div className="route route-line">
-                  <div><small>Điểm xuất phát</small><strong>{codes.loc(t.sourceLocationId ?? t.requestLocationId)}</strong></div>
+                  <div><small>{tr('tasks.from')}</small><strong>{codes.loc(t.sourceLocationId ?? t.requestLocationId)}</strong></div>
                   <span className="route-arrow" aria-hidden="true">➜</span>
-                  <div><small>Điểm đích</small><strong>{codes.loc(t.destinationLocationId)}</strong></div>
-                  <div><small>Đã lấy rack</small><strong>{formatTime(t.pickConfirmedAt)}</strong></div>
-                  <div><small>Đã thả rack</small><strong>{formatTime(t.dropConfirmedAt)}</strong></div>
+                  <div><small>{tr('tasks.to')}</small><strong>{codes.loc(t.destinationLocationId)}</strong></div>
+                  <div><small>{tr('tasks.pickedAt')}</small><strong>{formatTime(t.pickConfirmedAt)}</strong></div>
+                  <div><small>{tr('tasks.droppedAt')}</small><strong>{formatTime(t.dropConfirmedAt)}</strong></div>
                 </div>
               </section>
 
               {(editable || canCancel || (simulator && !['Completed', 'Failed', 'Cancelled'].includes(t.state))) && (
                 <section className="detail-sec">
-                  <h3>Thao tác</h3>
+                  <h3>{tr('tasks.secActions')}</h3>
                   {askCancel || confirming ? (
                     <div className="cancel-box">
-                      <label>Lý do hủy nhiệm vụ
-                        <input type="search" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nhập lý do (bắt buộc)" />
+                      <label>{tr('tasks.cancelReasonLabel')}
+                        <input type="search" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr('tasks.cancelReasonPh')} />
                       </label>
                       <div className="btn-row">
-                        <Button variant="danger" disabled={busy || !reason.trim()} onClick={() => void run(() => api.cancelTask(t.id, reason.trim()), 'Đã gửi yêu cầu hủy. Nhiệm vụ chỉ chuyển sang “Đã hủy” sau khi RCS xác nhận.').then(() => { setReason(''); setConfirming(false); onCancelDone() })}>Xác nhận hủy</Button>
-                        <Button onClick={() => { setReason(''); setConfirming(false); onCancelDone() }}>Bỏ qua</Button>
+                        <Button variant="danger" disabled={busy || !reason.trim()} onClick={() => void run(() => api.cancelTask(t.id, reason.trim()), tr('tasks.cancelSent')).then(() => { setReason(''); setConfirming(false); onCancelDone() })}>{tr('tasks.confirmCancel')}</Button>
+                        <Button onClick={() => { setReason(''); setConfirming(false); onCancelDone() }}>{tr('tasks.skip')}</Button>
                       </div>
                     </div>
                   ) : (
                     <div className="btn-row">
-                      {editable && <Button disabled={busy} onClick={() => onEdit(t)}>Sửa nhiệm vụ</Button>}
-                      {editable && <Button variant="danger" disabled={busy} onClick={() => onDelete(t)}>Xóa nhiệm vụ</Button>}
-                      {canCancel && <Button variant="danger" disabled={busy} onClick={() => setConfirming(true)}>Hủy nhiệm vụ</Button>}
-                      {simulator && <Button variant="primary" disabled={busy} onClick={() => void run(() => api.simulateNext(t.id))}>Chạy bước thiết bị tiếp theo (mô phỏng)</Button>}
+                      {editable && <Button disabled={busy} onClick={() => onEdit(t)}>{tr('tasks.editTask')}</Button>}
+                      {editable && <Button variant="danger" disabled={busy} onClick={() => onDelete(t)}>{tr('tasks.deleteTask')}</Button>}
+                      {canCancel && <Button variant="danger" disabled={busy} onClick={() => setConfirming(true)}>{tr('tasks.cancelTask')}</Button>}
+                      {simulator && <Button variant="primary" disabled={busy} onClick={() => void run(() => api.simulateNext(t.id))}>{tr('tasks.simNext')}</Button>}
                     </div>
                   )}
                   {actionMsg && <div className="notice notice-info">{actionMsg}</div>}
@@ -227,9 +233,13 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
                 </section>
               )}
 
+              {isAdmin && !DEMO_MODE && t.requiresReconciliation && ['Failed', 'Cancelled', 'Completed'].includes(t.state) && (
+                <ReconciliationPanel task={t} onChanged={() => { task.reload(); history.reload() }} />
+              )}
+
               <section className="detail-sec">
-                <h3>Lịch sử chuyển trạng thái</h3>
-                <Async state={history} isEmpty={(d) => d.length === 0} empty={{ title: 'Chưa có lịch sử' }}>
+                <h3>{tr('tasks.secHistory')}</h3>
+                <Async state={history} isEmpty={(d) => d.length === 0} empty={{ title: tr('tasks.noHistory') }}>
                   {(rows) => (
                     <ol className="timeline">
                       {rows.map((h) => {
@@ -243,7 +253,7 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
                                   <TaskStatePill state={h.fromState as TaskState} /><span aria-hidden="true">➜</span><TaskStatePill state={h.toState as TaskState} />
                                 </span>
                               ) : <strong>{HISTORY_EVENT_VI[h.event] ?? h.event}</strong>}
-                              {h.detail && <small>{reasonVi(h.detail)} <span className="muted">· {SOURCE_VI[h.source] ?? h.source}</span></small>}
+                              {h.detail && <small title={h.detail}>{describeHistory(h.detailCode, h.detailArgs, h.detail)} <span className="muted">· {SOURCE_VI[h.source] ?? h.source}</span></small>}
                             </span>
                           </li>
                         )
@@ -254,16 +264,16 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
               </section>
 
               <section className="detail-sec">
-                <h3>Sự kiện PLC / RCS</h3>
+                <h3>{tr('tasks.secDevice')}</h3>
                 {deviceEvents.length === 0 ? (
-                  <p className="muted">Chưa có sự kiện PLC/RCS nào cho nhiệm vụ này.</p>
+                  <p className="muted">{tr('tasks.noDevice')}</p>
                 ) : (
                   <ul className="event-list">
                     {deviceEvents.map((h) => (
                       <li key={h.id}>
                         <span className="num muted">{formatTime(h.occurredAt)}</span>
                         <Pill tone="info" dot={false}>{SOURCE_VI[h.source] ?? h.source}</Pill>
-                        <span>{h.toState && h.fromState !== h.toState ? `→ ${TASK_STATE_VI[h.toState as TaskState] ?? h.toState}` : HISTORY_EVENT_VI[h.event] ?? h.event}{h.detail ? ` · ${reasonVi(h.detail)}` : ''}</span>
+                        <span>{h.toState && h.fromState !== h.toState ? `→ ${TASK_STATE_VI[h.toState as TaskState] ?? h.toState}` : HISTORY_EVENT_VI[h.event] ?? h.event}{h.detail ? ` · ${describeHistory(h.detailCode, h.detailArgs, h.detail)}` : ''}</span>
                       </li>
                     ))}
                   </ul>

@@ -62,14 +62,14 @@ public sealed partial class OperationalConfigService(
     {
         var code = ConnectionValidator.Clean(cmd.RcsRobotCode);
         var errors = new List<FieldError>();
-        if (code is not null && !RobotCodeRegex().IsMatch(code)) errors.Add(new("rcsRobotCode", "Mã robot chỉ gồm chữ, số, dấu chấm, gạch ngang, gạch dưới (tối đa 100 ký tự)."));
+        if (code is not null && !RobotCodeRegex().IsMatch(code)) errors.Add(new("rcsRobotCode", "Mã robot chỉ gồm chữ, số, dấu chấm, gạch ngang, gạch dưới (tối đa 100 ký tự).", "ROBOT_CODE_FORMAT"));
         if (errors.Count > 0) throw new ValidationFailedException(errors);
 
         await uow.ExecuteAsync(async t =>
         {
             var agv = await agvs.GetAsync(id, t) ?? throw AppException.NotFound("AGV_NOT_FOUND", "Không tìm thấy AGV.");
             if (code is not null && (await agvs.ListAsync(t)).Any(a => a.Id != id && string.Equals(a.RcsRobotCode, code, StringComparison.OrdinalIgnoreCase)))
-                throw new ValidationFailedException([new("rcsRobotCode", "Mã robot này đã được gán cho AGV khác.")]);
+                throw new ValidationFailedException([new("rcsRobotCode", "Mã robot này đã được gán cho AGV khác.", "ROBOT_CODE_IN_USE")]);
             // PER_AGV safety: an AGV that currently owns an active task must not be switched off underneath it.
             if (!cmd.Enabled && agv.Enabled && await tasks.GetActiveForAgvAsync(id, t) is not null)
                 throw AppException.Conflict("AGV_HAS_ACTIVE_TASK", "AGV đang có nhiệm vụ hoạt động nên chưa thể tắt.");
@@ -87,12 +87,12 @@ public sealed partial class OperationalConfigService(
         var code = ConnectionValidator.Clean(cmd.Code) ?? "";
         var name = ConnectionValidator.Clean(cmd.Name);
         var errors = new List<FieldError>();
-        if (!LocationCodeRegex().IsMatch(code)) errors.Add(new("code", "Mã vị trí chỉ gồm chữ, số, gạch ngang, gạch dưới (tối đa 50 ký tự)."));
-        if (name is null) errors.Add(new("name", "Cần nhập tên vị trí."));
-        else if (name.Length > 200) errors.Add(new("name", "Tên vị trí tối đa 200 ký tự."));
-        if (cmd.RackCapacity is < 0 or > 1000) errors.Add(new("rackCapacity", "Sức chứa phải nằm trong khoảng 0–1000."));
-        if (!Enum.IsDefined(cmd.Type)) errors.Add(new("type", "Loại vị trí không hợp lệ."));
-        if (!Enum.IsDefined(cmd.AllowedRackKind)) errors.Add(new("allowedRackKind", "Loại rack chấp nhận không hợp lệ."));
+        if (!LocationCodeRegex().IsMatch(code)) errors.Add(new("code", "Mã vị trí chỉ gồm chữ, số, gạch ngang, gạch dưới (tối đa 50 ký tự).", "LOCATION_CODE_FORMAT"));
+        if (name is null) errors.Add(new("name", "Cần nhập tên vị trí.", "LOCATION_NAME_REQUIRED"));
+        else if (name.Length > 200) errors.Add(new("name", "Tên vị trí tối đa 200 ký tự.", "LOCATION_NAME_MAX"));
+        if (cmd.RackCapacity is < 0 or > 1000) errors.Add(new("rackCapacity", "Sức chứa phải nằm trong khoảng 0–1000.", "CAPACITY_RANGE"));
+        if (!Enum.IsDefined(cmd.Type)) errors.Add(new("type", "Loại vị trí không hợp lệ.", "LOCATION_TYPE_INVALID"));
+        if (!Enum.IsDefined(cmd.AllowedRackKind)) errors.Add(new("allowedRackKind", "Loại rack chấp nhận không hợp lệ.", "ALLOWED_KIND_INVALID"));
         if (errors.Count > 0) throw new ValidationFailedException(errors);
 
         await uow.ExecuteAsync(async t =>
@@ -100,7 +100,7 @@ public sealed partial class OperationalConfigService(
             var existing = await locations.GetByCodeAsync(code, t);
             if (create)
             {
-                if (existing is not null) throw new ValidationFailedException([new("code", "Mã vị trí đã tồn tại.")]);
+                if (existing is not null) throw new ValidationFailedException([new("code", "Mã vị trí đã tồn tại.", "LOCATION_EXISTS")]);
                 locations.Add(new Location(code, name!, cmd.Type, cmd.RackCapacity, cmd.AllowedRackKind, cmd.RequiresPlcPermission, clock.UtcNow));
                 return true;
             }
@@ -109,7 +109,7 @@ public sealed partial class OperationalConfigService(
             var occupied = await racks.CountAtLocationAsync(existing.Id, t);
             var reserved = await reservations.CountActiveDestinationAsync(existing.Id, t);
             if (cmd.RackCapacity < occupied + reserved)
-                throw new ValidationFailedException([new("rackCapacity", $"Sức chứa không được nhỏ hơn số rack đang có ({occupied}) cộng số chỗ đang giữ ({reserved}).")]);
+                throw new ValidationFailedException([new("rackCapacity", $"Sức chứa không được nhỏ hơn số rack đang có ({occupied}) cộng số chỗ đang giữ ({reserved}).", "CAPACITY_BELOW_USED", FieldArgs.Of(("occupied", occupied), ("reserved", reserved)))]);
             if (!cmd.Enabled && existing.Enabled && reserved > 0)
                 throw AppException.Conflict("LOCATION_HAS_RESERVATION", "Vị trí đang được giữ chỗ cho nhiệm vụ nên chưa thể tắt.");
             existing.Configure(name!, cmd.RackCapacity, cmd.AllowedRackKind, cmd.Enabled, cmd.RequiresPlcPermission, clock.UtcNow);

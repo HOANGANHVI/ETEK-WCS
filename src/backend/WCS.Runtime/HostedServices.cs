@@ -19,10 +19,19 @@ public sealed class SchedulerHostedService(IServiceScopeFactory scopes, IOptions
         using var timer = new PeriodicTimer(interval);
         do
         {
+            // CR-008A (AUDIT-002): two independent exception scopes. A failing station intake must never stop the scheduler pass that dispatches / recovers tasks.
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<StationRequestProcessor>().RunOnceAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Station request intake failed (the scheduler pass still runs)");
+            }
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<ITaskScheduler>().RunOnceAsync(stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

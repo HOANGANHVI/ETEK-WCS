@@ -48,22 +48,43 @@ public static class DependencyInjection
         services.Configure<SeedOptions>(configuration.GetSection(SeedOptions.SectionName));
         services.Configure<IntegrationOptions>(configuration.GetSection(IntegrationOptions.SectionName));
 
+        // Server resource monitoring: container metrics (cgroup) and host metrics are separate providers chosen by platform; one sampler feeds the dashboard.
+        services.Configure<WCS.Application.Monitoring.ResourceMonitoringOptions>(configuration.GetSection(WCS.Application.Monitoring.ResourceMonitoringOptions.SectionName));
+        var diskPath = configuration[$"{WCS.Application.Monitoring.ResourceMonitoringOptions.SectionName}:DiskPath"];
+        services.AddSingleton<WCS.Application.Monitoring.IContainerMetricsProvider>(_ => WCS.Infrastructure.Monitoring.MetricsProviderFactory.Container(diskPath));
+        services.AddSingleton<WCS.Application.Monitoring.IHostMetricsProvider>(_ => WCS.Infrastructure.Monitoring.MetricsProviderFactory.Host(diskPath));
+        services.AddSingleton<WCS.Infrastructure.Monitoring.ResourceMonitor>();
+        services.AddSingleton<WCS.Application.Monitoring.IResourceMonitor>(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
+        services.AddHostedService(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
+
         services.AddDbContext<WcsDbContext>(o => o.UseNpgsql(BuildConnectionString(configuration),
             npgsql => npgsql.MigrationsAssembly(typeof(WcsDbContext).Assembly.FullName)));
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IAgvRepository, AgvRepository>();
+        services.AddScoped<IStationRequestRepository, StationRequestRepository>();   // CR-008B-2
         services.AddScoped<ILocationRepository, LocationRepository>();
         services.AddScoped<IRackRepository, RackRepository>();
         services.AddScoped<IReservationRepository, ReservationRepository>();
         services.AddScoped<IInventoryTransactionRepository, InventoryTransactionRepository>();
         services.AddScoped<ITransportTaskRepository, TransportTaskRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
+        // CR-010: configurable Business Process / Route Engine persistence and the simulator-only leg dispatcher
+        services.AddScoped<WCS.Application.Routing.IRoutingRepository, RoutingRepository>();
+        services.AddScoped<WCS.Application.Routing.ILegDispatcher, SimulatedLegDispatcher>();
+        services.AddSingleton<WCS.Application.Routing.IPlcLinkStatus, PlcRuntimeLinkStatus>();
+        services.AddSingleton<WCS.Application.Routing.IPlcObservationSource, UnavailablePlcObservationSource>();
         services.AddScoped<WcsDataSeeder>();
+        services.AddScoped<WCS.Application.Logging.ILogQueryService, WCS.Infrastructure.Logging.LogQueryService>();   // CR-007
+        services.AddScoped<WCS.Infrastructure.Logging.DeploymentLogImporter>();
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
         services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
+        services.AddScoped<WCS.Application.Diagnostics.IPlcDiagnosticSource, WCS.Infrastructure.Plc.PlcDiagnosticSource>();
+        services.AddSingleton<WCS.Application.Plc.IPlcTemplateProvider, WCS.Infrastructure.Plc.PlcTemplateProvider>();   // CR-010 Default IO Mapping Template
         services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
         services.AddSingleton<WCS.Application.Plc.ISimulatorControl>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.SimulatedPlcNetwork>());
+        services.AddSingleton<WCS.Infrastructure.Plc.PlcExchangeRecorder>();   // PLC diagnostics: stored MC exchange history
+        services.AddSingleton<WCS.Application.Plc.IPlcExchangeSink>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.PlcExchangeRecorder>());
         services.AddSingleton<WCS.Application.Plc.IPlcEndpointFactory, WCS.Infrastructure.Plc.PlcEndpointFactory>();
         services.AddSingleton<WCS.Application.Plc.IPlcEvents, WCS.Infrastructure.Plc.PlcEventDispatcher>();
 
@@ -91,6 +112,10 @@ public static class DependencyInjection
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
         services.AddSingleton<IRcsClient>(sp => sp.GetRequiredService<RcsSimulator>());
+        // CR-008A: Production must not dispatch to the simulator (explicit opt-in only).
+        var allowRcsSimulatorInProduction = configuration.GetValue("Rcs:AllowSimulatorInProduction", false);
+        services.AddSingleton<IRcsDispatchGuard>(sp => new RcsDispatchGuard(sp.GetRequiredService<IRcsClient>(),
+            sp.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>(), allowRcsSimulatorInProduction));
         // The legacy simulator stays the default. The PLC-backed service is used only when Plc:Integration:Enabled=true (approved flow mappings required).
         services.AddSingleton<IStationSignalService>(sp =>
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WCS.Application.Plc.PlcRuntimeOptions>>().Value.Integration.Enabled

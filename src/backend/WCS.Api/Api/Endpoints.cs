@@ -50,6 +50,8 @@ internal static class Audited
 
 public static class Endpoints
 {
+    private static readonly DateTimeOffset BackendStart = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime();
+
     public static void MapWcsApi(this WebApplication app)
     {
         // ---------------------------------------------------------------- authentication (no role required, login is anonymous)
@@ -68,6 +70,45 @@ public static class Endpoints
         }).RequireAuthorization();
         auth.MapGet("me", (HttpContext c) =>
             ApiResults.Ok(c, Me(c.User.Identity!.Name!, c.User.DisplayName(), c.Actor().Role, c.User.MustChangePassword()))).RequireAuthorization();
+        // Personal interface preferences: any signed-in user, always the caller's own account (taken from the session).
+        auth.MapGet("preferences", async (HttpContext c, AuthService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.GetPreferencesAsync(c.Actor(), ct))).RequireAuthorization();
+        auth.MapPut("preferences", async (HttpContext c, UserPreferencesRequest r, AuthService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.SetPreferencesAsync(c.Actor(), r.Theme, r.SidebarCollapsed, ct))).RequireAuthorization();
+        // Own profile: full name + e-mail (self-service), avatar. Always the caller's account (from the session); there is no route that addresses another user.
+        auth.MapGet("profile", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.GetAsync(c.Actor(), ct))).RequireAuthorization();
+        auth.MapPut("profile", async (HttpContext c, UpdateProfileRequest r, ProfileService svc, CancellationToken ct) =>
+        {
+            var (profile, identity) = await svc.UpdateOwnAsync(c.Actor(), r.DisplayName, r.Email, ct);
+            await c.SignInAsync(identity); // the display name is a session claim: refresh it (the security stamp is unchanged, other sessions stay valid)
+            return ApiResults.Ok(c, profile);
+        }).RequireAuthorization();
+        auth.MapGet("avatar", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+        {
+            var file = await svc.GetAvatarAsync(c.Actor(), ct);
+            if (file is null) return ApiResults.Fail(c, StatusCodes.Status404NotFound, "AVATAR_NOT_FOUND", "Chưa có ảnh đại diện.");
+            // The stored (validated) type is the only type served; the browser may not sniff it into anything else and may not run it as a document.
+            c.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            c.Response.Headers["Content-Security-Policy"] = "default-src 'none'; sandbox";
+            c.Response.Headers["Cache-Control"] = "private, no-store";
+            return Results.File(file.Data, file.ContentType);
+        }).RequireAuthorization();
+        auth.MapPut("avatar", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+        {
+            // Raw image bytes in the body (no file name, no path, no multipart): read at most limit+1 bytes so an oversized upload is refused without buffering it.
+            if (c.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } f) f.MaxRequestBodySize = AvatarImage.MaxBytes + 1024;
+            using var ms = new MemoryStream();
+            var buffer = new byte[16 * 1024]; int n;
+            while ((n = await c.Request.Body.ReadAsync(buffer, ct)) > 0)
+            {
+                ms.Write(buffer, 0, n);
+                if (ms.Length > AvatarImage.MaxBytes) throw AppException.Validation("AVATAR_TOO_LARGE", "Ảnh đại diện tối đa 512 KB.");
+            }
+            return ApiResults.Ok(c, await svc.SetAvatarAsync(c.Actor(), ms.ToArray(), ct));
+        }).RequireAuthorization();
+        auth.MapDelete("avatar", async (HttpContext c, ProfileService svc, CancellationToken ct) =>
+            ApiResults.Ok(c, await svc.RemoveAvatarAsync(c.Actor(), ct))).RequireAuthorization();
         auth.MapPost("change-password", async (HttpContext c, ChangePasswordRequest r, AuthService svc, CancellationToken ct) =>
         {
             var user = await svc.ChangeOwnPasswordAsync(c.Actor(), r.CurrentPassword, r.NewPassword, ct);
@@ -83,6 +124,16 @@ public static class Endpoints
         var agv = api.MapGroup("/agvs").WithTags("AGV");
         agv.MapGet("", async (HttpContext c, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.ListAgvsAsync(ct)));
         agv.MapGet("{id:guid}", async (HttpContext c, Guid id, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.GetAgvAsync(id, ct)));
+        // CR-008B-5 (D-8): Admin only, both confirmations mandatory, audited with the AGV, the task and both confirmations.
+        agv.MapPost("{id:guid}/release-hold", async (HttpContext c, Guid id, ReleaseAgvHoldRequest r, AgvHoldService s, WcsQueries q, CancellationToken ct) =>
+        {
+            var before = await q.GetAgvAsync(id, ct);
+            await Audited.RunAsync(c, "AGV_DISPATCH_HOLD_RELEASE", "Agv", id.ToString(), before,
+                () => s.ReleaseAsync(id, r.InventoryReconciled, r.AgvPhysicallyVerified, r.Note, c.Actor().Username, ct),
+                res => new { agv = res.Agv.Code, taskId = res.TaskId, previousReason = res.PreviousReason, heldAt = res.HeldAt, inventoryReconciled = r.InventoryReconciled, agvPhysicallyVerified = r.AgvPhysicallyVerified },
+                r.Note);
+            return ApiResults.Ok(c, await q.GetAgvAsync(id, ct));
+        }).RequireAuthorization(admin);
 
         // ---- Location
         var loc = api.MapGroup("/locations").WithTags("Location");
@@ -112,6 +163,8 @@ public static class Endpoints
 
         // ---- PLC topology, IO catalog, monitoring (CR-002)
         api.MapPlcApi();
+        api.MapRoutingApi();   // CR-010
+        api.MapDiagnosticApi();   // PLC diagnostic export
 
         // ---- Process flows available for task requests (read-only view of the deployed configuration; lets the UI avoid hard-coding stations)
         api.MapGet("/flows", (HttpContext c, WCS.Application.Flows.IFlowCatalog flows) =>
@@ -158,6 +211,17 @@ public static class Endpoints
             var before = await q.GetTaskAsync(id, ct);
             return ApiResults.Ok(c, await Audited.RunAsync(c, "TASK_CANCEL", "Task", id.ToString(), Audited.TaskSnapshot(before),
                 () => o.CancelTaskAsync(id, r.Reason, c.Actor().Username, ct), Audited.TaskSnapshot, r.Reason));
+        }).RequireAuthorization(admin);
+        // CR-008B-3: reconciliation worklist and detail for the Admin (read only), and the "could not be established" check (records history, releases nothing).
+        task.MapGet("reconciliation", async (HttpContext c, ReconciliationService s, int? take, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.ListAsync(take ?? 200, ct))).RequireAuthorization(admin);
+        task.MapGet("{id:guid}/reconciliation", async (HttpContext c, Guid id, ReconciliationService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.GetDetailAsync(id, ct))).RequireAuthorization(admin);
+        task.MapPost("{id:guid}/reconciliation-check", async (HttpContext c, Guid id, ReconciliationCheckRequest r, ReconciliationService s, WcsQueries q, CancellationToken ct) =>
+        {
+            await Audited.RunAsync(c, "TASK_RECONCILE_CHECK_UNRESOLVED", "Task", id.ToString(), null,
+                async () => { await s.RecordUnresolvedCheckAsync(id, r.Note.Trim(), c.Actor().Username, ct); return 0; }, _ => new { unresolved = true }, r.Note);
+            return ApiResults.Ok(c, await q.GetTaskAsync(id, ct));
         }).RequireAuthorization(admin);
         task.MapPost("{id:guid}/reconcile", async (HttpContext c, Guid id, ReconcileTaskRequest r, IInventoryService inv2, WcsQueries q, CancellationToken ct) =>
         {
@@ -217,6 +281,8 @@ public static class Endpoints
             ApiResults.Ok(c, await s.CreateAsync(c.Actor(), new CreateUserCommand(r.Username, r.DisplayName, r.Role, r.Password, r.IsActive ?? true), ct), StatusCodes.Status201Created));
         users.MapPut("{id:guid}", async (HttpContext c, Guid id, UpdateUserRequest r, UserAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await s.UpdateAsync(c.Actor(), id, new UpdateUserCommand(r.DisplayName, r.Role, r.IsActive), ct)));
+        users.MapPut("{id:guid}/organization", async (HttpContext c, Guid id, UpdateOrganizationRequest r, UserAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.SetOrganizationAsync(c.Actor(), id, r.Position, r.Department, ct)));
         users.MapDelete("{id:guid}", async (HttpContext c, Guid id, UserAdminService s, CancellationToken ct) =>
         {
             await s.DeleteAsync(c.Actor(), id, ct);
@@ -228,26 +294,34 @@ public static class Endpoints
             return ApiResults.Ok(c, new { reset = true });
         });
         api.MapGet("/audit", async (HttpContext c, IAuditLog log, string? actor, string? action, AuditResult? result, DateTimeOffset? from, DateTimeOffset? to,
-            int? skip, int? take, CancellationToken ct) =>
-            ApiResults.Ok(c, await log.QueryAsync(new AuditQuery(actor, action, result, from, to, skip ?? 0, take ?? 100), ct)))
+            int? skip, int? take, string? actionPrefix, CancellationToken ct) =>
+            ApiResults.Ok(c, await log.QueryAsync(new AuditQuery(actor, action, result, from, to, skip ?? 0, take ?? 100, actionPrefix), ct)))
             .WithTags("Audit").RequireAuthorization(admin);
 
         // ---- System
+        // Server resources (container and host metrics, kept apart): Admin only, served from the one background sampler (it never samples per request).
+        api.MapGet("/system/resources", (HttpContext c, WCS.Application.Monitoring.IResourceMonitor monitor) => ApiResults.Ok(c, monitor.GetSnapshot()))
+            .WithTags("System").RequireAuthorization(admin);
         api.MapGet("/system/health", async (HttpContext c, WcsDbContext db, ISchedulerStatus scheduler, IPlcAdapter plc, WCS.Application.Plc.IPlcRuntime plcRuntime,
-            IOptions<IntegrationOptions> integration, IOptions<SchedulerOptions> schedulerOptions, IClock clock, CancellationToken ct) =>
+            IOptions<IntegrationOptions> integration, IOptions<SchedulerOptions> schedulerOptions, IRcsDispatchGuard rcsGuard, IClock clock, CancellationToken ct) =>
         {
+            var dbWatch = System.Diagnostics.Stopwatch.StartNew();
             var dbOk = await db.Database.CanConnectAsync(ct);
+            dbWatch.Stop();
             var last = scheduler.LastRunAt;
             var stale = last is null || clock.UtcNow - last > TimeSpan.FromMilliseconds(Math.Max(10_000, schedulerOptions.Value.TickIntervalMs * 10));
             var health = new
             {
                 status = dbOk && !stale && scheduler.LastError is null ? "Healthy" : "Degraded",
                 time = clock.UtcNow,
-                database = new { connected = dbOk },
+                // Application health only: the backend process and its database. It says nothing about PLC, RCS or AGV (see integration) nor about the server resources (see /system/resources).
+                backend = new { startedAt = BackendStart, uptimeSeconds = Math.Max(0, Math.Round((clock.UtcNow - BackendStart).TotalSeconds)) },
+                database = new { connected = dbOk, latencyMs = dbOk ? Math.Round(dbWatch.Elapsed.TotalMilliseconds, 1) : (double?)null },
                 scheduler = new { lastRunAt = last, lastError = scheduler.LastError, stale },
                 integration = new
                 {
                     mode = integration.Value.Mode, plc = plc.GetConnectionStatus().ToString(),
+                    rcs = new { dispatchAllowed = rcsGuard.Check().Allowed, code = rcsGuard.Check().Code },   // CR-008A: RCS_NOT_CONNECTED in Production without a real adapter
                     plcRuntime = new
                     {
                         mode = plcRuntime.Info().EffectiveMode, running = plcRuntime.Running,

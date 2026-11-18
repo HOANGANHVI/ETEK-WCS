@@ -8,7 +8,14 @@ public enum RackKind { Full = 1, Empty = 2 }
 
 public enum AgvConnectionStatus { Unknown = 0, Online = 1, Offline = 2, Error = 3 }
 
-public enum LocationType { Station = 1, Buffer = 2, ManualBuffer = 3, Waypoint = 4 }
+public enum LocationType
+{
+    Station = 1, Buffer = 2, ManualBuffer = 3, Waypoint = 4,
+    /// <summary>CR-010: intermediate position where an AMR waits while it still holds a rack. NOT a storage location (inventory is not updated there).</summary>
+    WaitingPosition = 5,
+    /// <summary>CR-010 location roles (additive; stored as text).</summary>
+    PickupLocation = 6, DeliveryLocation = 7,
+}
 
 /// <summary>Which rack kind a location may hold (inventory-management.md 4.2 AllowedRackStatus).</summary>
 public enum AllowedRackKind { Any = 0, Full = 1, Empty = 2 }
