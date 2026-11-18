@@ -77,7 +77,7 @@ public class WriteValueValidatorTests
     [Fact]
     public void WritePolicy_still_needs_the_write_approval_in_the_real_read_write_mode()
     {
-        var all = new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = new PlcWriteOptions { Enabled = true, EngineerApprovalReference = "TEST-REF", HandshakeApproved = true } };
+        var all = new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = new PlcWriteOptions { Enabled = true } };
         var point = new IoPointRef(Guid.NewGuid(), "PLC-01", "A1", "Request_Ack", PlcSignalDirection.SoftwareToPlc, PlcDataType.Bool, "M101", null, null, WriteAllowed: false, "Command", Pollable: true);
         Assert.Equal("WRITE_NOT_ALLOWED", WritePolicy.Evaluate(all, point).Code);                                         // pollable is not enough
         Assert.True(WritePolicy.Evaluate(all, point with { WriteAllowed = true }).Allowed);
@@ -220,7 +220,6 @@ public class PlcWriteApprovalTests(DatabaseFixture fixture)
         var (h, f, admin) = await BootAsync(new()
         {
             ["Plc:Mode"] = "RealReadWrite", ["Plc:AllowLiveConnection"] = "true", ["Plc:Write:Enabled"] = "true",
-            ["Plc:Write:EngineerApprovalReference"] = "TEST-APPROVAL-001", ["Plc:Write:HandshakeApproved"] = "true",
         });
         await using var _h = h; using var _f = f;
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, "/api/plc/connections/PLC-01", new

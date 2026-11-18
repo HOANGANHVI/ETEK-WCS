@@ -195,10 +195,9 @@ function Assert-EnvFile {
     if ($e['PLC_MODE'] -eq 'Simulator' -and $e['PLC_ALLOW_SIMULATOR_IN_PRODUCTION'] -ne 'true') {
         Fail 'PLC_MODE=Simulator is refused in Production. Use PLC_MODE=RealReadOnly, or (deliberate, supervised, no PLC) PLC_ALLOW_SIMULATOR_IN_PRODUCTION=true.'
     }
-    if ($e['PLC_MODE'] -eq 'RealReadOnly') { Write-Warn2 'PLC_MODE=RealReadOnly in .env: the runtime stays READ-ONLY and no write is possible whatever the other PLC_WRITE_* keys say. Set PLC_MODE=RealReadWrite (or remove the line) to allow writing once every key is approved.' }
-    $writeKeys = @('PLC_ALLOW_LIVE_CONNECTION', 'PLC_WRITE_ENABLED', 'PLC_WRITE_HANDSHAKE_APPROVED') | Where-Object { $e[$_] -eq 'true' }
-    if ($writeKeys.Count -gt 0 -and -not $e['PLC_WRITE_APPROVAL_REFERENCE'] -and $e['PLC_WRITE_ENABLED'] -eq 'true') { Write-Warn2 'PLC_WRITE_ENABLED=true but PLC_WRITE_APPROVAL_REFERENCE is empty: the runtime stays READ-ONLY (a write needs every key).' }
-    if ($e['PLC_MODE'] -in @($null, '', 'RealReadWrite') -and $e['PLC_ALLOW_LIVE_CONNECTION'] -eq 'true' -and $e['PLC_WRITE_ENABLED'] -eq 'true' -and $e['PLC_WRITE_APPROVAL_REFERENCE'] -and $e['PLC_WRITE_HANDSHAKE_APPROVED'] -eq 'true') { Write-Warn2 'PLC WRITE IS ENABLED (RealReadWrite with every key). Writes still need an Admin write approval per IO point and are audited. Make sure this was approved.' }
+    if ($e['PLC_MODE'] -eq 'RealReadOnly') { Write-Warn2 'PLC_MODE=RealReadOnly in .env: the runtime stays READ-ONLY and no write is possible whatever the other PLC_WRITE_* keys say. Set PLC_MODE=RealReadWrite (or remove the line) to allow writing once PLC_ALLOW_LIVE_CONNECTION and PLC_WRITE_ENABLED are true.' }
+    if ($e['PLC_WRITE_ENABLED'] -eq 'true' -and $e['PLC_ALLOW_LIVE_CONNECTION'] -ne 'true') { Write-Warn2 'PLC_WRITE_ENABLED=true but PLC_ALLOW_LIVE_CONNECTION is not true: the runtime stays READ-ONLY.' }
+    if ($e['PLC_MODE'] -in @($null, '', 'RealReadWrite') -and $e['PLC_ALLOW_LIVE_CONNECTION'] -eq 'true' -and $e['PLC_WRITE_ENABLED'] -eq 'true') { Write-Warn2 'PLC WRITE IS ENABLED (RealReadWrite, live connection and write enabled). Writes still need an Admin write approval per IO point and are audited. Make sure this was approved.' }
     return $e
 }
 
