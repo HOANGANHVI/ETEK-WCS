@@ -16,6 +16,7 @@ public static class DependencyInjection
             services.AddHostedService<RoutingHostedService>();   // CR-010
             services.AddHostedService<AgvStatusHostedService>();
             services.AddHostedService<LogMaintenanceHostedService>();   // CR-007
+            services.AddHostedService<DiagnosticExportCleanupHostedService>();   // CR-021
             services.AddHostedService<DbHealthMonitorHostedService>();  // CR-007
         }
         return services;

@@ -43,6 +43,21 @@ public sealed class LogMaintenanceHostedService(IServiceScopeFactory scopes, ICo
     }
 }
 
+/// <summary>CR-021: removes finished system-diagnostic ZIP files after their retention (24 h) and orphaned work folders. Only touches the diagnostic export folder.</summary>
+public sealed class DiagnosticExportCleanupHostedService(WCS.Application.Diagnostics.DiagnosticExportJobs jobs, ILogger<DiagnosticExportCleanupHostedService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(15));
+        do
+        {
+            try { var n = jobs.Sweep(); if (n > 0) logger.LogInformation("Diagnostic export cleanup removed {Count} file(s). {EventCode}", n, "DIAG_EXPORT_CLEANUP"); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogWarning(ex, "Diagnostic export cleanup failed (will retry). {EventCode}", "DIAG_EXPORT_CLEANUP_FAILED"); }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+
 /// <summary>
 /// CR-007: reports database state TRANSITIONS (lost / restored, pending migrations) instead of one error per failed query. Read-only probe every 15 seconds; it does not retry,
 /// reconnect or change anything: the application keeps behaving exactly as before.

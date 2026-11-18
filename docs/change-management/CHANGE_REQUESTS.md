@@ -37,6 +37,7 @@
 | CR-017 | Why the Deploy runtime stays read-only: configuration chain, .env.example, diagnostics | Project owner instruction (2026-11-18) | **IMPLEMENTED** (code, configuration, tools; not deployed; no real PLC written) | 2026-11-18 | `.env.example` fixed, `plc-write-config.ps1`, `MissingWriteKeys`, key checklist in the banner, binding tests |
 | CR-019 | Simplify PLC write approval: remove PLC_WRITE_APPROVAL_REFERENCE and PLC_WRITE_HANDSHAKE_APPROVED | Project owner instruction (2026-11-18) | **IMPLEMENTED** (not deployed; no real PLC written) | 2026-11-18 | Single approval = Admin per-point write approval; runtime keys reduced to PLC_MODE, PLC_ALLOW_LIVE_CONNECTION, PLC_WRITE_ENABLED |
 | CR-020 | Unified PLC monitoring and I/O operations: Read/Write moved to PLC Monitoring; IO Address Mapping is configuration only | Project owner instruction (2026-11-18) | **IMPLEMENTED** (verified against the MC mock only; not deployed; no real PLC touched) | 2026-11-18 | New "I/O monitoring" tab, `monitor/points`, `signals/{s}/read`, read-back after write |
+| CR-021 | System-wide diagnostic logging and export (batches A-D) | Project owner instruction (2026-11-18; decisions D1-D8 approved) | **IN PROGRESS** - batch A implemented | 2026-11-18 | Survey: `docs/reviews/CR021_PHASE1_LOGGING_SURVEY_AND_PROPOSAL.md` |
 
 ## New Change Request template
 
@@ -379,3 +380,10 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Status rules:** Good only when the last read succeeded and is not older than `Plc:StaleAfterSeconds` (default 15); the list is recomputed on the server each time it is read.
 - **Not changed:** MC protocol, register mapping, PLC configuration, polling mechanism, CR-019 guards, handshake, diagnostics. No migration. No new PLC traffic from the monitoring list (it reads values the workers already hold).
 - **Not verified against a real PLC:** read/write/read-back timing and values on real hardware.
+
+### CR-021 – System-wide diagnostic logging and export
+
+- **Source:** project owner (2026-11-18). Phase-1 survey and proposal: `docs/reviews/CR021_PHASE1_LOGGING_SURVEY_AND_PROPOSAL.md`. Decisions D1-D8 approved: CorrelationId nullable on `system_log` (the column already exists), `TransportTask` and `TransportOrder`; export "all" follows each source's real retention (no 31-day cap); ZIP kept 24 h in a private temp folder then deleted; logging standardised at `IRcsClient` on the simulator only (no real RCS/AGV exists); API requests logged when >= 1000 ms or 5xx/401/403; order A -> B -> C -> D.
+- **Batch A (implemented):** normalised event model (`DiagEvent`) read at export time from `system_log`, `plc_comm_log`, `audit_log`, `task_history`, `routing_events`, `inventory_transactions`; streaming background export job (`POST/GET /api/diagnostics/exports`, download endpoint, Admin only, audited as DIAGNOSTIC_EXPORT_SYSTEM / DIAGNOSTIC_EXPORT_DOWNLOAD); ZIP with Summary, Manifest, System_Info, Health_Snapshot, Events, Errors, Timeline, Modules, PLC (existing PLC export unchanged), Audit, Configuration (masked); each source guarded, failures reported (Manifest and Summary); ranges 1h / 24h / all / custom; scopes: whole system, modules, level, PLC, device, CorrelationId, TaskId (related rows of other modules pulled in by shared ids); cleanup service; Admin UI on the Diagnostics page. No migration. PLC export endpoint and format untouched.
+- **Batches B-D:** see CHANGELOG as they land.
+- **Not changed:** business logic, dispatch, PLC/RCS/AGV behaviour, protected business rules.

@@ -5,6 +5,7 @@ import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
+import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
 import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
@@ -46,9 +47,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** Downloads the PLC diagnostic ZIP (binary, so it bypasses the JSON envelope of request()). Errors keep the same ApiRequestError shape. */
 async function downloadPlcDiagnostics(f: { plcId?: string; quick?: string; from?: string; to?: string }): Promise<void> {
+  return downloadZip(`/api/diagnostics/plc/export${qs(f)}`, 'WCS_Diagnostic.zip')
+}
+
+/** CR-021: the ZIP of a finished system export (Admin-only, audited by the server). */
+const downloadDiagExport = (id: string): Promise<void> => downloadZip(`/api/diagnostics/exports/${encodeURIComponent(id)}/download`, 'WCS_SystemDiagnostic.zip')
+
+async function downloadZip(path: string, fallbackName: string): Promise<void> {
   let res: Response
   try {
-    res = await fetch(`${BASE_URL}/api/diagnostics/plc/export${qs(f)}`, { credentials: 'include', headers: { 'X-WCS-Client': 'web' } })
+    res = await fetch(`${BASE_URL}${path}`, { credentials: 'include', headers: { 'X-WCS-Client': 'web' } })
   } catch {
     throw new ApiRequestError(0, { code: 'NETWORK_ERROR', message: 'Cannot reach the WCS API.' })
   }
@@ -61,7 +69,7 @@ async function downloadPlcDiagnostics(f: { plcId?: string; quick?: string; from?
   const name = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers.get('Content-Disposition') ?? '')?.[1]
   const url = URL.createObjectURL(await res.blob())
   const a = document.createElement('a')
-  a.href = url; a.download = name ? decodeURIComponent(name) : 'WCS_Diagnostic.zip'
+  a.href = url; a.download = name ? decodeURIComponent(name) : fallbackName
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
@@ -135,6 +143,11 @@ const realApi = {
 
   // PLC monitoring and configuration (CR-002)
   downloadPlcDiagnostics,
+  downloadDiagExport,
+  diagExportOptions: () => request<DiagExportOptions>('/api/diagnostics/export-options'),
+  diagStartExport: (b: DiagExportBody) => request<DiagExportJob>('/api/diagnostics/exports', { method: 'POST', body: JSON.stringify(b) }),
+  diagGetExport: (id: string) => request<DiagExportJob>(`/api/diagnostics/exports/${encodeURIComponent(id)}`),
+  diagListExports: () => request<DiagExportJob[]>('/api/diagnostics/exports'),
   plcOverview: () => request<PlcOverview>('/api/plc/overview'),
   plcMonitorPoints: (f: { plcId?: string; stationId?: string }) => request<MonitorList>(`/api/plc/monitor/points${qs({ plcId: f.plcId, stationId: f.stationId })}`),
   plcReadNow: (stationId: string, signal: string) =>

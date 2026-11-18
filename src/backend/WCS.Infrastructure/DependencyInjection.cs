@@ -80,6 +80,14 @@ public static class DependencyInjection
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
         services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
         services.AddScoped<WCS.Application.Diagnostics.IPlcDiagnosticSource, WCS.Infrastructure.Plc.PlcDiagnosticSource>();
+        // CR-021: read-only readers of the stored log sources for the system diagnostic export
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.SystemLogSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.PlcCommLogSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.AuditLogSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.TaskHistorySource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.RoutingEventSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.InventoryTransactionSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticHealthSource, WCS.Infrastructure.Diagnostics.DiagnosticHealthSource>();
         services.AddSingleton<WCS.Application.Plc.IPlcTemplateProvider, WCS.Infrastructure.Plc.PlcTemplateProvider>();   // CR-010 Default IO Mapping Template
         services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
         services.AddSingleton<WCS.Application.Plc.ISimulatorControl>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.SimulatedPlcNetwork>());

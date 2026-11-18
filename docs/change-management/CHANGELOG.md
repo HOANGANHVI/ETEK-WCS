@@ -1,5 +1,11 @@
 # Change Log
 
+## v3.7 – CR-021 batch A System diagnostic export (2026-11-18)
+
+- Change Request: CR-021 (in progress). Batch A: whole-system diagnostic export as a background job, normalised events, per-source status, masked configuration, Admin UI. No migration; PLC export unchanged; not deployed.
+- Tests added: `SystemDiagnosticExportTests` (8). Found and fixed by them: secrets inside nested JSON (audit before/after) escaped past the masking; the Manifest now writes explicit nulls.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.6 – CR-020 Unified PLC monitoring and operations (2026-11-18)
 
 - Change Request: CR-020. Status: IMPLEMENTED; mock-verified only; not deployed; no migration.
