@@ -26,7 +26,7 @@ export interface PlcWorkerStatus {
 export interface PlcRuntimeInfo {
   mode: string; effectiveMode: string; allowLiveConnection: boolean; writeEnabled: boolean; writeKeysComplete: boolean; running: boolean; notes: string[]
   /** CR-016: which write conditions are met (booleans and the NAMES of what is missing; the approval reference itself is never sent). */
-  writeApprovalReferenceSet?: boolean; writeHandshakeApproved?: boolean; missingWriteKeys?: string[]
+  missingWriteKeys?: string[]
 }
 
 export interface PlcStationSummary {

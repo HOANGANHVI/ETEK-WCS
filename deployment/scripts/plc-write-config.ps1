@@ -1,6 +1,6 @@
 # CR-017: shows whether the PLC WRITE settings really reach the backend. Read-only: it changes nothing, sends nothing to a PLC.
 # For each setting it compares  (1) the .env file the deployment scripts use  (2) what docker-compose.yml resolves from it  (3) what the RUNNING backend container was created with.
-# The approval reference is NEVER printed: only "set" / "unset". ASCII only (Windows PowerShell 5.1).
+# CR-019: only three settings remain (the approval reference and handshake approval keys were removed; old lines in .env are ignored). ASCII only (Windows PowerShell 5.1).
 #   deployment\scripts\plc-write-config.ps1            report (needs Docker for the container column)
 #   deployment\scripts\plc-write-config.ps1 -NoContainer   only .env + compose defaults (no Docker needed)
 param([switch]$NoContainer)
@@ -11,9 +11,7 @@ $ErrorActionPreference = 'Stop'
 $script:WriteKeys = @(
     @{ EnvName = 'PLC_MODE';                      Option = 'Plc__Mode';                                  Default = 'RealReadWrite'; Need = 'RealReadWrite'; Secret = $false },
     @{ EnvName = 'PLC_ALLOW_LIVE_CONNECTION';     Option = 'Plc__AllowLiveConnection';                   Default = 'false';         Need = 'true';          Secret = $false },
-    @{ EnvName = 'PLC_WRITE_ENABLED';             Option = 'Plc__Write__Enabled';                        Default = 'false';         Need = 'true';          Secret = $false },
-    @{ EnvName = 'PLC_WRITE_APPROVAL_REFERENCE';  Option = 'Plc__Write__EngineerApprovalReference';      Default = '';              Need = '<set>';         Secret = $true  },
-    @{ EnvName = 'PLC_WRITE_HANDSHAKE_APPROVED';  Option = 'Plc__Write__HandshakeApproved';              Default = 'false';         Need = 'true';          Secret = $false }
+    @{ EnvName = 'PLC_WRITE_ENABLED';             Option = 'Plc__Write__Enabled';                        Default = 'false';         Need = 'true';          Secret = $false }
 )
 
 # What docker-compose resolves for one key: a value that is set AND non-empty wins over the default (${NAME:-default}).
@@ -75,4 +73,4 @@ $rows | Format-Table Setting, DotEnv, Compose, Container, @{ n = 'Met'; e = { if
 $missing = @($rows | Where-Object { -not $_.Met } | ForEach-Object { $_.Setting })
 if ($missing.Count -eq 0) { Write-Ok 'Every write setting is in effect: the runtime is REAL_READ_WRITE (each IO still needs an Admin write approval).' }
 else { Write-Warn2 ('Writing is NOT possible yet. Missing: ' + ($missing -join ', ') + '. The IO mapping page shows the same list from the running backend.') }
-Write-Host 'Values of the approval reference are never printed. Nothing was changed.'
+Write-Host "Nothing was changed."

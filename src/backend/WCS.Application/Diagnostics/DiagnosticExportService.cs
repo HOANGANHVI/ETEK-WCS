@@ -106,7 +106,7 @@ public sealed class DiagnosticExportService(IPlcDiagnosticSource source, IPlcRun
             Add("PLC/PLC_Configuration.json", JsonSerializer.Serialize(new
             {
                 runtime = new { mode = po.Mode.ToString(), effectiveMode = WritePolicy.EffectiveMode(po).ToString(), allowLiveConnection = po.AllowLiveConnection, runtimeEnabled = po.RuntimeEnabled,
-                    writeEnabled = po.Write.Enabled, handshakeApproved = po.Write.HandshakeApproved, engineerApprovalReference = string.IsNullOrWhiteSpace(po.Write.EngineerApprovalReference) ? "not set" : "set",
+                    writeEnabled = po.Write.Enabled,
                     writeKeysComplete = WritePolicy.WriteKeysComplete(po), integrationEnabled = po.Integration.Enabled, po.ReconnectInitialDelayMs, po.ReconnectMaxDelayMs, po.LogRetentionDays,
                     po.ExchangeHistoryPerPlc, po.ExchangeOkSampleSeconds },
                 connections,

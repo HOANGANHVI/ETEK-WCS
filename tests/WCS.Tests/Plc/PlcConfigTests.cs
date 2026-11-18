@@ -143,7 +143,7 @@ public class WritePolicyTests
         var rw = new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true };
         Assert.Equal(PlcRuntimeMode.RealReadOnly, WritePolicy.EffectiveMode(rw));                      // keys missing: degrades, never upgrades
         Assert.Equal("READ_ONLY", WritePolicy.Evaluate(rw, p).Code);
-        rw.Write.Enabled = true; rw.Write.EngineerApprovalReference = "PLC-ENG-001"; rw.Write.HandshakeApproved = true;
+        rw.Write.Enabled = true;
         Assert.Equal(PlcRuntimeMode.RealReadWrite, WritePolicy.EffectiveMode(rw));
         Assert.True(WritePolicy.Evaluate(rw, p).Allowed);
         Assert.Equal("WRITE_NOT_ALLOWED", WritePolicy.Evaluate(rw, Pt("Request_Ack", "Command", PlcSignalDirection.SoftwareToPlc, false)).Code);

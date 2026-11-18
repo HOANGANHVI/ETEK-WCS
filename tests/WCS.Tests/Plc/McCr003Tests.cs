@@ -499,7 +499,7 @@ public class McCr003EndpointTests
         Assert.Null(handler.Snapshot(false).Points.Single().Address);
 
         // and the write policy names the reason
-        var options = new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = { Enabled = true, EngineerApprovalReference = "T-1", HandshakeApproved = true } };
+        var options = new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = { Enabled = true } };
         var denied = WritePolicy.Evaluate(options, ack with { WriteAllowed = true });
         Assert.False(denied.Allowed); Assert.Equal("ADDRESS_NOT_APPROVED", denied.Code);
         Assert.True(WritePolicy.Evaluate(options, ack with { WriteAllowed = true, Pollable = true }).Allowed);

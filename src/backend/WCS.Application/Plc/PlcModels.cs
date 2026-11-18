@@ -195,14 +195,13 @@ public sealed class PlcRuntimeOptions
     public PlcHandshakeOptions Handshake { get; set; } = new();
 }
 
-/// <summary>Extra keys required before any write to a real PLC. All must be provided by the deployment, none has a default.</summary>
+/// <summary>
+/// Deployment key required before any write to a real PLC (CR-019): only <see cref="Enabled"/> (plus Mode=RealReadWrite and AllowLiveConnection). The former engineer-approval reference and handshake-approval
+/// settings were removed: the single approval is the Admin's per-point write approval. Old environment variables for them are simply ignored by configuration binding.
+/// </summary>
 public sealed class PlcWriteOptions
 {
     public bool Enabled { get; set; }
-    /// <summary>Reference of the PLC engineer's written approval (document/ticket id). Required for REAL_READ_WRITE.</summary>
-    public string? EngineerApprovalReference { get; set; }
-    /// <summary>Set to true only after the handshake sheet has been completed and approved.</summary>
-    public bool HandshakeApproved { get; set; }
 }
 
 public sealed class PlcIntegrationOptions

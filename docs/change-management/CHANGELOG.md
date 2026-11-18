@@ -1,5 +1,11 @@
 # Change Log
 
+## v3.5 – CR-019 Simplified PLC write approval (2026-11-18)
+
+- Change Request: CR-019. Status: IMPLEMENTED; not deployed; no real PLC written; no migration.
+- Removed PLC_WRITE_APPROVAL_REFERENCE and PLC_WRITE_HANDSHAKE_APPROVED (options, policy, Runtime Info, banner, compose, .env.example, README, plc-write-config.ps1, tests). The Admin per-point write approval is the only approval; all safety guards are unchanged.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.4 – CR-017 Runtime write configuration (2026-11-18)
 
 - Change Request: CR-017. Status: IMPLEMENTED; not deployed; no real PLC written.

@@ -316,13 +316,13 @@ public static class WritePolicy
 
     public sealed record Decision(bool Allowed, string? Code = null, string? Reason = null);
 
-    /// <summary>The mode that is really in force: READ_WRITE degrades to READ_ONLY unless every write key is present.</summary>
+    /// <summary>The mode that is really in force: READ_WRITE degrades to READ_ONLY unless AllowLiveConnection and Write.Enabled are both set.</summary>
     public static PlcRuntimeMode EffectiveMode(PlcRuntimeOptions o) =>
         o.Mode == PlcRuntimeMode.RealReadWrite && !WriteKeysComplete(o) ? PlcRuntimeMode.RealReadOnly : o.Mode;
 
     /// <summary>
-    /// CR-017: the deployment settings (by their environment-variable names) that are not in effect for a real write - exactly the conditions of <see cref="EffectiveMode"/>. The approval reference is
-    /// only checked for being present, never returned. An empty list in a real mode means the runtime is in REAL_READ_WRITE; the simulator needs none.
+    /// CR-017: the deployment settings (by their environment-variable names) that are not in effect for a real write - exactly the conditions of <see cref="EffectiveMode"/>. CR-019: only live connection and write-enabled
+    /// remain (plus the mode). An empty list in a real mode means the runtime is in REAL_READ_WRITE; the simulator needs none.
     /// </summary>
     public static IReadOnlyList<string> MissingWriteKeys(PlcRuntimeOptions o)
     {
@@ -331,13 +331,11 @@ public static class WritePolicy
         if (o.Mode != PlcRuntimeMode.RealReadWrite) missing.Add("PLC_MODE");
         if (!o.AllowLiveConnection) missing.Add("PLC_ALLOW_LIVE_CONNECTION");
         if (!o.Write.Enabled) missing.Add("PLC_WRITE_ENABLED");
-        if (string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference)) missing.Add("PLC_WRITE_APPROVAL_REFERENCE");
-        if (!o.Write.HandshakeApproved) missing.Add("PLC_WRITE_HANDSHAKE_APPROVED");
         return missing;
     }
 
     public static bool WriteKeysComplete(PlcRuntimeOptions o) =>
-        o.AllowLiveConnection && o.Write.Enabled && !string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference) && o.Write.HandshakeApproved;
+        o.AllowLiveConnection && o.Write.Enabled;
 
     /// <param name="forHandshake">The write comes from an APPROVED handshake rule (not from a manual test). Only then may the simulator drive motion permits;
     /// real modes keep them blocked: they cannot be allow-listed until a separate approved change exists.</param>

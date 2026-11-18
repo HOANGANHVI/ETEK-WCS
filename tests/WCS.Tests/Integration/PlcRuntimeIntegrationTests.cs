@@ -278,7 +278,7 @@ public class PlcRuntimeIntegrationTests(DatabaseFixture fixture)
         await fa.DisposeAsync();
 
         // (b) every key present: the allow-listed point is written, the control signals are STILL refused
-        var keys = new Dictionary<string, string?>(common) { ["Plc:Write:Enabled"] = "true", ["Plc:Write:EngineerApprovalReference"] = "TEST-APPROVAL-001", ["Plc:Write:HandshakeApproved"] = "true" };
+        var keys = new Dictionary<string, string?>(common) { ["Plc:Write:Enabled"] = "true" };
         var (fb, adminB) = await Boot(keys);
         await using var _fb = fb;
         Assert.Equal("RealReadWrite", (await adminB.SendJsonAsync(HttpMethod.Get, "/api/plc/overview")).Root.GetProperty("data").GetProperty("runtime").GetProperty("effectiveMode").GetString());

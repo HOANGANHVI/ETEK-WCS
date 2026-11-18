@@ -170,7 +170,7 @@ public class HandshakeTests
         // READ_WRITE with every key: a normal command bit may be written, a motion permit may NOT (not even by an approved rule)
         var rwOptions = new PlcRuntimeOptions
         {
-            Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = { Enabled = true, EngineerApprovalReference = "TEST", HandshakeApproved = true },
+            Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = { Enabled = true },
             Handshake = { Definitions = [AckRule(), Permit()] },
         };
         var rw = new FakeRuntime(rwOptions, ("PLC-01", "A1")); rw.LiveBaseline("A1"); rw.Set("A1", "Pickup_Request", true);
