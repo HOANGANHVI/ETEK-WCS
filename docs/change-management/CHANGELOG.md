@@ -1,5 +1,10 @@
 # Change Log
 
+## v3.10 – CR-021 batch D End-to-end verification and performance (2026-11-18)
+
+- `SystemDiagnosticScenarioTests` (2): task reconstruction across modules on the real logging pipeline + RCS simulator + MC mock; 500 000-event export (time, size, memory) and per-source limit. Module classification by event-code prefix (fixes TASK_FINISHED being filed under RCS because its text says "RCS"). PLC folder "Partial" only when PLC events older than its cap exist. Not deployed. CR-021 closed as IMPLEMENTED.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.9 – CR-021 batch C Missing diagnostic events (2026-11-18)
 
 - RCS call logging (decorator), task/dispatch/cancel/finish decisions, station requests, AGV status changes, inventory, database slow/failed commands, API (D7), SignalR, application lifecycle, unhandled exceptions, startup config warnings. 30 log templates translated (vi/en). The 401/403 request level changed from Information to Warning (D7); the existing test was updated. Not deployed. No migration.

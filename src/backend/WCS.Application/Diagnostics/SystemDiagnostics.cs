@@ -55,9 +55,27 @@ public static class DiagModules
     public static bool IsValid(string? m) => m is not null && All.Contains(m, StringComparer.OrdinalIgnoreCase);
     public static string Canonical(string m) => All.First(x => x.Equals(m, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Module of a system_log row, from its stored category and logger name. Unknown loggers stay in System.</summary>
-    public static string ForSystemLog(string category, string source)
+    /// <summary>The module an event code belongs to, by its stable prefix (CR-021 codes). Null for a code without a known prefix.</summary>
+    public static string? ForEventCode(string? code)
     {
+        if (string.IsNullOrEmpty(code)) return null;
+        bool P(string p) => code.StartsWith(p, StringComparison.Ordinal);
+        if (P("TASK_") || P("CANCEL_")) return Task;
+        if (P("STATION_REQUEST_")) return Station;
+        if (P("INVENTORY_")) return Inventory;
+        if (P("AGV_STATUS")) return Agv;
+        if (P("RCS_")) return Rcs;
+        if (P("DB_")) return Database;
+        if (P("API_") || P("SIGNALR_")) return Api;
+        if (P("AUTH_")) return Auth;
+        if (P("APP_") || P("UNHANDLED_") || P("UNOBSERVED_") || P("STARTUP_") || P("DIAG_")) return System;
+        return null;
+    }
+
+    /// <summary>Module of a system_log row: the event-code prefix first (it states what the event is about), then the stored category and logger name. Unknown loggers stay in System.</summary>
+    public static string ForSystemLog(string category, string source, string? eventCode = null)
+    {
+        if (ForEventCode(eventCode) is { } byCode) return byCode;
         var s = source ?? "";
         bool Has(string x) => s.Contains(x, StringComparison.OrdinalIgnoreCase);
         return category switch

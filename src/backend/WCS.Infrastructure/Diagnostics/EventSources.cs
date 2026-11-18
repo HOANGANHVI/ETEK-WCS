@@ -129,7 +129,7 @@ internal sealed class SystemLogSource(WcsDbContext db) : EventSourceBase<SystemL
         var warn = LogLevels.Rank(r.Level) >= 2;
         return new DiagEvent
         {
-            TimestampUtc = r.OccurredAt, Level = r.Level, EventName = r.EventCode ?? "LOG", Category = r.Category, Module = DiagModules.ForSystemLog(r.Category, r.Source),
+            TimestampUtc = r.OccurredAt, Level = r.Level, EventName = r.EventCode ?? "LOG", Category = r.Category, Module = DiagModules.ForSystemLog(r.Category, r.Source, r.EventCode),
             Component = Ids.ShortName(r.Source), Source = "system_log", Message = r.Message, CorrelationId = r.CorrelationId, TaskId = ids.Task,
             AgvId = ids.Agv ?? (r.Category == LogCategories.RcsAgv ? r.Device : null), PlcId = r.Device is { } d && d.StartsWith("PLC", StringComparison.OrdinalIgnoreCase) ? d : ids.Plc,
             StationId = ids.Station, RackId = ids.Rack, ErrorCode = warn ? r.EventCode : null, ExceptionType = exType, ExceptionMessage = exMsg, StackTrace = stack,

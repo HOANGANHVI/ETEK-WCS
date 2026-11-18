@@ -158,9 +158,13 @@ public sealed class SystemDiagnosticExporter(IEnumerable<IDiagnosticEventSource>
                             using var rd = new StreamReader(e.Open(), Encoding.UTF8);
                             AddText(e.FullName.StartsWith("PLC/", StringComparison.Ordinal) ? e.FullName : "PLC/package/" + e.FullName, await rd.ReadToEndAsync(ct), sanitize: false);   // already sanitised by the PLC export
                         }
-                        plcRep.RowsExported = pkg.Files.Count; plcRep.Note = $"PLC export ({pkg.Files.Count} files) for {plcFrom:O} .. {plcTo:O}" + (plcFrom != from && from is not null ? " (cut to the PLC export's 31-day cap)" : "");
+                        // the PLC export keeps its own 31-day cap; it only counts as a LOSS when stored PLC events older than that cap exist in the requested range
+                        var plcOldest = reports.FirstOrDefault(r => r.Name == "plc_comm_log")?.OldestStored;
+                        var cut = (from is null || from < plcFrom) && plcOldest is { } oldest && oldest < plcFrom;
+                        plcRep.RowsExported = pkg.Files.Count;
+                        plcRep.Note = $"PLC export ({pkg.Files.Count} files) for {plcFrom:O} .. {plcTo:O}" + (cut ? $" - cut to the PLC export's {o.PlcFolderMaxDays}-day cap; older PLC events are in Events/ (module Plc) but not in this folder" : "");
                         foreach (var w in pkg.Warnings) notes.Add("PLC package: " + w);
-                        if (plcFrom != from && from is null) plcRep.Status = "Partial";
+                        if (cut) plcRep.Status = "Partial";
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException) { plcRep.Status = "Failed"; plcRep.Error = ex.GetType().Name + (ex is AppException ae ? ": " + ae.Code : ""); }
                 }

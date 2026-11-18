@@ -206,6 +206,21 @@ public class DiagnosticLoggingTests(DatabaseFixture fixture)
         Assert.Equal(LogLevel.Error, failed.Level); Assert.Equal("42P01", failed.Props["SqlState"]);
     }
 
+    [Fact]
+    public void An_event_code_decides_the_module_before_the_message_text_does()
+    {
+        // a task event whose text mentions RCS is still a TASK event (the old text-based category would have called it RCS)
+        Assert.Equal("Task", DiagModules.ForSystemLog("RCS_AGV", "WCS.Application.Services.TaskOrchestrator", "TASK_FINISHED"));
+        Assert.Equal("Rcs", DiagModules.ForSystemLog("RCS_AGV", "WCS.Infrastructure.Simulation.LoggingRcsClient", "RCS_CALL_FAILED"));
+        Assert.Equal("Station", DiagModules.ForSystemLog("SYSTEM", "WCS.Application.Services.StationRequestProcessor", "STATION_REQUEST_REJECTED"));
+        Assert.Equal("Inventory", DiagModules.ForSystemLog("SYSTEM", "WCS.Application.Services.InventoryService", "INVENTORY_UNCERTAIN"));
+        Assert.Equal("Database", DiagModules.ForSystemLog("DATABASE", "WCS.Infrastructure.Persistence.DbDiagnosticsInterceptor", "DB_DEADLOCK"));
+        Assert.Equal("Api", DiagModules.ForSystemLog("SYSTEM", "Serilog.AspNetCore.RequestLoggingMiddleware", "API_ACCESS_DENIED"));
+        Assert.Equal("System", DiagModules.ForSystemLog("SYSTEM", "WCS.Runtime.ApplicationLifecycleHostedService", "APP_STARTED"));
+        Assert.Equal("Database", DiagModules.ForSystemLog("DATABASE", "WCS.Runtime.DbHealthMonitorHostedService", "DB_LOST"));      // codes without a CR-021 prefix fall back to the category as before
+        Assert.Null(DiagModules.ForEventCode("SOMETHING_ELSE"));
+    }
+
     // ------------------------------------------------------------------------------------------------ API, SignalR, application life, configuration
     [Fact]
     public void Requests_are_stored_only_when_slow_denied_or_failed_and_carry_a_stable_event_code()
