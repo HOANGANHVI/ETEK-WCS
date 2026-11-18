@@ -51,6 +51,9 @@ try
     if (ForwardedHeadersSetup.Build(app.Configuration) is { } forwarded) app.UseForwardedHeaders(forwarded);
 
     LogSetup.LogStartupSummary(app);
+    // CR-021: failures that happen outside any request (a worker thread, a fire-and-forget task) are recorded instead of vanishing. Observation only: nothing is marked handled.
+    AppDomain.CurrentDomain.UnhandledException += (_, e) => app.Logger.LogCritical(e.ExceptionObject as Exception, "Unhandled exception outside a request (process terminating: {Terminating}). {EventCode}", e.IsTerminating, "UNHANDLED_EXCEPTION");
+    System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) => app.Logger.LogError(e.Exception, "A task failed and nobody observed it. {EventCode}", "UNOBSERVED_TASK_EXCEPTION");
 
     // CR-008A (AUDIT-001): say clearly at start-up when Production cannot dispatch tasks because only the RCS simulator exists.
     var rcsGuard = app.Services.GetRequiredService<IRcsDispatchGuard>().Check();
@@ -72,7 +75,9 @@ try
         using var diag = WCS.Application.Diagnostics.DiagnosticContext.Begin(ctx.TraceIdentifier);   // the ambient frame: tasks/orders created by this request keep this id
         using (LogContext.PushProperty("CorrelationId", ctx.TraceIdentifier)) await next();
     });
-    app.UseSerilogRequestLogging(o => o.GetLevel = LogSetup.RequestLevel);
+    LogSetup.SlowRequestMs = app.Configuration.GetValue("Diagnostics:SlowRequestMs", 1000);
+    app.Use((ctx, next) => { ctx.Items[LogSetup.RequestStartKey] = System.Diagnostics.Stopwatch.GetTimestamp(); return next(); });   // CR-021: request start, to tell a slow request
+    app.UseSerilogRequestLogging(o => { o.GetLevel = LogSetup.RequestLevel; o.EnrichDiagnosticContext = LogSetup.EnrichRequest; });
     app.UseExceptionHandler(ExceptionMapping.Configure);
     app.UseCors();
     app.UseAuthentication();

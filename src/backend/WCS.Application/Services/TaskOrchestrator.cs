@@ -41,6 +41,18 @@ public sealed class TaskOrchestrator(
 
     public async Task<CreateTaskResult> CreateTaskAsync(CreateTaskCommand cmd, CancellationToken ct = default)
     {
+        try { return await CreateTaskCoreAsync(cmd, ct); }
+        catch (AppException ex) when (ex.Kind is not (ErrorKind.Unauthorized or ErrorKind.Forbidden))
+        {
+            // CR-021: the pre-creation checks (flow, station, AGV, RCS link) decide here; the reason is recorded, the exception is unchanged
+            logger.LogWarning("Task creation rejected: request {RequestKey}, flow {Flow}, station {Station}, requested by {RequestedBy}: {Code} - {Message}. {EventCode}",
+                cmd.RequestKey, cmd.Flow, cmd.StationCode, cmd.RequestedBy, ex.Code, ex.Message, "TASK_CREATE_REJECTED");
+            throw;
+        }
+    }
+
+    private async Task<CreateTaskResult> CreateTaskCoreAsync(CreateTaskCommand cmd, CancellationToken ct)
+    {
         if (string.IsNullOrWhiteSpace(cmd.RequestKey)) throw AppException.Validation("REQUEST_KEY_REQUIRED", "RequestKey is required.");
         // CR-008A (AUDIT-001): Production without a real RCS adapter refuses the task up front: nothing is created, reserved or shown as AGV work.
         var link = rcsGuard.Check();
@@ -61,6 +73,7 @@ public sealed class TaskOrchestrator(
                   ?? throw AppException.Rejected("AGV_NOT_CONFIGURED", $"No AGV with role {rule.AgvRole} is configured.");
         if (!agv.Enabled) throw AppException.Rejected("AGV_DISABLED", $"{agv.Code} is disabled.");
 
+        string? createdCorrelation = null;
         var created = await Tx(async (events, _, t) =>
         {
             var existing = await tasks.GetByRequestKeyAsync(cmd.RequestKey.Trim(), t);
@@ -68,6 +81,7 @@ public sealed class TaskOrchestrator(
             var task = TransportTask.Create(cmd.RequestKey, flow, rule.RackKind, agv.Id, station.Id, cmd.RequestedBy, clock.UtcNow);
             task.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021: the task keeps the id of the request that created it (or a new one)
             CorrelationCache.Remember(task.Id, task.CorrelationId);
+            createdCorrelation = task.CorrelationId;
             tasks.Add(task);
             events.Add(new WcsEvent("TaskCreated", task.ToDto()));
             return task.Id;
@@ -75,6 +89,9 @@ public sealed class TaskOrchestrator(
 
         if (created is { } id)
         {
+            using (DiagnosticContext.Begin(createdCorrelation, taskId: id.ToString("D"), agvId: agv.Code, stationId: station.Code))
+                logger.LogInformation("Task {TaskId} created: flow {Flow}, station {Station}, AGV {Agv}, rack kind {RackKind}, requested by {RequestedBy}, request key {RequestKey}. {EventCode}",
+                    id, flow, station.Code, agv.Code, rule.RackKind, cmd.RequestedBy, cmd.RequestKey, "TASK_CREATED");
             await ProcessTaskAsync(id, ct);
             return new CreateTaskResult(await GetDto(id, ct), true);
         }
@@ -88,8 +105,10 @@ public sealed class TaskOrchestrator(
     public async Task ProcessTaskAsync(Guid taskId, CancellationToken ct = default)
     {
         using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));   // CR-021: every log line of this step carries the CorrelationId of the task
+        string? decisionAgv = null, decisionReason = null; Guid decisionAgvId = Guid.Empty;
         var dispatch = await Tx(async (events, after, t) =>
         {
+            decisionAgv = null; decisionReason = null;
             var task = await tasks.GetAsync(taskId, t);
             if (task is null || task.State is not (TaskState.Pending or TaskState.Validating)) return false;
             var rule = flows.Get(task.Flow);
@@ -125,26 +144,62 @@ public sealed class TaskOrchestrator(
             if (busy) task.TransitionTo(TaskState.Queued, held ? "AGV on dispatch hold; request queued" : "AGV busy; request queued", Wcs, clock.UtcNow, HistoryDetail.Of(held ? "QUEUED_AGV_HOLD" : "QUEUED_AGV_BUSY"));
             else task.TransitionTo(TaskState.Dispatching, "AGV free; claimed", Wcs, clock.UtcNow, HistoryDetail.Of("DISPATCHING_CLAIMED"));
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+            decisionAgv = agv.Code; decisionAgvId = agv.Id; decisionReason = held ? "AGV_ON_DISPATCH_HOLD" : busy ? "AGV_BUSY_PER_AGV" : null;
             return !busy;
         }, ct);
+
+        // CR-021: the AGV decision of this task - assigned at once, or queued and why (the only AGV of the flow's role is the candidate; there is no other to prefer)
+        if (decisionAgv is not null)
+        {
+            if (dispatch) logger.LogInformation("Task {TaskId} assigned to AGV {Agv}: the AGV has no active or queued task and is not on dispatch hold. {EventCode}", taskId, decisionAgv, "TASK_DISPATCH_DECISION");
+            else if (decisionReason is not null)
+            {
+                LastDispatchWait[decisionAgvId] = decisionReason;   // the queue pass will not repeat the same reason
+                logger.LogInformation("Task {TaskId} waits for AGV {Agv}: {Reason}. {EventCode}", taskId, decisionAgv, decisionReason, "TASK_DISPATCH_WAIT");
+            }
+        }
 
         if (dispatch) await DispatchToRcsAsync(taskId, ct);
     }
 
+    /// <summary>CR-021: why the queue of an AGV last did not move (logged when it CHANGES, so a busy AGV does not write a line per scheduler tick).</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, string> LastDispatchWait = new();
+
     public async Task TryDispatchNextAsync(Guid agvId, CancellationToken ct = default)
     {
+        string? waitReason = null; string? agvCode = null;
         var next = await Tx(async (events, _, t) =>
         {
-            if (await tasks.GetActiveForAgvAsync(agvId, t) is not null) return (Guid?)null; // PER_AGV
+            waitReason = null;
+            if (await tasks.GetActiveForAgvAsync(agvId, t) is not null) { waitReason = "AGV_BUSY_PER_AGV"; return (Guid?)null; } // PER_AGV
             var agv = await agvs.GetAsync(agvId, t);
-            if (agv is null || !agv.Enabled || await agvs.IsOnDispatchHoldAsync(agvId, t)) return null;   // CR-008B-5 (D-7): held AGV (fresh read, after the active-task check)
+            agvCode = agv?.Code;
+            if (agv is null || !agv.Enabled) { waitReason = "AGV_DISABLED"; return null; }
+            if (await agvs.IsOnDispatchHoldAsync(agvId, t)) { waitReason = "AGV_ON_DISPATCH_HOLD"; return null; }   // CR-008B-5 (D-7): held AGV (fresh read, after the active-task check)
             var task = await tasks.NextQueuedForAgvAsync(agvId, t); // FIFO: NEEDS_CONFIRMATION (no approved priority policy)
             if (task is null) return null;
             task.TransitionTo(TaskState.Dispatching, "AGV free; claimed from queue", Wcs, clock.UtcNow, HistoryDetail.Of("DISPATCHING_FROM_QUEUE"));
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return task.Id;
         }, ct);
-        if (next is { } id) await DispatchToRcsAsync(id, ct);
+        if (next is { } id)
+        {
+            LastDispatchWait.TryRemove(agvId, out _);
+            using (DiagnosticContext.Begin(await CorrelationOfAsync(id, ct), taskId: id.ToString("D"), agvId: agvCode))
+                logger.LogInformation("Task {TaskId} assigned to AGV {Agv}: head of the FIFO queue, the AGV has no active task, is enabled and is not on dispatch hold. {EventCode}", id, agvCode, "TASK_DISPATCH_DECISION");
+            await DispatchToRcsAsync(id, ct);
+        }
+        else if (waitReason is null) LastDispatchWait.TryRemove(agvId, out _);
+        else if (!LastDispatchWait.TryGetValue(agvId, out var last) || last != waitReason)
+        {
+            // the reason changed: say which queued task is waiting and why the AGV was not given to it
+            if (await tasks.NextQueuedForAgvAsync(agvId, ct) is { } waiting)
+            {
+                LastDispatchWait[agvId] = waitReason;
+                using (DiagnosticContext.Begin(waiting.CorrelationId, taskId: waiting.Id.ToString("D"), agvId: agvCode))
+                    logger.LogInformation("Task {TaskId} waits for AGV {Agv}: {Reason}. {EventCode}", waiting.Id, agvCode, waitReason, "TASK_DISPATCH_WAIT");
+            }
+        }
     }
 
     // ============================================================================ RCS dispatch
@@ -341,6 +396,7 @@ public sealed class TaskOrchestrator(
                 await inventory.ConfirmDropAsync(task, rule, s.Source, s.User, s.ExternalRackId, t);
                 task.ConfirmDrop(now);
                 task.TransitionTo(TaskState.Completed, "Drop confirmed; inventory updated", src, now, HistoryDetail.Of("DROP_CONFIRMED"));
+                logger.LogInformation("Task {TaskId} finished as {State}: {Reason} (source {Source}; physical outcome possible: {Physical}). {EventCode}", task.Id, TaskState.Completed, "Drop confirmed; inventory updated", src, true, "TASK_FINISHED");   // CR-021
                 after.Add(() => TryDispatchNextAsync(task.AgvId));
                 return Applied("Completed");
             }
@@ -474,6 +530,7 @@ public sealed class TaskOrchestrator(
             var task = await tasks.GetAsync(taskId, t) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Task not found.");
             var why = $"Cancel requested by {user ?? "system"}: {reason}";
             var whyCode = HistoryDetail.Of("CANCEL_REQUESTED", ("user", user ?? "system"), ("reason", reason));
+            logger.LogInformation("Task {TaskId} cancel requested by {User}: {Reason} (state {State}). {EventCode}", task.Id, user ?? "system", reason, task.State, "TASK_CANCEL_REQUESTED");   // CR-021
             switch (task.State)
             {
                 case TaskState.Cancelled: return false; // idempotent
@@ -482,6 +539,7 @@ public sealed class TaskOrchestrator(
                 case TaskState.Pending or TaskState.Validating or TaskState.Queued:
                     // Never dispatched: there is no RCS task to cancel and nothing physical to reconcile.
                     task.TransitionTo(TaskState.Cancelled, why, Wcs, clock.UtcNow, whyCode);
+                    logger.LogInformation("Task {TaskId} finished as {State}: {Reason} (source {Source}; physical outcome possible: {Physical}). {EventCode}", task.Id, TaskState.Cancelled, why, Wcs, false, "TASK_FINISHED");   // CR-021
                     await inventory.ReleaseReservationsAsync(task, t);
                     break;
                 case TaskState.CancelPending:
@@ -742,6 +800,8 @@ public sealed class TaskOrchestrator(
         var physical = forceUncertain || physicalUnproven || task.RcsTaskCode is not null || task.PickConfirmedAt is not null;
         var wasQueuedBehind = task.AgvId;
         task.TransitionTo(terminal, reason, source, clock.UtcNow, code);
+        logger.Log(terminal == TaskState.Failed ? LogLevel.Warning : LogLevel.Information, "Task {TaskId} finished as {State}: {Reason} (source {Source}; physical outcome possible: {Physical}). {EventCode}",
+            task.Id, terminal, reason, source, physical, "TASK_FINISHED");   // CR-021
         if (physical)
         {
             if (terminal != TaskState.Completed) task.RequireReconciliation(reason, clock.UtcNow, code);

@@ -1,5 +1,11 @@
 # Change Log
 
+## v3.9 – CR-021 batch C Missing diagnostic events (2026-11-18)
+
+- RCS call logging (decorator), task/dispatch/cancel/finish decisions, station requests, AGV status changes, inventory, database slow/failed commands, API (D7), SignalR, application lifecycle, unhandled exceptions, startup config warnings. 30 log templates translated (vi/en). The 401/403 request level changed from Information to Warning (D7); the existing test was updated. Not deployed. No migration.
+- Tests added: `DiagnosticLoggingTests` (11). Found by them: task completion and queue-cancel did not pass through the finish path (now logged), and the first-task AGV decision is made in ProcessTask, not in the queue pass.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.8 – CR-021 batch B Correlation and tracing (2026-11-18)
 
 - Migration `AddCorrelationIds` (additive, nullable, indexed) on `transport_tasks` and `transport_orders`. `DiagnosticContext`, log enricher, inbound `X-Correlation-Id`, task/order frames. No business logic changed. Not deployed.

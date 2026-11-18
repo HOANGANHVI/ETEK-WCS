@@ -57,8 +57,11 @@ public static class DependencyInjection
         services.AddSingleton<WCS.Application.Monitoring.IResourceMonitor>(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
         services.AddHostedService(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
 
-        services.AddDbContext<WcsDbContext>(o => o.UseNpgsql(BuildConnectionString(configuration),
-            npgsql => npgsql.MigrationsAssembly(typeof(WcsDbContext).Assembly.FullName)));
+        // CR-021: slow commands and failed commands (deadlock, constraint, timeout) are logged without parameter values (Diagnostics:SlowQueryMs, default 1000)
+        var slowQueryMs = configuration.GetValue("Diagnostics:SlowQueryMs", 1000);
+        services.AddDbContext<WcsDbContext>((sp, o) => o.UseNpgsql(BuildConnectionString(configuration),
+            npgsql => npgsql.MigrationsAssembly(typeof(WcsDbContext).Assembly.FullName))
+            .AddInterceptors(new DbDiagnosticsInterceptor(sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<DbDiagnosticsInterceptor>>(), slowQueryMs)));
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IAgvRepository, AgvRepository>();
@@ -119,7 +122,8 @@ public static class DependencyInjection
         services.AddSingleton<RcsSimulator>();
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
-        services.AddSingleton<IRcsClient>(sp => sp.GetRequiredService<RcsSimulator>());
+        // CR-021: every RCS call is logged (operation, request code, outcome, duration, adapter); the Production guard looks through the wrapper (IRcsClientDecorator.Unwrap)
+        services.AddSingleton<IRcsClient>(sp => new LoggingRcsClient(sp.GetRequiredService<RcsSimulator>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LoggingRcsClient>>()));
         // CR-008A: Production must not dispatch to the simulator (explicit opt-in only).
         var allowRcsSimulatorInProduction = configuration.GetValue("Rcs:AllowSimulatorInProduction", false);
         services.AddSingleton<IRcsDispatchGuard>(sp => new RcsDispatchGuard(sp.GetRequiredService<IRcsClient>(),

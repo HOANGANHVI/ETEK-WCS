@@ -59,6 +59,13 @@ public interface IRcsClient
     Task<RcsAgvStatus?> QueryAgvStatusAsync(string robotCode, CancellationToken ct = default);
 }
 
+/// <summary>CR-021: an <see cref="IRcsClient"/> that wraps another one (for example to log calls). Safety checks that ask "which adapter is this?" must look through it with <see cref="Unwrap"/>.</summary>
+public interface IRcsClientDecorator
+{
+    IRcsClient Inner { get; }
+    static IRcsClient Unwrap(IRcsClient client) { while (client is IRcsClientDecorator d) client = d.Inner; return client; }
+}
+
 /// <summary>CR-008A: whether tasks may currently be sent to the RCS adapter. Code is a stable identifier (RCS_NOT_CONNECTED when only the simulator exists in Production).</summary>
 public sealed record RcsDispatchStatus(bool Allowed, string Code, string Message);
 
