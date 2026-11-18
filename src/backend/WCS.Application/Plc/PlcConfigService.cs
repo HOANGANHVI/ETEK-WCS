@@ -37,12 +37,15 @@ public sealed record PlcStationView(string StationId, string PlcId, int Order, s
 
 public sealed record IoPointView(Guid Id, string PlcId, string StationId, int Seq, string Group, string SignalName, string Direction, string DataType,
     string Description, string ConfigStatus, string? TemplateAddressReference, string? ActualAddress, int? WordLength, string? Encoding,
-    bool? WriteAllowed, string? ApprovedBy, DateTimeOffset? ApprovedAt, bool? Pollable = null);
+    bool? WriteAllowed, string? ApprovedBy, DateTimeOffset? ApprovedAt, bool? Pollable = null,
+    string? WriteApproval = null, string? WriteDecidedBy = null, DateTimeOffset? WriteDecidedAt = null, string? WriteDecisionNote = null, bool? WriteSupported = null);
 
 public sealed record SetPointAddressCommand(string Address, int? WordLength, string? Encoding);
 
 public static class PlcLabels
 {
+    /// <summary>CR-014 write approval label: NOT_APPROVED (awaiting a decision) / APPROVED / REJECTED.</summary>
+    public static string WriteStatus(WriteApprovalStatus s) => s switch { WriteApprovalStatus.Approved => "APPROVED", WriteApprovalStatus.Rejected => "REJECTED", _ => "NOT_APPROVED" };
     public static string Status(IoConfigStatus s) => s switch { IoConfigStatus.Approved => "APPROVED", IoConfigStatus.Configured => "CONFIGURED", _ => "NEEDS_CONFIGURATION" };
 }
 
@@ -134,7 +137,9 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     public static IoPointView ToView(StationIoPoint p, bool includeConfiguration, bool? pollable = null) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
         p.Direction.ToString(), p.DataType.ToString(), p.Description, PlcLabels.Status(p.Status),
         includeConfiguration ? p.TemplateAddressReference : null, includeConfiguration ? p.ActualAddress : null, includeConfiguration ? p.WordLength : null,
-        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? pollable ?? p.IsPollable : null);
+        includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? pollable ?? p.IsPollable : null,
+        PlcLabels.WriteStatus(p.WriteApproval), includeConfiguration ? p.WriteDecidedBy : null, includeConfiguration ? p.WriteDecidedAt : null, includeConfiguration ? p.WriteDecisionNote : null,
+        WriteValueValidator.IsWriteSupported(p.DataType, p.Encoding));
 
     /// <summary>Records an address confirmed by the PLC engineer. Conflicts with other points of the SAME PLC are rejected; other PLCs are independent.</summary>
     public Task<IoPointView> SetAddressAsync(Guid pointId, SetPointAddressCommand cmd, CancellationToken ct = default) =>
@@ -261,14 +266,27 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         return Summarize(result.PlcId, items, items.Count(i => (i.Outcome is BulkOutcome.Approved or BulkOutcome.AlreadyApproved) && Pollable(i.PointId)));
     }
 
-    public Task<IoPointView> SetWriteAllowedAsync(Guid pointId, bool allowed, CancellationToken ct = default) =>
+    /// <summary>Compatibility entry (PUT write-allowed): the same decision as <see cref="DecideWriteAsync"/>.</summary>
+    public Task<IoPointView> SetWriteAllowedAsync(Guid pointId, bool allowed, string by, CancellationToken ct = default) => DecideWriteAsync(pointId, allowed, by, null, ct);
+
+    /// <summary>
+    /// CR-014: the Admin approves or rejects WRITING one point. Independent of reading (Pollable / read approval) and of the handshake. Refused for the safety/interlock/permit signals
+    /// and for a data type or encoding the driver cannot write. Whether a write is then really executed is decided at write time by the runtime mode and WritePolicy.
+    /// </summary>
+    public Task<IoPointView> DecideWriteAsync(Guid pointId, bool approve, string by, string? note, CancellationToken ct = default) =>
         uow.ExecuteAsync(async t =>
         {
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
-            if (allowed && WritePolicy.IsBlockedSignal(p.SignalName, p.Group))
-                throw AppException.Rejected("WRITE_BLOCKED_SAFETY", "Tín hiệu Safety/Interlock và Transfer/Departure Permit không được cho phép ghi từ chức năng thử.");
-            try { p.SetWriteAllowed(allowed, clock.UtcNow); }
-            catch (WCS.Domain.Common.DomainException ex) { throw AppException.Rejected(ex.Code, ex.Message); }
+            if (approve)
+            {
+                if (WritePolicy.IsBlockedSignal(p.SignalName, p.Group))
+                    throw AppException.Rejected("WRITE_BLOCKED_SAFETY", "Tín hiệu Safety/Interlock và Transfer/Departure Permit không được cho phép ghi từ chức năng thử.");
+                if (!WriteValueValidator.IsWriteSupported(p.DataType, p.Encoding))
+                    throw AppException.Rejected("WRITE_TYPE_UNSUPPORTED", "Kiểu dữ liệu hoặc encoding của tín hiệu chưa hỗ trợ ghi.");
+                try { p.ApproveWrite(by, clock.UtcNow); }
+                catch (WCS.Domain.Common.DomainException ex) { throw AppException.Rejected(ex.Code, ex.Message); }
+            }
+            else p.RejectWrite(by, note, clock.UtcNow);
             return ToView(p, true);
         }, ct);
 

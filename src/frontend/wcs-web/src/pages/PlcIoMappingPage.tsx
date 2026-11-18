@@ -8,8 +8,9 @@ import { useT } from '../i18n'
 import { localizeFieldError } from '../i18n/logCatalog'
 import { CONFIG_STATUS_VI, DATATYPE_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
-import { AddressDialog, SimDialog, WriteDialog, type DialogPoint } from './plc/plcDialogs'
-import { BLOCKED_SIGNALS, deviceOf } from './plc/plcFormat'
+import { AddressDialog, SimDialog, type DialogPoint } from './plc/plcDialogs'
+import { TypedWriteDialog, WriteApprovalDialog } from './plc/writeDialogs'
+import { BLOCKED_SIGNALS, deviceOf, WRITE_TONE } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
 
 const PLCS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04'] as const
@@ -18,7 +19,7 @@ const STATIONS: Record<string, string[]> = {
 }
 const STATUSES = ['NEEDS_CONFIGURATION', 'CONFIGURED', 'APPROVED'] as const
 
-type Dialog = { kind: 'address' | 'write' | 'sim'; point: IoPointConfig } | null
+type Dialog = { kind: 'address' | 'write' | 'sim' | 'writeApproval'; point: IoPointConfig } | null
 
 const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
   id: p.id, plcId: p.plcId, stationId: p.stationId, signalName: p.signalName, dataType: p.dataType, address: p.actualAddress, configStatus: p.configStatus,
@@ -44,8 +45,9 @@ export function PlcIoMappingPage() {
 
   const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
   const simulator = mode === 'Simulator'
-  // Engineering tools (value injection, test-write) are hidden in production builds; the API refuses them in the Production environment as well.
-  const canWrite = ENGINEERING_TOOLS && (simulator || mode === 'RealReadWrite')
+  // CR-015: the write dialog is available in every build (Production included). It is offered only when the runtime really is in a write mode (the simulator, or REAL_READ_WRITE with every
+  // write key); in a read-only runtime the column says so instead of showing a button the backend would refuse.
+  const canWrite = simulator || mode === 'RealReadWrite'
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -100,7 +102,7 @@ export function PlcIoMappingPage() {
             <div className="table-wrap">
               <table className="grid" aria-label={t('plc.mappingTable')}>
                 <thead>
-                  <tr><th>{t('plc.colPlc')}</th><th>{t('plc.station')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colDescription')}</th><th>{t('plc.colDataType')}</th><th>{t('plc.colDevice')}</th><th>{t('plc.colActualAddress')}</th><th>{t('plc.colPollable')}</th><th>{t('plc.colApproval')}</th><th>{t('plc.colActions')}</th></tr>
+                  <tr><th>{t('plc.colPlc')}</th><th>{t('plc.station')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colDescription')}</th><th>{t('plc.colDataType')}</th><th>{t('plc.colDevice')}</th><th>{t('plc.colActualAddress')}</th><th>{t('plc.colPollable')}</th><th>{t('plc.colApproval')}</th><th>{t('plc.colWrite')}</th><th>{t('plc.colActions')}</th></tr>
                 </thead>
                 <tbody>
                   {rows.map((p) => {
@@ -117,16 +119,21 @@ export function PlcIoMappingPage() {
                         <td className="mono">{p.actualAddress ?? <span className="muted">{t('plc.unassigned')}</span>}</td>
                         <td>{p.pollable ? <Pill tone="ok" dot={false}>{t('plc.yes')}</Pill> : <Pill tone="muted" dot={false}>{t('plc.no')}</Pill>}</td>
                         <td><ConfigPill status={p.configStatus} />{p.approvedBy && <small className="muted"> {p.approvedBy}</small>}</td>
+                        <td className="nowrap">{inbound || blocked
+                          ? <span className="muted" title={t('plc.writeNotApplicableTitle')}>{t('plc.writeNotApplicable')}</span>
+                          : <><Pill tone={WRITE_TONE[p.writeApproval] ?? 'warn'} dot={false}>{t(`plc.writeState_${p.writeApproval}` as 'plc.writeState_APPROVED')}</Pill>{p.writeDecidedBy && <small className="muted"> {p.writeDecidedBy}</small>}</>}</td>
                         <td className="nowrap">
                           <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
+                          {!inbound && !blocked && <><Button size="sm" disabled={!p.actualAddress} title={p.actualAddress ? undefined : t('plc.writeNoAddressTitle')} onClick={() => setDialog({ kind: 'writeApproval', point: p })}>{t('plc.btnWriteApproval')}</Button>{' '}</>}
                           {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>{t('plc.btnSim')}</Button>{' '}</>}
-                          {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnTestWrite')}</Button>}
-                          {ENGINEERING_TOOLS && !inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
+                          {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" disabled={p.writeApproval !== 'APPROVED' || p.writeSupported === false || !p.actualAddress} title={p.writeApproval !== 'APPROVED' ? t('plc.writeNotApproved') : p.writeSupported === false ? t('plc.writeUnsupported') : undefined} onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnWrite')}</Button>}
+                          {!inbound && !blocked && !canWrite && <small className="muted" title={t('plc.writeReadOnlyTitle')}>{t('plc.writeReadOnly')}</small>}
+                          {!inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
                         </td>
                       </tr>
                     )
                   })}
-                  {rows.length === 0 && <tr><td colSpan={10} className="muted">{t('plc.noMatch')}</td></tr>}
+                  {rows.length === 0 && <tr><td colSpan={11} className="muted">{t('plc.noMatch')}</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -134,7 +141,8 @@ export function PlcIoMappingPage() {
         </Async>
       </Panel>
       {dialog?.kind === 'address' && <AddressDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
-      {dialog?.kind === 'write' && <WriteDialog point={asDialogPoint(dialog.point)} simulator={simulator} onClose={() => setDialog(null)} onDone={done} />}
+      {dialog?.kind === 'write' && <TypedWriteDialog point={dialog.point} simulator={simulator} onClose={() => setDialog(null)} onDone={done} />}
+      {dialog?.kind === 'writeApproval' && <WriteApprovalDialog point={dialog.point} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'sim' && <SimDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
     </>
   )

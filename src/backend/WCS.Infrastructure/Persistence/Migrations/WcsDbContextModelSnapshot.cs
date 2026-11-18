@@ -845,6 +845,24 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("WriteAllowed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("WriteApproval")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("NotApproved");
+
+                    b.Property<DateTimeOffset?>("WriteDecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WriteDecidedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("WriteDecisionNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("StationId");

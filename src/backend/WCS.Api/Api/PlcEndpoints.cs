@@ -119,7 +119,20 @@ public static partial class PlcEndpoints
         plc.MapPut("points/{id:guid}/write-allowed", async (HttpContext c, Guid id, SetWriteAllowedRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {
             var view = await Audited.RunAsync(c, "PLC_IO_WRITE_ALLOWED", "StationIoPoint", id.ToString(), null,
-                () => s.SetWriteAllowedAsync(id, r.Allowed, ct), res => new { res.PlcId, res.StationId, res.SignalName, res.WriteAllowed });
+                () => s.SetWriteAllowedAsync(id, r.Allowed, c.Actor().Username, ct), res => new { res.PlcId, res.StationId, res.SignalName, res.WriteAllowed });
+            await rt.ReloadPlcAsync(view.PlcId, ct);
+            return ApiResults.Ok(c, view);
+        }).RequireAuthorization(admin);
+        // CR-014: write approval of one point (Admin). Independent of reading and of the handshake; it does not send anything to a PLC.
+        plc.MapPost("points/{id:guid}/write-approval", async (HttpContext c, Guid id, WriteApprovalRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
+        {
+            var approve = r.Decision.Equals("Approve", StringComparison.OrdinalIgnoreCase);
+            if (!approve && !r.Decision.Equals("Reject", StringComparison.OrdinalIgnoreCase))
+                throw AppException.Validation("WRITE_DECISION_INVALID", "Quyết định phải là Approve hoặc Reject.");
+            var view = await Audited.RunAsync(c, approve ? "PLC_IO_WRITE_APPROVE" : "PLC_IO_WRITE_REJECT", "StationIoPoint", id.ToString(), null,
+                () => s.DecideWriteAsync(id, approve, c.Actor().Username, r.Note, ct),
+                res => new { res.PlcId, res.StationId, res.SignalName, address = res.ActualAddress, res.DataType, res.WriteApproval, res.WriteAllowed, decidedBy = res.WriteDecidedBy, decidedAt = res.WriteDecidedAt },
+                detail: r.Note);
             await rt.ReloadPlcAsync(view.PlcId, ct);
             return ApiResults.Ok(c, view);
         }).RequireAuthorization(admin);
@@ -158,13 +171,16 @@ public static partial class PlcEndpoints
             });
         }).RequireAuthorization(admin);
 
-        // ---------------------------------------------------------------------------------------------- guarded test write (Admin)
-        plc.MapPost("stations/{stationId}/signals/{signal}/test-write", async (HttpContext c, string stationId, string signal, TestWriteRequest r, PlcConfigService s, IPlcRuntime rt, IWebHostEnvironment env, CancellationToken ct) =>
+        // ---------------------------------------------------------------------------------------------- guarded write (Admin)
+        // CR-015: available in every environment, Production included. What guards it is NOT the environment but, in this order: Admin role, the per-point write approval,
+        // the value validation, WritePolicy (mode REAL_READ_WRITE + every write key + never the safety/permit signals) and the MC driver. Every call is audited.
+        plc.MapPost("stations/{stationId}/signals/{signal}/test-write", async (HttpContext c, string stationId, string signal, TestWriteRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {
-            RequireNotProduction(env);
             var point = (await s.ListPointsAsync(null, stationId, true, ct)).FirstOrDefault(p => p.SignalName == signal) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             var type = Enum.Parse<PlcDataType>(point.DataType);
             var value = ParseValue(type, r.Value);
+            var shape = WriteValueValidator.Check(type, point.WordLength, point.Encoding, value);   // CR-014: reject a wrong value here, before the runtime
+            if (!shape.Ok) throw AppException.Validation(shape.Code!, shape.Message!);
             var result = await Audited.RunAsync(c, "PLC_TEST_WRITE", "StationIoPoint", point.Id.ToString(), null,
                 async () =>
                 {
@@ -202,7 +218,7 @@ public static partial class PlcEndpoints
         });
     }
 
-    /// <summary>Test-write and simulator controls are engineering tools: refused in the Production environment (UI cleanup follow-up to CR-004).</summary>
+    /// <summary>Simulator controls are engineering tools of the in-memory simulator: refused in the Production environment (CR-004). The PLC write is NOT among them (CR-015).</summary>
     private static void RequireNotProduction(IWebHostEnvironment env)
     {
         if (env.IsProduction()) throw AppException.Conflict("NOT_AVAILABLE_IN_PRODUCTION", "Chức năng kỹ thuật này không khả dụng trong môi trường vận hành.");
@@ -223,10 +239,9 @@ public static partial class PlcEndpoints
                 PlcDataType.Bool => e.ValueKind switch
                 {
                     JsonValueKind.True => PointValue.OfBool(true), JsonValueKind.False => PointValue.OfBool(false),
-                    JsonValueKind.Number when e.GetInt32() is 0 or 1 => PointValue.OfBool(e.GetInt32() == 1),
                     _ => throw new FormatException(),
                 },
-                PlcDataType.Int => e.ValueKind == JsonValueKind.Number ? PointValue.OfInt(e.GetInt32()) : throw new FormatException(),
+                PlcDataType.Int => e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var n) ? PointValue.OfInt(n) : throw new FormatException(),   // a fraction or a number beyond 32 bits is not an INT
                 _ => e.ValueKind == JsonValueKind.String ? PointValue.OfString(e.GetString()!) : throw new FormatException(),
             };
         }

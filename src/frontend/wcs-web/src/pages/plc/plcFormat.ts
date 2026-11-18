@@ -30,3 +30,6 @@ export const BLOCKED_SIGNALS = ['Safety_Ready', 'Transfer_Permit', 'AGV_Departur
 
 /** The device letter of an address (D / W / M), or null when none is assigned. X/Y are not supported by IO mapping (CR-004). */
 export const deviceOf = (address: string | null): string | null => (address ? address.trim().charAt(0).toUpperCase() : null)
+
+/** Tone of the write-approval pill: NOT_APPROVED (awaiting a decision) / APPROVED / REJECTED. */
+export const WRITE_TONE: Record<string, 'warn' | 'ok' | 'bad'> = { NOT_APPROVED: 'warn', APPROVED: 'ok', REJECTED: 'bad' }

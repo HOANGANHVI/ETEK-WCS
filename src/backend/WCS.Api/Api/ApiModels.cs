@@ -109,6 +109,9 @@ public sealed record BulkApprovalRequest([property: Required] bool? Confirm, [pr
 
 public sealed record SetWriteAllowedRequest(bool Allowed);
 
+/// <summary>CR-014: Decision is "Approve" or "Reject" (Reject also withdraws an earlier approval).</summary>
+public sealed record WriteApprovalRequest([property: Required, StringLength(10)] string Decision, [property: StringLength(200)] string? Note);
+
 public sealed record TestWriteRequest(System.Text.Json.JsonElement Value);
 public sealed record SimulatorValueRequest([property: Required] string PlcId, [property: Required] string StationId, [property: Required] string Signal, System.Text.Json.JsonElement Value);
 public sealed record SimulatorOnlineRequest([property: Required] string PlcId, bool Online);

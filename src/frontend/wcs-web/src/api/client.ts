@@ -150,6 +150,8 @@ const realApi = {
     request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'PUT', body: JSON.stringify(b) }),
   plcClearAddress: (id: string) => request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'DELETE' }),
   plcApprovePoint: (id: string) => request<IoPointState>(`/api/plc/points/${id}/approve`, { method: 'POST' }),
+  plcWriteApproval: (id: string, decision: 'Approve' | 'Reject', note?: string) =>
+    request<IoPointConfig>(`/api/plc/points/${id}/write-approval`, { method: 'POST', body: JSON.stringify({ decision, note }) }),
   plcWriteAllowed: (id: string, allowed: boolean) => request<IoPointState>(`/api/plc/points/${id}/write-allowed`, { method: 'PUT', body: JSON.stringify({ allowed }) }),
   // CR-010 multi-leg Transport Tasks, Station Transactions and configurable Business Processes
   routingOrders: (state?: string, take = 100) => request<OrderPage>(`/api/routing/orders${qs({ state, take })}`),

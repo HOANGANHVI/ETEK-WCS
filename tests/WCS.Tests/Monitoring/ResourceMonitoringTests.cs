@@ -231,8 +231,10 @@ public class ResourceMonitoringTests
         if (!OperatingSystem.IsWindows()) return;
         var p = new WindowsHostMetricsProvider(AppContext.BaseDirectory);
         p.Sample(T0);
-        Thread.Sleep(300);
-        var r = p.Sample(T0.AddMilliseconds(300));
+        ProviderResult r;
+        var tries = 0;
+        do { Thread.Sleep(400); r = p.Sample(T0.AddMilliseconds(400)); } while (r.Metrics[MetricKeys.CpuPercent].Value is null && ++tries < 5);   // CPU is the Task Manager counter (Processor Utility): a transient read error gives no value, never another metric
+        Assert.NotEqual("CPU_IDLE_TIME_FALLBACK", r.Info.Note);                                                                                            // the counter exists on every supported Windows
         Assert.Equal(MetricSource.Host, r.Source);
         Assert.InRange(r.Metrics[MetricKeys.CpuPercent].Value!.Value, 0, 100);
         Assert.True(r.Metrics[MetricKeys.MemoryTotalBytes].Value > 1_000_000_000);

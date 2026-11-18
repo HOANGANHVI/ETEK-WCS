@@ -104,8 +104,11 @@ public sealed class LinuxHostMetricsProvider(string procRoot, string sysRoot, Fu
 /// <summary>
 /// Windows (WCS running natively on Windows): GetSystemTimes, GlobalMemoryStatusEx, GetTickCount64 and the drive of the data folder. These are the Windows host's
 /// own figures. A CPU temperature is not available through a supported, permission-free Windows API, so it is reported Unavailable rather than guessed.
+/// CPU: the figure is the performance counter "Processor Information(_Total)\% Processor Utility" - the very number Task Manager (Windows 10 1709 and later) shows.
+/// The older "% Processor Time" (idle-time based, what GetSystemTimes yields) ignores the processor clock: a CPU that idles at a low frequency reads ~1-2 % there
+/// but ~10 % in Task Manager. Only when the counter does not exist on this Windows (not for a transient read error) the idle-time figure is used instead and flagged in <see cref="ProviderInfo.Note"/>.
 /// </summary>
-public sealed class WindowsHostMetricsProvider(string? diskPath) : IHostMetricsProvider
+public sealed class WindowsHostMetricsProvider(string? diskPath) : IHostMetricsProvider, IDisposable
 {
     [StructLayout(LayoutKind.Sequential)] private struct FileTime { public uint Low; public uint High; public readonly ulong Value => ((ulong)High << 32) | Low; }
     [StructLayout(LayoutKind.Sequential)]
@@ -117,27 +120,63 @@ public sealed class WindowsHostMetricsProvider(string? diskPath) : IHostMetricsP
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx status);
     [DllImport("kernel32.dll")] private static extern ulong GetTickCount64();
 
+    [StructLayout(LayoutKind.Sequential)] private struct PdhFmtCounterValue { public uint CStatus; public double DoubleValue; }
+    [DllImport("pdh.dll", CharSet = CharSet.Unicode)] private static extern uint PdhOpenQuery(string? dataSource, IntPtr userData, out IntPtr query);
+    [DllImport("pdh.dll", CharSet = CharSet.Unicode)] private static extern uint PdhAddEnglishCounterW(IntPtr query, string path, IntPtr userData, out IntPtr counter);
+    [DllImport("pdh.dll")] private static extern uint PdhCollectQueryData(IntPtr query);
+    [DllImport("pdh.dll")] private static extern uint PdhGetFormattedCounterValue(IntPtr counter, uint format, out uint type, out PdhFmtCounterValue value);
+    [DllImport("pdh.dll")] private static extern uint PdhCloseQuery(IntPtr query);
+    private const uint PdhFmtDouble = 0x200;
+    private const string UtilityCounter = @"\Processor Information(_Total)\% Processor Utility";
+
+    private IntPtr _query, _counter;
+    private bool _pdhTried, _pdhPrimed;
+
+    /// <summary>Task Manager's CPU figure. Null when the counter does not exist (older Windows) or cannot be read; the first call only primes the counter.</summary>
+    private (double? Value, bool Warming) ReadUtility()
+    {
+        try
+        {
+            if (!_pdhTried)
+            {
+                _pdhTried = true;
+                if (PdhOpenQuery(null, IntPtr.Zero, out _query) != 0 || PdhAddEnglishCounterW(_query, UtilityCounter, IntPtr.Zero, out _counter) != 0)
+                { if (_query != IntPtr.Zero) PdhCloseQuery(_query); _query = _counter = IntPtr.Zero; }
+            }
+            if (_counter == IntPtr.Zero) return (null, false);
+            if (PdhCollectQueryData(_query) != 0) return (null, true);                          // transient: no reading this time (never a different metric)
+            if (!_pdhPrimed) { _pdhPrimed = true; return (null, true); }                       // a rate needs two readings
+            if (PdhGetFormattedCounterValue(_counter, PdhFmtDouble, out _, out var v) != 0 || v.CStatus != 0 || !double.IsFinite(v.DoubleValue)) return (null, true);   // e.g. PDH_CALC_NEGATIVE_DENOMINATOR right after a sleep/clock change
+            return (Math.Clamp(v.DoubleValue, 0, 100), false);                              // utility can exceed 100 % while the clock is boosted
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { _counter = IntPtr.Zero; return (null, false); }
+    }
+
+    public void Dispose() { if (_query != IntPtr.Zero) { PdhCloseQuery(_query); _query = _counter = IntPtr.Zero; } }
+
     private (ulong Idle, ulong Total)? _prev;
 
     public ProviderResult Sample(DateTimeOffset now)
     {
-        var info = new ProviderInfo("Windows", RuntimeInformation.OSDescription, null, false, Environment.MachineName);
         var m = new Dictionary<string, RawMetric>();
+        var (utility, utilityWarming) = ReadUtility();
+        var info = new ProviderInfo("Windows", RuntimeInformation.OSDescription, null, false, Environment.MachineName, utility is null && !utilityWarming ? "CPU_IDLE_TIME_FALLBACK" : null);
         try
         {
             if (GetSystemTimes(out var idle, out var kernel, out var user))
             {
                 var cur = (Idle: idle.Value, Total: kernel.Value + user.Value);        // kernel time already includes idle time
-                if (_prev is null) m[MetricKeys.CpuPercent] = RawMetric.Unavailable(MetricReasons.WarmingUp);
+                if (utility is { } u) m[MetricKeys.CpuPercent] = RawMetric.Of(u);       // what Task Manager shows
+                else if (utilityWarming || _prev is null) m[MetricKeys.CpuPercent] = RawMetric.Unavailable(MetricReasons.WarmingUp);
                 else
                 {
-                    var dTotal = cur.Total - _prev.Value.Total;
+                    var dTotal = cur.Total - _prev.Value.Total;                         // fallback: classic "% Processor Time"
                     m[MetricKeys.CpuPercent] = dTotal == 0 ? RawMetric.Unavailable(MetricReasons.WarmingUp)
                         : RawMetric.Of(Math.Clamp((1 - (double)(cur.Idle - _prev.Value.Idle) / dTotal) * 100, 0, 100));
                 }
                 _prev = cur;
             }
-            else m[MetricKeys.CpuPercent] = RawMetric.Unavailable(MetricReasons.ReadFailed);
+            else m[MetricKeys.CpuPercent] = utility is { } u2 ? RawMetric.Of(u2) : RawMetric.Unavailable(MetricReasons.ReadFailed);
             m[MetricKeys.CpuCores] = RawMetric.Of(Environment.ProcessorCount);
 
             var mem = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };

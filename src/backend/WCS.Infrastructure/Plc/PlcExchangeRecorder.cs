@@ -14,7 +14,7 @@ namespace WCS.Infrastructure.Plc;
 /// Stores the latest MC request/response pairs of every PLC in PostgreSQL (<c>plc_exchange_log</c>, at most <see cref="PlcRuntimeOptions.ExchangeHistoryPerPlc"/> rows per PLC, older rows pruned).
 /// It is a side channel of the PLC path: <see cref="Record"/> only enqueues (never blocks, never throws); a background loop writes in batches with its own database context.
 /// If the database refuses the write, the entries of that batch are dropped, one warning per minute is logged, and the PLC worker is not affected.
-/// Failures are always kept; successful exchanges are sampled (one per PLC per <see cref="PlcRuntimeOptions.ExchangeOkSampleSeconds"/>) so routine traffic cannot push a failure out of the window.
+/// Failures and every WRITE are always kept; successful READ exchanges are sampled (one per PLC per <see cref="PlcRuntimeOptions.ExchangeOkSampleSeconds"/>) so routine traffic cannot push a failure out of the window.
 /// </summary>
 public sealed class PlcExchangeRecorder : IPlcExchangeSink, IDisposable
 {
@@ -44,7 +44,7 @@ public sealed class PlcExchangeRecorder : IPlcExchangeSink, IDisposable
         try
         {
             var gap = _options.Value.ExchangeOkSampleSeconds;
-            if (e.Outcome == "OK" && gap > 0)
+            if (e.Outcome == "OK" && e.Operation != "WRITE" && gap > 0)      // CR-015: every write exchange is kept (rare and the one to audit); only routine successful READS are sampled
             {
                 if (_lastOk.TryGetValue(e.PlcId, out var last) && e.At - last < TimeSpan.FromSeconds(gap)) return;
                 _lastOk[e.PlcId] = e.At;
