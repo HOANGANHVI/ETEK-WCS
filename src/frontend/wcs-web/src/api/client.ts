@@ -6,6 +6,7 @@ import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
 import type { AddressIssue, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
+import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, ReconciliationDetail, SimulationStep, SystemHealth,
@@ -124,6 +125,34 @@ const realApi = {
   plcClearAddress: (id: string) => request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'DELETE' }),
   plcApprovePoint: (id: string) => request<IoPointState>(`/api/plc/points/${id}/approve`, { method: 'POST' }),
   plcWriteAllowed: (id: string, allowed: boolean) => request<IoPointState>(`/api/plc/points/${id}/write-allowed`, { method: 'PUT', body: JSON.stringify({ allowed }) }),
+  // CR-010 multi-leg Transport Tasks, Station Transactions and configurable Business Processes
+  routingOrders: (state?: string, take = 100) => request<OrderPage>(`/api/routing/orders${qs({ state, take })}`),
+  routingOrder: (id: string) => request<OrderDetail>(`/api/routing/orders/${id}`),
+  routingStartable: () => request<StartableProcess[]>('/api/routing/startable-processes'),
+  routingStart: (b: { requestKey: string; locationCode: string; requestType: string; rackKind?: string; processCode: string }) =>
+    request<{ order: Order; created: boolean }>('/api/routing/orders', { method: 'POST', body: JSON.stringify(b) }),
+  routingCancel: (id: string, reason?: string) => request<Order>(`/api/routing/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  routingPick: (legId: string) => request<unknown>(`/api/routing/legs/${legId}/pick`, { method: 'POST' }),
+  routingDrop: (legId: string) => request<unknown>(`/api/routing/legs/${legId}/drop`, { method: 'POST', body: JSON.stringify({}) }),
+  routingTransactions: (activeOnly: boolean) => request<StationTransaction[]>(`/api/routing/transactions${qs({ activeOnly: activeOnly ? 'true' : undefined, take: 200 })}`),
+  routingTxExit: (id: string) => request<StationTransaction>(`/api/routing/transactions/${id}/exit`, { method: 'POST' }),
+  routingTxResolve: (id: string, resumeState: string | null) => request<StationTransaction>(`/api/routing/transactions/${id}/resolve`, { method: 'POST', body: JSON.stringify({ resumeState }) }),
+  processes: () => request<Process[]>('/api/processes'),
+  process: (id: string) => request<Process>(`/api/processes/${id}`),
+  processCreate: (b: ProcessHeaderBody) => request<Process>('/api/processes', { method: 'POST', body: JSON.stringify(b) }),
+  processUpdate: (id: string, b: ProcessHeaderBody) => request<Process>(`/api/processes/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  processNewVersion: (id: string, fromVersionId?: string) => request<ProcessVersion>(`/api/processes/${id}/versions`, { method: 'POST', body: JSON.stringify({ fromVersionId }) }),
+  processImportReference: () => request<ImportResult>('/api/processes/import-reference', { method: 'POST' }),
+  processAudit: () => request<AuditRow[]>('/api/processes/audit?take=200'),
+  processVersion: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}`),
+  processSaveDefinition: (id: string, d: VersionDefinition) => request<ProcessVersion>(`/api/process-versions/${id}/definition`, { method: 'PUT', body: JSON.stringify(d) }),
+  processValidate: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/validate`, { method: 'POST' }),
+  processPublish: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/publish`, { method: 'POST' }),
+  processDisable: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/disable`, { method: 'POST' }),
+  plcAdd: (b: AddPlcBody) => request<PlcConnection>('/api/plc/connections', { method: 'POST', body: JSON.stringify(b) }),
+  plcStations: () => request<PortView[]>('/api/plc/stations'),
+  plcLinkPort: (stationId: string, locationCode: string | null, enabled: boolean) =>
+    request<PortView>(`/api/plc/stations/${encodeURIComponent(stationId)}/link`, { method: 'PUT', body: JSON.stringify({ locationCode, enabled }) }),
   // CR-007 Logging & Diagnostics (Admin only; the API enforces it)
   logsStats: (from?: string, to?: string) => request<LogStats>(`/api/logs/stats${qs({ from, to })}`),
   logsSearch: (f: LogFilter) =>

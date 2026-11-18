@@ -45,7 +45,7 @@ public interface IAuditLog
     Task<int> CountByActorAsync(string username, CancellationToken ct = default);
 }
 
-public sealed record AuditQuery(string? Actor, string? Action, AuditResult? Result, DateTimeOffset? From, DateTimeOffset? To, int Skip, int Take);
+public sealed record AuditQuery(string? Actor, string? Action, AuditResult? Result, DateTimeOffset? From, DateTimeOffset? To, int Skip, int Take, string? ActionPrefix = null);
 
 public sealed class AuthOptions
 {

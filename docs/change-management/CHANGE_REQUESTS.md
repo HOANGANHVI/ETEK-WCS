@@ -27,7 +27,7 @@
 | CR-001 | Authentication, Admin/Operator authorization, account management, audit trail, Operator task edit/hard-delete, Operator inventory edit | Project owner messages (2026-11-06) | **APPROVED** (2026-11-06) | Phase 1 | Final business rules confirmed by the project owner; implemented; see docs/specification/access-control.md |
 | CR-002 | Replace single-PLC topology with 4 PLC connections and 16 independent Station IO sets using the common 23-signal template | Project owner confirmation and `ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx` (2026-11-06) | **IMPLEMENTED** (Simulator/Mock; real PLC untested) | Phases 1-7 | Specification addenda and controlled IO workbook updated; actual device addresses/protocol/handshake remain unconfirmed |
 | CR-003 | Integrate the proven MC Protocol reference library into the WCS PLC driver (frame/response parity, devices M/X/Y/D/W, strict validation, ambiguous writes, per-PLC timeouts and address bases, diagnostics) | Project owner instruction + `reference/Kết nối MCprotocol.zip` (2026-11-07) | **IMPLEMENTED** (Simulator/Mock; real PLC untested) | CR-003 | Driver hardened; X/Y/W numbering base, QJ71E71-100 settings, addresses and handshake remain unconfirmed |
-| CR-010 | PLC communication, per-PLC IO mapping and the 9-step PLC-WCS exchange process (replaces the per-Station IO model of CR-002 in part) | `AGV_PLC_IO_Interface_List_10_11_2026.xlsx` (sheets `IO Matrix`, `Trang_tính1`) and project owner instruction (2026-11-17) | **PENDING_APPROVAL** (specification review only; nothing implemented) | TBD | Draft specification, gap analysis and open questions written; no approved specification, code, schema or configuration changed |
+| CR-010 | PLC communication, per-PLC IO mapping and the 9-step PLC-WCS exchange process (replaces the per-Station IO model of CR-002 in part) | `AGV_PLC_IO_Interface_List_10_11_2026.xlsx` (sheets `IO Matrix`, `Trang_tính1`) and project owner instruction (2026-11-17) | **IMPLEMENTED – PARTIAL** (scope approved by the project owner instruction of 2026-11-18; PLC live signalling and a real RCS leg adapter are NOT implemented) | 2026-11-18 | Route Engine, multi-leg Transport Task, per-port Station Transaction, configurable Business Process, PLC provisioning, API, UI, migration `AddRoutingEngine`, 50 tests. See ADR-0008 and `reviews/CR010_ROUTE_ENGINE_IMPLEMENTATION_REPORT.md` |
 
 ## New Change Request template
 
@@ -52,8 +52,8 @@
 - **Regression tests:**
 - **Rollback approach:**
 - **Open questions:**
-- **Decision:** PENDING
-- **Approved by / date:**
+- **Decision:** APPROVED for implementation within the scope of the project owner instruction of 2026-11-18 (business principles of sections 2-3 of that instruction); the items that instruction leaves open stay OPEN (see the implementation addendum below).
+- **Approved by / date:** Project owner / 2026-11-18 (implementation instruction). The formal sign-off field is left to the owner.
 
 ## Example – do not treat as approved
 
@@ -246,7 +246,34 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Acceptance criteria (for the later implementation CR):** an approved specification; PLC count configurable without code change; independent per-PLC mapping verified (editing one PLC changes neither another PLC nor the template); the 9 steps reproduced in the simulator in the documented order; duplicate Request_ID never creates a second task; per-PLC FIFO and one active transaction per PLC with PLCs running concurrently; disconnect/reconnect and WCS restart resume at the correct step without repeating a completed step or a physical command; inconsistent state ends in PendingReconciliation; simulator/mock and real-hardware results reported separately.
 - **Regression tests:** existing PLC suites (CR-002, CR-003, CR-004, CR-008B-2), station intake, PER_AGV, inventory and task state machine tests must remain green; new tests per the acceptance criteria.
 - **Rollback approach:** this step adds documents only; revert the commit. A later implementation must be additive and reversible.
-- **Open questions:** `PLC_SPEC_OPEN_QUESTIONS.md` (about 30 numbered items; the blocking ones are Q-ORD-1, Q-LEG-1, Q-MAP-1, Q-INV-1, Q-STR-1, Q-IO-2, Q-PLC-1).
-- **Deliverables of this step:** `PLC_REVIEW_CURRENT_STATE_AND_GAP_ANALYSIS.md`, `PLC_COMMUNICATION_SPECIFICATION_DRAFT.md`, `PLC_SPEC_OPEN_QUESTIONS.md` (all under `docs/02_Interface_Specification/`).
+- **Open questions:** `PLC_SPEC_OPEN_QUESTIONS.md` (about 38 numbered items; the blocking ones are Q-ORD-1, Q-LEG-1, Q-MAP-1, Q-INV-1, Q-STR-1, Q-IO-2, Q-PLC-1 and, from the 2026-11-18 consolidation, Q-GATE-1, Q-MLEG-1, Q-MLEG-2, Q-AGV-1).
+- **Deliverables of this step:** `PLC_REVIEW_CURRENT_STATE_AND_GAP_ANALYSIS.md`, `PLC_COMMUNICATION_SPECIFICATION_DRAFT.md`, `PLC_SPEC_OPEN_QUESTIONS.md` (all under `docs/02_Interface_Specification/`). Added 2026-11-18: `PLC_BUSINESS_PROCESS_AND_TRANSACTION_MODEL_DRAFT.md`.
 - **Decision:** PENDING
 - **Approved by / date:**
+
+#### CR-010 addendum – 2026-11-18 consolidation of business process and PLC communication (specification only)
+
+- **Scope added:** two-level model (Station Transaction per gate; Transport Task with Legs), multi-leg flows through buffers, 10 specification-level acceptance scenarios. Document: `docs/02_Interface_Specification/PLC_BUSINESS_PROCESS_AND_TRANSACTION_MODEL_DRAFT.md`.
+- **Sources read (text only):** `7. FFC AMR/Process in detail.pptx` (11 slides) and `7. FFC AMR/ETEK Process AGV Phase 2 12.08.26.pptx` (10 slides; the file on disk has no "(1)" in its name). Both sit in the parent folder of the project. Diagrams/arrows were not interpretable from text. Slides 5-10 of the first file match BP-01..BP-06. The Phase 2 file uses other location names (P1-P4, M5, M6) and is not part of the approved baseline (Q-PH2-1, Q-LOC-1).
+- **Findings from the slides:** (a) "only 1 task at a time" is on slide 4 and is superseded by BR-01 PER_AGV (Q-SLD-1); (b) in approved flows a drop at buffer F ends the task - an automatic buffer-to-gate leg exists only in BP-04 (REVIEW) and is therefore not approvable (Q-MLEG-2); (c) PLC door-open handshake is present at A1/A2 and B1/B2 for both pick and drop, absent at F buffers.
+- **New conflicts recorded:** (C-1) a "gate with its own I/O set" versus the workbook's single signal set per PLC and the earlier "one transaction per PLC" decision (Q-GATE-1, blocking); (C-2) multi-leg flows versus `task-state-machine.md` 3.6, which says a multi-leg task mechanism must be approved first (Q-MLEG-1, blocking); (C-3) AGV occupancy between legs versus PER_AGV/`WAITING_FOR_DESTINATION` (Q-AGV-1, blocking); gate release at step 8 or 9 (Q-REL-1).
+- **Unchanged and still OPEN:** M9101 ACK timing (Q-ORD-1), M9120 timing (Q-ORD-2), handshake↔pick/drop mapping (Q-MAP-1), destination-gate handshake (Q-LEG-1), PLC protocol items.
+- **Protected rules:** BP-01/02/03/05/06 not changed; BP-04 REVIEW; A3/A4 and D1/D2 UNCHANGED; PER_AGV not changed; `TaskStateMachine` and `InventoryService` not changed; WCS owns inventory.
+- **Approved baseline files NOT edited** (CLAUDE.md section 3, steps 5-6). To be updated only after approval: business-rules.md (BR-01 clarification of Task/Leg/Station Transaction), process-flows.md (Leg concept and any approved buffer legs), integration-requirements.md (5.2/5.3/5.10), task-state-machine.md (only if Q-MLEG-1 requires it), ADR-0004 (supersede) plus a new ADR for the two-level model, CHANGELOG.
+- **Proposed Impact Matrix rows (not applied):** "Multi-leg / buffer flows" – Spec: affected; Backend: affected (orchestration layer, not TaskStateMachine); Database: additive; PLC: handshake per gate; UI: transaction/leg views; Tests: AT-01..AT-10. "Gate independence" – Spec/PLC/Backend affected, depends on Q-GATE-1.
+- **Proposed Traceability rows (not applied):** CR010-REQ-01 two-level model; CR010-REQ-02 gate independence; CR010-REQ-03 multi-leg and buffer inventory; CR010-REQ-04 recovery per leg; each traced to the model document and tests AT-01..AT-10 (status: PROPOSED, no implementation).
+- **Not approvable yet:** items that depend on Q-GATE-1, Q-MLEG-1, Q-MLEG-2, Q-AGV-1 and the earlier blocking questions.
+
+#### CR-010 implementation addendum – 2026-11-18
+
+- **Status:** IMPLEMENTED – PARTIAL. Authority: ADR-0008, `reviews/CR010_ROUTE_ENGINE_IMPLEMENTATION_REPORT.md`.
+- **Owner decisions applied (formerly open):**
+  - Q-GATE-1: independence is per **port** (a PLC Station of CR-002, one IO set each); several ports of one PLC may hold transactions at the same time; there is no PLC-wide lock. A port is the unit of the transaction; the PLC-wide handshake serialisation question stays with the PLC engineer.
+  - Q-MLEG-1 / Q-MLEG-2: multi-leg flows are executed by a configurable Route Engine; routes (including buffers and waiting) are data. BP-04 remains REVIEW and every flow equivalent to it is review-blocked.
+  - Q-SLD-1: the "one task at a time" statement of the old slide is not a system-wide limit; PER_AGV stays.
+  - Q-GATE-2 / Q-REL-1: a Station Transaction ends when the physical handover is done and the AMR has left the port.
+  - Q-BUF-1: buffers are physical storage locations (inventory updated on the confirmed drop); an intermediate waiting position is not a storage location.
+- **Assumptions recorded for confirmation:** the AGV is free between two legs (PER_AGV applied per leg, O-1); a destination port transaction opens at dispatch (O-3); the within-priority order of candidates follows the document order.
+- **Still OPEN (no implementation, no write to any PLC):** M9101 ACK timing, M9120 timing and Safety_Ready, M9003/M9004/M9005 mapping to pick/drop, destination-port handshake, D1500 length/overlap, D1514 and Rack_Type encodings, reset ownership/timeouts/retries, heartbeat cycle, Phase 2 location mapping (P1-P4, M5, M6), E/G and X port discrepancies.
+- **Not implemented:** live reading of the PLC registers into `PlcRequestService` and live handshake observation (`IPlcObservationSource` has only a "no data" adapter), a real RCS adapter for configurable legs, hardware verification.
+- **Migration:** `AddRoutingEngine` (additive: 8 tables). `wcs_db` backed up before applying (`wcs_db_before_AddRoutingEngine_20261118-094032.dump`, verified with `pg_restore -l`).

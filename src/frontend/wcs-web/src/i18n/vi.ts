@@ -51,8 +51,8 @@ export const RACK_STATUS_TONE: Record<string, Tone> = { Full: 'info', Empty: 'mu
 export const RACK_KIND_VI = localizedMap({ Full: 'rack đầy', Empty: 'rack rỗng' }, { Full: 'full rack', Empty: 'empty rack' })
 
 export const LOCATION_TYPE_VI = localizedMap(
-  { Station: 'Trạm máy', Buffer: 'Vị trí đệm', ManualBuffer: 'Vị trí đệm thủ công', Waypoint: 'Điểm trung gian' },
-  { Station: 'Machine station', Buffer: 'Buffer', ManualBuffer: 'Manual buffer', Waypoint: 'Waypoint' })
+  { Station: 'Trạm máy', Buffer: 'Vị trí đệm', ManualBuffer: 'Vị trí đệm thủ công', Waypoint: 'Điểm trung gian', WaitingPosition: 'Vị trí chờ trung gian', PickupLocation: 'Vị trí lấy rack', DeliveryLocation: 'Vị trí giao rack' },
+  { Station: 'Machine station', Buffer: 'Buffer', ManualBuffer: 'Manual buffer', Waypoint: 'Waypoint', WaitingPosition: 'Intermediate waiting position', PickupLocation: 'Pickup location', DeliveryLocation: 'Delivery location' })
 export const ALLOWED_KIND_VI = localizedMap(
   { Any: 'Mọi loại rack', Full: 'Chỉ rack đầy', Empty: 'Chỉ rack rỗng' },
   { Any: 'Any rack type', Full: 'Full racks only', Empty: 'Empty racks only' })
@@ -452,6 +452,25 @@ export const AUDIT_ACTION_VI = localizedMap({
   PLC_SIMULATOR_SET_VALUE: 'Mô phỏng: đặt giá trị tín hiệu',
   PLC_SIMULATOR_ONLINE: 'Mô phỏng: đổi trạng thái kết nối PLC',
   PLC_SIMULATOR_STATION_FAULT: 'Mô phỏng: gây/khôi phục lỗi trạm',
+  ROUTING_ORDER_START: 'Khởi tạo Transport Task',
+  ROUTING_ORDER_CANCEL: 'Hủy Transport Task',
+  ROUTING_LEG_PICK: 'Xác nhận đã lấy rack (chặng)',
+  ROUTING_LEG_DROP: 'Xác nhận đã thả rack (chặng)',
+  ROUTING_TX_ADVANCE: 'Cập nhật trạng thái giao dịch tại cổng',
+  ROUTING_TX_EXIT: 'Xác nhận AMR đã rời cổng',
+  ROUTING_TX_RECONCILE: 'Đối soát giao dịch tại cổng',
+  ROUTING_PLC_REQUEST: 'Nhập yêu cầu PLC',
+  PROCESS_CREATE: 'Tạo quy trình',
+  PROCESS_UPDATE: 'Sửa thông tin quy trình',
+  PROCESS_NEW_VERSION: 'Tạo phiên bản quy trình',
+  PROCESS_IMPORT: 'Nạp quy trình tham chiếu',
+  PROCESS_VERSION_SAVE: 'Lưu cấu hình phiên bản quy trình',
+  PROCESS_VALIDATE: 'Kiểm tra phiên bản quy trình',
+  PROCESS_PUBLISH: 'Publish phiên bản quy trình',
+  PROCESS_DISABLE: 'Vô hiệu hóa phiên bản quy trình',
+  PLC_ADD: 'Thêm PLC',
+  PLC_PORT_ADD: 'Thêm cổng cho PLC',
+  PLC_PORT_LINK: 'Liên kết cổng với vị trí',
 }, {
   AUTH_LOGIN: 'Sign in',
   AUTH_LOGOUT: 'Sign out',
@@ -495,4 +514,23 @@ export const AUDIT_ACTION_VI = localizedMap({
   PLC_SIMULATOR_SET_VALUE: 'Simulation: set signal value',
   PLC_SIMULATOR_ONLINE: 'Simulation: change PLC connection state',
   PLC_SIMULATOR_STATION_FAULT: 'Simulation: set/clear station fault',
+  ROUTING_ORDER_START: 'Start Transport Task',
+  ROUTING_ORDER_CANCEL: 'Cancel Transport Task',
+  ROUTING_LEG_PICK: 'Confirm rack picked (leg)',
+  ROUTING_LEG_DROP: 'Confirm rack dropped (leg)',
+  ROUTING_TX_ADVANCE: 'Advance Station Transaction',
+  ROUTING_TX_EXIT: 'Confirm AMR left the port',
+  ROUTING_TX_RECONCILE: 'Reconcile Station Transaction',
+  ROUTING_PLC_REQUEST: 'Submit a PLC request',
+  PROCESS_CREATE: 'Create process',
+  PROCESS_UPDATE: 'Update process',
+  PROCESS_NEW_VERSION: 'Create process version',
+  PROCESS_IMPORT: 'Load reference processes',
+  PROCESS_VERSION_SAVE: 'Save process version configuration',
+  PROCESS_VALIDATE: 'Validate process version',
+  PROCESS_PUBLISH: 'Publish process version',
+  PROCESS_DISABLE: 'Disable process version',
+  PLC_ADD: 'Add PLC',
+  PLC_PORT_ADD: 'Add a PLC port',
+  PLC_PORT_LINK: 'Link a port to a location',
 })

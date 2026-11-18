@@ -135,3 +135,7 @@ Tài liệu nguồn nêu rõ process của A3/A4 và D1/D2 giữ nguyên như pr
 - Không tự thêm bind rack vào điểm được ghi “Không bind rack”.
 - Không tự sửa luồng BP-04.
 - Không tự đổi thứ tự ưu tiên nguồn/đích nếu tài liệu hoặc quyết định nghiệp vụ chưa xác nhận.
+
+## 2.4. Addendum – flows as configuration (CR-010, 2026-11-18)
+
+The approved flows BP-01, 02, 03, 05, 06 keep the behaviour described above. They can now also be expressed as **Business Process configuration** (data in the database, versioned, validated before publishing); the reference drafts derived from the working matrix are loaded by an Admin and are never published automatically. BP-04 and its Phase 2 counterpart are review-blocked drafts. The Phase 2 slides use other location names (P1-P4, M5, M6) and an "intermediate waiting position"; they are drafts only and are not mapped to F1-F5 / KV1-KV4. Nothing in sections 2.1-2.3 is changed.

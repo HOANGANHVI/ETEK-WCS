@@ -58,7 +58,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         return (await repo.ListConnectionsAsync(ct)).Select(c => ToView(c, stations.Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList())).ToList();
     }
 
-    private static PlcConnectionView ToView(PlcConnection c, IReadOnlyList<string> stations)
+    public static PlcConnectionView ToView(PlcConnection c, IReadOnlyList<string> stations)
     {
         var missing = c.MissingParameters();
         return new(c.Id, c.Name, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer,

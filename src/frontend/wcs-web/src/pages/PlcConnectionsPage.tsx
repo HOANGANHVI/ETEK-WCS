@@ -13,6 +13,7 @@ import { Field, Switch } from './config/FormKit'
 import { fromApiError, fromNum, toInt, toStr, type Errors } from './config/formUtils'
 import { fmtTime } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
+import { PlcProvisioning } from './plc/PlcProvisioning'
 
 const PROTOCOLS: { value: string; label: MsgKey }[] = [{ value: 'McProtocol3EBinaryTcp', label: 'plc.protocolMc' }]
 
@@ -54,6 +55,7 @@ function PlcConnectionsBody({ realMode, simulator }: { realMode: boolean; simula
           </div>
         )}
       </Async>
+      <PlcProvisioning onChanged={() => list.reload()} />
     </>
   )
 }

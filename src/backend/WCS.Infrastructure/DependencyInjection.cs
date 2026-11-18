@@ -69,11 +69,17 @@ public static class DependencyInjection
         services.AddScoped<IInventoryTransactionRepository, InventoryTransactionRepository>();
         services.AddScoped<ITransportTaskRepository, TransportTaskRepository>();
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
+        // CR-010: configurable Business Process / Route Engine persistence and the simulator-only leg dispatcher
+        services.AddScoped<WCS.Application.Routing.IRoutingRepository, RoutingRepository>();
+        services.AddScoped<WCS.Application.Routing.ILegDispatcher, SimulatedLegDispatcher>();
+        services.AddSingleton<WCS.Application.Routing.IPlcLinkStatus, PlcRuntimeLinkStatus>();
+        services.AddSingleton<WCS.Application.Routing.IPlcObservationSource, UnavailablePlcObservationSource>();
         services.AddScoped<WcsDataSeeder>();
         services.AddScoped<WCS.Application.Logging.ILogQueryService, WCS.Infrastructure.Logging.LogQueryService>();   // CR-007
         services.AddScoped<WCS.Infrastructure.Logging.DeploymentLogImporter>();
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
         services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
+        services.AddSingleton<WCS.Application.Plc.IPlcTemplateProvider, WCS.Infrastructure.Plc.PlcTemplateProvider>();   // CR-010 Default IO Mapping Template
         services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
         services.AddSingleton<WCS.Application.Plc.ISimulatorControl>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.SimulatedPlcNetwork>());
         services.AddSingleton<WCS.Application.Plc.IPlcEndpointFactory, WCS.Infrastructure.Plc.PlcEndpointFactory>();

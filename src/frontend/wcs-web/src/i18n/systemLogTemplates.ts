@@ -8,6 +8,10 @@
 export interface Bilingual { vi: string; en: string }
 
 export const SYSTEM_LOG_TEMPLATES: Record<string, Bilingual> = {
+  'Leg dispatch failed for {LegId}': { vi: 'Gửi chặng {LegId} tới hệ thống AGV thất bại', en: 'Leg dispatch failed for {LegId}' },
+  'Continue of leg {Code} failed; it is retried by the next pass': { vi: 'Yêu cầu tiếp tục chặng {Code} thất bại; lượt xử lý sau sẽ thử lại', en: 'Continue of leg {Code} failed; it is retried by the next pass' },
+  'PLC {Plc} is not connected: {Count} Station Transaction(s) kept and marked suspended': { vi: 'PLC {Plc} chưa kết nối: giữ nguyên {Count} Station Transaction và đánh dấu tạm dừng', en: 'PLC {Plc} is not connected: {Count} Station Transaction(s) kept and marked suspended' },
+  '{What} failed (the loop continues)': { vi: '{What} thất bại (vòng lặp vẫn tiếp tục)', en: '{What} failed (the loop continues)' },
   'Unhandled exception {TraceId}': { vi: 'Lỗi chưa được xử lý (TraceId {TraceId})', en: 'Unhandled exception (TraceId {TraceId})' },
   'WCS backend starting: environment {Environment}, version {Version}, PLC mode {PlcMode} (live connection allowed: {AllowLive}), integration {IntegrationMode}, cookie secure policy {CookieSecure}, database {Database}, deployment log import {DeploymentLogs}, system log storage {SystemLog}. {EventCode}': {
     vi: 'WCS backend khởi động: môi trường {Environment}, phiên bản {Version}, chế độ PLC {PlcMode} (cho phép kết nối thật: {AllowLive}), tích hợp {IntegrationMode}, chính sách cookie {CookieSecure}, cơ sở dữ liệu {Database}, nhập nhật ký triển khai {DeploymentLogs}, lưu nhật ký hệ thống {SystemLog}',

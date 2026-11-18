@@ -22,11 +22,13 @@ const NAV: NavItem[] = [
   { to: '/agvs', label: 'nav.agv', icon: <IconAgv /> },
   { to: '/tasks', label: 'nav.tasks', icon: <IconTasks /> },
   { to: '/inventory', label: 'nav.inventory', icon: <IconWarehouse /> },
+  ...(DEMO_MODE ? [] : [{ to: '/routing', label: 'routing.navRouting' as MsgKey, icon: <IconTasks /> }]),   // CR-010 (not part of the browser-only simulation)
   { to: '/plc', label: 'nav.plcMonitor', end: true, icon: <IconPlc /> },
 ]
 
 // PLC configuration (CR-004). Admin only; the API enforces the same rule.
 const NAV_PLC: NavItem[] = [
+  ...(DEMO_MODE ? [] : [{ to: '/processes', label: 'routing.navProcesses' as MsgKey, icon: <IconSettings /> }]),   // CR-010 route configuration
   { to: '/plc/connections', label: 'nav.plcConnections', icon: <IconSettings /> },
   { to: '/plc/io-mapping', label: 'nav.plcIoMapping', icon: <IconPlc /> },
 ]

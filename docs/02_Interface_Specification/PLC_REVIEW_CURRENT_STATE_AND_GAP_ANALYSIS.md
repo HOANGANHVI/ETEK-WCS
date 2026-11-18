@@ -139,6 +139,20 @@ Tóm tắt theo tầng (mọi mệnh đề dưới đây đã được kiểm tr
 | Kiểm thử | Simulator cần sinh theo tập tín hiệu mới; test intake/handshake/recovery mới; hồi quy các test PLC hiện có (CR-002/003/004/008B) |
 | Quy tắc được bảo vệ | PER_AGV, BP-04, WCS sở hữu tồn kho, A3/A4 & D1/D2, không bind rack — **được giữ**; điểm tiếp xúc ghi ở Q-INV-1, Q-LEG-1 |
 
+## 7A. Bổ sung 2026-11-18 – hợp nhất với quy trình nghiệp vụ (Station Transaction / Transport Task)
+
+Chi tiết ở [PLC_BUSINESS_PROCESS_AND_TRANSACTION_MODEL_DRAFT.md](PLC_BUSINESS_PROCESS_AND_TRANSACTION_MODEL_DRAFT.md). Hiện trạng đối chiếu thêm:
+
+| Hạng mục | Hiện trạng (đã kiểm tra trong baseline/mã) | Yêu cầu mới | Khoảng cách | Đề xuất |
+|---|---|---|---|---|
+| Hai cấp Task/Station Transaction | Một `TransportTask` + `station_requests`; không có khái niệm Leg hay Station Transaction | Hai cấp độc lập, Task nhiều chặng | Chưa có Leg; liên kết Task↔request chỉ 1-1 | Lớp điều phối Leg bổ sung, **không** sửa `TaskStateMachine` (Q-MLEG-1) |
+| Nhiều chặng | `WAITING_FOR_DESTINATION` giữ AGV; baseline §3.6 nói nhiều chặng "phải được duyệt" | A→buffer→B với tồn kho cập nhật tại buffer | Chưa có luồng buffer-rồi-tiếp-tục trong baseline | Chờ Q-MLEG-1, Q-AGV-1, Q-BUF-1 |
+| Cổng độc lập | Excel: một bộ tín hiệu/PLC; [YC] cũ: 1 transaction/PLC | Cổng độc lập, cùng PLC lẫn khác PLC | Mâu thuẫn trực tiếp nếu "cổng" ≠ PLC | Q-GATE-1 (chặn); mô tả theo "Gate" |
+| Giải phóng cổng | Chưa có | Khi AMR rời cổng | Bước 8 hay 9? | Q-REL-1 |
+| "Một task một thời điểm" | BR-01 = `PER_AGV`; câu nằm ở `Process in detail` slide 4, không chép vào baseline | Không tự bỏ giới hạn | BR-01 (đã duyệt) cao hơn slide nguồn | Q-SLD-1; áp dụng ở cấp task theo AGV |
+| Nguồn process | Hai .pptx ở `7. FFC AMR/` (ngoài thư mục dự án); đã đọc văn bản | Đọc hai file .pptx | Hình vẽ/mũi tên không đọc được từ văn bản; Phase 2 chưa thuộc baseline | Bảng BP đối chiếu slide 5–10; Phase 2 chỉ làm bối cảnh (Q-PH2-1, Q-LOC-1) |
+| Buffer→cổng máy tự động | Slide 5–10: thả vào buffer F kết thúc task; chặng buffer→B1/B2 chỉ ở BP-04 (`REVIEW`) | A→buffer→B tự động | Không có trong luồng đã duyệt | Q-MLEG-2 (chặn) |
+
 ## 8. Xác nhận phạm vi thay đổi của đợt phân tích này
 
 Chỉ **thêm** tài liệu mới trong `docs/02_Interface_Specification/` và **thêm** mục CR-010 vào `docs/change-management/CHANGE_REQUESTS.md`. Không có tệp mã nguồn, migration, cấu hình runtime, workbook, hoặc tài liệu baseline nào bị sửa.

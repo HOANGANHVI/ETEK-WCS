@@ -13,6 +13,7 @@ public static class DependencyInjection
     {
         services.Configure<ProcessFlowOptions>(configuration.GetSection(ProcessFlowOptions.SectionName));
         services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
+        services.Configure<Routing.RouteEngineOptions>(configuration.GetSection(Routing.RouteEngineOptions.SectionName));
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<ISchedulerStatus, SchedulerStatus>();
@@ -26,11 +27,19 @@ public static class DependencyInjection
         services.AddScoped<ReconciliationService>();   // CR-008B-3
         services.AddScoped<AgvHoldService>();   // CR-008B-5
         services.AddScoped<AgvStatusService>();
+        // CR-010
+        services.AddScoped<Routing.RouteConditionEvaluator>();
+        services.AddScoped<Routing.ProcessValidator>();
+        services.AddScoped<Routing.ProcessAdminService>();
+        services.AddScoped<Routing.StationTransactionService>();
+        services.AddScoped<Routing.IRouteEngine, Routing.RouteEngine>();
+        services.AddScoped<Routing.IPlcRequestService, Routing.PlcRequestService>();
         services.AddScoped<ConnectionConfigService>();
         services.AddScoped<OperationalConfigService>();
 
         services.Configure<Plc.PlcRuntimeOptions>(configuration.GetSection(Plc.PlcRuntimeOptions.SectionName));
         services.AddScoped<Plc.PlcConfigService>();
+        services.AddScoped<Plc.PlcProvisioningService>();   // CR-010
         services.AddSingleton<Plc.IPlcRuntime, Plc.PlcRuntime>();
         services.AddSingleton<Plc.HandshakeCoordinator>();
         services.AddSingleton<Plc.PlcStationSignalService>();

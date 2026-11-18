@@ -2,6 +2,7 @@
 
 **Trạng thái:** `DRAFT – chờ chủ dự án review/phê duyệt (CR-010)`. Tài liệu này **không** thay thế bất kỳ đặc tả đã duyệt nào cho đến khi CR-010 được phê duyệt. Không có mã nguồn, schema hay cấu hình nào bị thay đổi để viết tài liệu này.
 **Phạm vi:** giao tiếp WCS ↔ PLC của hệ thống AGV (Phase 1): kết nối, IO mapping, quy trình trao đổi 9 bước, đọc dữ liệu xác định vị trí, queue/transaction, khôi phục.
+**Cập nhật 2026-11-18:** yêu cầu hợp nhất tách **Station Transaction** (theo cổng) khỏi **Transport Task** (nhiều chặng/Leg). Mọi chỗ trong tài liệu này viết "PLC transaction" hoặc "một transaction mỗi PLC" nay phải đọc là *Station Transaction*; đơn vị "cổng" chưa được chốt (Q-GATE-1; cách hiểu G-A ≡ một transaction/PLC tương thích bản này). Xem [Mô hình Transport Task / Leg / Station Transaction](PLC_BUSINESS_PROCESS_AND_TRANSACTION_MODEL_DRAFT.md). Các nội dung còn OPEN không đổi: M9101 (Q-ORD-1), M9120 (Q-ORD-2), mapping pick/drop (Q-MAP-1), cổng đích (Q-LEG-1).
 **Đọc cùng:** [Khảo sát hiện trạng & bảng khoảng cách](PLC_REVIEW_CURRENT_STATE_AND_GAP_ANALYSIS.md) · [Danh sách cần xác nhận](PLC_SPEC_OPEN_QUESTIONS.md).
 
 ### Nhãn độ chắc chắn (áp dụng cho mọi mệnh đề)
@@ -286,7 +287,8 @@ Trong **cả hai** phương án: (1) việc **đọc** thanh ghi diễn ra trư�
 
 ### 9.1. Transaction độc lập theo PLC **[YC]**
 
-- Mỗi PLC xử lý **tối đa một transaction tại một thời điểm**; các PLC khác nhau xử lý **đồng thời**.
+- **[Cập nhật 2026-11-18]** Đơn vị tuần tự hóa là **cổng** (Station Transaction), kết thúc khi AMR đã rời cổng (mốc bước 8/9: Q-REL-1), không phải cả Transport Task. Nếu cổng ≡ PLC (G-A) thì quy tắc dưới đây giữ nguyên; nếu nhiều cổng cùng PLC (G-B/G-C) thì chỉ phần tín hiệu dùng chung phải tuần tự, không khóa cả PLC (Q-GATE-1).
+- Mỗi PLC xử lý **tối đa một transaction tại một thời điểm** *(theo G-A)*; các PLC khác nhau xử lý **đồng thời**.
 - **Không** có khóa PLC toàn cục hay queue toàn cục. Mỗi PLC có trạng thái transaction riêng.
 - Transaction PLC kết thúc khi bước 9 (M9005) hoàn tất ở Trạm đó. **Không đồng nhất với toàn bộ vòng đời AGV task**: task có thể còn tiếp tục (ví dụ BP-01: sau khi lấy rack tại A1/A2, AGV còn chuyển tới B1/B2/F…) **[ĐX]**. Task và transaction là hai thực thể có liên kết.
 - PER_AGV vẫn áp dụng cho task (tối đa một task hoạt động trên một AGV); không thay đổi **[HT]**.
@@ -467,6 +469,7 @@ Không có thao tác "ép hoàn tất/ép hủy" tự động.
 | `PickConfirmed` / `DropConfirmed` | Bước 9 (M9005) sau bước 7 |
 
   Đây chỉ là gợi ý; việc chọn là quyết định nghiệp vụ. **Không** sửa `TaskStateMachine` trong đặc tả này.
+- **Multi-leg [YC2, 2026-11-18]:** một Transport Task có thể có nhiều Leg và nhiều Station Transaction; kết thúc một Station Transaction không làm Task hoàn thành. Cơ chế chặng so với một task RCS (Q-MLEG-1) và việc giải phóng AGV giữa các chặng (Q-AGV-1) chưa quyết định; xem tài liệu mô hình.
 - Chặng do **WCS khởi tạo ở Trạm khác** (không phải Trạm phát request; vd. lấy rack trống tại B1/B2 cho yêu cầu của A1/A2) **không có trình tự trong sheet** (Q-LEG-1).
 - M9102/D1600 (AGV được phân công) và M9103: xem §7.3.
 

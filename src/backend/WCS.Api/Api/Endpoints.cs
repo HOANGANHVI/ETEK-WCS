@@ -163,6 +163,7 @@ public static class Endpoints
 
         // ---- PLC topology, IO catalog, monitoring (CR-002)
         api.MapPlcApi();
+        api.MapRoutingApi();   // CR-010
 
         // ---- Process flows available for task requests (read-only view of the deployed configuration; lets the UI avoid hard-coding stations)
         api.MapGet("/flows", (HttpContext c, WCS.Application.Flows.IFlowCatalog flows) =>
@@ -292,8 +293,8 @@ public static class Endpoints
             return ApiResults.Ok(c, new { reset = true });
         });
         api.MapGet("/audit", async (HttpContext c, IAuditLog log, string? actor, string? action, AuditResult? result, DateTimeOffset? from, DateTimeOffset? to,
-            int? skip, int? take, CancellationToken ct) =>
-            ApiResults.Ok(c, await log.QueryAsync(new AuditQuery(actor, action, result, from, to, skip ?? 0, take ?? 100), ct)))
+            int? skip, int? take, string? actionPrefix, CancellationToken ct) =>
+            ApiResults.Ok(c, await log.QueryAsync(new AuditQuery(actor, action, result, from, to, skip ?? 0, take ?? 100, actionPrefix), ct)))
             .WithTags("Audit").RequireAuthorization(admin);
 
         // ---- System

@@ -148,6 +148,20 @@
 - One PLC connection; no station clustering.
 - Process flows BP-01 to BP-06 documented with unresolved source ambiguities retained.
 
+## v2.8 – CR-010: Configurable Business Process, Route Engine, multi-leg Transport Task and per-port Station Transaction (2026-11-18)
+
+- Change Request: CR-010 (IMPLEMENTED – PARTIAL).
+- Status: scope approved by the project owner instruction of 2026-11-18; PLC live signalling and a real RCS leg adapter remain open.
+- Source: owner instruction of 2026-11-18; `Process in detail.pptx`, `ETEK Process AGV Phase 2 12.08.26.pptx`, `AGV_PLC_IO_Interface_List_10_11_2026.xlsx`, `WCS_BP_Port_PLC_Transaction_Matrix.xlsx` (working reference).
+- Added: Transport Task with Legs; Station Transaction per port (one active per port, database-enforced); Business Process / Route Step / Candidate / condition configuration with versions (Draft, Validated, Published, Disabled), publish validation and snapshots on every task; Route Engine; leg-level PER_AGV; inventory updates for legs and buffers; PLC disconnect/restart recovery; PLC provisioning (any number of PLCs, independent copy of the default IO template per port); Admin API and UI; reference process drafts; migration `AddRoutingEngine`; ADR-0008.
+- Changed: `LocationType` gained WaitingPosition, PickupLocation, DeliveryLocation (additive); audit query gained an optional action prefix; `PlcConfigService.ToView` made public. No existing behaviour was changed.
+- Deprecated: none.
+- Specification files changed: `decisions/ADR/ADR-0008` (new), `specification/business-rules.md` (addendum 1.9), `specification/process-flows.md` (addendum 2.4), `specification/integration-requirements.md` (addendum), PLC specification drafts (statuses).
+- Software components affected: Domain (Routing), Application (Routing, Plc provisioning), Infrastructure (repository, simulator leg dispatcher, template provider), Runtime (RoutingHostedService), API (RoutingEndpoints), Frontend (Routing, Processes, PLC provisioning). Not touched: TaskStateMachine, TransportTask, InventoryService, TaskOrchestrator, FlowOptions, Scheduler, RCS client, PLC worker/driver.
+- Tests added/updated: 50 CR-010 tests (domain, integration, API); existing suites unchanged.
+- Approved by: Project owner (implementation instruction).
+- Date: 2026-11-18.
+
 ## Change log entry template
 
 ### vX.Y.Z – <short title>

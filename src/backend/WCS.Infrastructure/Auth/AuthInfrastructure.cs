@@ -86,6 +86,7 @@ internal sealed class AuditLog(DbContextOptions<WcsDbContext> options, WcsDbCont
         IQueryable<AuditEntry> query = db.AuditLog.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(q.Actor)) query = query.Where(x => x.Actor == q.Actor.Trim().ToLower());
         if (!string.IsNullOrWhiteSpace(q.Action)) query = query.Where(x => x.Action == q.Action.Trim());
+        if (!string.IsNullOrWhiteSpace(q.ActionPrefix)) { var prefix = q.ActionPrefix.Trim(); query = query.Where(x => x.Action.StartsWith(prefix)); }   // CR-010: audit of one feature area
         if (q.Result is { } res) query = query.Where(x => x.Result == res);
         if (q.From is { } from) query = query.Where(x => x.OccurredAt >= from);
         if (q.To is { } to) query = query.Where(x => x.OccurredAt <= to);
