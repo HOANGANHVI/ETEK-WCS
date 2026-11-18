@@ -68,7 +68,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await using var c = new NpgsqlConnection(ConnectionString);
         await c.OpenAsync();
         await using var cmd = new NpgsqlCommand(
-            "TRUNCATE routing_events, station_transactions, transport_legs, transport_orders, route_candidates, route_steps, business_process_versions, business_processes, station_requests, task_history, transport_tasks, reservations, inventory_transactions, racks, processed_events, locations, agvs, connection_settings, app_users, audit_log, plc_comm_log, system_log, station_io_points, plc_stations, plc_connections CASCADE", c);
+            "TRUNCATE routing_events, station_transactions, transport_legs, transport_orders, route_candidates, route_steps, business_process_versions, business_processes, station_requests, task_history, transport_tasks, reservations, inventory_transactions, racks, processed_events, locations, agvs, connection_settings, app_users, audit_log, plc_comm_log, plc_exchange_log, system_log, station_io_points, plc_stations, plc_connections CASCADE", c);
         await cmd.ExecuteNonQueryAsync();
     }
 }

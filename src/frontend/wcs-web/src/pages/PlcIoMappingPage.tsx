@@ -45,8 +45,9 @@ export function PlcIoMappingPage() {
 
   const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
   const simulator = mode === 'Simulator'
-  // Engineering tools (value injection, test-write) are hidden in production builds; the API refuses them in the Production environment as well.
-  const canWrite = ENGINEERING_TOOLS && (simulator || mode === 'RealReadWrite')
+  // CR-015: the write dialog is available in every build (Production included). It is offered only when the runtime really is in a write mode (the simulator, or REAL_READ_WRITE with every
+  // write key); in a read-only runtime the column says so instead of showing a button the backend would refuse.
+  const canWrite = simulator || mode === 'RealReadWrite'
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -125,8 +126,9 @@ export function PlcIoMappingPage() {
                           <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
                           {!inbound && !blocked && <><Button size="sm" disabled={!p.actualAddress} title={p.actualAddress ? undefined : t('plc.writeNoAddressTitle')} onClick={() => setDialog({ kind: 'writeApproval', point: p })}>{t('plc.btnWriteApproval')}</Button>{' '}</>}
                           {ENGINEERING_TOOLS && simulator && <><Button size="sm" onClick={() => setDialog({ kind: 'sim', point: p })}>{t('plc.btnSim')}</Button>{' '}</>}
-                          {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnTestWrite')}</Button>}
-                          {ENGINEERING_TOOLS && !inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
+                          {!inbound && !blocked && canWrite && <Button size="sm" variant="danger" disabled={p.writeApproval !== 'APPROVED' || p.writeSupported === false || !p.actualAddress} title={p.writeApproval !== 'APPROVED' ? t('plc.writeNotApproved') : p.writeSupported === false ? t('plc.writeUnsupported') : undefined} onClick={() => setDialog({ kind: 'write', point: p })}>{t('plc.btnWrite')}</Button>}
+                          {!inbound && !blocked && !canWrite && <small className="muted" title={t('plc.writeReadOnlyTitle')}>{t('plc.writeReadOnly')}</small>}
+                          {!inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
                         </td>
                       </tr>
                     )

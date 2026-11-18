@@ -119,7 +119,9 @@ public class PlcCr004Tests(DatabaseFixture fixture)
         var r = await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/simulator/plc-online", body);
         Assert.Equal(409, r.Status); Assert.Contains("NOT_AVAILABLE_IN_PRODUCTION", r.Raw);
         Assert.Equal(409, (await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/simulator/value", new { plcId = "PLC-01", stationId = "A1", signal = "Station_Online", value = true })).Status);
-        Assert.Equal(409, (await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/stations/A1/signals/Request_ID/test-write", new { value = "X" })).Status);
+        // CR-015: the PLC write is NOT an environment-blocked engineering tool any more: in Production it is judged by the write guards (here: the STRING has no configured length)
+        var write = await admin.SendJsonAsync(HttpMethod.Post, "/api/plc/stations/A1/signals/Request_ID/test-write", new { value = "X" });
+        Assert.NotEqual("NOT_AVAILABLE_IN_PRODUCTION", write.Root.ErrorCode()); Assert.Equal(400, write.Status);   // judged by the value/write guards (a STRING with no configured length), not by the environment
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/connections")).Status);   // configuration itself stays available to Admin
     }
 

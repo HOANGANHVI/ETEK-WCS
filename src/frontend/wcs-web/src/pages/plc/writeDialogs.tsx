@@ -1,5 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { api } from '../../api/client'
+import { ApiRequestError } from '../../api/errors'
 import type { IoPointConfig } from '../../api/plcTypes'
 import { useAuth } from '../../auth/AuthContext'
 import { Button, Pill } from '../../components/ui'
@@ -106,7 +107,11 @@ export function TypedWriteDialog({ point, simulator, onClose, onDone }: { point:
     if (!parsed.ok) return
     setBusy(true); setError(null)
     try { await api.plcTestWrite(point.stationId, point.signalName, parsed.value); setWrittenValue(parsed.value); setStep('done'); io.reload() }
-    catch (e) { setError(describeError(e)); setStep('input') } finally { setBusy(false) }
+    catch (e) {
+      // WRITE_FAILED carries the PLC end code / driver reason, WRITE_AMBIGUOUS says the PLC may or may not have executed it: show both, never a bare success
+      const detail = e instanceof ApiRequestError && (e.code === 'WRITE_FAILED' || e.code === 'WRITE_AMBIGUOUS') && e.message ? `  (${e.message})` : ''
+      setError(describeError(e) + detail); setStep('input')
+    } finally { setBusy(false) }
   }
   const finish = () => (step === 'done' ? onDone(t('plc.testWritten', { station: point.stationId, signal: point.signalName })) : onClose())
 

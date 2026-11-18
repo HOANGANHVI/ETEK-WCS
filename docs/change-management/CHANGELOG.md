@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.2 – CR-015 Enable PLC write (2026-11-18)
+
+- Change Request: CR-015. Status: IMPLEMENTED (code, configuration); not deployed; no real PLC written.
+- Changed: the write endpoint is no longer refused in Production; the write dialog is in every build; compose default `PLC_MODE=RealReadWrite` and the write keys are settable (`PLC_WRITE_ENABLED`, `PLC_WRITE_APPROVAL_REFERENCE`, `PLC_WRITE_HANDSHAKE_APPROVED`); every WRITE exchange is kept in the MC history.
+- Unchanged: Admin role, per-point write approval, value validation, WritePolicy (all keys needed), safety signals blocked, handshake approval.
+- Tests added: `PlcWriteEnablementTests` (4); harness now truncates `plc_exchange_log`.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.1 – CR-014 PLC write approval and typed write input (2026-11-18)
 
 - Change Request: CR-014. Status: IMPLEMENTED (code); not deployed.

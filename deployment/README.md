@@ -80,8 +80,11 @@ Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + m�
 | `WCS_HTTP_PORT` | Cổng Nginx | `80` |
 | `WCS_COOKIE_SECURE` | `Always` (HTTPS, **khuyến nghị vận hành**) hoặc `SameAsRequest` (chỉ HTTP LAN thử nghiệm) | `Always` |
 | `WCS_EDGE_SUBNET`, `WCS_NGINX_IP` | Mạng nội bộ Docker và địa chỉ cố định của Nginx; backend chỉ tin `X-Forwarded-*` từ đúng địa chỉ này | `172.30.0.0/24`, `172.30.0.10` |
-| `PLC_MODE` | `RealReadOnly` (mặc định) hoặc `RealReadWrite` | `RealReadOnly` |
+| `PLC_MODE` | `RealReadWrite` (mặc định, chế độ hỗ trợ ghi) hoặc `RealReadOnly`. Thiếu bất kỳ khóa ghi nào bên dưới thì runtime **vẫn chỉ đọc** (hiển thị trên trang PLC) | `RealReadWrite` |
 | `PLC_ALLOW_LIVE_CONNECTION` | `false`: **không mở socket tới PLC thật** | `false` |
+| `PLC_WRITE_ENABLED` | Khóa ghi 1/3 (CR-015): `true` để cho phép ghi | `false` |
+| `PLC_WRITE_APPROVAL_REFERENCE` | Khóa ghi 2/3: mã tham chiếu phê duyệt bằng văn bản của kỹ sư PLC (không được bỏ trống) | trống |
+| `PLC_WRITE_HANDSHAKE_APPROVED` | Khóa ghi 3/3: `true` khi bảng handshake đã được duyệt (không tự duyệt Handshake: quy tắc handshake vẫn nằm trong cấu hình riêng) | `false` |
 | `PLC_ALLOW_SIMULATOR_IN_PRODUCTION` | Production từ chối `Plc:Mode=Simulator` trừ khi `true` (chỉ để khởi động có giám sát khi chưa có PLC) | `false` |
 | `WCS_ALLOW_NETWORK_PROBE` | Cho phép phép thử TCP của "Kiểm tra kết nối" (chỉ mở/đóng cổng) | `false` |
 | `WCS_LOG_LEVEL`, `WCS_TIMEZONE`, `WCS_VERSION` | Log, múi giờ, nhãn image | `Information`, `Asia/Ho_Chi_Minh`, commit |
@@ -140,14 +143,14 @@ Trình tự an toàn (mỗi bước cần kỹ sư PLC):
 2. Kiểm tra đường mạng từ container (chỉ mở/đóng TCP, **không gửi byte nào**):
    `deployment\scripts\plc-route-test.ps1 -Port <cổng đã xác nhận>` — tham số `-Port` bắt buộc, dự án không giả định cổng.
 3. Đặt `PLC_ALLOW_LIVE_CONNECTION=true`, chạy lại `deploy.ps1`/`start.ps1`; Admin bật kết nối từng PLC; **bắt đầu chỉ đọc** (`PLC_MODE=RealReadOnly`).
-4. Chỉ các IO đã được kỹ sư phê duyệt mới được đọc. Không bật `RealReadWrite` khi chưa có phê duyệt bằng văn bản.
+4. Việc đọc chỉ cần địa chỉ IO hợp lệ (CR-012). **Ghi** (CR-015) chỉ xảy ra khi đủ: `PLC_MODE=RealReadWrite`, `PLC_ALLOW_LIVE_CONNECTION=true`, `PLC_WRITE_ENABLED=true`, `PLC_WRITE_APPROVAL_REFERENCE=<mã phê duyệt>`, `PLC_WRITE_HANDSHAKE_APPROVED=true`; IO có **duyệt quyền ghi** của Admin (*Cấu hình địa chỉ IO → Duyệt ghi*); người ghi là Admin; giá trị đúng kiểu; không phải tín hiệu Safety/Permit. Mỗi lần ghi có hộp thoại xác nhận và Audit Log. Không bật các khóa này khi chưa có phê duyệt bằng văn bản của kỹ sư PLC.
 
 Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.10.x, đúng cổng, Windows Firewall, và danh sách IP được phép trên PLC (dùng IP máy Windows).
 
 ## 9. An toàn Production
 
 - Backend **từ chối khởi động** nếu Production chạy `Plc:Mode=Simulator` (trừ khi `PLC_ALLOW_SIMULATOR_IN_PRODUCTION=true`, có cảnh báo trong log). Khi ngoại lệ bật, giao diện vẫn ghi rõ "Chưa kết nối PLC thật", không có handshake tự động.
-- API mô phỏng và ghi thử (`/api/plc/simulator/*`, `test-write`) bị chặn ở Production; giao diện bản build không hiển thị công cụ kỹ thuật.
+- API mô phỏng (`/api/plc/simulator/*`) bị chặn ở Production; giao diện bản build không hiển thị công cụ mô phỏng. **Ghi PLC (`test-write`) không còn bị chặn theo môi trường (CR-015)**: nó được bảo vệ bởi quyền Admin, duyệt quyền ghi từng IO, kiểm tra giá trị, WritePolicy (đủ khóa ghi) và Audit Log.
 - **RCS hiện chỉ có adapter mô phỏng**: nhiệm vụ **không** được gửi tới AGV/RCS thật; giao diện hiển thị thông báo này trên mọi màn hình.
 - PostgreSQL không publish ra LAN; backend không publish; không dùng privileged hay host network; backend chạy bằng user không phải root.
 - **Forwarded headers:** backend chỉ chấp nhận `X-Forwarded-For/Proto` từ địa chỉ Nginx được chỉ định (`Deployment:TrustedProxyNetworks`, mặc định `172.30.0.10/32`); từ nguồn khác header bị bỏ qua. Nginx ghi đè `X-Forwarded-For` bằng địa chỉ thật của client (không nối thêm giá trị client gửi). Bật tin cậy mà không có danh sách proxy, hoặc dùng `0.0.0.0/0`, thì backend từ chối khởi động. Backend không được publish ra LAN: **không bao giờ thêm `ports:` cho `backend`/`postgres` trong Compose.**
