@@ -92,7 +92,13 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         var ack = await Id(h, "Request_Ack"); var agv = await Id(h, "AGV_ID"); var beat = await Id(h, "Heartbeat_SW");
         await Enter(admin, ack, "M101"); await Enter(admin, agv, "D1600"); await Enter(admin, beat, "M103");
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
-        Assert.Equal("RealReadWrite", (await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/overview")).Root.GetProperty("data").GetProperty("runtime").GetProperty("effectiveMode").GetString());
+        var ov = await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/overview");
+        var rt = ov.Root.GetProperty("data").GetProperty("runtime");
+        Assert.Equal("RealReadWrite", rt.GetProperty("effectiveMode").GetString());
+        // CR-016: the UI is told which conditions are met (flags and NAMES only) - and the engineer approval reference itself is never sent
+        Assert.True(rt.GetProperty("writeEnabled").GetBoolean() && rt.GetProperty("writeApprovalReferenceSet").GetBoolean() && rt.GetProperty("writeHandshakeApproved").GetBoolean());
+        Assert.Equal(0, rt.GetProperty("missingWriteKeys").GetArrayLength());
+        Assert.DoesNotContain("TEST-APPROVAL-001", ov.Raw);
 
         // nothing is written on its own: not when the connection comes up, not while the screens poll
         await Task.Delay(500);
@@ -104,6 +110,12 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         var notApproved = await Write(admin, "Request_Ack", true);
         Assert.Equal(("WRITE_NOT_ALLOWED", 422), (notApproved.Root.ErrorCode(), notApproved.Status));                      // pollable, connected, but no write approval
         Assert.Equal(0, Writes(plc));
+
+        // an approved-looking runtime still never writes a safety/permit signal: the approval is refused and so is a direct write
+        var permit = await Id(h, "Transfer_Permit"); await Enter(admin, permit, "M102");
+        Assert.Equal("WRITE_BLOCKED_SAFETY", (await Approve(admin, permit)).Root.ErrorCode());
+        Assert.Equal("WRITE_BLOCKED_SAFETY", (await Write(admin, "Transfer_Permit", true)).Root.ErrorCode());
+        Assert.False(plc.GetBit(102)); Assert.Equal(0, Writes(plc));
 
         Assert.Equal(200, (await Approve(admin, ack)).Status); Assert.Equal(200, (await Approve(admin, agv)).Status);
         Assert.Equal("VALUE_INVALID", (await Write(admin, "Request_Ack", "on")).Root.ErrorCode());                          // wrong data type
@@ -143,7 +155,14 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         var ack = await Id(h, "Request_Ack");
         await Enter(admin, ack, "M101"); Assert.Equal(200, (await Approve(admin, ack)).Status);
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
-        Assert.Equal("RealReadOnly", (await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/overview")).Root.GetProperty("data").GetProperty("runtime").GetProperty("effectiveMode").GetString());
+        var ov = await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/overview");
+        var rt = ov.Root.GetProperty("data").GetProperty("runtime");
+        Assert.Equal("RealReadOnly", rt.GetProperty("effectiveMode").GetString());
+        // CR-016: the UI can name exactly what is missing (here the three write keys), so it explains instead of hiding the write action
+        Assert.False(rt.GetProperty("writeEnabled").GetBoolean() || rt.GetProperty("writeApprovalReferenceSet").GetBoolean() || rt.GetProperty("writeHandshakeApproved").GetBoolean());
+        Assert.Equal(["PLC_WRITE_ENABLED", "PLC_WRITE_APPROVAL_REFERENCE", "PLC_WRITE_HANDSHAKE_APPROVED"], rt.GetProperty("missingWriteKeys").EnumerateArray().Select(x => x.GetString()).ToArray());
+        // the approved point is reported as approved - the refusal below comes from the runtime mode, which is what the UI shows as the reason
+        Assert.Equal("APPROVED", (await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/points?plcId=PLC-01&stationId=A1")).Root.GetProperty("data").EnumerateArray().Single(p => p.GetProperty("id").GetGuid() == ack).GetProperty("writeApproval").GetString());
 
         var r = await Write(admin, "Request_Ack", true);
         Assert.Equal(("READ_ONLY", 422), (r.Root.ErrorCode(), r.Status));
