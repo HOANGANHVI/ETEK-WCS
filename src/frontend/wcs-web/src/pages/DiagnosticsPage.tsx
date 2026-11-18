@@ -4,6 +4,7 @@ import { Async, Button, PageHeader, Panel } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { describeError } from '../i18n/vi'
+import { SystemExportPanel } from './diagnostics/SystemExportPanel'
 
 type Mode = '1h' | '24h' | 'custom'
 
@@ -37,6 +38,7 @@ export function DiagnosticsPage() {
   return (
     <>
       <PageHeader title={t('diagnostics.title')} description={t('diagnostics.description')} />
+      <SystemExportPanel plcs={plcs.data ?? []} />
       {result && <div className={`notice ${result.ok ? 'notice-ok' : 'notice-bad'}`} role={result.ok ? 'status' : 'alert'}>{result.text}</div>}
       <Panel title={t('diagnostics.panel')}>
         <Async state={plcs} isEmpty={(d) => d.length === 0} empty={{ title: t('diagnostics.noPlc') }}>

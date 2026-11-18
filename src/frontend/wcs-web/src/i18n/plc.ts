@@ -36,6 +36,23 @@ export const MONITOR_STATUS_VI = localizedMap({
 })
 export const MONITOR_STATUS_TONE: Record<string, Tone> = { Good: 'ok', Stale: 'warn', Bad: 'bad', Offline: 'bad', Unknown: 'muted', NotConfigured: 'muted', Simulated: 'warn' }
 
+/** CR-021: system diagnostic export - job state, source status, module names. */
+export const DIAG_STATE_VI = localizedMap({
+  Queued: 'Đang chờ', Running: 'Đang chạy', Completed: 'Hoàn tất', Failed: 'Thất bại', Expired: 'Đã hết hạn',
+}, { Queued: 'Queued', Running: 'Running', Completed: 'Completed', Failed: 'Failed', Expired: 'Expired' })
+export const DIAG_STATE_TONE: Record<string, Tone> = { Queued: 'muted', Running: 'warn', Completed: 'ok', Failed: 'bad', Expired: 'muted' }
+export const DIAG_SOURCE_VI = localizedMap({
+  OK: 'Đầy đủ', Partial: 'Một phần', Failed: 'Không đọc được', NotRequested: 'Ngoài phạm vi',
+}, { OK: 'Complete', Partial: 'Partial', Failed: 'Could not be read', NotRequested: 'Out of scope' })
+export const DIAG_SOURCE_TONE: Record<string, Tone> = { OK: 'ok', Partial: 'warn', Failed: 'bad', NotRequested: 'muted' }
+export const DIAG_MODULE_VI = localizedMap({
+  System: 'Hệ thống', Database: 'Cơ sở dữ liệu', Rcs: 'RCS', Agv: 'AGV', Plc: 'PLC', Task: 'Task / điều phối', Routing: 'Routing', Station: 'Station / IO',
+  Inventory: 'Tồn kho / vị trí', Auth: 'Đăng nhập / phân quyền', Audit: 'Audit', Api: 'API / SignalR', Deployment: 'Triển khai', Config: 'Cấu hình',
+}, {
+  System: 'System', Database: 'Database', Rcs: 'RCS', Agv: 'AGV', Plc: 'PLC', Task: 'Task / dispatching', Routing: 'Routing', Station: 'Station / IO',
+  Inventory: 'Inventory / location', Auth: 'Authentication / authorization', Audit: 'Audit', Api: 'API / SignalR', Deployment: 'Deployment', Config: 'Configuration',
+})
+
 export const CONFIG_STATUS_VI = localizedMap({
   NEEDS_CONFIGURATION: 'Cần thiết lập', CONFIGURED: 'Đã nhập địa chỉ', APPROVED: 'Đã xác nhận (kỹ sư PLC)',
 }, {
@@ -107,6 +124,12 @@ export const PLC_ERROR_VI = localizedMap({
   TYPE_MISMATCH: 'Giá trị không đúng kiểu dữ liệu của tín hiệu.',
   WRITE_FAILED: 'Ghi xuống PLC thất bại.',
   READ_FAILED: 'Đọc PLC thất bại.',
+  DIAGNOSTIC_MODULE_INVALID: 'Tên module không hợp lệ.',
+  DIAGNOSTIC_LEVEL_INVALID: 'Mức lỗi phải là Information, Warning, Error hoặc Critical.',
+  DIAGNOSTIC_EXPORT_BUSY: 'Đang có quá nhiều lần xuất chẩn đoán. Hãy thử lại khi một lần xuất đã xong.',
+  DIAGNOSTIC_JOB_NOT_FOUND: 'Không tìm thấy lần xuất (có thể đã hết hạn 24 giờ).',
+  DIAGNOSTIC_JOB_NOT_READY: 'Lần xuất chưa xong, đã thất bại hoặc file đã hết hạn.',
+  DIAGNOSTIC_EXPORT_TIMEOUT: 'Lần xuất vượt quá thời gian cho phép.',
   NOT_CONFIGURED: 'IO chưa có địa chỉ hợp lệ nên không đọc được.',
   WRITE_AMBIGUOUS: 'Lệnh ghi đã được gửi nhưng không nhận được xác nhận: KHÔNG được ghi lại tự động. Hãy đọc lại giá trị trên PLC để kiểm tra.',
   RADIX_UNCONFIRMED: 'Cơ số địa chỉ X/Y/W đang chờ kỹ sư PLC xác nhận.',
@@ -191,6 +214,12 @@ export const PLC_ERROR_VI = localizedMap({
   TYPE_MISMATCH: 'The value does not match the signal data type.',
   WRITE_FAILED: 'Writing to the PLC failed.',
   READ_FAILED: 'Reading the PLC failed.',
+  DIAGNOSTIC_MODULE_INVALID: 'The module name is not valid.',
+  DIAGNOSTIC_LEVEL_INVALID: 'The level must be Information, Warning, Error or Critical.',
+  DIAGNOSTIC_EXPORT_BUSY: 'Too many diagnostic exports are running or waiting. Try again when one has finished.',
+  DIAGNOSTIC_JOB_NOT_FOUND: 'Diagnostic export not found (it may have expired after 24 hours).',
+  DIAGNOSTIC_JOB_NOT_READY: 'The export is not finished, failed, or its file has expired.',
+  DIAGNOSTIC_EXPORT_TIMEOUT: 'The export exceeded the allowed time.',
   NOT_CONFIGURED: 'The IO has no valid address, so it cannot be read.',
   WRITE_AMBIGUOUS: 'The write command was sent but no confirmation was received: do NOT retry automatically. Read the value back from the PLC to verify.',
   RADIX_UNCONFIRMED: 'The X/Y/W address radix is awaiting confirmation by the PLC engineer.',

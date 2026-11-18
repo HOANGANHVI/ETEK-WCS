@@ -57,8 +57,11 @@ public static class DependencyInjection
         services.AddSingleton<WCS.Application.Monitoring.IResourceMonitor>(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
         services.AddHostedService(sp => sp.GetRequiredService<WCS.Infrastructure.Monitoring.ResourceMonitor>());
 
-        services.AddDbContext<WcsDbContext>(o => o.UseNpgsql(BuildConnectionString(configuration),
-            npgsql => npgsql.MigrationsAssembly(typeof(WcsDbContext).Assembly.FullName)));
+        // CR-021: slow commands and failed commands (deadlock, constraint, timeout) are logged without parameter values (Diagnostics:SlowQueryMs, default 1000)
+        var slowQueryMs = configuration.GetValue("Diagnostics:SlowQueryMs", 1000);
+        services.AddDbContext<WcsDbContext>((sp, o) => o.UseNpgsql(BuildConnectionString(configuration),
+            npgsql => npgsql.MigrationsAssembly(typeof(WcsDbContext).Assembly.FullName))
+            .AddInterceptors(new DbDiagnosticsInterceptor(sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<DbDiagnosticsInterceptor>>(), slowQueryMs)));
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IAgvRepository, AgvRepository>();
@@ -80,6 +83,14 @@ public static class DependencyInjection
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();
         services.AddScoped<WCS.Infrastructure.Plc.PlcCatalogSeeder>();
         services.AddScoped<WCS.Application.Diagnostics.IPlcDiagnosticSource, WCS.Infrastructure.Plc.PlcDiagnosticSource>();
+        // CR-021: read-only readers of the stored log sources for the system diagnostic export
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.SystemLogSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.PlcCommLogSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.AuditLogSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.TaskHistorySource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.RoutingEventSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.InventoryTransactionSource>();
+        services.AddScoped<WCS.Application.Diagnostics.IDiagnosticHealthSource, WCS.Infrastructure.Diagnostics.DiagnosticHealthSource>();
         services.AddSingleton<WCS.Application.Plc.IPlcTemplateProvider, WCS.Infrastructure.Plc.PlcTemplateProvider>();   // CR-010 Default IO Mapping Template
         services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
         services.AddSingleton<WCS.Application.Plc.ISimulatorControl>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.SimulatedPlcNetwork>());
@@ -111,7 +122,8 @@ public static class DependencyInjection
         services.AddSingleton<RcsSimulator>();
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
-        services.AddSingleton<IRcsClient>(sp => sp.GetRequiredService<RcsSimulator>());
+        // CR-021: every RCS call is logged (operation, request code, outcome, duration, adapter); the Production guard looks through the wrapper (IRcsClientDecorator.Unwrap)
+        services.AddSingleton<IRcsClient>(sp => new LoggingRcsClient(sp.GetRequiredService<RcsSimulator>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LoggingRcsClient>>()));
         // CR-008A: Production must not dispatch to the simulator (explicit opt-in only).
         var allowRcsSimulatorInProduction = configuration.GetValue("Rcs:AllowSimulatorInProduction", false);
         services.AddSingleton<IRcsDispatchGuard>(sp => new RcsDispatchGuard(sp.GetRequiredService<IRcsClient>(),

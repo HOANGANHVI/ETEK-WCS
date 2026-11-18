@@ -86,6 +86,8 @@ public sealed class InventoryService(
         if (task.RackId is { } rid && await racks.GetAsync(rid, ct) is { } rack) rack.MarkUnknown(clock.UtcNow);
         foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId }.Where(x => x is not null).Distinct())
             if (await locations.GetAsync(id!.Value, ct) is { } loc) loc.SetReconciliationRequired(true, clock.UtcNow);
+        logger.LogWarning("Task {TaskId}: rack {RackId} and locations {SourceLocation}/{DestinationLocation} marked uncertain (picked, delivery not confirmed). {EventCode}",
+            task.Id, task.RackId, task.SourceLocationId, task.DestinationLocationId, "INVENTORY_UNCERTAIN");   // CR-021
     }
 
     public async Task MarkPhysicalUnprovenAsync(TransportTask task, CancellationToken ct = default)
@@ -94,6 +96,8 @@ public sealed class InventoryService(
         if (task.RackId is { } rid && await racks.GetAsync(rid, ct) is { } rack && rack.Status != RackStatus.Unknown) rack.MarkUnknown(clock.UtcNow);
         foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId }.Where(x => x is not null).Distinct())
             if (await locations.GetAsync(id!.Value, ct) is { } loc) loc.SetReconciliationRequired(true, clock.UtcNow);
+        logger.LogWarning("Task {TaskId}: rack {RackId} and locations {SourceLocation}/{DestinationLocation} marked uncertain (outcome reported by RCS cannot be proven). {EventCode}",
+            task.Id, task.RackId, task.SourceLocationId, task.DestinationLocationId, "INVENTORY_UNCERTAIN");   // CR-021
     }
 
     // -------------------------------------------------------------------------- confirmed events
@@ -250,7 +254,7 @@ public sealed class InventoryService(
             return true;
         }, ct);
         await notifier.PublishAsync([new WcsEvent("InventoryChanged", new { taskId, reason = "reconciled" })], ct);
-        logger.LogInformation("Task {TaskId} reconciled by {User} at {Location}", taskId, user, actualLocationCode);
+        logger.LogInformation("Task {TaskId} reconciled by {User} at {Location}. {EventCode}", taskId, user, actualLocationCode, "INVENTORY_RECONCILED");
     }
 
     // -------------------------------------------------------------------------- helpers

@@ -29,6 +29,10 @@ public static class DependencyInjection
         services.AddScoped<AgvHoldService>();   // CR-008B-5
         services.AddScoped<AgvStatusService>();
         services.AddScoped<Diagnostics.DiagnosticExportService>();   // PLC diagnostic export (P1)
+        // CR-021: whole-system diagnostic export (sources are registered by the infrastructure; jobs run in the background)
+        services.Configure<Diagnostics.SystemDiagnosticOptions>(configuration.GetSection(Diagnostics.SystemDiagnosticOptions.SectionName));
+        services.AddScoped<Diagnostics.SystemDiagnosticExporter>();
+        services.AddSingleton<Diagnostics.DiagnosticExportJobs>();
         // CR-010
         services.AddScoped<Routing.RouteConditionEvaluator>();
         services.AddScoped<Routing.ProcessValidator>();

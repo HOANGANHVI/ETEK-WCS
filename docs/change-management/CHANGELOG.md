@@ -1,5 +1,28 @@
 # Change Log
 
+## v3.10 – CR-021 batch D End-to-end verification and performance (2026-11-18)
+
+- `SystemDiagnosticScenarioTests` (2): task reconstruction across modules on the real logging pipeline + RCS simulator + MC mock; 500 000-event export (time, size, memory) and per-source limit. Module classification by event-code prefix (fixes TASK_FINISHED being filed under RCS because its text says "RCS"). PLC folder "Partial" only when PLC events older than its cap exist. Not deployed. CR-021 closed as IMPLEMENTED.
+- Approved by: project owner. Date: 2026-11-18.
+
+## v3.9 – CR-021 batch C Missing diagnostic events (2026-11-18)
+
+- RCS call logging (decorator), task/dispatch/cancel/finish decisions, station requests, AGV status changes, inventory, database slow/failed commands, API (D7), SignalR, application lifecycle, unhandled exceptions, startup config warnings. 30 log templates translated (vi/en). The 401/403 request level changed from Information to Warning (D7); the existing test was updated. Not deployed. No migration.
+- Tests added: `DiagnosticLoggingTests` (11). Found by them: task completion and queue-cancel did not pass through the finish path (now logged), and the first-task AGV decision is made in ProcessTask, not in the queue pass.
+- Approved by: project owner. Date: 2026-11-18.
+
+## v3.8 – CR-021 batch B Correlation and tracing (2026-11-18)
+
+- Migration `AddCorrelationIds` (additive, nullable, indexed) on `transport_tasks` and `transport_orders`. `DiagnosticContext`, log enricher, inbound `X-Correlation-Id`, task/order frames. No business logic changed. Not deployed.
+- Tests added: `CorrelationTests` (9). Found by them: an AsyncLocal frame created inside an async helper is lost on return, so every step now enters its frame itself.
+- Approved by: project owner. Date: 2026-11-18.
+
+## v3.7 – CR-021 batch A System diagnostic export (2026-11-18)
+
+- Change Request: CR-021 (in progress). Batch A: whole-system diagnostic export as a background job, normalised events, per-source status, masked configuration, Admin UI. No migration; PLC export unchanged; not deployed.
+- Tests added: `SystemDiagnosticExportTests` (8). Found and fixed by them: secrets inside nested JSON (audit before/after) escaped past the masking; the Manifest now writes explicit nulls.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.6 – CR-020 Unified PLC monitoring and operations (2026-11-18)
 
 - Change Request: CR-020. Status: IMPLEMENTED; mock-verified only; not deployed; no migration.

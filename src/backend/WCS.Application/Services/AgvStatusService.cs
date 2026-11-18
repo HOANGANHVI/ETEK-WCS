@@ -13,6 +13,7 @@ public sealed class AgvStatusService(IUnitOfWork uow, IAgvRepository agvs, IRcsC
         foreach (var snapshot in await agvs.ListAsync(ct))
         {
             if (string.IsNullOrWhiteSpace(snapshot.RcsRobotCode)) continue; // robot code not configured yet
+            using var _frame = WCS.Application.Diagnostics.DiagnosticContext.Begin(null, agvId: snapshot.Code);   // CR-021
             AgvConnectionStatus status; string? detail;
             var link = guard.Check();
             if (!link.Allowed)
@@ -32,14 +33,20 @@ public sealed class AgvStatusService(IUnitOfWork uow, IAgvRepository agvs, IRcsC
                 (status, detail) = (AgvConnectionStatus.Error, ex.Message);
             }
 
+            AgvConnectionStatus? previous = null;
             var changed = await uow.ExecuteAsync(async t =>
             {
+                previous = null;
                 var agv = await agvs.GetAsync(snapshot.Id, t);
                 if (agv is null) return (WcsEvent?)null;
+                if (agv.ConnectionStatus != status) previous = agv.ConnectionStatus;
                 var different = agv.ConnectionStatus != status || agv.StatusDetail != detail;
                 agv.UpdateStatus(status, detail, clock.UtcNow);
                 return different ? new WcsEvent("AgvStatusChanged", agv.ToDto(null)) : null;
             }, ct);
+            if (previous is { } from)   // CR-021: a CHANGE of connection status is a diagnostic event (a steady status is not logged per poll)
+                logger.Log(status is AgvConnectionStatus.Offline or AgvConnectionStatus.Error ? LogLevel.Warning : LogLevel.Information, "AGV {Agv} connection status {From} -> {To}: {Detail}. {EventCode}",
+                    snapshot.Code, from, status, detail ?? "-", "AGV_STATUS_CHANGED");
             if (changed is not null) await notifier.PublishAsync([changed], ct);
         }
     }

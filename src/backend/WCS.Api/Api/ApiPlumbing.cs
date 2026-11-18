@@ -69,7 +69,7 @@ public static class ExceptionMapping
 
 /// <summary>SignalR hub. Only signed-in Admin/Operator sessions (same cookie as the REST API) may connect.</summary>
 [Microsoft.AspNetCore.Authorization.Authorize(Policy = AuthSetup.OperationsPolicy)]
-public sealed class WcsHub : Hub
+public sealed class WcsHub(ILogger<WcsHub> logger) : Hub
 {
     public const string AdminGroup = "admins";
 
@@ -78,7 +78,16 @@ public sealed class WcsHub : Hub
     {
         if (Context.User?.IsInRole(nameof(WCS.Domain.Users.UserRole.Admin)) == true)
             await Groups.AddToGroupAsync(Context.ConnectionId, AdminGroup);
+        logger.LogInformation("Realtime client connected: user {User}, role {Role}. {EventCode}", Context.User?.Identity?.Name ?? "-", Context.User?.IsInRole(nameof(WCS.Domain.Users.UserRole.Admin)) == true ? "Admin" : "Operator", "SIGNALR_CONNECTED");   // CR-021
         await base.OnConnectedAsync();
+    }
+
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        // CR-021: a clean close is information; a close with an error (network drop, transport failure) is a warning
+        if (exception is null) logger.LogInformation("Realtime client disconnected: user {User}. {EventCode}", Context.User?.Identity?.Name ?? "-", "SIGNALR_DISCONNECTED");
+        else logger.LogWarning(exception, "Realtime client disconnected with an error: user {User}. {EventCode}", Context.User?.Identity?.Name ?? "-", "SIGNALR_DISCONNECTED_ERROR");
+        return base.OnDisconnectedAsync(exception);
     }
 }
 

@@ -56,6 +56,9 @@ public class TransportTask
     public string? StateReasonCode { get; private set; }
     public string? StateReasonArgsJson { get; private set; }
     public string? RequestedBy { get; private set; }
+    /// <summary>CR-021: the id that ties every log event of this task's life together (set once at creation; null for tasks created before CR-021).</summary>
+    public string? CorrelationId { get; private set; }
+    public void SetCorrelation(string? correlationId) { if (CorrelationId is null && !string.IsNullOrWhiteSpace(correlationId)) CorrelationId = correlationId.Trim().Length > 100 ? correlationId.Trim()[..100] : correlationId.Trim(); }
 
     /// <summary>Unique request code sent to RCS (idempotent task creation).</summary>
     public string RcsRequestCode { get; private set; } = default!;

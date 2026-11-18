@@ -119,6 +119,7 @@ public sealed class Harness : IAsyncDisposable
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddSingleton<IConfiguration>(config);   // CR-021: the system diagnostic export reads (masked) configuration sections
         services.AddWcsApplication(config);
         services.AddWcsInfrastructure(config);
         services.AddSingleton<IClock>(Clock);
