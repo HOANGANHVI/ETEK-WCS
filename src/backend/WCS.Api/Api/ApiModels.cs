@@ -104,6 +104,9 @@ public sealed record UpdatePlcConnectionRequest(string? Name, [property: Require
 
 public sealed record SetPointAddressRequest([property: Required, StringLength(20)] string Address, int? WordLength, [property: StringLength(40)] string? Encoding);
 
+/// <summary>Bulk READ approval: the Admin confirms the number of eligible points shown by the preview (the call is refused if it changed meanwhile).</summary>
+public sealed record BulkApprovalRequest([property: Required] bool? Confirm, [property: Required] int? ExpectedEligible);
+
 public sealed record SetWriteAllowedRequest(bool Allowed);
 
 public sealed record TestWriteRequest(System.Text.Json.JsonElement Value);

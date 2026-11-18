@@ -11,14 +11,17 @@ import { describeError } from '../i18n/vi'
 import { AddressDialog, SimDialog, WriteDialog, type DialogPoint } from './plc/plcDialogs'
 import { BLOCKED_SIGNALS, deviceOf } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
+import { BulkApprovalDialog } from './plc/BulkApprovalDialog'
 
 const PLCS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04'] as const
 const STATIONS: Record<string, string[]> = {
   'PLC-01': ['A1', 'A2', 'A3', 'A4'], 'PLC-02': ['B1', 'B2', 'D1', 'D2'], 'PLC-03': ['X1', 'X2', 'X3', 'X6'], 'PLC-04': ['E1', 'E2', 'G3', 'G7'],
 }
+/** PLC under commissioning that offers the bulk read approval. The backend decides (Plc:BulkApproval:AllowedPlcIds, default PLC-04) and refuses any other PLC. */
+const BULK_APPROVAL_PLC = 'PLC-04'
 const STATUSES = ['NEEDS_CONFIGURATION', 'CONFIGURED', 'APPROVED'] as const
 
-type Dialog = { kind: 'address' | 'write' | 'sim'; point: IoPointConfig } | null
+type Dialog = { kind: 'address' | 'write' | 'sim'; point: IoPointConfig } | { kind: 'bulk'; plcId: string } | null
 
 const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
   id: p.id, plcId: p.plcId, stationId: p.stationId, signalName: p.signalName, dataType: p.dataType, address: p.actualAddress, configStatus: p.configStatus,
@@ -85,6 +88,7 @@ export function PlcIoMappingPage() {
         </div>
         <div className="btn-row">
           <Button disabled={!plc} onClick={() => void check()}>{t('plc.checkConflicts', { plc: plc || t('plc.choosePlc') })}</Button>
+          {plc === BULK_APPROVAL_PLC && <Button variant="primary" onClick={() => setDialog({ kind: 'bulk', plcId: plc })}>{t('plc.bulkButton', { plc })}</Button>}
           <Button onClick={() => { setPlc(''); setStation(''); setStatus(''); setSearch('') }}>{t('plc.clearFilters')}</Button>
           <span className="muted">{t('plc.showing', { shown: rows.length, total: counts.total })}</span>
         </div>
@@ -133,6 +137,7 @@ export function PlcIoMappingPage() {
           )}
         </Async>
       </Panel>
+      {dialog?.kind === 'bulk' && <BulkApprovalDialog plcId={dialog.plcId} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'address' && <AddressDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'write' && <WriteDialog point={asDialogPoint(dialog.point)} simulator={simulator} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'sim' && <SimDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}

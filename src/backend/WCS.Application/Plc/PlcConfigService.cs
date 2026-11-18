@@ -168,6 +168,89 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             return ToView(p, true);
         }, ct);
 
+    // ---------------------------------------------------------------------------------------------- bulk READ approval (commissioning of one PLC)
+    /// <summary>Classifies every IO point of a PLC for a bulk read-approval without changing anything.</summary>
+    private static IReadOnlyList<BulkApprovalItem> Classify(IReadOnlyList<StationIoPoint> points, AddressBases bases)
+    {
+        var specs = points.Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction)).ToList();
+        var issues = AddressValidator.Validate(specs, bases);
+        AddressIssue? IssueOf(Guid id) => issues.FirstOrDefault(i => i.PointId == id) ?? issues.FirstOrDefault(i => i.ConflictWith == id);
+        return points.Select(p =>
+        {
+            BulkApprovalItem Item(string outcome, string? code = null, string? reason = null) =>
+                new(p.Id, p.StationId, p.SignalName, p.DataType.ToString(), p.ActualAddress, outcome, code, reason);
+            if (p.Status == IoConfigStatus.Approved) return Item(BulkOutcome.AlreadyApproved);
+            if (p.Status == IoConfigStatus.NeedsConfiguration || string.IsNullOrWhiteSpace(p.ActualAddress))
+                return Item(BulkOutcome.NotEligible, "NO_ADDRESS", "No address entered.");
+            if (IssueOf(p.Id) is { } issue) return Item(BulkOutcome.NotEligible, issue.Code, issue.Message);
+            if (p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(p.Encoding))
+                return Item(BulkOutcome.NotEligible, "ENCODING_REQUIRED", "STRING needs a confirmed encoding.");
+            return Item(BulkOutcome.Eligible);
+        }).ToList();
+    }
+
+    private static BulkApprovalPreview ToPreview(string plcId, IReadOnlyList<BulkApprovalItem> items) =>
+        new(plcId, items.Count, items.Count(i => !string.IsNullOrWhiteSpace(i.Address)), items.Count(i => i.Outcome == BulkOutcome.Eligible),
+            items.Count(i => i.Outcome == BulkOutcome.NotEligible), items.Count(i => i.Outcome == BulkOutcome.AlreadyApproved), items);
+
+    private async Task RequireBulkAllowedAsync(string plcId, IReadOnlyList<string> allowed, CancellationToken ct)
+    {
+        _ = await repo.GetConnectionAsync(plcId, ct) ?? throw AppException.NotFound("PLC_NOT_FOUND", $"Không tìm thấy {plcId}.");
+        if (!BulkApprovalPolicy.IsAllowed(allowed, plcId))
+            throw AppException.Rejected("BULK_APPROVAL_NOT_ALLOWED", $"Duyệt đọc hàng loạt không được bật cho {plcId}.");
+    }
+
+    /// <summary>What a bulk read-approval of <paramref name="plcId"/> would do. Read-only.</summary>
+    public async Task<BulkApprovalPreview> PreviewBulkApprovalAsync(string plcId, IReadOnlyList<string> allowedPlcIds, CancellationToken ct = default)
+    {
+        await RequireBulkAllowedAsync(plcId, allowedPlcIds, ct);
+        return ToPreview(plcId, Classify(await repo.ListPointsAsync(plcId, null, ct), await BasesOfAsync(plcId, ct)));
+    }
+
+    /// <summary>
+    /// Grants READ approval (the existing <see cref="StationIoPoint.Approve"/>) to every eligible IO point of one allowed PLC: status CONFIGURED, address present and valid
+    /// (format, type/device, no overlap on the PLC), STRING with encoding. Addresses, data types, write permission, handshake and every other PLC are untouched.
+    /// <paramref name="expectedEligible"/> (the count the Admin confirmed in the preview) guards against a changed state between preview and confirmation.
+    /// A point whose approval fails is reported and does not stop the others.
+    /// </summary>
+    public Task<BulkApprovalResult> BulkApproveAsync(string plcId, string approvedBy, IReadOnlyList<string> allowedPlcIds, int? expectedEligible, CancellationToken ct = default) =>
+        uow.ExecuteAsync(async t =>
+        {
+            await RequireBulkAllowedAsync(plcId, allowedPlcIds, t);
+            var points = await repo.ListPointsAsync(plcId, null, t);
+            var items = Classify(points, await BasesOfAsync(plcId, t)).ToList();
+            var eligible = items.Count(i => i.Outcome == BulkOutcome.Eligible);
+            if (expectedEligible is { } exp && exp != eligible)
+                throw AppException.Rejected("BULK_APPROVAL_PREVIEW_STALE", $"Số điểm đủ điều kiện đã thay đổi ({exp} → {eligible}). Hãy xem lại bản xem trước rồi xác nhận lại.");
+            var now = clock.UtcNow;
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (items[i].Outcome != BulkOutcome.Eligible) continue;
+                var p = points.First(x => x.Id == items[i].PointId);
+                try { p.Approve(approvedBy, now); items[i] = items[i] with { Outcome = BulkOutcome.Approved }; }
+                catch (WCS.Domain.Common.DomainException ex) { items[i] = items[i] with { Outcome = BulkOutcome.Failed, Code = ex.Code, Reason = ex.Message }; }
+            }
+            return Summarize(plcId, items, verified: 0);
+        }, ct);
+
+    private static BulkApprovalResult Summarize(string plcId, IReadOnlyList<BulkApprovalItem> items, int verified) =>
+        new(plcId, items.Count, items.Count(i => i.Outcome == BulkOutcome.Approved), items.Count(i => i.Outcome == BulkOutcome.AlreadyApproved),
+            items.Count(i => i.Outcome == BulkOutcome.NotEligible), items.Count(i => i.Outcome == BulkOutcome.Failed), verified, items);
+
+    /// <summary>
+    /// Re-reads the PLC's points (call it on a NEW scope so the database is read, not the tracker) and keeps "approved" only for points that really are
+    /// APPROVED and pollable now; anything else is reported as failed. Success is never taken from the number of requests sent.
+    /// </summary>
+    public async Task<BulkApprovalResult> VerifyBulkApprovalAsync(BulkApprovalResult result, CancellationToken ct = default)
+    {
+        var current = (await repo.ListPointsAsync(result.PlcId, null, ct)).ToDictionary(p => p.Id);
+        bool Pollable(Guid id) => current.TryGetValue(id, out var p) && p.Status == IoConfigStatus.Approved && p.IsPollable;
+        var items = result.Items.Select(i => i.Outcome == BulkOutcome.Approved && !Pollable(i.PointId)
+            ? i with { Outcome = BulkOutcome.Failed, Code = "VERIFY_FAILED", Reason = "After saving, the point is not Approved/Pollable." }
+            : i).ToList();
+        return Summarize(result.PlcId, items, items.Count(i => (i.Outcome is BulkOutcome.Approved or BulkOutcome.AlreadyApproved) && Pollable(i.PointId)));
+    }
+
     public Task<IoPointView> SetWriteAllowedAsync(Guid pointId, bool allowed, CancellationToken ct = default) =>
         uow.ExecuteAsync(async t =>
         {

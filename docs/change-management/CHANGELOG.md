@@ -1,5 +1,13 @@
 # Change Log
 
+## v2.8 – CR-011 Bulk READ approval of the PLC under commissioning (2026-11-18)
+
+- Change Request: CR-011. Status: IMPLEMENTED (code); not yet executed on the deployment database.
+- Added: Admin-only `GET/POST /api/plc/connections/{plcId}/bulk-approval`, dialog on the IO mapping page, audit action `PLC_IO_BULK_APPROVE`, configuration `Plc:BulkApproval:AllowedPlcIds` (default PLC-04).
+- Changed: none. The existing single-point approval, `IsPollable` and the PLC driver are unchanged; no migration.
+- Tests added: `PlcBulkApprovalTests` (7).
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v2.7 – CR-008B-5 AGV dispatch hold (2026-11-17)
 
 - Change Request: CR-008B (sub-CR B-5). Status: IMPLEMENTED on `develop`; not merged. Owner decisions D-5 (M2), D-6, D-7 (P2), D-8 applied.

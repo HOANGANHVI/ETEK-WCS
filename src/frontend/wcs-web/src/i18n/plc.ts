@@ -71,6 +71,9 @@ export const MISSING_PARAM_VI = localizedMap({
 
 export const PLC_ERROR_VI = localizedMap({
   PLC_NOT_FOUND: 'Không tìm thấy PLC.',
+  BULK_APPROVAL_NOT_ALLOWED: 'Duyệt đọc hàng loạt không được bật cho PLC này.',
+  BULK_APPROVAL_NOT_CONFIRMED: 'Cần xác nhận và số điểm đủ điều kiện đã xem ở bản xem trước.',
+  BULK_APPROVAL_PREVIEW_STALE: 'Số tín hiệu đủ điều kiện đã thay đổi từ lúc xem trước. Hãy mở lại hộp thoại và xác nhận lại.',
   IO_POINT_NOT_FOUND: 'Không tìm thấy IO point.',
   IO_NO_ADDRESS: 'Cần nhập địa chỉ trước khi xác nhận.',
   IO_NOT_APPROVED: 'Chỉ tín hiệu đã được xác nhận mới được cho phép ghi.',
@@ -141,6 +144,9 @@ export const PLC_ERROR_VI = localizedMap({
   AGV_TASK_CODE_MISMATCH: 'Chặng đã gắn với một mã nhiệm vụ AGV khác.',
 }, {
   PLC_NOT_FOUND: 'PLC not found.',
+  BULK_APPROVAL_NOT_ALLOWED: 'Bulk read approval is not enabled for this PLC.',
+  BULK_APPROVAL_NOT_CONFIRMED: 'A confirmation and the number of eligible points seen in the preview are required.',
+  BULK_APPROVAL_PREVIEW_STALE: 'The number of eligible signals changed since the preview. Reopen the dialog and confirm again.',
   IO_POINT_NOT_FOUND: 'IO point not found.',
   IO_NO_ADDRESS: 'Enter an address before confirming.',
   IO_NOT_APPROVED: 'Only confirmed signals may be written.',

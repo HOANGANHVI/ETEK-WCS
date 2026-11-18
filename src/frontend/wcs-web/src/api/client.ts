@@ -5,7 +5,7 @@ import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
-import type { AddressIssue, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
+import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, SavePlcConnectionBody, StationSnapshot } from './plcTypes'
 import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
@@ -142,6 +142,9 @@ const realApi = {
   processCreate: (b: ProcessHeaderBody) => request<Process>('/api/processes', { method: 'POST', body: JSON.stringify(b) }),
   processUpdate: (id: string, b: ProcessHeaderBody) => request<Process>(`/api/processes/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   processNewVersion: (id: string, fromVersionId?: string) => request<ProcessVersion>(`/api/processes/${id}/versions`, { method: 'POST', body: JSON.stringify({ fromVersionId }) }),
+  plcBulkApprovalPreview: (plcId: string) => request<BulkApprovalPreview>(`/api/plc/connections/${plcId}/bulk-approval`),
+  plcBulkApprove: (plcId: string, expectedEligible: number) =>
+    request<BulkApprovalResult>(`/api/plc/connections/${plcId}/bulk-approval`, { method: 'POST', body: JSON.stringify({ confirm: true, expectedEligible }) }),
   processImportReference: () => request<ImportResult>('/api/processes/import-reference', { method: 'POST' }),
   processAudit: () => request<AuditRow[]>('/api/processes/audit?take=200'),
   processVersion: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}`),

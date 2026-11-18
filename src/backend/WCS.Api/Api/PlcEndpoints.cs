@@ -12,6 +12,10 @@ public static partial class PlcEndpoints
 {
     private static bool IsAdmin(HttpContext c) => c.User.IsInRole(nameof(WCS.Domain.Users.UserRole.Admin));
 
+    /// <summary>PLCs allowed to use the bulk read-approval: configuration <c>Plc:BulkApproval:AllowedPlcIds</c>, default PLC-04 only; an explicit empty list disables it.</summary>
+    private static IReadOnlyList<string> BulkAllowed(IConfiguration cfg) =>
+        cfg.GetSection(BulkApprovalPolicy.ConfigKey).Exists() ? cfg.GetSection(BulkApprovalPolicy.ConfigKey).Get<string[]>() ?? [] : BulkApprovalPolicy.Default;
+
     /// <summary>
     /// PLC topology, IO catalog and monitoring API. Configuration, addresses, diagnostics, logs and every write facility are Admin-only;
     /// the monitoring views (state, station list, IO values and quality without addresses or network details) are open to both roles.
@@ -38,6 +42,30 @@ public static partial class PlcEndpoints
         }).RequireAuthorization(admin);
         plc.MapGet("connections/{plcId}/address-check", async (HttpContext c, string plcId, PlcConfigService s, CancellationToken ct) =>
             ApiResults.Ok(c, await s.CheckPlcAsync(plcId, ct))).RequireAuthorization(admin);
+
+        // Bulk READ approval of one commissioning PLC (default PLC-04 only; Plc:BulkApproval:AllowedPlcIds). It uses the existing approval (StationIoPoint.Approve):
+        // it never changes an address or data type, never allows a write, never touches another PLC and sends nothing to the PLC. Never runs on its own.
+        plc.MapGet("connections/{plcId}/bulk-approval", async (HttpContext c, string plcId, PlcConfigService s, IConfiguration cfg, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.PreviewBulkApprovalAsync(plcId, BulkAllowed(cfg), ct))).RequireAuthorization(admin);
+        plc.MapPost("connections/{plcId}/bulk-approval", async (HttpContext c, string plcId, BulkApprovalRequest r, PlcConfigService s, IConfiguration cfg, IServiceScopeFactory scopes, IPlcRuntime rt, CancellationToken ct) =>
+        {
+            if (r.Confirm != true || r.ExpectedEligible is null)
+                throw AppException.Validation("BULK_APPROVAL_NOT_CONFIRMED", "Cần xác nhận và số điểm đủ điều kiện đã xem ở bản xem trước.");
+            var allowed = BulkAllowed(cfg);
+            var result = await Audited.RunAsync(c, "PLC_IO_BULK_APPROVE", "PlcConnection", plcId, null, async () =>
+            {
+                var applied = await s.BulkApproveAsync(plcId, c.Actor().Username, allowed, r.ExpectedEligible, ct);
+                await using var scope = scopes.CreateAsyncScope();                  // a fresh context: the result is checked against the database, not the tracker
+                return await scope.ServiceProvider.GetRequiredService<PlcConfigService>().VerifyBulkApprovalAsync(applied, ct);
+            }, res => new
+            {
+                res.Total, res.Approved, res.AlreadyApproved, res.NotEligible, res.Failed, res.VerifiedPollable,
+                approved = res.Items.Where(i => i.Outcome == BulkOutcome.Approved).Select(i => $"{i.StationId}/{i.SignalName}={i.Address}").ToList(),
+                failed = res.Items.Where(i => i.Outcome == BulkOutcome.Failed).Select(i => $"{i.StationId}/{i.SignalName}:{i.Code}").ToList(),
+            }, detail: $"expectedEligible={r.ExpectedEligible}");
+            await rt.ReloadPlcAsync(plcId, ct);
+            return ApiResults.Ok(c, result);
+        }).RequireAuthorization(admin);
 
         // Read-only reachability check: never sends a PLC command. Simulator mode and an unconfirmed configuration never touch the network.
         plc.MapPost("connections/{plcId}/test", async (HttpContext c, string plcId, PlcConfigService s, IOptions<PlcRuntimeOptions> o, IConnectionProbe probe, CancellationToken ct) =>

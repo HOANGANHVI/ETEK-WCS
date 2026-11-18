@@ -75,3 +75,8 @@ export interface IoPointConfig {
   dataType: 'Bool' | 'Int' | 'String'; description: string; configStatus: string; templateAddressReference: string | null; actualAddress: string | null
   wordLength: number | null; encoding: string | null; writeAllowed: boolean | null; approvedBy: string | null; approvedAt: string | null; pollable: boolean | null
 }
+
+/** Bulk READ approval of a commissioning PLC (Admin). Outcome: ELIGIBLE (preview only) | APPROVED | ALREADY_APPROVED | NOT_ELIGIBLE | FAILED. */
+export interface BulkApprovalItem { pointId: string; stationId: string; signalName: string; dataType: string; address: string | null; outcome: string; code: string | null; reason: string | null }
+export interface BulkApprovalPreview { plcId: string; total: number; withAddress: number; eligible: number; notEligible: number; alreadyApproved: number; items: BulkApprovalItem[] }
+export interface BulkApprovalResult { plcId: string; total: number; approved: number; alreadyApproved: number; notEligible: number; failed: number; verifiedPollable: number; items: BulkApprovalItem[] }
