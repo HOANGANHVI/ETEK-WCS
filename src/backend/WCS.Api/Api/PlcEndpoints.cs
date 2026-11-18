@@ -173,7 +173,7 @@ public static partial class PlcEndpoints
 
         // ---------------------------------------------------------------------------------------------- guarded write (Admin)
         // CR-015: available in every environment, Production included. What guards it is NOT the environment but, in this order: Admin role, the per-point write approval,
-        // the value validation, WritePolicy (mode REAL_READ_WRITE + every write key + never the safety/permit signals) and the MC driver. Every call is audited.
+        // the value validation, WritePolicy (mode REAL_READ_WRITE + AllowLiveConnection + Write.Enabled + never the safety/permit signals) and the MC driver. Every call is audited.
         plc.MapPost("stations/{stationId}/signals/{signal}/test-write", async (HttpContext c, string stationId, string signal, TestWriteRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {
             var point = (await s.ListPointsAsync(null, stationId, true, ct)).FirstOrDefault(p => p.SignalName == signal) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");

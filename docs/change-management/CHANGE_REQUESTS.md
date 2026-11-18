@@ -35,6 +35,7 @@
 | CR-015 | Enable PLC write: remove the environment-based blocks, RealReadWrite as the supported mode, write keys in the deployment | Project owner instruction (2026-11-18) | **IMPLEMENTED** (code, configuration; not deployed; no real PLC written) | 2026-11-18 | Production no longer refuses the write; write dialog in every build; compose write keys; write exchanges always recorded |
 | CR-016 | PLC write UI: always show the write action with the concrete reason when it cannot be used; runtime write readiness | Project owner instruction (2026-11-18) | **IMPLEMENTED** (code; not deployed; no real PLC written) | 2026-11-18 | "Ghi PLC" button always shown for writable IO, readiness banner, runtime info with missing key names |
 | CR-017 | Why the Deploy runtime stays read-only: configuration chain, .env.example, diagnostics | Project owner instruction (2026-11-18) | **IMPLEMENTED** (code, configuration, tools; not deployed; no real PLC written) | 2026-11-18 | `.env.example` fixed, `plc-write-config.ps1`, `MissingWriteKeys`, key checklist in the banner, binding tests |
+| CR-019 | Simplify PLC write approval: remove PLC_WRITE_APPROVAL_REFERENCE and PLC_WRITE_HANDSHAKE_APPROVED | Project owner instruction (2026-11-18) | **IMPLEMENTED** (not deployed; no real PLC written) | 2026-11-18 | Single approval = Admin per-point write approval; runtime keys reduced to PLC_MODE, PLC_ALLOW_LIVE_CONNECTION, PLC_WRITE_ENABLED |
 
 ## New Change Request template
 
@@ -357,3 +358,12 @@ TST-AUTH-* (unit/API with in-memory fakes) and TST-AUTH-DB-* (PostgreSQL integra
 - **Changes:** `.env.example` now has `PLC_MODE=RealReadWrite` and the three write keys (false/empty, with the explanation); `_common.ps1` warns when the `.env` forces `PLC_MODE=RealReadOnly`; new read-only `deployment/scripts/plc-write-config.ps1` compares `.env`, the compose resolution and the RUNNING container's environment (the reference only as set/unset); `WritePolicy.MissingWriteKeys` is the single source of the missing list; the `RUNTIME_START` log line names the requested mode and missing keys; the IO mapping banner shows the five settings as received by the backend (✓/✗, `PLC_MODE` with its current value). README section 10 explains the checks.
 - **Not changed / not done:** no approval reference, no key set to true, read-only checks, write approval, Admin authorization, validation, audit and the safety/permit ban unchanged. The operator must still edit `.env` (the keys stay false/empty by default) and run `deploy.ps1`.
 - **Database impact:** none.
+
+### CR-019 – Simplify PLC write approval (remove the dual approval)
+
+- **Status:** IMPLEMENTED. Not deployed. No write sent to a real PLC (tests use the MC mock).
+- **Removed:** `PlcWriteOptions.EngineerApprovalReference` / `HandshakeApproved` (PLC_WRITE_APPROVAL_REFERENCE, PLC_WRITE_HANDSHAKE_APPROVED), their use in `WritePolicy.EffectiveMode/WriteKeysComplete/MissingWriteKeys`, the Runtime Info fields `writeApprovalReferenceSet` / `writeHandshakeApproved`, the banner checklist entries, the compose variables, the .env.example lines, the diagnostic-export fields. Old lines in an existing `.env` are ignored (no longer passed by compose; unknown configuration keys are ignored by binding): no error, no warning.
+- **Write conditions now:** Mode RealReadWrite + AllowLiveConnection + Write.Enabled, Admin, address, WriteApproval=Approved, valid type/value, PLC connected, not a blocked signal, user confirmation.
+- **Kept unchanged:** Admin-only, per-point write approval, AddressValidator, WriteValueValidator, safety/permit ban, PLC->Software not writable, confirmation step, audit, WRITE_AMBIGUOUS / no automatic retry, no write on start/connect/open. The protocol handshake rules (`Handshake.cs`, Plc:Handshake) are a separate control function and were NOT touched.
+- **Database impact:** none (no migration; WriteApproval/WriteAllowed data and audit untouched).
+- **Note:** supersedes the key lists of CR-015 and CR-017; the earlier text is kept as history.

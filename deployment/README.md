@@ -80,11 +80,10 @@ Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + m�
 | `WCS_HTTP_PORT` | Cổng Nginx | `80` |
 | `WCS_COOKIE_SECURE` | `Always` (HTTPS, **khuyến nghị vận hành**) hoặc `SameAsRequest` (chỉ HTTP LAN thử nghiệm) | `Always` |
 | `WCS_EDGE_SUBNET`, `WCS_NGINX_IP` | Mạng nội bộ Docker và địa chỉ cố định của Nginx; backend chỉ tin `X-Forwarded-*` từ đúng địa chỉ này | `172.30.0.0/24`, `172.30.0.10` |
-| `PLC_MODE` | `RealReadWrite` (mặc định, chế độ hỗ trợ ghi) hoặc `RealReadOnly`. Thiếu bất kỳ khóa ghi nào bên dưới thì runtime **vẫn chỉ đọc** (hiển thị trên trang PLC) | `RealReadWrite` |
+| `PLC_MODE` | `RealReadWrite` (mặc định, chế độ hỗ trợ ghi) hoặc `RealReadOnly`. Thiếu `PLC_ALLOW_LIVE_CONNECTION` hoặc `PLC_WRITE_ENABLED` thì runtime **vẫn chỉ đọc** (hiển thị trên trang PLC) | `RealReadWrite` |
 | `PLC_ALLOW_LIVE_CONNECTION` | `false`: **không mở socket tới PLC thật** | `false` |
-| `PLC_WRITE_ENABLED` | Khóa ghi 1/3 (CR-015): `true` để cho phép ghi | `false` |
-| `PLC_WRITE_APPROVAL_REFERENCE` | Khóa ghi 2/3: mã tham chiếu phê duyệt bằng văn bản của kỹ sư PLC (không được bỏ trống) | trống |
-| `PLC_WRITE_HANDSHAKE_APPROVED` | Khóa ghi 3/3: `true` khi bảng handshake đã được duyệt (không tự duyệt Handshake: quy tắc handshake vẫn nằm trong cấu hình riêng) | `false` |
+| `PLC_WRITE_ENABLED` | Khóa ghi (CR-015/CR-019): `true` để cho phép ghi | `false` |
+| *(đã bỏ, CR-019)* `PLC_WRITE_APPROVAL_REFERENCE`, `PLC_WRITE_HANDSHAKE_APPROVED` | Không còn được đọc. Dòng cũ trong `.env` được bỏ qua, không gây lỗi; có thể xóa. Phê duyệt duy nhất là **Duyệt ghi theo từng IO** của Admin | — |
 | `PLC_ALLOW_SIMULATOR_IN_PRODUCTION` | Production từ chối `Plc:Mode=Simulator` trừ khi `true` (chỉ để khởi động có giám sát khi chưa có PLC) | `false` |
 | `WCS_ALLOW_NETWORK_PROBE` | Cho phép phép thử TCP của "Kiểm tra kết nối" (chỉ mở/đóng cổng) | `false` |
 | `WCS_LOG_LEVEL`, `WCS_TIMEZONE`, `WCS_VERSION` | Log, múi giờ, nhãn image | `Information`, `Asia/Ho_Chi_Minh`, commit |
@@ -143,7 +142,7 @@ Trình tự an toàn (mỗi bước cần kỹ sư PLC):
 2. Kiểm tra đường mạng từ container (chỉ mở/đóng TCP, **không gửi byte nào**):
    `deployment\scripts\plc-route-test.ps1 -Port <cổng đã xác nhận>` — tham số `-Port` bắt buộc, dự án không giả định cổng.
 3. Đặt `PLC_ALLOW_LIVE_CONNECTION=true`, chạy lại `deploy.ps1`/`start.ps1`; Admin bật kết nối từng PLC; **bắt đầu chỉ đọc** (`PLC_MODE=RealReadOnly`).
-4. Việc đọc chỉ cần địa chỉ IO hợp lệ (CR-012). **Ghi** (CR-015) chỉ xảy ra khi đủ: `PLC_MODE=RealReadWrite`, `PLC_ALLOW_LIVE_CONNECTION=true`, `PLC_WRITE_ENABLED=true`, `PLC_WRITE_APPROVAL_REFERENCE=<mã phê duyệt>`, `PLC_WRITE_HANDSHAKE_APPROVED=true`; IO có **duyệt quyền ghi** của Admin (*Cấu hình địa chỉ IO → Duyệt ghi*); người ghi là Admin; giá trị đúng kiểu; không phải tín hiệu Safety/Permit. Mỗi lần ghi có hộp thoại xác nhận và Audit Log. Không bật các khóa này khi chưa có phê duyệt bằng văn bản của kỹ sư PLC.
+4. Việc đọc chỉ cần địa chỉ IO hợp lệ (CR-012). **Ghi** (CR-015) chỉ xảy ra khi đủ: `PLC_MODE=RealReadWrite`, `PLC_ALLOW_LIVE_CONNECTION=true`, `PLC_WRITE_ENABLED=true`; IO có **duyệt quyền ghi** của Admin (*Cấu hình địa chỉ IO → Duyệt ghi*); người ghi là Admin; giá trị đúng kiểu; không phải tín hiệu Safety/Permit. Mỗi lần ghi có hộp thoại xác nhận và Audit Log. Chỉ bật các khóa này khi thực sự có ý định ghi.
 
 Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.10.x, đúng cổng, Windows Firewall, và danh sách IP được phép trên PLC (dùng IP máy Windows).
 
@@ -197,6 +196,6 @@ Backend tự đọc cgroup của chính container (CPU, RAM theo giới hạn `W
 
 Trang *Cấu hình địa chỉ IO* hiển thị banner "Trạng thái ghi PLC" và liệt kê khóa còn thiếu theo **giá trị backend thực sự nhận được**. Nếu banner báo thiếu mà bạn tin là đã đặt:
 
-1. Chạy `deployment\scripts\plc-write-config.ps1`. Script chỉ đọc: so sánh `.env` (đường dẫn được in ra) với biến môi trường **thực sự trong container backend**; mã phê duyệt chỉ hiện "set/unset", không bao giờ hiện giá trị.
-2. Nguyên nhân thường gặp: (a) `.env` được tạo từ `.env.example` cũ có `PLC_MODE=RealReadOnly` (ép chỉ đọc, khóa nào cũng vô hiệu); (b) thiếu một trong 4 khóa; (c) sửa `.env` nhưng chưa chạy lại `deploy.ps1`/`start.ps1` nên container backend chưa được tạo lại; (d) `.env` sai thư mục (`WCS_CONFIG_DIR`, mặc định `C:\ETEK-WCS\config\.env`); (e) giá trị boolean không phải `true`/`false`.
+1. Chạy `deployment\scripts\plc-write-config.ps1`. Script chỉ đọc: so sánh `.env` (đường dẫn được in ra) với biến môi trường **thực sự trong container backend**; chỉ hiển thị 3 khóa còn hiệu lực (CR-019).
+2. Nguyên nhân thường gặp: (a) `.env` được tạo từ `.env.example` cũ có `PLC_MODE=RealReadOnly` (ép chỉ đọc, khóa nào cũng vô hiệu); (b) thiếu `PLC_ALLOW_LIVE_CONNECTION` hoặc `PLC_WRITE_ENABLED`; (c) sửa `.env` nhưng chưa chạy lại `deploy.ps1`/`start.ps1` nên container backend chưa được tạo lại; (d) `.env` sai thư mục (`WCS_CONFIG_DIR`, mặc định `C:\ETEK-WCS\config\.env`); (e) giá trị boolean không phải `true`/`false`.
 3. Log backend khi khởi động có dòng `RUNTIME_START` nêu chế độ yêu cầu, chế độ hiệu lực và tên các khóa còn thiếu (không có giá trị).

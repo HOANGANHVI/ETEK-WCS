@@ -71,13 +71,11 @@ services:
       Deployment__TrustForwardedHeaders: "true"
       Deployment__TrustedProxyNetworks__0: ${WCS_NGINX_IP:-172.30.0.10}/32
       # PLC safety (CR-002/CR-006/CR-015). Defaults: no simulator and no socket to a physical PLC. RealReadWrite is the supported mode, but a write is executed ONLY when the
-      # runtime really is in RealReadWrite (AllowLiveConnection + Write.Enabled + EngineerApprovalReference + HandshakeApproved ALL set) and the point has an Admin write approval;
-      # with any key missing the runtime stays read-only (shown on the PLC pages). The keys below are deliberately empty/false here: they are the operator's attestations.
+      # runtime really is in RealReadWrite (AllowLiveConnection + Write.Enabled both set, CR-019) and the point has an Admin write approval;
+      # with any key missing the runtime stays read-only (shown on the PLC pages). The keys below are deliberately false here.
       Plc__Mode: ${PLC_MODE:-RealReadWrite}
       Plc__AllowLiveConnection: ${PLC_ALLOW_LIVE_CONNECTION:-false}
       Plc__Write__Enabled: ${PLC_WRITE_ENABLED:-false}
-      Plc__Write__EngineerApprovalReference: ${PLC_WRITE_APPROVAL_REFERENCE:-}
-      Plc__Write__HandshakeApproved: ${PLC_WRITE_HANDSHAKE_APPROVED:-false}
       Plc__AllowSimulatorInProduction: ${PLC_ALLOW_SIMULATOR_IN_PRODUCTION:-false}
       # RCS has only a simulator adapter (project baseline): Integration:Mode must stay "Simulator"; no network probe unless enabled.
       Integration__Mode: Simulator

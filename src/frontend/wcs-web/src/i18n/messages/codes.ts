@@ -81,7 +81,7 @@ export default defineMessages({
   fieldLabel_writeTimeoutMs: 'Timeout ghi (ms)',
   // ---- coded texts: runtime notes, reasons, connection checks
   text_LIVE_CONNECTION_DISABLED: 'Chưa cho phép kết nối PLC thật (Plc:AllowLiveConnection = false): hệ thống không mở kết nối tới PLC.',
-  text_WRITE_KEYS_MISSING: 'Đã yêu cầu chế độ đọc/ghi nhưng thiếu các khóa ghi (Write.Enabled, EngineerApprovalReference, HandshakeApproved): hệ thống chạy ở chế độ chỉ đọc.',
+  text_WRITE_KEYS_MISSING: 'Đã yêu cầu chế độ đọc/ghi nhưng thiếu các khóa ghi (AllowLiveConnection, Write.Enabled): hệ thống chạy ở chế độ chỉ đọc.',
   text_SIMULATOR_MODE: 'Chế độ mô phỏng: không có kết nối nào tới PLC vật lý.',
   text_CONNECTION_NOT_ENABLED: 'Admin chưa bật kết nối PLC này.',
   text_PLC_CONNECT_FAILED: 'Không kết nối được tới PLC.',
@@ -236,7 +236,7 @@ export default defineMessages({
   fieldLabel_readTimeoutMs: 'Read timeout (ms)',
   fieldLabel_writeTimeoutMs: 'Write timeout (ms)',
   text_LIVE_CONNECTION_DISABLED: 'Live PLC connection is not allowed (Plc:AllowLiveConnection = false): the system does not open any connection to the PLC.',
-  text_WRITE_KEYS_MISSING: 'Read/write mode was requested but the write keys are incomplete (Write.Enabled, EngineerApprovalReference, HandshakeApproved): the system runs read-only.',
+  text_WRITE_KEYS_MISSING: 'Read/write mode was requested but the write keys are incomplete (AllowLiveConnection, Write.Enabled): the system runs read-only.',
   text_SIMULATOR_MODE: 'Simulation mode: there is no connection to a physical PLC.',
   text_CONNECTION_NOT_ENABLED: 'An Admin has not enabled this PLC connection.',
   text_PLC_CONNECT_FAILED: 'Unable to connect to the PLC.',

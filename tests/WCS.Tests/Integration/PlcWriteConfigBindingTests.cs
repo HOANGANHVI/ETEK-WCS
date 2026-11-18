@@ -19,7 +19,7 @@ namespace WCS.Tests.Integration;
 [Collection("Database")]
 public class PlcWriteConfigBindingTests(DatabaseFixture fixture)
 {
-    private const string Reference = "TEST-APPROVAL-REF-0001";    // a made-up test value, never a real approval
+    private const string OldReference = "TEST-OLD-REF-0001";      // a made-up value of the REMOVED PLC_WRITE_APPROVAL_REFERENCE key (CR-019)
 
     private static string ComposePath()
     {
@@ -62,19 +62,19 @@ public class PlcWriteConfigBindingTests(DatabaseFixture fixture)
 
     private static Dictionary<string, string> AllKeys() => new()
     {
-        ["PLC_ALLOW_LIVE_CONNECTION"] = "true", ["PLC_WRITE_ENABLED"] = "true", ["PLC_WRITE_APPROVAL_REFERENCE"] = Reference, ["PLC_WRITE_HANDSHAKE_APPROVED"] = "true",
+        ["PLC_ALLOW_LIVE_CONNECTION"] = "true", ["PLC_WRITE_ENABLED"] = "true",
     };
 
     [Fact]
     public void The_compose_file_passes_every_write_condition_under_the_name_the_backend_binds()
     {
         var env = ContainerPlcEnvironment(AllKeys());
-        foreach (var name in new[] { "Plc__Mode", "Plc__AllowLiveConnection", "Plc__Write__Enabled", "Plc__Write__EngineerApprovalReference", "Plc__Write__HandshakeApproved" })
+        foreach (var name in new[] { "Plc__Mode", "Plc__AllowLiveConnection", "Plc__Write__Enabled" })
             Assert.True(env.ContainsKey(name), $"docker-compose.yml does not pass {name} to the backend");
         using var _ = new EnvScope(env);
         var o = Bind();                                                                            // the real EnvironmentVariables provider and binder
-        Assert.Equal((PlcRuntimeMode.RealReadWrite, true, true, true), (o.Mode, o.AllowLiveConnection, o.Write.Enabled, o.Write.HandshakeApproved));
-        Assert.Equal(Reference, o.Write.EngineerApprovalReference);                                 // reached the options (asserted here, in a test, with a made-up value)
+        Assert.Equal((PlcRuntimeMode.RealReadWrite, true, true), (o.Mode, o.AllowLiveConnection, o.Write.Enabled));
+        Assert.DoesNotContain(env.Keys, k => k.Contains("EngineerApproval") || k.Contains("HandshakeApproved"));      // CR-019: the removed keys are not passed any more
         Assert.Equal(PlcRuntimeMode.RealReadWrite, WritePolicy.EffectiveMode(o));
         Assert.Empty(WritePolicy.MissingWriteKeys(o));
     }
@@ -82,8 +82,6 @@ public class PlcWriteConfigBindingTests(DatabaseFixture fixture)
     [Theory]
     [InlineData("PLC_ALLOW_LIVE_CONNECTION", "PLC_ALLOW_LIVE_CONNECTION")]
     [InlineData("PLC_WRITE_ENABLED", "PLC_WRITE_ENABLED")]
-    [InlineData("PLC_WRITE_APPROVAL_REFERENCE", "PLC_WRITE_APPROVAL_REFERENCE")]
-    [InlineData("PLC_WRITE_HANDSHAKE_APPROVED", "PLC_WRITE_HANDSHAKE_APPROVED")]
     public void Each_missing_key_alone_keeps_the_runtime_read_only_and_is_the_only_one_reported(string absent, string expectedMissing)
     {
         var dotEnv = AllKeys(); dotEnv.Remove(absent);
@@ -106,7 +104,7 @@ public class PlcWriteConfigBindingTests(DatabaseFixture fixture)
     [InlineData("True")] [InlineData("TRUE")] [InlineData("true")]
     public void The_boolean_spelling_of_a_Windows_edited_env_file_is_accepted(string value)
     {
-        var dotEnv = AllKeys(); dotEnv["PLC_WRITE_ENABLED"] = value; dotEnv["PLC_WRITE_HANDSHAKE_APPROVED"] = value; dotEnv["PLC_ALLOW_LIVE_CONNECTION"] = value;
+        var dotEnv = AllKeys(); dotEnv["PLC_WRITE_ENABLED"] = value; dotEnv["PLC_ALLOW_LIVE_CONNECTION"] = value;
         using var _ = new EnvScope(ContainerPlcEnvironment(dotEnv));
         Assert.Empty(WritePolicy.MissingWriteKeys(Bind()));
     }
@@ -123,14 +121,28 @@ public class PlcWriteConfigBindingTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public void An_env_file_without_any_write_setting_reports_the_four_keys_and_not_the_mode()
+    public void An_env_file_without_any_write_setting_reports_the_two_keys_and_not_the_mode()
     {
         using var _ = new EnvScope(ContainerPlcEnvironment(new Dictionary<string, string>()));        // the defaults of docker-compose.yml only
         var o = Bind();
         Assert.Equal(PlcRuntimeMode.RealReadWrite, o.Mode);                                          // CR-015 default
-        Assert.False(o.AllowLiveConnection); Assert.False(o.Write.Enabled); Assert.False(o.Write.HandshakeApproved); Assert.True(string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference));
+        Assert.False(o.AllowLiveConnection); Assert.False(o.Write.Enabled);
         Assert.Equal(PlcRuntimeMode.RealReadOnly, WritePolicy.EffectiveMode(o));
-        Assert.Equal(["PLC_ALLOW_LIVE_CONNECTION", "PLC_WRITE_ENABLED", "PLC_WRITE_APPROVAL_REFERENCE", "PLC_WRITE_HANDSHAKE_APPROVED"], WritePolicy.MissingWriteKeys(o));
+        Assert.Equal(["PLC_ALLOW_LIVE_CONNECTION", "PLC_WRITE_ENABLED"], WritePolicy.MissingWriteKeys(o));
+    }
+
+    [Theory]
+    [InlineData("")] [InlineData("false")] [InlineData(OldReference)]
+    public void The_removed_approval_reference_and_handshake_keys_are_ignored_whatever_their_value(string oldValue)
+    {
+        // an old .env still containing the two removed lines (CR-019): they are not even passed by compose, and if set as raw variables they are ignored by binding
+        var dotEnv = AllKeys(); dotEnv["PLC_WRITE_APPROVAL_REFERENCE"] = oldValue; dotEnv["PLC_WRITE_HANDSHAKE_APPROVED"] = oldValue;
+        var vars = ContainerPlcEnvironment(dotEnv);
+        vars["Plc__Write__EngineerApprovalReference"] = oldValue; vars["Plc__Write__HandshakeApproved"] = oldValue;
+        using var _ = new EnvScope(vars);
+        var o = Bind();                                                                            // must not throw
+        Assert.Equal(PlcRuntimeMode.RealReadWrite, WritePolicy.EffectiveMode(o));
+        Assert.Empty(WritePolicy.MissingWriteKeys(o));
     }
 
     // ---------------------------------------------------------------- through a real host: environment -> configuration -> runtime -> Runtime Info API
@@ -155,25 +167,22 @@ public class PlcWriteConfigBindingTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task The_Runtime_Info_API_reports_what_the_backend_really_received_and_never_the_approval_reference()
+    public async Task The_Runtime_Info_API_reports_what_the_backend_really_received_without_the_removed_keys()
     {
         var (all, rawAll) = await RuntimeInfoAsync(AllKeys());
         Assert.Equal("RealReadWrite", all.GetProperty("effectiveMode").GetString());
-        Assert.True(all.GetProperty("allowLiveConnection").GetBoolean() && all.GetProperty("writeEnabled").GetBoolean()
-            && all.GetProperty("writeApprovalReferenceSet").GetBoolean() && all.GetProperty("writeHandshakeApproved").GetBoolean());
+        Assert.True(all.GetProperty("allowLiveConnection").GetBoolean() && all.GetProperty("writeEnabled").GetBoolean());
         Assert.Equal(0, all.GetProperty("missingWriteKeys").GetArrayLength());
-        Assert.DoesNotContain(Reference, rawAll);
+        Assert.DoesNotContain("writeApprovalReferenceSet", rawAll); Assert.DoesNotContain("writeHandshakeApproved", rawAll);
 
-        var partial = AllKeys(); partial.Remove("PLC_WRITE_APPROVAL_REFERENCE");
-        var (some, rawSome) = await RuntimeInfoAsync(partial);
+        var partial = AllKeys(); partial.Remove("PLC_WRITE_ENABLED");
+        var (some, _) = await RuntimeInfoAsync(partial);
         Assert.Equal("RealReadOnly", some.GetProperty("effectiveMode").GetString());
-        Assert.False(some.GetProperty("writeApprovalReferenceSet").GetBoolean());
-        Assert.True(some.GetProperty("writeEnabled").GetBoolean());                                     // what the backend DID receive is not reported as missing
-        Assert.Equal(["PLC_WRITE_APPROVAL_REFERENCE"], some.GetProperty("missingWriteKeys").EnumerateArray().Select(x => x.GetString()).ToArray());
-        Assert.DoesNotContain(Reference, rawSome);
+        Assert.True(some.GetProperty("allowLiveConnection").GetBoolean());                              // what the backend DID receive is not reported as missing
+        Assert.Equal(["PLC_WRITE_ENABLED"], some.GetProperty("missingWriteKeys").EnumerateArray().Select(x => x.GetString()).ToArray());
 
         var (none, _) = await RuntimeInfoAsync(new Dictionary<string, string>());
         Assert.Equal("RealReadWrite", none.GetProperty("mode").GetString());
-        Assert.Equal(4, none.GetProperty("missingWriteKeys").GetArrayLength());
+        Assert.Equal(2, none.GetProperty("missingWriteKeys").GetArrayLength());
     }
 }

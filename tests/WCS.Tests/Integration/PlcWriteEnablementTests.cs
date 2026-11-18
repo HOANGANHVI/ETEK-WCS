@@ -27,7 +27,6 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
     private static Dictionary<string, string?> AllKeys => new()
     {
         ["Plc:Mode"] = "RealReadWrite", ["Plc:AllowLiveConnection"] = "true", ["Plc:Write:Enabled"] = "true",
-        ["Plc:Write:EngineerApprovalReference"] = "TEST-APPROVAL-001", ["Plc:Write:HandshakeApproved"] = "true",
     };
 
     /// <summary>A PRODUCTION host (secure cookies, no development shortcuts) on the given configuration, with the PLC runtime started and PLC-01 pointed at the mock.</summary>
@@ -95,8 +94,9 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         var ov = await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/overview");
         var rt = ov.Root.GetProperty("data").GetProperty("runtime");
         Assert.Equal("RealReadWrite", rt.GetProperty("effectiveMode").GetString());
-        // CR-016: the UI is told which conditions are met (flags and NAMES only) - and the engineer approval reference itself is never sent
-        Assert.True(rt.GetProperty("writeEnabled").GetBoolean() && rt.GetProperty("writeApprovalReferenceSet").GetBoolean() && rt.GetProperty("writeHandshakeApproved").GetBoolean());
+        // CR-016: the UI is told which conditions are met (flags and NAMES only); CR-019: no approval reference / handshake approval field exists any more
+        Assert.True(rt.GetProperty("writeEnabled").GetBoolean());
+        Assert.False(rt.TryGetProperty("writeApprovalReferenceSet", out _) || rt.TryGetProperty("writeHandshakeApproved", out _));
         Assert.Equal(0, rt.GetProperty("missingWriteKeys").GetArrayLength());
         Assert.DoesNotContain("TEST-APPROVAL-001", ov.Raw);
 
@@ -158,9 +158,9 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         var ov = await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/overview");
         var rt = ov.Root.GetProperty("data").GetProperty("runtime");
         Assert.Equal("RealReadOnly", rt.GetProperty("effectiveMode").GetString());
-        // CR-016: the UI can name exactly what is missing (here the three write keys), so it explains instead of hiding the write action
-        Assert.False(rt.GetProperty("writeEnabled").GetBoolean() || rt.GetProperty("writeApprovalReferenceSet").GetBoolean() || rt.GetProperty("writeHandshakeApproved").GetBoolean());
-        Assert.Equal(["PLC_WRITE_ENABLED", "PLC_WRITE_APPROVAL_REFERENCE", "PLC_WRITE_HANDSHAKE_APPROVED"], rt.GetProperty("missingWriteKeys").EnumerateArray().Select(x => x.GetString()).ToArray());
+        // CR-016: the UI can name exactly what is missing (here the write key), so it explains instead of hiding the write action
+        Assert.False(rt.GetProperty("writeEnabled").GetBoolean());
+        Assert.Equal(["PLC_WRITE_ENABLED"], rt.GetProperty("missingWriteKeys").EnumerateArray().Select(x => x.GetString()).ToArray());
         // the approved point is reported as approved - the refusal below comes from the runtime mode, which is what the UI shows as the reason
         Assert.Equal("APPROVED", (await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/points?plcId=PLC-01&stationId=A1")).Root.GetProperty("data").EnumerateArray().Single(p => p.GetProperty("id").GetGuid() == ack).GetProperty("writeApproval").GetString());
 
@@ -247,8 +247,8 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         Assert.Contains("Plc__Mode: ${PLC_MODE:-RealReadWrite}", compose);                                                  // read-only is no longer forced
         Assert.Contains("Plc__AllowLiveConnection: ${PLC_ALLOW_LIVE_CONNECTION:-false}", compose);                          // no socket to a real PLC until the operator says so
         Assert.Contains("Plc__Write__Enabled: ${PLC_WRITE_ENABLED:-false}", compose);
-        Assert.Contains("Plc__Write__EngineerApprovalReference: ${PLC_WRITE_APPROVAL_REFERENCE:-}", compose);               // never pre-filled
-        Assert.Contains("Plc__Write__HandshakeApproved: ${PLC_WRITE_HANDSHAKE_APPROVED:-false}", compose);
+        Assert.DoesNotContain("EngineerApprovalReference", compose);                                                         // CR-019: the removed keys are no longer passed
+        Assert.DoesNotContain("HandshakeApproved", compose);
         Assert.DoesNotContain("PLC_MODE:-RealReadOnly", compose);
     }
 }
