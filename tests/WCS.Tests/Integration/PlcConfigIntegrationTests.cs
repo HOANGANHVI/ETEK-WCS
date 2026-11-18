@@ -161,8 +161,7 @@ public class PlcConfigIntegrationTests(DatabaseFixture fixture)
         var ack = await Id("A1", "Request_Ack");
         Assert.Equal(422, (await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{ack}/approve")).Status);                 // no address yet
         await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{ack}/address", new { address = "M200" });
-        Assert.Equal(422, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{ack}/write-allowed", new { allowed = true })).Status);   // not approved
-        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{ack}/approve")).Status);
+        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{ack}/approve")).Status);                  // the READ approval (CR-014: write approval no longer depends on it)
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{ack}/write-allowed", new { allowed = true })).Status);
         var permit = await Id("A1", "Transfer_Permit");
         await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{permit}/address", new { address = "M201" });

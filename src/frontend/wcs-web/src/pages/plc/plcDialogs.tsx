@@ -49,36 +49,6 @@ export function AddressDialog({ point, onClose, onDone }: { point: DialogPoint; 
   )
 }
 
-export function WriteDialog({ point, simulator, onClose, onDone }: { point: DialogPoint; simulator: boolean; onClose: () => void; onDone: (m: string) => void }) {
-  const t = useT()
-  const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const parsed = text.trim() === '' ? null : parseTyped(point.dataType, text)
-  const submit = async () => {
-    if (!parsed || !parsed.ok) return
-    setBusy(true); setError(null)
-    try { await api.plcTestWrite(point.stationId, point.signalName, parsed.value); onDone(t('plc.testWritten', { station: point.stationId, signal: point.signalName })) }
-    catch (e) { setError(describeError(e)) } finally { setBusy(false) }
-  }
-  return (
-    <Modal title={t('plc.writeTitle', { station: point.stationId, signal: point.signalName })} onClose={onClose} footer={<>
-      <Button onClick={onClose}>{t('plc.skip')}</Button>
-      <Button variant="danger" disabled={busy || !parsed || !parsed.ok} onClick={() => void submit()}>{t('plc.confirmWrite')}</Button>
-    </>}>
-      {!simulator && (
-        <div className="notice notice-warn">
-          {t('plc.realWriteWarn')}
-        </div>
-      )}
-      {error && <div className="notice notice-bad" role="alert">{error}</div>}
-      <div className="form-grid single">
-        <Field label={t('plc.valueLabel', { type: DATATYPE_VI[point.dataType] })} error={parsed && !parsed.ok ? parsed.message : undefined}><input value={text} onChange={(e) => setText(e.target.value)} /></Field>
-      </div>
-    </Modal>
-  )
-}
-
 export function SimDialog({ point, onClose, onDone }: { point: DialogPoint; onClose: () => void; onDone: (m: string) => void }) {
   const t = useT()
   const [text, setText] = useState('')

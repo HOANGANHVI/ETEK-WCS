@@ -119,7 +119,20 @@ public static partial class PlcEndpoints
         plc.MapPut("points/{id:guid}/write-allowed", async (HttpContext c, Guid id, SetWriteAllowedRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {
             var view = await Audited.RunAsync(c, "PLC_IO_WRITE_ALLOWED", "StationIoPoint", id.ToString(), null,
-                () => s.SetWriteAllowedAsync(id, r.Allowed, ct), res => new { res.PlcId, res.StationId, res.SignalName, res.WriteAllowed });
+                () => s.SetWriteAllowedAsync(id, r.Allowed, c.Actor().Username, ct), res => new { res.PlcId, res.StationId, res.SignalName, res.WriteAllowed });
+            await rt.ReloadPlcAsync(view.PlcId, ct);
+            return ApiResults.Ok(c, view);
+        }).RequireAuthorization(admin);
+        // CR-014: write approval of one point (Admin). Independent of reading and of the handshake; it does not send anything to a PLC.
+        plc.MapPost("points/{id:guid}/write-approval", async (HttpContext c, Guid id, WriteApprovalRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
+        {
+            var approve = r.Decision.Equals("Approve", StringComparison.OrdinalIgnoreCase);
+            if (!approve && !r.Decision.Equals("Reject", StringComparison.OrdinalIgnoreCase))
+                throw AppException.Validation("WRITE_DECISION_INVALID", "Quyết định phải là Approve hoặc Reject.");
+            var view = await Audited.RunAsync(c, approve ? "PLC_IO_WRITE_APPROVE" : "PLC_IO_WRITE_REJECT", "StationIoPoint", id.ToString(), null,
+                () => s.DecideWriteAsync(id, approve, c.Actor().Username, r.Note, ct),
+                res => new { res.PlcId, res.StationId, res.SignalName, address = res.ActualAddress, res.DataType, res.WriteApproval, res.WriteAllowed, decidedBy = res.WriteDecidedBy, decidedAt = res.WriteDecidedAt },
+                detail: r.Note);
             await rt.ReloadPlcAsync(view.PlcId, ct);
             return ApiResults.Ok(c, view);
         }).RequireAuthorization(admin);
@@ -165,6 +178,8 @@ public static partial class PlcEndpoints
             var point = (await s.ListPointsAsync(null, stationId, true, ct)).FirstOrDefault(p => p.SignalName == signal) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             var type = Enum.Parse<PlcDataType>(point.DataType);
             var value = ParseValue(type, r.Value);
+            var shape = WriteValueValidator.Check(type, point.WordLength, point.Encoding, value);   // CR-014: reject a wrong value here, before the runtime
+            if (!shape.Ok) throw AppException.Validation(shape.Code!, shape.Message!);
             var result = await Audited.RunAsync(c, "PLC_TEST_WRITE", "StationIoPoint", point.Id.ToString(), null,
                 async () =>
                 {
@@ -223,10 +238,9 @@ public static partial class PlcEndpoints
                 PlcDataType.Bool => e.ValueKind switch
                 {
                     JsonValueKind.True => PointValue.OfBool(true), JsonValueKind.False => PointValue.OfBool(false),
-                    JsonValueKind.Number when e.GetInt32() is 0 or 1 => PointValue.OfBool(e.GetInt32() == 1),
                     _ => throw new FormatException(),
                 },
-                PlcDataType.Int => e.ValueKind == JsonValueKind.Number ? PointValue.OfInt(e.GetInt32()) : throw new FormatException(),
+                PlcDataType.Int => e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var n) ? PointValue.OfInt(n) : throw new FormatException(),   // a fraction or a number beyond 32 bits is not an INT
                 _ => e.ValueKind == JsonValueKind.String ? PointValue.OfString(e.GetString()!) : throw new FormatException(),
             };
         }

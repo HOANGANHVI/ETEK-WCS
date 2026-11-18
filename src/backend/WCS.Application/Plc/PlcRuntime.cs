@@ -176,7 +176,9 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
                 ("mode", WritePolicy.EffectiveMode(Options).ToString()), ("address", point.Address)));
             return new WriteResult(false, decision.Code, decision.Reason);
         }
-        if (value.Type != point.DataType) return new WriteResult(false, "TYPE_MISMATCH", $"Tín hiệu kiểu {point.DataType}, giá trị kiểu {value.Type}.");
+        // CR-014: the value is checked against the signal (type, 16-bit INT range, ASCII STRING length) before anything is queued
+        var shape = WriteValueValidator.Check(point.DataType, point.WordLength, point.Encoding, value);
+        if (!shape.Ok) return new WriteResult(false, shape.Code, shape.Message);
         return await worker.EnqueueWriteAsync(point, value).WaitAsync(ct);
     }
 }

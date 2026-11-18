@@ -9,6 +9,9 @@ public enum PlcDataType { Bool = 1, Int = 2, String = 3 }
 /// <summary>NeedsConfiguration: no confirmed address. Configured: address entered by an Admin. Approved: confirmed by the PLC engineer.</summary>
 public enum IoConfigStatus { NeedsConfiguration = 0, Configured = 1, Approved = 2 }
 
+/// <summary>CR-014: the Admin decision on WRITING a point. Independent of reading (<see cref="IoConfigStatus"/>) and of the handshake. NotApproved = awaiting a decision.</summary>
+public enum WriteApprovalStatus { NotApproved = 0, Approved = 1, Rejected = 2 }
+
 /// <summary>Runtime mode of the PLC layer (CR-002). The default is <see cref="Simulator"/>; real modes are opt-in and guarded.</summary>
 public enum PlcRuntimeMode { Simulator = 0, RealReadOnly = 1, RealReadWrite = 2 }
 
@@ -148,6 +151,11 @@ public class StationIoPoint
     public DateTimeOffset? ApprovedAt { get; private set; }
     /// <summary>Per-signal write allow-list. Default false. Honoured only in REAL_READ_WRITE (and the simulator).</summary>
     public bool WriteAllowed { get; private set; }
+    /// <summary>CR-014: write approval decision (NotApproved / Approved / Rejected). <see cref="WriteAllowed"/> is true exactly when this is Approved (kept for the runtime and older clients).</summary>
+    public WriteApprovalStatus WriteApproval { get; private set; }
+    public string? WriteDecidedBy { get; private set; }
+    public DateTimeOffset? WriteDecidedAt { get; private set; }
+    public string? WriteDecisionNote { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public uint Version { get; private set; }
 
@@ -156,20 +164,20 @@ public class StationIoPoint
     /// <summary>
     /// CR-012: an entered address makes the point readable (polled) - approval is no longer needed for READING. Only an address that passed the entry validation can be stored,
     /// and the runtime additionally re-checks it with <c>AddressValidator</c> (see <c>PlcPollablePolicy</c>). Approval (<see cref="IoConfigStatus.Approved"/>) now only governs WRITE permission
-    /// (<see cref="SetWriteAllowed"/>) and the approval of a port mapping for Business Process publishing; it never grants a write by itself.
+    /// (<see cref="ApproveWrite"/>, CR-014) and the approval of a port mapping for Business Process publishing; it never grants a write by itself.
     /// </summary>
     public bool IsPollable => HasConfirmedAddress;
 
     public void ConfigureAddress(string address, int? wordLength, string? encoding, DateTimeOffset now)
     {
         ActualAddress = address; WordLength = wordLength; Encoding = encoding;
-        Status = IoConfigStatus.Configured; ApprovedBy = null; ApprovedAt = null; WriteAllowed = false; UpdatedAt = now;
+        Status = IoConfigStatus.Configured; ApprovedBy = null; ApprovedAt = null; ResetWriteApproval(); UpdatedAt = now;
     }
 
     public void ClearAddress(DateTimeOffset now)
     {
         ActualAddress = null; WordLength = null; Encoding = null;
-        Status = IoConfigStatus.NeedsConfiguration; ApprovedBy = null; ApprovedAt = null; WriteAllowed = false; UpdatedAt = now;
+        Status = IoConfigStatus.NeedsConfiguration; ApprovedBy = null; ApprovedAt = null; ResetWriteApproval(); UpdatedAt = now;
     }
 
     public void Approve(string by, DateTimeOffset now)
@@ -178,11 +186,25 @@ public class StationIoPoint
         Status = IoConfigStatus.Approved; ApprovedBy = by; ApprovedAt = now; UpdatedAt = now;
     }
 
-    public void SetWriteAllowed(bool allowed, DateTimeOffset now)
+    /// <summary>A new or cleared address withdraws any write decision: the Admin decided on a different address.</summary>
+    private void ResetWriteApproval() { WriteAllowed = false; WriteApproval = WriteApprovalStatus.NotApproved; WriteDecidedBy = null; WriteDecidedAt = null; WriteDecisionNote = null; }
+
+    /// <summary>
+    /// CR-014: approves WRITING this point. Independent of the read approval (<see cref="Approve"/>) and of pollability: it needs an entered address and a Software -> PLC direction,
+    /// nothing else. Whether a write really happens is still decided by the runtime mode and WritePolicy.
+    /// </summary>
+    public void ApproveWrite(string by, DateTimeOffset now)
     {
-        if (allowed && Status != IoConfigStatus.Approved) throw new DomainException("IO_NOT_APPROVED", "Only approved points may be allowed for writing.");
-        if (allowed && Direction != PlcSignalDirection.SoftwareToPlc) throw new DomainException("IO_NOT_WRITABLE", "Only Software -> PLC points can be written.");
-        WriteAllowed = allowed; UpdatedAt = now;
+        if (Status == IoConfigStatus.NeedsConfiguration || string.IsNullOrWhiteSpace(ActualAddress)) throw new DomainException("IO_NO_ADDRESS", "Cannot approve writing a point without an address.");
+        if (Direction != PlcSignalDirection.SoftwareToPlc) throw new DomainException("IO_NOT_WRITABLE", "Only Software -> PLC points can be written.");
+        WriteAllowed = true; WriteApproval = WriteApprovalStatus.Approved; WriteDecidedBy = by; WriteDecidedAt = now; WriteDecisionNote = null; UpdatedAt = now;
+    }
+
+    /// <summary>Rejects (or withdraws) the write approval. Always allowed.</summary>
+    public void RejectWrite(string by, string? note, DateTimeOffset now)
+    {
+        WriteAllowed = false; WriteApproval = WriteApprovalStatus.Rejected; WriteDecidedBy = by; WriteDecidedAt = now;
+        WriteDecisionNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim()[..Math.Min(note.Trim().Length, 200)]; UpdatedAt = now;
     }
 }
 

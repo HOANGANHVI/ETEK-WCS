@@ -56,6 +56,9 @@ internal sealed class StationIoPointConfiguration : IEntityTypeConfiguration<Sta
         b.Property(x => x.ActualAddress).HasMaxLength(20);
         b.Property(x => x.Encoding).HasMaxLength(40);
         b.Property(x => x.ApprovedBy).HasMaxLength(100);
+        b.Property(x => x.WriteApproval).HasConversion<string>().HasMaxLength(20).HasDefaultValue(WriteApprovalStatus.NotApproved);
+        b.Property(x => x.WriteDecidedBy).HasMaxLength(100);
+        b.Property(x => x.WriteDecisionNote).HasMaxLength(200);
         b.Property(x => x.Version).IsRowVersion();
         b.HasOne<PlcConnection>().WithMany().HasForeignKey(x => x.PlcId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<PlcStation>().WithMany().HasForeignKey(x => x.StationId).OnDelete(DeleteBehavior.Restrict);

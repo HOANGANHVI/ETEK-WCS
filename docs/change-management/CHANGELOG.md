@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.1 – CR-014 PLC write approval and typed write input (2026-11-18)
+
+- Change Request: CR-014. Status: IMPLEMENTED (code); not deployed.
+- Added: `WriteApproval` state per IO point, `POST /api/plc/points/{id}/write-approval`, `WriteValueValidator`, IO mapping write-permission column and dialogs, migration `AddPlcWriteApproval`.
+- Changed: write permission no longer needs the read approval; BOOL write values accept true/false only.
+- Tests added: `PlcWriteApprovalTests` (3 + real MC mock write path), `WriteValueValidatorTests`.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.0 – CR-013 PLC Diagnostic Logging and Export (2026-11-18)
 
 - Change Request: CR-013. Status: IMPLEMENTED (code); not deployed, not verified against a real PLC.

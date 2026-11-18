@@ -135,9 +135,11 @@ public class PlcPollingPolicyTests(DatabaseFixture fixture)
         var ack = await Id(h, "PLC-04", "E1", "Request_Ack");
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{ack}/address", new { address = "M9100" })).Status);
         Assert.True(await PollableAsync(admin, ack));
-        var blocked = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{ack}/write-allowed", new { allowed = true });
-        Assert.Equal(422, blocked.Status); Assert.Equal("IO_NOT_APPROVED", blocked.Root.ErrorCode());                    // write permission still needs the approval
-        Assert.False(await h.Db(db => db.StationIoPoints.Where(p => p.Id == ack).Select(p => p.WriteAllowed).SingleAsync()));
+        // CR-014: being pollable (or read-approved) never grants a write: the point stays NOT_APPROVED for writing until an Admin decides
+        var stored = await h.Db(db => db.StationIoPoints.AsNoTracking().SingleAsync(p => p.Id == ack));
+        Assert.Equal((WriteApprovalStatus.NotApproved, false), (stored.WriteApproval, stored.WriteAllowed));
+        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{ack}/approve")).Status);          // read approval...
+        Assert.False(await h.Db(db => db.StationIoPoints.Where(p => p.Id == ack).Select(p => p.WriteAllowed).SingleAsync()));   // ...is not a write approval
 
         // even an approved, write-allowed, pollable point is refused by the policy in the read-only / degraded modes
         var p = new IoPointRef(ack, "PLC-04", "E1", "Request_Ack", PlcSignalDirection.SoftwareToPlc, PlcDataType.Bool, "M9100", null, null, WriteAllowed: true, "Handshake", Pollable: true);

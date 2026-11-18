@@ -74,6 +74,10 @@ export interface IoPointConfig {
   id: string; plcId: string; stationId: string; seq: number; group: string; signalName: string; direction: 'PlcToSoftware' | 'SoftwareToPlc'
   dataType: 'Bool' | 'Int' | 'String'; description: string; configStatus: string; templateAddressReference: string | null; actualAddress: string | null
   wordLength: number | null; encoding: string | null; writeAllowed: boolean | null; approvedBy: string | null; approvedAt: string | null; pollable: boolean | null
+  /** CR-014: the Admin decision on WRITING (independent of reading): NOT_APPROVED (awaiting) | APPROVED | REJECTED. */
+  writeApproval: 'NOT_APPROVED' | 'APPROVED' | 'REJECTED'; writeDecidedBy: string | null; writeDecidedAt: string | null; writeDecisionNote: string | null
+  /** false when the driver cannot write this data type / encoding. */
+  writeSupported: boolean | null
 }
 
 /** Bulk READ approval of a commissioning PLC (Admin). Outcome: ELIGIBLE (preview only) | APPROVED | ALREADY_APPROVED | NOT_ELIGIBLE | FAILED. */
