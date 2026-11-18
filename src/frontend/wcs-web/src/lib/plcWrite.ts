@@ -21,3 +21,20 @@ export function writeReadiness(runtime: WriteRuntime | null | undefined, plcStat
   if (plcState !== 'Connected') return { ok: false, reason: 'PLC_NOT_CONNECTED' }                         // the simulator reports Connected too
   return { ok: true }
 }
+
+export interface WriteKeyRuntime { mode?: string; allowLiveConnection?: boolean; writeEnabled?: boolean; writeApprovalReferenceSet?: boolean; writeHandshakeApproved?: boolean }
+export interface WriteKeyState { key: string; ok: boolean; current?: string }
+
+/**
+ * CR-017: the five deployment settings a real write needs, each judged by what the BACKEND reports it received (never by what the .env is supposed to contain).
+ * The approval reference is only ever "set" or not: its value is not available to the browser.
+ */
+export function writeKeyChecklist(r: WriteKeyRuntime): WriteKeyState[] {
+  return [
+    { key: 'PLC_MODE', ok: r.mode === 'RealReadWrite', current: r.mode },
+    { key: 'PLC_ALLOW_LIVE_CONNECTION', ok: r.allowLiveConnection === true },
+    { key: 'PLC_WRITE_ENABLED', ok: r.writeEnabled === true },
+    { key: 'PLC_WRITE_APPROVAL_REFERENCE', ok: r.writeApprovalReferenceSet === true },
+    { key: 'PLC_WRITE_HANDSHAKE_APPROVED', ok: r.writeHandshakeApproved === true },
+  ]
+}

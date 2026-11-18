@@ -1,5 +1,12 @@
 # Change Log
 
+## v3.4 – CR-017 Runtime write configuration (2026-11-18)
+
+- Change Request: CR-017. Status: IMPLEMENTED; not deployed; no real PLC written.
+- Fixed: `deployment/.env.example` forced `PLC_MODE=RealReadOnly` and lacked the write keys. Added: `plc-write-config.ps1`, `WritePolicy.MissingWriteKeys`, banner key checklist, RUNTIME_START diagnostics, deployment README section 10.
+- Tests added: `PlcWriteConfigBindingTests` (14), `tests/deployment/Test-PlcWriteConfig.ps1` (16), 6 more checks in `plc-write-smoke.ts`.
+- Approved by: project owner. Date: 2026-11-18.
+
 ## v3.3 – CR-016 PLC write UI readiness (2026-11-18)
 
 - Change Request: CR-016. Status: IMPLEMENTED (code); not deployed; no real PLC written.

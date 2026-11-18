@@ -320,6 +320,22 @@ public static class WritePolicy
     public static PlcRuntimeMode EffectiveMode(PlcRuntimeOptions o) =>
         o.Mode == PlcRuntimeMode.RealReadWrite && !WriteKeysComplete(o) ? PlcRuntimeMode.RealReadOnly : o.Mode;
 
+    /// <summary>
+    /// CR-017: the deployment settings (by their environment-variable names) that are not in effect for a real write - exactly the conditions of <see cref="EffectiveMode"/>. The approval reference is
+    /// only checked for being present, never returned. An empty list in a real mode means the runtime is in REAL_READ_WRITE; the simulator needs none.
+    /// </summary>
+    public static IReadOnlyList<string> MissingWriteKeys(PlcRuntimeOptions o)
+    {
+        if (o.Mode == PlcRuntimeMode.Simulator) return [];
+        var missing = new List<string>();
+        if (o.Mode != PlcRuntimeMode.RealReadWrite) missing.Add("PLC_MODE");
+        if (!o.AllowLiveConnection) missing.Add("PLC_ALLOW_LIVE_CONNECTION");
+        if (!o.Write.Enabled) missing.Add("PLC_WRITE_ENABLED");
+        if (string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference)) missing.Add("PLC_WRITE_APPROVAL_REFERENCE");
+        if (!o.Write.HandshakeApproved) missing.Add("PLC_WRITE_HANDSHAKE_APPROVED");
+        return missing;
+    }
+
     public static bool WriteKeysComplete(PlcRuntimeOptions o) =>
         o.AllowLiveConnection && o.Write.Enabled && !string.IsNullOrWhiteSpace(o.Write.EngineerApprovalReference) && o.Write.HandshakeApproved;
 

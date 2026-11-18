@@ -192,3 +192,11 @@ Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.1
 ## Giám sát tài nguyên máy chủ (trang Overview, chỉ Admin)
 
 Backend tự đọc cgroup của chính container (CPU, RAM theo giới hạn `WCS_BACKEND_CPUS` / `WCS_BACKEND_MEMORY`, uptime, ổ chứa volume dữ liệu) và hiển thị trên Overview. **Không cần đổi Compose, không cần `privileged`, Docker socket hay mount ổ đĩa host.** Trên Docker Desktop, số đo "Máy chủ" là của VM Linux chạy container (được gắn nhãn rõ), không phải máy Windows; số đo Windows thật cần Host Agent (chưa cài, xem `docs/reviews/SERVER_RESOURCE_MONITORING_REPORT.md`). Cấu hình (tùy chọn, biến môi trường backend): `ResourceMonitoring__Enabled`, `ResourceMonitoring__SampleIntervalSeconds`, `ResourceMonitoring__CpuWarning/CpuCritical`, `...MemoryWarning/MemoryCritical`, `...DiskWarning/DiskCritical`, `ResourceMonitoring__DiskPath`.
+
+## 10. Kiểm tra cấu hình ghi PLC thực sự vào backend (CR-017)
+
+Trang *Cấu hình địa chỉ IO* hiển thị banner "Trạng thái ghi PLC" và liệt kê khóa còn thiếu theo **giá trị backend thực sự nhận được**. Nếu banner báo thiếu mà bạn tin là đã đặt:
+
+1. Chạy `deployment\scripts\plc-write-config.ps1`. Script chỉ đọc: so sánh `.env` (đường dẫn được in ra) với biến môi trường **thực sự trong container backend**; mã phê duyệt chỉ hiện "set/unset", không bao giờ hiện giá trị.
+2. Nguyên nhân thường gặp: (a) `.env` được tạo từ `.env.example` cũ có `PLC_MODE=RealReadOnly` (ép chỉ đọc, khóa nào cũng vô hiệu); (b) thiếu một trong 4 khóa; (c) sửa `.env` nhưng chưa chạy lại `deploy.ps1`/`start.ps1` nên container backend chưa được tạo lại; (d) `.env` sai thư mục (`WCS_CONFIG_DIR`, mặc định `C:\ETEK-WCS\config\.env`); (e) giá trị boolean không phải `true`/`false`.
+3. Log backend khi khởi động có dòng `RUNTIME_START` nêu chế độ yêu cầu, chế độ hiệu lực và tên các khóa còn thiếu (không có giá trị).
