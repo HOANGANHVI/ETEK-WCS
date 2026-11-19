@@ -6,6 +6,7 @@
 - **Shared components:** `EmptyState` (icon), `ChartEmpty`, `StackedSummary` (stacked status bar + counts/share), `IconInbox` / `IconChart`.
 - **Charts from existing data only:** tasks by status (Task Management), AGV status (AGV Monitoring), racks by status (Locations & Stock), PLC connection state, Station address configuration and, for Admin in a real PLC runtime, PLC communication counters (PLC Monitoring). No new API; no statistic that the system does not already hold (the error-trend / history statistics that need new data are NOT added). Empty data shows an explicit empty state.
 - CR-023 compact PLC layout kept (only the narrow-card container breakpoint 300 → 250 px, because the wider page padding would otherwise have stacked the PLC card rows); CR-024 bilingual unchanged.
+- **Alignment follow-up (CR-025):** login VI/EN switch moved to the card top-right corner on the logo row; Sidebar collapse button row reduced from 40 to 32 px and the header-to-first-group gap from 56 to 38 px. CSS only (`styles/modern.css`).
 - No backend, API, database, migration, PLC, RCS, SignalR, authorization or business-logic change. Not deployed.
 
 ## v3.14 – CR-024 Bilingual Description of IO signals (2026-11-19)
