@@ -10,6 +10,7 @@ using WCS.Domain.Logging;
 using WCS.Domain.Plc;
 using WCS.Domain.Users;
 using WCS.Infrastructure.Persistence;
+using WCS.Infrastructure.Plc;
 using WCS.Tests.Support;
 
 namespace WCS.Tests.Integration;
@@ -164,6 +165,35 @@ public class SystemDiagnosticExportTests(DatabaseFixture fixture)
         var summary = Text(path, "Summary.txt");
         Assert.Contains("Completeness: COMPLETE", summary); Assert.Contains("CANCEL_RETRY_LIMIT", summary); Assert.Contains("Known limitations", summary); Assert.Contains("no real RCS/AGV adapter", Text(path, "System_Info.txt"));
         Assert.Equal(outcome.Events, m.GetProperty("totals").GetProperty("events").GetInt64());
+    }
+
+    // ------------------------------------------------------------------------------------------------ the PLC folder inside the single export (CR-022: the separate PLC export screen is gone)
+    [Fact]
+    public async Task The_PLC_module_alone_or_one_PLC_still_delivers_the_complete_PLC_folder_and_other_scopes_do_not_add_it()
+    {
+        await using var h = await Harness.CreateAsync(fixture);
+        var now = DateTimeOffset.UtcNow; await SeedAsync(h, now);
+        await h.Scoped(async sp => { await sp.GetRequiredService<PlcCatalogSeeder>().SeedAsync(); return 0; });
+        var folder = new[] { "PLC/PLC_Connections.csv", "PLC/PLC_Configuration.json", "PLC/PLC_Connection.log", "PLC/PLC_Runtime.log", "PLC/PLC_Communication.log", "PLC/PLC_Read_Write.log", "PLC/PLC_Error_Summary.csv" };
+
+        var (plcOnly, o1) = await Run(h, Req("24h", new DiagScope { Modules = [DiagModules.Plc] }));
+        Assert.All(folder, f => Assert.Contains(f, Names(plcOnly)));
+        Assert.All(Events(plcOnly).Where(e => !e.GetProperty("related").GetBoolean()), e => Assert.Equal("Plc", e.GetProperty("module").GetString()));
+        Assert.Contains(o1.Sources, s => s.Name.StartsWith("plc_package", StringComparison.Ordinal) && s.Status == "OK");
+        Assert.Contains(o1.Sources, s => s.Name == "system_log" && s.Status == "NotRequested");      // the other sources are reported as not requested, not silently skipped
+
+        var (one, _) = await Run(h, Req("24h", new DiagScope { PlcId = "PLC-01" }));
+        Assert.All(folder, f => Assert.Contains(f, Names(one)));
+        var csv = Text(one, "PLC/PLC_Connections.csv");
+        Assert.Contains("PLC-01", csv); Assert.DoesNotContain("PLC-02", csv);                          // only the chosen PLC in the PLC folder...
+        Assert.All(Events(one), e => Assert.Equal("PLC-01", e.GetProperty("plcId").GetString()));      // ...and in the events
+
+        var (taskScope, _) = await Run(h, Req("24h", new DiagScope { TaskId = "11111111-2222-3333-4444-555555555555" }));
+        Assert.DoesNotContain(Names(taskScope), n => n.StartsWith("PLC/", StringComparison.Ordinal));  // a task/correlation scope has no basis to include PLC files
+        var (db, _) = await Run(h, Req("24h", new DiagScope { Modules = [DiagModules.Database] }));
+        Assert.DoesNotContain(Names(db), n => n.StartsWith("PLC/", StringComparison.Ordinal));
+        var (whole, _) = await Run(h, Req("24h"));
+        Assert.All(folder, f => Assert.Contains(f, Names(whole)));                                       // the whole system keeps the PLC folder
     }
 
     // ------------------------------------------------------------------------------------------------ failure of one source

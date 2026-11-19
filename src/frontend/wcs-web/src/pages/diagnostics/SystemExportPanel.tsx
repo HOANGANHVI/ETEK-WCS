@@ -99,6 +99,7 @@ export function SystemExportPanel({ plcs }: { plcs: PlcConnection[] }) {
           <label className="field"><span>TaskId</span><input value={taskId} onChange={(e) => setTaskId(e.target.value)} placeholder="GUID" /></label>
           <label className="field"><span>CorrelationId</span><input value={correlationId} onChange={(e) => setCorrelationId(e.target.value)} /></label>
         </div>
+        <p className="muted small">{t('diagnostics.sysPlcHint')}</p>
         <div><Button variant="primary" disabled={busy || running || (scopeKind === 'modules' && modules.length === 0)} onClick={() => void start()}>{busy ? t('diagnostics.sysStarting') : t('diagnostics.sysStart')}</Button></div>
       </div>
 
