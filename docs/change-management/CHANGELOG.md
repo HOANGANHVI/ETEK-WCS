@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.16 – CR-026 Configuration Export / Import (2026-11-19) – DOCUMENTATION ONLY
+
+- Change Request, impact report and Phase 2 plan written (`CR-026_CONFIG_TRANSFER.md`); status PENDING_APPROVAL. No source code, migration or specification change.
+
 ## v3.15 – CR-025 Modern Industrial UI (2026-11-19)
 
 - **Style layer** (`styles/modern.css`, tokens): cool light background, borderless cards with soft shadows, one 8/12 px radius scale, gradient navy header/sidebar with a blue active marker, KPI cards with tinted icon tile and tone accent, quiet tables (small uppercase headers, soft separators), softer pills, rounded form controls with a blue focus ring, segmented range switch, rounded notices. Both themes keep working (tokens only).
