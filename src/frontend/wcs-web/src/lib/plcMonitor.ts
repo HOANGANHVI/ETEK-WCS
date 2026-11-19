@@ -8,11 +8,12 @@ export const MONITOR_STATUSES: MonitorStatus[] = ['Good', 'Stale', 'Bad', 'Offli
 export type SortKey = 'plc' | 'station' | 'signal' | 'status' | 'updated'
 export interface MonitorFilter { plc: string; station: string; status: string; text: string }
 
-export function filterPoints(rows: MonitorPoint[], f: MonitorFilter): MonitorPoint[] {
+/** `describe` returns the description as DISPLAYED (in the screen language), so a search finds what the user reads. */
+export function filterPoints(rows: MonitorPoint[], f: MonitorFilter, describe: (p: MonitorPoint) => string = (p) => p.description): MonitorPoint[] {
   const q = f.text.trim().toLowerCase()
   return rows.filter((p) =>
     (!f.plc || p.plcId === f.plc) && (!f.station || p.stationId === f.station) && (!f.status || p.status === f.status)
-    && (!q || p.signalName.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)))
+    && (!q || p.signalName.toLowerCase().includes(q) || describe(p).toLowerCase().includes(q)))
 }
 
 const STATUS_ORDER = Object.fromEntries(MONITOR_STATUSES.map((s, i) => [s, i])) as Record<string, number>

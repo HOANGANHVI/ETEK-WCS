@@ -1,5 +1,12 @@
 # Change Log
 
+## v3.14 – CR-024 Bilingual Description of IO signals (2026-11-19)
+
+- The Description column of **IO Address Mapping** (and the same text in the **PLC monitoring IO tab**) now follows the selected language: VI shows the Vietnamese text of the controlled IO workbook, EN an English text; the language switch updates the table immediately, without reload.
+- Source: the description is one fixed text per template signal (23 signals, identical for all 4 PLCs / 16 Stations = 368 points) stored once and not editable in the application, so it is translated centrally by Signal Name through the i18n dictionary (`plc.sigDesc_<Signal_Name>`, helper `lib/plcSignals.ts`). A signal without an entry shows the stored text unchanged.
+- The monitoring text search now matches the description as displayed (current language).
+- No change to database, API, IO catalog / workbook, Signal Name, address, data type, configuration or PLC communication. Not deployed.
+
 ## v3.13 – Fix: start-up failure with Auth:CookieSecure=Always (defect of CR-021 batch C) (2026-11-19)
 
 - **Defect:** the start-up configuration warning added by CR-021 batch C read `Auth:CookieSecure` with `GetValue<bool>`, but the setting is the text `Always` | `SameAsRequest` (docker-compose default `Always`): every Production start failed with `FormatException: String 'Always' was not recognized as a valid Boolean`. The tests did not run the start-up summary with a Production configuration, which is why it was not caught.
