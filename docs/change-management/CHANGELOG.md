@@ -1,5 +1,12 @@
 # Change Log
 
+## v3.13 – Fix: start-up failure with Auth:CookieSecure=Always (defect of CR-021 batch C) (2026-11-19)
+
+- **Defect:** the start-up configuration warning added by CR-021 batch C read `Auth:CookieSecure` with `GetValue<bool>`, but the setting is the text `Always` | `SameAsRequest` (docker-compose default `Always`): every Production start failed with `FormatException: String 'Always' was not recognized as a valid Boolean`. The tests did not run the start-up summary with a Production configuration, which is why it was not caught.
+- **Fix:** `LogSetup.LogStartupSummary` now uses `AuthSetup.ResolveSecurePolicy` (the resolver authentication uses) and logs the resolved policy; an invalid value fails with the same `InvalidOperationException` as authentication (no weaker fallback). The duplicate warning was removed (Program.cs already warns for SameAsRequest in Production) together with its translation. Cookie policy and authentication are unchanged.
+- **Tests:** `StartupCookiePolicyTests` (12): valid values, unset defaults, invalid values, one resolver for both, and the real host with `Auth__CookieSecure` Always / SameAsRequest including the Set-Cookie Secure flag. 11 of the 12 fail without the fix.
+- No .env, database or volume change. Not deployed.
+
 ## v3.12 – CR-023 Compact PLC screens (2026-11-19)
 
 - PLC connection cards (2-column parameters, groups, state in title, one action row), PLC monitoring (compact cards, 16 compact Station tiles in 8 columns on wide screens), responsive rules, four explanation texts removed, icon-only menu on phones. Frontend only; no API/database/PLC change. Not deployed.
