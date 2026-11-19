@@ -83,8 +83,11 @@ public static class LogSetup
         }
         catch (Exception) { db = "not configured"; }
 
+        // The cookie policy is resolved by the SAME function authentication uses (Auth:CookieSecure is the text Always | SameAsRequest, never a boolean): logging and authentication cannot disagree, and an invalid value
+        // fails here with the same InvalidOperationException authentication would raise. (A Production host on SameAsRequest is already warned about in Program.cs.)
+        var cookiePolicy = WCS.Api.Api.AuthSetup.ResolveSecurePolicy(c["Auth:CookieSecure"], app.Environment.IsDevelopment());
+
         // CR-021: configuration that is missing or unsafe for the environment is a diagnostic event of its own (the values themselves are never logged)
-        if (app.Environment.IsProduction() && !c.GetValue("Auth:CookieSecure", true)) app.Logger.LogWarning("Auth cookies are not marked Secure in Production (Auth:CookieSecure=false). {EventCode}", "STARTUP_CONFIG_WARNING");
         if (app.Environment.IsProduction() && string.Equals(c["Plc:Mode"] ?? "Simulator", "Simulator", StringComparison.OrdinalIgnoreCase) && !c.GetValue("Plc:AllowSimulatorInProduction", false))
             app.Logger.LogWarning("Plc:Mode is Simulator in Production without Plc:AllowSimulatorInProduction: the PLC runtime will refuse to start. {EventCode}", "STARTUP_CONFIG_WARNING");
         if (!string.IsNullOrWhiteSpace(c["DeploymentLogs:Directory"]) && !Directory.Exists(c["DeploymentLogs:Directory"]))
@@ -95,7 +98,7 @@ public static class LogSetup
             "WCS backend starting: environment {Environment}, version {Version}, PLC mode {PlcMode} (live connection allowed: {AllowLive}), integration {IntegrationMode}, " +
             "cookie secure policy {CookieSecure}, database {Database}, deployment log import {DeploymentLogs}, system log storage {SystemLog}. {EventCode}",
             app.Environment.EnvironmentName, version, c["Plc:Mode"] ?? "Simulator", c.GetValue("Plc:AllowLiveConnection", false), c["Integration:Mode"] ?? "Simulator",
-            c["Auth:CookieSecure"] ?? "default", db, string.IsNullOrWhiteSpace(c["DeploymentLogs:Directory"]) ? "off" : "on", c.GetValue("Logging:SystemLog:Enabled", true) ? "on" : "off",
+            cookiePolicy, db, string.IsNullOrWhiteSpace(c["DeploymentLogs:Directory"]) ? "off" : "on", c.GetValue("Logging:SystemLog:Enabled", true) ? "on" : "off",
             "STARTUP_SUMMARY");
     }
 }
