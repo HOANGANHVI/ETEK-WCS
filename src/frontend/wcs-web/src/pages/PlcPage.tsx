@@ -1,9 +1,10 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { PlcExchange, PlcOverview, PlcStationSummary, PlcWorkerStatus } from '../api/plcTypes'
 import { useAuth } from '../auth/AuthContext'
 import { Async, EmptyState, PageHeader, Panel, Pill } from '../components/ui'
+import { ChartEmpty, StackedSummary, type SummaryItem } from '../components/charts'
 import { DEMO_MODE } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useT, type MsgKey } from '../i18n'
@@ -90,6 +91,7 @@ function Overview({ isAdmin }: { isAdmin: boolean }) {
       {(o) => { const real = o.runtime.effectiveMode !== 'Simulator'; return (
         <>
           <RuntimeBanner rt={o.runtime} />
+          <PlcSummaries o={o} real={real} isAdmin={isAdmin} />
           <div className="plc-cards">
             {o.plcs.map((w) => <PlcCard key={w.plcId} w={w} isAdmin={isAdmin} real={real} />)}
           </div>
@@ -173,5 +175,54 @@ function StationTile({ s, phase, active, onClick, real }: { s: PlcStationSummary
         <small className="st-hs" title={APPROVAL_VI.NEEDS_CONFIRMATION}>{t('plc.tileHsPending')}</small>
       </span>
     </button>
+  )
+}
+
+/** CR-025: distribution charts built only from the data the overview already returns (connection state, addressed IO points, communication counters). */
+function PlcSummaries({ o, real, isAdmin }: { o: PlcOverview; real: boolean; isAdmin: boolean }) {
+  const t = useT()
+  const conn = useMemo<SummaryItem[]>(() => {
+    if (!real) return [{ key: 'sim', label: t('plc.sumConnSim'), tone: 'muted', value: o.plcs.length }]
+    const n = (f: (s: PlcWorkerStatus['state']) => boolean) => o.plcs.filter((w) => f(w.state)).length
+    return [
+      { key: 'ok', label: t('plc.sumConnConnected'), tone: 'ok', value: n((s) => s === 'Connected') },
+      { key: 'ing', label: t('plc.sumConnConnecting'), tone: 'warn', value: n((s) => s === 'Connecting') },
+      { key: 'bad', label: t('plc.sumConnFaulted'), tone: 'bad', value: n((s) => s === 'Faulted') },
+      { key: 'off', label: t('plc.sumConnOff'), tone: 'muted', value: n((s) => s !== 'Connected' && s !== 'Connecting' && s !== 'Faulted') },
+    ]
+  }, [o.plcs, real, t])
+  const stations = useMemo<SummaryItem[]>(() => [
+    { key: 'full', label: t('plc.sumStFull'), tone: 'ok', value: o.stations.filter((s) => s.total > 0 && s.configured === s.total).length },
+    { key: 'part', label: t('plc.sumStPartial'), tone: 'warn', value: o.stations.filter((s) => s.configured > 0 && s.configured < s.total).length },
+    { key: 'none', label: t('plc.sumStNone'), tone: 'muted', value: o.stations.filter((s) => s.configured === 0).length },
+  ], [o.stations, t])
+  const comm = real ? o.plcs.filter((w) => w.diagnostics && w.diagnostics.requests > 0) : []   // simulator counters are not PLC communication
+  return (
+    <div className="sum-grid">
+      <Panel title={t('plc.sumConnTitle')} subtitle={t('plc.sumConnSub', { n: o.plcs.length })}>
+        <StackedSummary items={conn} ariaLabel={t('plc.sumConnTitle')} emptyTitle={t('plc.noPlcDataShort')} />
+      </Panel>
+      <Panel title={t('plc.sumStTitle')} subtitle={t('plc.sumStSub', { n: o.stations.length })}>
+        <StackedSummary items={stations} ariaLabel={t('plc.sumStTitle')} emptyTitle={t('plc.noPlcDataShort')} />
+      </Panel>
+      {isAdmin && (
+        <Panel title={t('plc.sumCommTitle')} subtitle={t('plc.sumCommSub')}>
+          {comm.length === 0 ? <ChartEmpty title={t('plc.sumCommEmpty')} /> : (
+            <ul className="comm-list">
+              {comm.map((w) => { const d = w.diagnostics!; const ok = d.requests - d.failures; return (
+                <li key={w.plcId}>
+                  <strong>{w.plcId}</strong>
+                  <div className="sum-bar" role="img" aria-label={`${w.plcId}: ${ok} / ${d.failures}`}>
+                    {ok > 0 && <span className="seg tone-ok" style={{ flexGrow: ok }} title={`${t('plc.sumCommOk')}: ${ok}`} />}
+                    {d.failures > 0 && <span className="seg tone-bad" style={{ flexGrow: d.failures }} title={`${t('plc.sumCommFail')}: ${d.failures}`} />}
+                  </div>
+                  <span className="comm-meta">{t('plc.sumCommRow', { requests: d.requests, failures: d.failures, timeouts: d.timeouts })}</span>
+                </li>
+              ) })}
+            </ul>
+          )}
+        </Panel>
+      )}
+    </div>
   )
 }

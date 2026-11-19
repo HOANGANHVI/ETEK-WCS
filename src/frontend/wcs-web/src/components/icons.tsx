@@ -50,3 +50,5 @@ export const IconPanelLeftOpen = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><re
 export const IconSun = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Svg>
 export const IconMoon = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" /></Svg>
 export const IconUser = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></Svg>
+export const IconInbox = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><path d="M4 13l2.4-7.2A2 2 0 0 1 8.3 4.5h7.4a2 2 0 0 1 1.9 1.3L20 13" /><path d="M4 13v5a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 18v-5h-4.5a3.5 3.5 0 0 1-7 0H4z" /></Svg>
+export const IconChart = (p: SVGProps<SVGSVGElement>) => <Svg {...p}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></Svg>

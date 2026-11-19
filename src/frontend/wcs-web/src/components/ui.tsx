@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { taskStage } from './taskStage'
+import { IconInbox } from './icons'
 import { useT, type MsgKey } from '../i18n'
 import type { ApiState } from '../hooks/useApi'
 import type { TaskState, TransportTask } from '../api/types'
@@ -87,6 +88,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="state state-empty">
+      <span className="empty-icon" aria-hidden="true"><IconInbox /></span>
       <div><strong>{title}</strong>{hint && <span>{hint}</span>}</div>
     </div>
   )

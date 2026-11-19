@@ -5,7 +5,7 @@ import type { InventoryTransaction, TransportTask } from '../api/types'
 import { AgvCard } from '../components/AgvCard'
 import { ServerResources } from '../components/ServerResources'
 import { DEMO_MODE } from '../config'
-import { BarChart, Donut, LineChart } from '../components/charts'
+import { BarChart, ChartEmpty, Donut, LineChart } from '../components/charts'
 import { IconAgv, IconClock, IconTasks, IconWarehouse } from '../components/icons'
 import { linkText, plcView, rcsView } from '../components/linkStatus'
 import { useAuth } from '../auth/AuthContext'
@@ -188,7 +188,7 @@ export function DashboardPage() {
       <div className="dc-grid">
         <Panel title={t('dashboard.trendTitle')} className="dc-8" subtitle={range === 'today' ? t('dashboard.trendUnitHour') : t('dashboard.trendUnitDay')}>
           <Async state={finished} empty={{ title: t('dashboard.noData') }}>
-            {() => !stats || !hasFinished ? <div className="chart-empty">{t('dashboard.noData')}</div> : (
+            {() => !stats || !hasFinished ? <ChartEmpty title={t('dashboard.noData')} /> : (
               <>
                 <div className="chart-meta">
                   <div className="legend"><span><i className="ch-ok" />{t('dashboard.legendCompleted')}</span><span><i className="ch-bad" />{t('dashboard.legendFailed')}</span></div>
@@ -204,7 +204,7 @@ export function DashboardPage() {
 
         <Panel title={t('dashboard.rateTitle')} className="dc-4">
           <Async state={finished} empty={{ title: t('dashboard.noData') }}>
-            {() => !stats || !hasFinished ? <div className="chart-empty">{t('dashboard.noData')}</div> : (
+            {() => !stats || !hasFinished ? <ChartEmpty title={t('dashboard.noData')} /> : (
               <>
                 <div className="donut-wrap">
                   <Donut ariaLabel={t('dashboard.rateAria')}
@@ -223,7 +223,7 @@ export function DashboardPage() {
 
         <Panel title={t('dashboard.cycleTitle')} className="dc-7" subtitle={t('dashboard.cycleUnit', { unit: t(cycleUnit.key) })}>
           <Async state={finished} empty={{ title: t('dashboard.noData') }}>
-            {() => !stats || stats.cycle === null ? <div className="chart-empty">{t('dashboard.noData')}</div> : (
+            {() => !stats || stats.cycle === null ? <ChartEmpty title={t('dashboard.noData')} /> : (
               <>
                 <LineChart labels={labels} ariaLabel={t('dashboard.cycleAria')} formatY={(n) => String(Math.round(n * 10) / 10)}
                   values={stats.cycleByBucket.map((v) => (v === null ? null : v / cycleUnit.div))}

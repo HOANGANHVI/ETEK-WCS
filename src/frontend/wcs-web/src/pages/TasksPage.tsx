@@ -7,6 +7,7 @@ import { CreateTaskDialog, DeleteTaskDialog, EditTaskDialog } from './TaskDialog
 import { ReconciliationPanel } from './ReconciliationPanel'
 import { USER_EDITABLE } from './taskRules'
 import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
+import { StackedSummary, type SummaryItem } from '../components/charts'
 import { DEMO_MODE, ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
@@ -14,7 +15,7 @@ import { useT } from '../i18n'
 import { describeHistory } from '../i18n/logCatalog'
 import { formatDateTime, formatTime } from '../i18n/format'
 import {
-  AGV_ROLE_VI, DEVICE_EVENT_RE, describeError, flowInfo, HISTORY_EVENT_VI, LEG_VI, SOURCE_VI, TASK_STATE_VI, taskCode,
+  AGV_ROLE_VI, DEVICE_EVENT_RE, OCCUPYING_STATES, describeError, flowInfo, HISTORY_EVENT_VI, LEG_VI, SOURCE_VI, TASK_STATE_VI, taskCode,
 } from '../i18n/vi'
 
 const CANCELLABLE: TaskState[] = [
@@ -38,6 +39,7 @@ export function TasksPage() {
   const urlId = params.get('id')
 
   const tasks = useApi(useCallback(() => api.tasks(stateFilter || undefined, 0, 200), [stateFilter]), [...EVENTS])
+  const allTasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])   // unfiltered, for the status summary only
   const agvs = useApi(useCallback(() => api.agvs(), []))
   const locations = useApi(useCallback(() => api.locations(), []))
   const codes = useCodeMaps(locations.data, agvs.data)
@@ -46,6 +48,18 @@ export function TasksPage() {
     const q = search.trim().toLowerCase()
     return (tasks.data?.items ?? []).filter((t) => (!agvFilter || t.agvId === agvFilter) && (!reconOnly || t.requiresReconciliation) && (!q || taskCode(t.id).toLowerCase().includes(q)))
   }, [tasks.data, agvFilter, search, reconOnly])
+
+  const summary = useMemo<SummaryItem[]>(() => {
+    const items = allTasks.data?.items ?? []
+    const n = (f: (s: TaskState) => boolean) => items.filter((x) => f(x.state)).length
+    return [
+      { key: 'run', label: tr('tasks.sumInProgress'), tone: 'info', value: n((x) => OCCUPYING_STATES.includes(x)) },
+      { key: 'queue', label: tr('tasks.sumQueued'), tone: 'warn', value: n((x) => x === 'Pending' || x === 'Validating' || x === 'Queued') },
+      { key: 'done', label: tr('tasks.sumCompleted'), tone: 'ok', value: n((x) => x === 'Completed') },
+      { key: 'fail', label: tr('tasks.sumFailed'), tone: 'bad', value: n((x) => x === 'Failed') },
+      { key: 'cancel', label: tr('tasks.sumCancelled'), tone: 'muted', value: n((x) => x === 'Cancelled') },
+    ]
+  }, [allTasks.data, tr])
 
   // Nothing chosen yet: show the newest task so the detail area is never an empty void.
   const selectedId = urlId ?? rows[0]?.id ?? null
@@ -58,6 +72,9 @@ export function TasksPage() {
         title={tr('tasks.title')}
         actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>{tr('tasks.create')}</Button>}
       />
+      <Panel title={tr('tasks.sumTitle')} subtitle={tr('tasks.sumSub', { n: allTasks.data?.items.length ?? 0 })} className="mb">
+        <StackedSummary items={summary} ariaLabel={tr('tasks.sumTitle')} emptyTitle={tr('tasks.sumEmpty')} />
+      </Panel>
       <div className={`task-layout ${selectedId ? 'with-detail' : ''}`}>
         <Panel
           title={tr('tasks.listPanel')}
