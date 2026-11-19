@@ -1,3 +1,7 @@
+using Microsoft.Extensions.Configuration;
+using WCS.Application;
+using WCS.Infrastructure;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -274,13 +278,34 @@ public class DiagnosticLoggingTests(DatabaseFixture fixture)
         public Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken ct = default) => Task.CompletedTask;
     }
 
+    [Fact]
+    public async Task The_real_runtime_registrations_pass_container_validation_so_no_background_worker_can_stop_the_application_from_starting()
+    {
+        // regression: a hosted service that asked for every IHostedService in its constructor was a circular dependency. Development validates the container at start-up, so the whole backend failed to start;
+        // the test factory removes the workers, so only the REAL registrations (AddWcsRuntime) reveal it.
+        await using var h = await Harness.CreateAsync(fixture);
+        var config = new ConfigurationBuilder().AddConfiguration(fixture.Configuration)
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:WcsDatabase"] = fixture.ConnectionString }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging(); services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(config);
+        services.AddWcsApplication(config); services.AddWcsInfrastructure(config); services.AddWcsRuntime(config);
+        services.AddSingleton<IHostEnvironment>(new FakeProdEnv { EnvironmentName = "Development" });
+        services.AddSingleton<IHostApplicationLifetime>(new Life());
+        services.AddSingleton<IClock>(h.Clock);
+        await using var sp = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });   // throws on a circular or missing dependency
+        var workers = sp.GetServices<IHostedService>().Select(w => w.GetType().Name).ToList();
+        Assert.Contains("ApplicationLifecycleHostedService", workers);
+        Assert.Contains("SchedulerHostedService", workers);
+    }
+
     private sealed class W1 : IHostedService { public Task StartAsync(CancellationToken c) => Task.CompletedTask; public Task StopAsync(CancellationToken c) => Task.CompletedTask; }
 
     [Fact]
     public async Task Application_start_and_stop_are_logged_with_the_list_of_background_workers()
     {
         var cap = new Capture(); using var lf = LoggerFactory.Create(b => b.AddProvider(cap)); var life = new Life();
-        var svc = new ApplicationLifecycleHostedService([new W1(), new W1()], life, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(), lf.CreateLogger<ApplicationLifecycleHostedService>());
+        using var sp = new ServiceCollection().AddSingleton<IHostedService>(new W1()).AddSingleton<IHostedService>(new W1()).BuildServiceProvider();
+        var svc = new ApplicationLifecycleHostedService(sp, life, lf.CreateLogger<ApplicationLifecycleHostedService>());
         await svc.StartAsync(CancellationToken.None);
         Assert.Empty(cap.With("APP_STARTED"));
         life.Started.Cancel(); life.Stopping.Cancel(); life.Stopped.Cancel();
