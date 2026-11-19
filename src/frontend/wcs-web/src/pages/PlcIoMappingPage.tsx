@@ -11,6 +11,7 @@ import { AddressDialog, type DialogPoint } from './plc/plcDialogs'
 import { WriteApprovalDialog } from './plc/writeDialogs'
 import { BLOCKED_SIGNALS, deviceOf, WRITE_TONE } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
+import { signalDescription } from '../lib/plcSignals'
 
 const PLCS = ['PLC-01', 'PLC-02', 'PLC-03', 'PLC-04'] as const
 const STATIONS: Record<string, string[]> = {
@@ -106,7 +107,7 @@ export function PlcIoMappingPage() {
                         <td className="nowrap">{p.plcId}</td>
                         <td className="nowrap"><strong>{p.stationId}</strong></td>
                         <td><strong>{p.signalName}</strong><br /><small className="muted">{p.group}</small></td>
-                        <td className="small">{p.description}</td>
+                        <td className="small">{signalDescription(t, p.signalName, p.description)}</td>
                         <td>{DATATYPE_VI[p.dataType]}</td>
                         <td className="mono">{deviceOf(p.actualAddress) ?? <span className="muted">—</span>}</td>
                         <td className="mono">{p.actualAddress ?? <span className="muted">{t('plc.unassigned')}</span>}</td>
