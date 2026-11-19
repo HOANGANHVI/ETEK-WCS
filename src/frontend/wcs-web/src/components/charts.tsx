@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { IconChart } from './icons'
 
 /**
  * Small dependency-free SVG charts (bar, line, donut) in the WCS design tokens. They draw exactly the numbers they are given: no smoothing, no estimates; a missing value
@@ -119,6 +120,43 @@ export function Donut({ slices, ariaLabel, center }: { slices: DonutSlice[]; ari
         })}
       </svg>
       <div className="donut-center">{center}</div>
+    </div>
+  )
+}
+
+/** Empty state of a chart: says honestly that there is nothing to draw (no data yet, or the statistic is not supported). */
+export function ChartEmpty({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="chart-empty rich" role="note">
+      <IconChart />
+      <strong>{title}</strong>
+      {hint && <span>{hint}</span>}
+    </div>
+  )
+}
+
+export interface SummaryItem { key: string; label: string; value: number; tone: ChartTone }
+
+/** One stacked bar plus a legend with the count and share of every item. Draws exactly the counts it is given; with nothing to count it says so. */
+export function StackedSummary({ items, ariaLabel, emptyTitle }: { items: SummaryItem[]; ariaLabel: string; emptyTitle: string }) {
+  const total = items.reduce((n, i) => n + i.value, 0)
+  if (total === 0) return <ChartEmpty title={emptyTitle} />
+  const pct = (v: number) => Math.round((v / total) * 100)
+  return (
+    <div className="sum">
+      <div className="sum-bar" role="img" aria-label={ariaLabel + ': ' + items.map((i) => i.label + ' ' + i.value).join(', ')}>
+        {items.filter((i) => i.value > 0).map((i) => <span key={i.key} className={'seg tone-' + i.tone} style={{ flexGrow: i.value }} title={i.label + ': ' + i.value + ' (' + pct(i.value) + '%)'} />)}
+      </div>
+      <ul className="sum-items">
+        {items.map((i) => (
+          <li key={i.key} className={i.value === 0 ? 'zero' : ''}>
+            <i className={'tone-' + i.tone} aria-hidden="true" />
+            <span className="sum-label">{i.label}</span>
+            <strong>{i.value}</strong>
+            <small>{pct(i.value)}%</small>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

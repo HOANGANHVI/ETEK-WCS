@@ -2,6 +2,9 @@ import { defineMessages } from '../core'
 
 export default defineMessages({
   title: 'Vị trí và tồn kho',
+  sumTitle: 'Rack theo trạng thái',
+  sumSub: '{n} rack đang được WCS quản lý',
+  sumEmpty: 'Chưa có rack để thống kê',
   stationGroup: 'Trạm máy {prefix}',
   manualBuffer: 'Vị trí đệm thủ công',
   fullBuffer: 'Vị trí đệm rack đầy',
@@ -72,6 +75,9 @@ export default defineMessages({
   colNote: 'Ghi chú',
 }, {
   title: 'Locations & Stock',
+  sumTitle: 'Racks by status',
+  sumSub: '{n} racks managed by WCS',
+  sumEmpty: 'No racks to summarise yet',
   stationGroup: 'Machine station {prefix}',
   manualBuffer: 'Manual buffer locations',
   fullBuffer: 'Full-rack buffer locations',

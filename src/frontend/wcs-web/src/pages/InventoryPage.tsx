@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Location, Rack } from '../api/types'
 import { Async, EmptyState, OccupancyPill, PageHeader, Panel, RackPill } from '../components/ui'
+import { StackedSummary, type SummaryItem } from '../components/charts'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
 import { t, useT } from '../i18n'
@@ -61,6 +62,17 @@ export function InventoryPage() {
     return [...m.values()].sort((a, b) => a.order - b.order).map((g) => ({ ...g, items: g.items.sort((a, b) => a.code.localeCompare(b.code)) }))
   }, [locations.data, t])
 
+  const rackSummary = useMemo<SummaryItem[]>(() => {
+    const r = racks.data ?? []
+    const n = (st: Rack['status']) => r.filter((x) => x.status === st).length
+    return [
+      { key: 'full', label: RACK_STATUS_VI.Full, tone: 'info', value: n('Full') },
+      { key: 'empty', label: RACK_STATUS_VI.Empty, tone: 'muted', value: n('Empty') },
+      { key: 'transit', label: RACK_STATUS_VI.InTransit, tone: 'warn', value: n('InTransit') },
+      { key: 'unknown', label: RACK_STATUS_VI.Unknown, tone: 'bad', value: n('Unknown') },
+    ]
+  }, [racks.data])
+
   const current = (locations.data ?? []).find((l) => l.code === selected) ?? null
   const tableRacks = useMemo(
     () => (racks.data ?? []).filter((r) => !current || r.currentLocationId === current.id),
@@ -70,6 +82,9 @@ export function InventoryPage() {
   return (
     <>
       <PageHeader title={t('inventory.title')} />
+      <Panel title={t('inventory.sumTitle')} subtitle={t('inventory.sumSub', { n: racks.data?.length ?? 0 })} className="mb">
+        <StackedSummary items={rackSummary} ariaLabel={t('inventory.sumTitle')} emptyTitle={t('inventory.sumEmpty')} />
+      </Panel>
 
       <div className="inv-top">
         <Panel title={t('inventory.mapPanel')} className="inv-map">

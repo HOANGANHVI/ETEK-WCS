@@ -1,0 +1,172 @@
+/* ======================================================================================================================================================
+   CR-025 – Modern Industrial visual layer.
+   Presentation only: this file restyles the shared components (shell, panel, KPI card, table, form controls, buttons, status pills, empty / error states)
+   using the design tokens, so every page follows one style and both themes keep working. No layout logic of CR-023 (compact PLC screens) is changed:
+   rules that are more specific than the ones below (for example `.plc-conn-card .panel-head`) keep winning on purpose.
+   Principles: flat white surfaces on a cool light background, soft shadows instead of borders, one 8/12 px radius scale, navy for structure,
+   blue for emphasis, green / amber / red ONLY for operational state.
+   ====================================================================================================================================================== */
+
+body { background: var(--bg); letter-spacing: .005em; }
+:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+
+/* ---- shell: header and sidebar --------------------------------------------------------------------------------------------------------------------- */
+.topbar { background: linear-gradient(90deg, var(--navy-900) 0%, var(--navy-800) 55%, var(--navy-700) 100%); border-bottom: 0; box-shadow: 0 2px 10px rgba(9, 26, 48, .25); position: relative; z-index: 5; }
+.brand { background: transparent; }
+.brand-mark { border-radius: 9px; background: linear-gradient(135deg, var(--accent-blue), var(--navy-600)); box-shadow: 0 2px 8px rgba(47, 125, 225, .45); }
+.sidebar { background: linear-gradient(180deg, var(--navy-900) 0%, #0a1f3a 100%); padding: 10px 12px 12px; }
+.nav-title { padding: 14px 12px 6px; font-size: 11px; letter-spacing: .11em; color: #5f7a9e; font-weight: 700; }
+.nav-link { height: 40px; border-radius: 10px; border-left: 0; font-size: var(--fs-sm); font-weight: 500; gap: 11px; position: relative; }
+.nav-link:hover { background: rgba(255, 255, 255, .06); }
+.nav-link.active { background: linear-gradient(90deg, rgba(47, 125, 225, .32), rgba(47, 125, 225, .12)); color: #fff; font-weight: 600; }
+.nav-link.active::before { content: ''; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 4px; border-radius: 0 4px 4px 0; background: var(--accent-blue); }
+.nav-link.active svg { color: #8fc0ff; }
+.side-foot { border-top-color: rgba(255, 255, 255, .08); }
+.clock { border-left-color: rgba(255, 255, 255, .14); }
+.main { padding: 20px 26px 32px; }
+
+/* ---- page header ----------------------------------------------------------------------------------------------------------------------------------- */
+.page-header { margin-bottom: 18px; align-items: center; }
+.page-header h1 { font-size: 24px; letter-spacing: -.01em; }
+.page-header p { font-size: var(--fs-sm); color: var(--text-3); }
+
+/* ---- panel: borderless card, quiet header ---------------------------------------------------------------------------------------------------------- */
+.panel { border: 1px solid transparent; border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+:root[data-theme='dark'] .panel { border-color: var(--line); }
+.panel-head { padding: 14px 18px 10px; border-bottom: 0; background: transparent; }
+.panel-head h2 { font-size: var(--fs-md); font-weight: 650; letter-spacing: -.005em; }
+.panel-sub { font-size: var(--fs-xs); color: var(--text-3); margin-top: 1px; display: block; }
+.panel-head + .panel-body.flush { border-top: 1px solid var(--line); border-radius: 0 0 var(--radius-lg) var(--radius-lg); overflow: hidden; }
+.panel-body { padding: 6px 18px 18px; }
+.panel-body.flush { padding: 0; }
+
+/* ---- KPI card: icon tile + big figure, tone shown by the tile and a hairline accent ------------------------------------------------------------------ */
+.kpi-row { gap: 14px; margin-bottom: 16px; }
+.kpi { position: relative; overflow: hidden; gap: 14px; padding: 16px 18px; border: 1px solid transparent; border-top-width: 1px; border-radius: var(--radius-lg); box-shadow: var(--shadow); transition: box-shadow .15s ease, transform .15s ease; }
+:root[data-theme='dark'] .kpi { border-color: var(--line); }
+.kpi:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+.kpi::after { content: ''; position: absolute; left: 18px; right: 18px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent-blue); opacity: .85; }
+.kpi-ok::after { background: var(--ok); } .kpi-warn::after { background: var(--amber); } .kpi-bad::after { background: var(--bad); } .kpi-muted::after { background: var(--muted-solid); }
+.kpi-ok, .kpi-warn, .kpi-bad, .kpi-muted { border-top-color: transparent; }
+.kpi-icon { width: 46px; height: 46px; border-radius: 13px; background: var(--info-bg); color: var(--info); }
+.kpi-bad .kpi-icon { background: var(--bad-bg); color: var(--bad); } .kpi-muted .kpi-icon { background: var(--muted-bg); color: var(--muted); }
+.kpi-icon svg { width: 23px; height: 23px; }
+.kpi-label { font-size: var(--fs-xs); font-weight: 650; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+.kpi-value { font-size: 30px; letter-spacing: -.02em; margin-top: 2px; }
+.kpi-hint { margin-top: 2px; }
+
+/* ---- buttons ----------------------------------------------------------------------------------------------------------------------------------------- */
+.btn { border-radius: var(--radius); border-color: var(--line-strong); font-weight: 600; transition: background .12s ease, border-color .12s ease, box-shadow .12s ease; }
+.btn:hover:not(:disabled) { box-shadow: 0 1px 4px rgba(9, 26, 48, .1); }
+.btn-primary { background: linear-gradient(180deg, var(--navy-500), var(--navy-600)); border-color: var(--navy-600); color: #fff; box-shadow: 0 1px 3px rgba(27, 74, 133, .35); }
+.btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #2f72bd, var(--navy-600)); border-color: var(--navy-600); }
+.btn-danger { background: transparent; }
+.btn-ghost:hover:not(:disabled) { box-shadow: none; }
+:root[data-theme='dark'] .btn-primary { background: linear-gradient(180deg, #3b82d6, #2a66b4); border-color: #2a66b4; }
+
+/* ---- form controls ----------------------------------------------------------------------------------------------------------------------------------- */
+select, input[type='search'], input[type='text'], input[type='number'], input[type='password'], input[type='datetime-local'], input[type='date'], textarea { border-radius: var(--radius); border-color: var(--line-strong); transition: border-color .12s ease, box-shadow .12s ease; }
+select:hover, input:hover, textarea:hover { border-color: var(--text-3); }
+select:focus, input:focus, textarea:focus { outline: none; border-color: var(--accent-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-blue) 25%, transparent); }
+
+/* ---- tables ------------------------------------------------------------------------------------------------------------------------------------------ */
+table.grid th { background: transparent; color: var(--text-3); font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 10px 14px; border-bottom: 1px solid var(--line-strong); }
+table.grid td { padding: 11px 14px; border-bottom: 1px solid var(--line); }
+table.grid tbody tr { transition: background .1s ease; }
+table.grid tbody tr:hover { background: var(--navy-50); }
+table.grid.clickable tbody tr:hover { background: var(--navy-50); }
+table.grid tbody tr.selected { background: var(--navy-50); box-shadow: inset 3px 0 0 var(--accent-blue); }
+.table-wrap { scrollbar-width: thin; }
+
+/* ---- status pill: tinted, no outline ------------------------------------------------------------------------------------------------------------------ */
+.pill { height: 23px; padding: 0 10px; border-color: transparent; font-weight: 650; letter-spacing: .01em; }
+.pill i { width: 6px; height: 6px; }
+
+/* ---- async states: loading / error / empty ------------------------------------------------------------------------------------------------------------ */
+.state { border-radius: var(--radius); }
+.state-error { border-left: 0; box-shadow: inset 4px 0 0 var(--bad); border-radius: var(--radius); }
+.state-empty { flex-direction: column; gap: 6px; padding: 34px 16px; }
+.state-empty .empty-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; background: var(--info-bg); color: var(--info); margin-bottom: 6px; }
+.state-empty .empty-icon svg { width: 26px; height: 26px; }
+.state-empty strong { color: var(--heading); font-size: var(--fs-md); }
+.chart-empty { min-height: 170px; border: 1px dashed var(--line-strong); border-radius: var(--radius); background: var(--surface-2); margin: 4px 0; }
+.chart-empty.rich { display: flex; flex-direction: column; gap: 4px; }
+.chart-empty.rich svg { width: 30px; height: 30px; color: var(--text-3); margin-bottom: 4px; }
+.chart-empty.rich strong { color: var(--heading); font-size: var(--fs-sm); }
+.unavailable { border-radius: var(--radius); background: var(--surface-2); }
+
+/* ---- notices ------------------------------------------------------------------------------------------------------------------------------------------ */
+.notice { border-left-width: 0; box-shadow: inset 4px 0 0 var(--navy-500); border-radius: var(--radius); padding: 10px 14px; }
+.notice-warn { box-shadow: inset 4px 0 0 var(--amber); } .notice-bad { box-shadow: inset 4px 0 0 var(--bad); } .notice-info { box-shadow: inset 4px 0 0 var(--accent-blue); }
+
+/* ---- segmented control (range switch, language switch family) --------------------------------------------------------------------------------------- */
+.range-switch { border: 0; padding: 3px; gap: 2px; border-radius: 11px; background: var(--muted-bg); }
+.range-switch button { height: 30px; border-radius: 8px; border: 0 !important; font-weight: 600; color: var(--text-2); }
+.range-switch button:hover { background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.range-switch button.active { background: var(--surface); color: var(--accent-text-strong); box-shadow: 0 1px 3px rgba(9, 26, 48, .14); }
+
+/* ---- cards used by several pages ------------------------------------------------------------------------------------------------------------------------ */
+.agv-card { border-color: transparent; border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden; }
+:root[data-theme='dark'] .agv-card { border-color: var(--line); }
+.agv-card.compact { box-shadow: var(--shadow); }
+.agv-head { border-bottom: 1px solid var(--line); }
+.agv-badge { border-radius: 8px; background-image: linear-gradient(135deg, rgba(255, 255, 255, .14), transparent); }
+.agv-idle { background: var(--surface-2); }
+.live-link, .live-tasks li { border-radius: var(--radius); border-color: var(--line); background: var(--surface-2); }
+.live-tasks li { background: var(--surface); }
+.loc-tile { border-radius: var(--radius); border-color: var(--line); border-left-width: 4px; box-shadow: var(--shadow); transition: box-shadow .12s ease, transform .12s ease; }
+.loc-tile:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+.stat-grid > div { border-color: transparent; background: var(--surface-2); border-radius: var(--radius); }
+.stat-grid dd { font-size: 24px; }
+.bar-track { border: 0; border-radius: 6px; height: 12px; }
+.bars li { font-size: var(--fs-sm); }
+.bars strong { font-size: var(--fs-md); }
+.fill-track { border: 0; border-radius: 6px; height: 10px; }
+.slot { border-radius: 6px; }
+.activity li { padding: 10px 18px; }
+.hbars .track { height: 10px; }
+
+/* ---- charts: softer axes, rounded marks ---------------------------------------------------------------------------------------------------------------- */
+.ch-grid { stroke: var(--line); stroke-dasharray: 3 4; }
+.ch-base { stroke: var(--line-strong); }
+.ch-ring { stroke-width: 14; } .ch-arc { stroke-width: 14; stroke-linecap: butt; }
+.donut-center strong { letter-spacing: -.02em; }
+.legend i, .donut-legend i { border-radius: 50%; }
+
+/* ---- dialogs ------------------------------------------------------------------------------------------------------------------------------------------ */
+.modal { border-radius: var(--radius-lg); box-shadow: 0 24px 60px rgba(9, 26, 48, .35); }
+
+/* ---- detail sections ----------------------------------------------------------------------------------------------------------------------------------- */
+.detail-sec h3 { font-size: 11.5px; letter-spacing: .08em; color: var(--text-3); }
+.kv2 dt { color: var(--text-3); }
+
+/* ---- reduced motion ------------------------------------------------------------------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) { .kpi, .kpi:hover, .loc-tile, .loc-tile:hover { transition: none; transform: none; } }
+
+/* ---- stacked summary (status distribution) ------------------------------------------------------------------------------------------------------------ */
+.sum { display: grid; gap: 14px; }
+.sum-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--muted-bg); gap: 2px; }
+.sum-bar .seg { display: block; min-width: 6px; }
+.sum-items { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 18px; }
+.sum-items li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; align-items: baseline; gap: 4px 8px; font-size: var(--fs-sm); }
+.sum-items li.zero { opacity: .55; }
+.sum-items i { width: 10px; height: 10px; border-radius: 50%; align-self: center; }
+.sum-label { color: var(--text-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sum-items strong { font-size: var(--fs-lg); font-variant-numeric: tabular-nums; color: var(--heading); }
+.sum-items small { color: var(--text-3); font-size: var(--fs-xs); min-width: 34px; text-align: right; }
+.sum-grid { align-items: start; display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.mb { margin-bottom: 14px; }
+.comm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.comm-list li { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 4px 12px; align-items: center; font-size: var(--fs-sm); }
+.comm-list .comm-meta { grid-column: 2; color: var(--text-3); font-size: var(--fs-xs); }
+@media (max-width: 420px) { .sum-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- PLC cards and station tiles (layout of CR-023 unchanged; only the surface) ------------------------------------------------------------------------ */
+.plc-card { border-color: transparent; border-top-color: var(--muted); border-top-width: 3px; border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+:root[data-theme='dark'] .plc-card { border-color: var(--line); border-top-color: var(--muted); }
+.station-tile { border-color: var(--line); border-radius: var(--radius); background: var(--surface-2); transition: box-shadow .12s ease, border-color .12s ease; }
+.station-tile:hover { box-shadow: var(--shadow-lift); }
+.station-tile.active { box-shadow: 0 0 0 2px var(--accent-blue) inset; border-color: var(--accent-blue); }
+.task-table table.grid th, .task-table table.grid td { padding-left: 10px; padding-right: 10px; }
+
+.sum-grid .chart-empty { min-height: 96px; }
