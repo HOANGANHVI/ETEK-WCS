@@ -8,6 +8,7 @@ import { useT } from '../../i18n'
 import { DATATYPE_VI, MONITOR_STATUS_TONE, MONITOR_STATUS_VI } from '../../i18n/plc'
 import { describeError } from '../../i18n/vi'
 import { filterPoints, MONITOR_STATUSES, readReadiness, rowWrite, sortPoints, type MonitorFilter, type SortKey } from '../../lib/plcMonitor'
+import { signalDescription } from '../../lib/plcSignals'
 import { runtimeAllowsWrite, writeKeyChecklist, type WriteBlock } from '../../lib/plcWrite'
 import { fmtTime, WRITE_TONE } from './plcFormat'
 import { SimDialog } from './plcDialogs'
@@ -54,7 +55,7 @@ export function PlcIoMonitor({ isAdmin, overview }: { isAdmin: boolean; overview
   const all = useMemo(() => list.data?.points ?? [], [list.data])
   const plcs = useMemo(() => [...new Set(all.map((p) => p.plcId))].sort(), [all])
   const stations = useMemo(() => [...new Set(all.filter((p) => !filter.plc || p.plcId === filter.plc).map((p) => p.stationId))].sort(), [all, filter.plc])
-  const rows = useMemo(() => sortPoints(filterPoints(all, filter), sort.key, sort.dir), [all, filter, sort])
+  const rows = useMemo(() => sortPoints(filterPoints(all, filter, (p) => signalDescription(t, p.signalName, p.description)), sort.key, sort.dir), [all, filter, sort, t])
   const counts = useMemo(() => Object.fromEntries(MONITOR_STATUSES.map((s) => [s, all.filter((p) => p.status === s).length])) as Record<string, number>, [all])
 
   const reasonText = (b: WriteBlock, plcId: string): string => {
@@ -149,7 +150,7 @@ export function PlcIoMonitor({ isAdmin, overview }: { isAdmin: boolean; overview
                         <td className="nowrap">{p.plcId}</td>
                         <td className="nowrap"><strong>{p.stationId}</strong></td>
                         <td><strong>{p.signalName}</strong><br /><small className="muted">{p.group}</small></td>
-                        <td className="small">{p.description}</td>
+                        <td className="small">{signalDescription(t, p.signalName, p.description)}</td>
                         {isAdmin && <td className="mono">{p.address ?? <span className="muted">—</span>}</td>}
                         <td>{DATATYPE_VI[p.dataType]}</td>
                         <td><ValueView p={p} /></td>

@@ -27,7 +27,7 @@ const rel = (f) => path.relative(web, f).replaceAll('\\', '/')
 const messagesDir = path.join(src, 'i18n', 'messages')
 const feFiles = walk(src).filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes(`${path.sep}messages${path.sep}`))
 const feText = feFiles.map(read).join('\n')
-const dynamicPrefixes = ['taskHistory.d_', 'codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_', 'monitor.reason_', 'plc.writeState_']
+const dynamicPrefixes = ['taskHistory.d_', 'codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_', 'monitor.reason_', 'plc.writeState_', 'plc.sigDesc_']
 const dictKeys = new Set()
 let keyCount = 0
 for (const f of fs.readdirSync(messagesDir)) {
