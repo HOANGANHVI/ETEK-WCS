@@ -38,7 +38,7 @@ export function ProcessesPage() {
 
   return (
     <>
-      <PageHeader title={t('routing.procTitle')} description={t('routing.procSubtitle')}
+      <PageHeader title={t('routing.procTitle')}
         actions={<><Button disabled={busy} onClick={importReference}>{t('routing.procImport')}</Button> <Button variant="primary" onClick={() => setCreating(true)}>{t('routing.procNew')}</Button></>} />
       {message && <div className="notice notice-ok" role="status">{message}</div>}
       {error && <div className="notice notice-error" role="alert">{error}</div>}

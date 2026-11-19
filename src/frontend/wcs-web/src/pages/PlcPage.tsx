@@ -68,7 +68,7 @@ function PointsTab({ isAdmin }: { isAdmin: boolean }) {
 function RuntimeBanner({ rt }: { rt: PlcOverview['runtime'] }) {
   const t = useT()
   return (
-    <div className="plc-banner">
+    <div className="plc-banner plc-banner-compact">
       <Pill tone={MODE_TONE[rt.effectiveMode] ?? 'muted'}>{MODE_VI[rt.effectiveMode] ?? rt.effectiveMode}</Pill>
       {rt.mode !== rt.effectiveMode && <span className="muted">{t('plc.requested', { mode: MODE_VI[rt.mode] ?? rt.mode })}</span>}
       {!rt.running && <Pill tone="warn">{t('plc.runtimeStopped')}</Pill>}
@@ -114,9 +114,11 @@ function PlcCard({ w, isAdmin, real }: { w: PlcWorkerStatus; isAdmin: boolean; r
   const d = w.diagnostics
   return (
     <section className={`plc-card ${real ? `state-${w.state}` : 'state-Disconnected'}`} aria-label={w.plcId}>
-      <header><strong>{w.plcId}</strong>{real ? <StatePill state={w.state} /> : <Pill tone="muted">{t('plc.notConnected')}</Pill>}</header>
-      {isAdmin && <div className="muted small mono">{w.ipAddress}</div>}
-      <dl className="kv2">
+      <header>
+        <span className="plc-id"><strong>{w.plcId}</strong>{isAdmin && w.ipAddress && <span className="muted small mono">{w.ipAddress}</span>}</span>
+        {real ? <StatePill state={w.state} /> : <Pill tone="muted">{t('plc.notConnected')}</Pill>}
+      </header>
+      <dl className="kv2 kv2-tight">
         <dt>{t('plc.rowStations')}</dt><dd>{w.stations}</dd>
         <dt>{t('plc.rowIo')}</dt><dd>{real ? qualitySummary(w) : t('plc.noDeviceData')}</dd>
         <dt>{t('plc.rowLastPoll')}</dt><dd>{fmtTime(w.lastPollAt)}</dd>
@@ -164,10 +166,12 @@ function StationTile({ s, phase, active, onClick, real }: { s: PlcStationSummary
   return (
     <button type="button" className={`station-tile ${active ? 'active' : ''}`} onClick={onClick} aria-pressed={active}>
       <span className="st-head"><strong>{s.stationId}</strong><small className="muted">{s.plcId}</small></span>
-      {real && <QualityBar good={s.good} configured={s.configured} total={s.total} />}
       <span className="st-meta">{real ? t('plc.tileGood', { good: s.good, total: s.total }) : t('plc.tileNoData', { total: s.total })}</span>
-      <Pill tone={PHASE_TONE[phase ?? 'Unknown'] ?? 'muted'} dot={false}>{PHASE_VI[phase ?? 'Unknown'] ?? phase}</Pill>
-      <small className="muted">{APPROVAL_VI.NEEDS_CONFIRMATION}</small>
+      {real && <QualityBar good={s.good} configured={s.configured} total={s.total} />}
+      <span className="st-foot">
+        <Pill tone={PHASE_TONE[phase ?? 'Unknown'] ?? 'muted'} dot={false}>{PHASE_VI[phase ?? 'Unknown'] ?? phase}</Pill>
+        <small className="st-hs" title={APPROVAL_VI.NEEDS_CONFIRMATION}>{t('plc.tileHsPending')}</small>
+      </span>
     </button>
   )
 }

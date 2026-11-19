@@ -28,7 +28,7 @@ export function StationPanel({ stationId, isAdmin, handshake, onClose }: Props) 
       <Async state={io} isEmpty={(d) => d.points.length === 0} empty={{ title: t('plc.noIoPoints') }}>
         {(snap) => (
           <div className="table-wrap">
-            <table className="grid">
+            <table className="grid station-io">
               <thead>
                 <tr>
                   <th>#</th><th>{t('plc.colSignal')}</th><th>{t('plc.colDirection')}</th><th>{t('plc.colType')}</th>

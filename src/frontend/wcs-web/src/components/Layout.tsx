@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode, type SyntheticEvent } from 'react'
+import { useCallback, useEffect, useState, type ReactNode, type SyntheticEvent } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { hasRole, useAuth } from '../auth/AuthContext'
@@ -81,11 +81,26 @@ const RT_KEY: Record<string, MsgKey> = { connecting: 'nav.rtConnecting', connect
 
 interface Tip { label: string; top: number; left: number }
 
+/** CR-023: on a phone the menu is always the icon-only rail (expanded it would take half of the screen and leave the page about 200 px). The stored preference is untouched. */
+function useNarrowScreen(maxWidth = 640): boolean {
+  const query = `(max-width: ${maxWidth}px)`
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
+  useEffect(() => {
+    const m = window.matchMedia(query)
+    const on = () => setNarrow(m.matches)
+    m.addEventListener('change', on)
+    return () => m.removeEventListener('change', on)
+  }, [query])
+  return narrow
+}
+
 function SideBar() {
   const t = useT()
   const { user } = useAuth()
   const { status } = useRealtime()
-  const { sidebarCollapsed: collapsed, update } = usePreferences()
+  const { sidebarCollapsed: preferCollapsed, update } = usePreferences()
+  const narrow = useNarrowScreen()
+  const collapsed = preferCollapsed || narrow
   const [tip, setTip] = useState<Tip | null>(null)
   const tone = status === 'connected' || status === 'demo' ? 'ok' : status === 'disconnected' ? 'bad' : 'warn'
 
@@ -136,7 +151,9 @@ export function Layout() {
   const t = useT()
   const { user } = useAuth()
   const location = useLocation()
-  const { sidebarCollapsed: sidebarIsCollapsed } = usePreferences()
+  const { sidebarCollapsed: preferCollapsed } = usePreferences()
+  const narrow = useNarrowScreen()
+  const sidebarIsCollapsed = preferCollapsed || narrow
   const deniedKey = (location.state as { denied?: MsgKey } | null)?.denied
   const denied = deniedKey ? t(deniedKey) : null
   return (
