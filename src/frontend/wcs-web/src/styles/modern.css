@@ -170,3 +170,20 @@ table.grid tbody tr.selected { background: var(--navy-50); box-shadow: inset 3px
 .task-table table.grid th, .task-table table.grid td { padding-left: 10px; padding-right: 10px; }
 
 .sum-grid .chart-empty { min-height: 96px; }
+
+/* ---- alignment fixes after CR-025 (layout only) ---- */
+/* Login: the VI/EN switch sits in the top-right corner of the card on the same row as the logo, inside the card padding. */
+.login-card { position: relative; }
+.login-lang { position: absolute; top: 28px; right: 30px; margin: 0; }
+.login-brand { min-height: 30px; padding-right: 92px; white-space: nowrap; }
+@media (max-width: 360px) {
+  .login-card { padding-left: 22px; padding-right: 22px; }
+  .login-lang { right: 22px; }
+  .login-brand { padding-right: 84px; }
+}
+
+/* Sidebar: compact header row for the collapse / expand button, short distance to the first menu group. */
+.sidebar { padding-top: 6px; }
+.side-toggle { height: 32px; margin-bottom: 0; padding: 0 10px; }
+.sidebar nav > .nav-title:first-child { padding-top: 6px; }
+.app[data-sidebar='collapsed'] .side-toggle { margin-bottom: 2px; }
