@@ -15,6 +15,18 @@ public interface IUnitOfWork
     /// occurs the tracker is cleared and the work is re-run (it must therefore re-read everything it needs).
     /// </summary>
     Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default);
+
+    /// <summary>
+    /// CR-026: runs <paramref name="work"/> in ONE database transaction in which every <see cref="ExecuteAsync{T}"/> call made by the work JOINS the open
+    /// transaction (it is flushed to the transaction but not committed). Any exception rolls the whole batch back; a concurrency conflict re-runs the whole batch
+    /// (so the work must be repeatable). Outside a batch, nested units of work are still refused. Realtime events published inside a batch are held until
+    /// the batch has committed and are dropped on rollback (<see cref="BatchEffects"/>).
+    /// Default implementation (stand-ins in tests): the work simply runs once.
+    /// </summary>
+    Task<T> ExecuteBatchAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => ExecuteAsync(work, ct);
+
+    /// <summary>CR-026: a batch that reads ONE consistent snapshot (REPEATABLE READ), used by Export so every group comes from the same moment. Default: the work runs once.</summary>
+    Task<T> ExecuteSnapshotAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => ExecuteAsync(work, ct);
 }
 
 /// <summary>CR-008B-2: durable store of detected station requests (see <see cref="WCS.Domain.Intake.StationRequestRecord"/>).</summary>

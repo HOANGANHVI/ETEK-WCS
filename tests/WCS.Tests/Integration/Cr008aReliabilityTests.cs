@@ -210,6 +210,7 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
         services.AddSingleton<ITaskOrchestrator>(new StubOrchestrator());
         services.AddScoped<StationRequestProcessor>();
         services.AddSingleton<IRcsDispatchGuard>(new SwitchGuard());
+        services.AddSingleton<IMaintenanceGate>(new OpenMaintenanceGate());   // CR-026: the processor now asks the Maintenance gate (always open here)
         services.AddSingleton<IClock>(new TestClock());
         services.AddSingleton<IUnitOfWork, DirectUnitOfWork>();
         services.AddSingleton<IStationRequestRepository, ThrowingRequestRepository>();   // CR-008B-2: the processor itself now fails -> the host must still run the scheduler

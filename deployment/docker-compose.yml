@@ -85,10 +85,14 @@ services:
       Serilog__MinimumLevel__Default: ${WCS_LOG_LEVEL:-Information}
       # CR-007: deployment events written by deployment/scripts/*.ps1 are imported (read-only) into Logging & Diagnostics; build label shown in the start-up summary
       DeploymentLogs__Directory: /deploy-logs
+      # CR-026: configuration export/import (Admin only). ON by default (no setting needs to change; WCS_CONFIG_TRANSFER_ENABLED=false is only an emergency switch). The folder is a PERSISTENT volume (never a temporary directory): it holds uploaded packages and the backup taken before every Apply.
+      ConfigTransfer__Enabled: ${WCS_CONFIG_TRANSFER_ENABLED:-true}
+      ConfigTransfer__BackupPath: /config-backups
       WCS_BUILD: ${WCS_VERSION:-local}
       TZ: ${WCS_TIMEZONE:-Asia/Ho_Chi_Minh}
     volumes:
       - wcs_keys:/keys
+      - wcs_config_backups:/config-backups   # CR-026: survives a re-created container
       # read-only: the backend can read deployment logs but never write to the host folder (scripts set WCS_LOG_DIR; default C:/ETEK-WCS/logs)
       - ${WCS_LOG_DIR:-C:/ETEK-WCS/logs}:/deploy-logs:ro
     networks: [db_net, edge_net]
@@ -124,3 +128,5 @@ volumes:
     name: etek_wcs_pgdata
   wcs_keys:
     name: etek_wcs_keys
+  wcs_config_backups:
+    name: etek_wcs_config_backups

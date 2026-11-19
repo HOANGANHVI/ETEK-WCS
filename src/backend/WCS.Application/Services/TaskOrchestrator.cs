@@ -23,6 +23,7 @@ public sealed class TaskOrchestrator(
     IFlowCatalog flows,
     IRcsClient rcs,
     IRcsDispatchGuard rcsGuard,
+    IMaintenanceGate maintenance,   // CR-026
     IStationSignalService stations,
     IProcessedEventRepository processed,
     IReservationRepository reservationRepo,
@@ -78,6 +79,7 @@ public sealed class TaskOrchestrator(
         {
             var existing = await tasks.GetByRequestKeyAsync(cmd.RequestKey.Trim(), t);
             if (existing is not null) return (Guid?)null;
+            await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): row-locked read in THIS transaction - a task cannot slip in while Maintenance is being switched on
             var task = TransportTask.Create(cmd.RequestKey, flow, rule.RackKind, agv.Id, station.Id, cmd.RequestedBy, clock.UtcNow);
             task.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021: the task keeps the id of the request that created it (or a new one)
             CorrelationCache.Remember(task.Id, task.CorrelationId);
@@ -111,6 +113,7 @@ public sealed class TaskOrchestrator(
             decisionAgv = null; decisionReason = null;
             var task = await tasks.GetAsync(taskId, t);
             if (task is null || task.State is not (TaskState.Pending or TaskState.Validating)) return false;
+            if (await maintenance.HoldNewWorkAsync(t)) return false;   // CR-026: work that has not started (no AGV, no reservation yet) stays exactly as it is
             var rule = flows.Get(task.Flow);
 
             if (task.State == TaskState.Pending) task.TransitionTo(TaskState.Validating, "Validating business conditions", Wcs, clock.UtcNow, HistoryDetail.Of("VALIDATING"));
@@ -178,6 +181,7 @@ public sealed class TaskOrchestrator(
             if (await agvs.IsOnDispatchHoldAsync(agvId, t)) { waitReason = "AGV_ON_DISPATCH_HOLD"; return null; }   // CR-008B-5 (D-7): held AGV (fresh read, after the active-task check)
             var task = await tasks.NextQueuedForAgvAsync(agvId, t); // FIFO: NEEDS_CONFIRMATION (no approved priority policy)
             if (task is null) return null;
+            if (await maintenance.HoldNewWorkAsync(t)) { waitReason = MaintenanceCodes.Code; return null; }   // CR-026: a queued task does not take the AGV while Maintenance is on
             task.TransitionTo(TaskState.Dispatching, "AGV free; claimed from queue", Wcs, clock.UtcNow, HistoryDetail.Of("DISPATCHING_FROM_QUEUE"));
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return task.Id;
@@ -215,6 +219,7 @@ public sealed class TaskOrchestrator(
         {
             var task = await tasks.GetAsync(taskId, t);
             if (task is null || task.State != TaskState.Dispatching || task.RcsTaskCode is not null) return null;
+            if (await maintenance.HoldNewWorkAsync(t)) return null;   // CR-026: not yet sent to the RCS (no RcsTaskCode) -> not sent during Maintenance; a task that already has one is never touched here
             // CR-008A (AUDIT-003): repeated attempts are spaced by the backoff (no more one attempt per scheduler tick). The first attempt is immediate.
             if (task.DispatchAttempts > 0 && !RcsRetryPolicy.IsDue(task.RcsRetryCount, task.RcsLastAttemptAt, clock.UtcNow, schedulerOptions.Value)) return null;
             if (task.DispatchAttempts >= schedulerOptions.Value.MaxDispatchAttempts)

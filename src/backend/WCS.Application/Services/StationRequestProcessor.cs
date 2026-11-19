@@ -18,7 +18,7 @@ namespace WCS.Application.Services;
 ///  - a permanent business rejection (any other <see cref="AppException"/>) is recorded as Rejected and acknowledged, as before;
 ///  - the same key detected again (restart, bit toggled with the same Request_ID) never creates a second record or task.
 /// </summary>
-public sealed class StationRequestProcessor(IStationSignalService stations, ITaskOrchestrator orchestrator, IRcsDispatchGuard rcsGuard,
+public sealed class StationRequestProcessor(IStationSignalService stations, ITaskOrchestrator orchestrator, IRcsDispatchGuard rcsGuard, IMaintenanceGate maintenance,
     IStationRequestRepository requests, IUnitOfWork uow, IClock clock, IOptions<SchedulerOptions> options, ILogger<StationRequestProcessor> logger)
 {
     private const int BatchSize = 100;
@@ -61,6 +61,7 @@ public sealed class StationRequestProcessor(IStationSignalService stations, ITas
         // 2) process the pending requests - only while RCS can take a task; the requests simply wait otherwise (nothing is lost, no attempt is used)
         var link = rcsGuard.Check();
         if (!link.Allowed) logger.LogDebug("Station requests wait: {Code}", link.Code);
+        else if (await maintenance.IsEnabledAsync(ct)) logger.LogDebug("Station requests wait: {Code}", MaintenanceCodes.Code);   // CR-026 (OQ-1): stay Pending - not accepted, not rejected, not acknowledged, no attempt used
         else handled += await ProcessPendingAsync(ct);
 
         // 3) a request that was already decided is re-acknowledged (idempotent, as a duplicate used to be); a repeat of a request that was pending takes the decision of the stored one
@@ -94,9 +95,9 @@ public sealed class StationRequestProcessor(IStationSignalService stations, ITas
                 await TryAckAsync(request);
                 handled++;
             }
-            catch (AppException ex) when (ex.Code == "RCS_NOT_CONNECTED")
+            catch (AppException ex) when (ex.Code is "RCS_NOT_CONNECTED" or MaintenanceCodes.Code)
             {
-                // not a rejection and not an attempt: the link state changed between the check and the call. Keep the request.
+                // not a rejection and not an attempt: the link state (or Maintenance, CR-026) changed between the check and the call. Keep the request.
                 logger.LogDebug("Station request {Key} kept: {Code}", p.RequestKey, ex.Code);
             }
             catch (AppException ex)
