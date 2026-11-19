@@ -8,6 +8,9 @@ import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
 import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
+import type {
+  ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
+} from './configTransferTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, ReconciliationDetail, SimulationStep, SystemHealth,
@@ -67,6 +70,46 @@ async function downloadZip(path: string, fallbackName: string): Promise<void> {
   a.href = url; a.download = name ? decodeURIComponent(name) : fallbackName
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
+/** CR-026: POST that answers with a ZIP (the configuration export). The server decides the file name. */
+async function postForZip(path: string, body: unknown, fallbackName: string): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-WCS-Client': 'web' }, body: JSON.stringify(body) })
+  } catch {
+    throw new ApiRequestError(0, { code: 'NETWORK_ERROR', message: 'Cannot reach the WCS API.' })
+  }
+  if (!res.ok) {
+    let err: ApiResponse<unknown> | null = null
+    try { err = (await res.json()) as ApiResponse<unknown> } catch { /* non-JSON */ }
+    if (res.status === 401) window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+    throw new ApiRequestError(res.status, err?.error ?? { code: 'HTTP_' + res.status, message: res.statusText || 'Request failed' })
+  }
+  const name = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(res.headers.get('Content-Disposition') ?? '')?.[1]
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url; a.download = name ? decodeURIComponent(name) : fallbackName
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
+/** CR-026: multipart upload of a configuration package (the browser sets the boundary, so no JSON content type). */
+async function uploadPackage(file: File): Promise<UploadResult> {
+  const form = new FormData(); form.append('file', file)
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}/api/config-transfer/imports`, { method: 'POST', credentials: 'include', headers: { 'X-WCS-Client': 'web' }, body: form })
+  } catch {
+    throw new ApiRequestError(0, { code: 'NETWORK_ERROR', message: 'Cannot reach the WCS API.' })
+  }
+  let body: ApiResponse<UploadResult> | null = null
+  try { body = (await res.json()) as ApiResponse<UploadResult> } catch { /* non-JSON */ }
+  if (!res.ok || !body?.success) {
+    if (res.status === 401) window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
+    throw new ApiRequestError(res.status, body?.error ?? { code: 'HTTP_' + res.status, message: res.statusText || 'Request failed' })
+  }
+  return body.data as UploadResult
 }
 
 const qs = (params: Record<string, string | number | undefined>) => {
@@ -218,6 +261,17 @@ const realApi = {
     request<Agv>(`/api/config/agvs/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   createLocation: (b: SaveLocationBody) => request<Location>('/api/config/locations', { method: 'POST', body: JSON.stringify(b) }),
   saveLocation: (b: SaveLocationBody) => request<Location>(`/api/config/locations/${encodeURIComponent(b.code)}`, { method: 'PUT', body: JSON.stringify(b) }),
+
+  // CR-026: Maintenance flag (everyone reads, Admin switches) and configuration export / import (Admin)
+  maintenance: () => request<MaintenanceView>('/api/system/maintenance'),
+  setMaintenance: (enabled: boolean, reason: string | null) => request<MaintenanceView>('/api/system/maintenance', { method: 'PUT', body: JSON.stringify({ enabled, reason }) }),
+  transferStatus: () => request<TransferStatus>('/api/config-transfer/status'),
+  transferGroups: () => request<TransferGroup[]>('/api/config-transfer/groups'),
+  transferExportCheck: (groups: TransferGroupId[]) => request<ExportDependencyReport>('/api/config-transfer/exports/check', { method: 'POST', body: JSON.stringify({ groups }) }),
+  transferExport: (groups: TransferGroupId[]) => postForZip('/api/config-transfer/exports', { groups }, 'wcs-config.zip'),
+  transferUpload: (file: File) => uploadPackage(file),
+  transferPreview: (id: string, selection: Selection) => request<ImportPlan>(`/api/config-transfer/imports/${id}/preview`, { method: 'POST', body: JSON.stringify(selection) }),
+  transferApply: (id: string, body: ApplyBody) => request<ApplyResult>(`/api/config-transfer/imports/${id}/apply`, { method: 'POST', body: JSON.stringify(body) }),
 }
 
 export { ApiRequestError }

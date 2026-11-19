@@ -28,7 +28,7 @@ public interface IPlcRequestService
 /// The WCS side of step 1 of the 9-step exchange: validate what the PLC shows, record the request durably (Station Transaction), then start the Business Process.
 /// It does NOT write M9101 or any other PLC signal (timing of the acknowledgement is an open decision, Q-ORD-1) and never substitutes another position for an invalid one.
 /// </summary>
-public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IRouteEngine engine,
+public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IRouteEngine engine, IMaintenanceGate maintenance,
     IClock clock, IOptions<RouteEngineOptions> options) : IPlcRequestService
 {
     public async Task<PlcRequestResult> HandleRequestAsync(PlcRequestSnapshot s, CancellationToken ct = default)
@@ -50,6 +50,10 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
             return new PlcRequestResult(PlcRequestOutcome.Duplicate, "DUPLICATE_REQUEST_ID", "This Request_ID was already processed.", d.ToDto(), order?.ToDto([d]));
         }, ct);
         if (dup is not null) return dup;
+
+        // CR-026 (OQ-1): during Maintenance a NEW request is refused BEFORE anything is recorded (no Station Transaction, no port claimed); the caller may repeat it later.
+        // A repeated Request_ID was answered above (idempotent). The locked check in the recording transaction below closes the race with the switch.
+        if (await maintenance.IsEnabledAsync(ct)) return Reject(MaintenanceCodes.Code, MaintenanceCodes.Message);
 
         // ---- resolve the location from the registers (only confirmed codes) and its port
         string locationCode; RackKind? kind = null;
@@ -95,6 +99,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
             {
                 var recon = await uow.ExecuteAsync(async t =>
                 {
+                    await maintenance.EnsureOpenAsync(t);   // CR-026
                     var loc = await locations.GetByCodeAsync(locationCode, t);
                     loc?.SetReconciliationRequired(true, clock.UtcNow);   // no new task may use the uncertain location (inventory-management.md 4.8)
                     var tx = StationTransaction.Create(port.Id, port.PlcId, locationCode, op, null, null, s.RequestId, clock.UtcNow, kind);
@@ -115,6 +120,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
         {
             txDto = await uow.ExecuteAsync(async t =>
             {
+                await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): row-locked read in the transaction that records the request
                 if (await routing.GetActiveTransactionForPortAsync(port.Id, t) is not null) throw AppException.Conflict("PORT_BUSY", $"Port {port.Id} already has an active Station Transaction.");
                 var tx = StationTransaction.Create(port.Id, port.PlcId, locationCode, op, null, null, s.RequestId, clock.UtcNow, kind);
                 tx.Advance(StationTransactionState.Requested, clock.UtcNow);
@@ -125,6 +131,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
             }, ct);
         }
         catch (AppException e) when (e.Code == "PORT_BUSY") { return Reject("PORT_BUSY", e.Message); }
+        catch (AppException e) when (e.Code == MaintenanceCodes.Code) { return Reject(e.Code, e.Message); }   // nothing was recorded
 
         return await StartAsync(txDto, kind, s, ct);
     }
@@ -138,6 +145,10 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
             var fresh = (await uow.ExecuteAsync(async t => (await routing.GetTransactionAsync(tx.Id, t))!.ToDto(), ct));
             return new PlcRequestResult(PlcRequestOutcome.Accepted, "ACCEPTED", "Request recorded and Transport Task started.", fresh, r.Order);
         }
+        catch (AppException e) when (e.Code == MaintenanceCodes.Code)
+        {   // CR-026: Maintenance began after the request was recorded. The transaction is NOT failed: it stays Accepted and ResumeOrphansAsync starts its Order when Maintenance ends.
+            return new PlcRequestResult(PlcRequestOutcome.Rejected, e.Code, e.Message, tx, null);
+        }
         catch (AppException e)
         {   // the business process could not start (not found / not published / ...): the request is closed so the port is free; nothing was dispatched
             await uow.ExecuteAsync(async t => { (await routing.GetTransactionAsync(tx.Id, t))?.Fail($"START_REFUSED: {e.Code}", clock.UtcNow); return 0; }, ct);
@@ -147,6 +158,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
 
     public async Task<int> ResumeOrphansAsync(CancellationToken ct = default)
     {
+        if (await maintenance.IsEnabledAsync(ct)) return 0;   // CR-026: starting the Order of a recorded request is new work
         var orphans = await uow.ExecuteAsync(async t => (await routing.ListTransactionsAsync(true, null, null, 200, t))
             .Where(x => x.OrderId is null && x.State == StationTransactionState.Accepted && x.RequestId is not null).Select(x => x.ToDto()).ToList(), ct);
         foreach (var o in orphans)

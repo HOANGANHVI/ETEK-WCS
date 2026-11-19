@@ -253,3 +253,37 @@ internal sealed class AuditEntryConfiguration : IEntityTypeConfiguration<WCS.Dom
         b.HasIndex(x => x.Action);
     }
 }
+
+internal sealed class SystemMaintenanceConfiguration : IEntityTypeConfiguration<SystemMaintenance>
+{
+    public void Configure(EntityTypeBuilder<SystemMaintenance> b)
+    {
+        b.ToTable("system_maintenance", t => t.HasCheckConstraint("ck_system_maintenance_singleton", "\"Id\" = 1"));   // CR-026: exactly one row
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Reason).HasMaxLength(300);
+        b.Property(x => x.ChangedBy).HasMaxLength(100);
+        b.Property(x => x.Version).IsRowVersion();
+        b.HasData(new { Id = SystemMaintenance.SingletonId, Enabled = false, UpdatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) });   // off by default
+    }
+}
+
+internal sealed class ConfigTransferSessionConfiguration : IEntityTypeConfiguration<ConfigTransferSession>
+{
+    public void Configure(EntityTypeBuilder<ConfigTransferSession> b)
+    {
+        b.ToTable("config_transfer_sessions");   // CR-026: bookkeeping only (hashes, token, counts, file names) - never the content of a package
+        b.HasKey(x => x.Id);
+        b.Property(x => x.PackageSha256).HasMaxLength(64).IsRequired();
+        b.Property(x => x.PackageFile).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Actor).HasMaxLength(100).IsRequired();
+        b.Property(x => x.SelectionJson).HasColumnType("text");
+        b.Property(x => x.PlanHash).HasMaxLength(64);
+        b.Property(x => x.PreviewToken).HasMaxLength(64);
+        b.Property(x => x.ResultJson).HasColumnType("text");
+        b.Property(x => x.BackupFile).HasMaxLength(200);
+        b.Property(x => x.ErrorCode).HasMaxLength(100);
+        b.Property(x => x.Version).IsRowVersion();
+        b.HasIndex(x => x.CreatedAt);
+    }
+}

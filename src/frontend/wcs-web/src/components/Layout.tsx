@@ -41,6 +41,7 @@ const NAV_PERSONAL: NavItem[] = [
 
 const NAV_SYSTEM: NavItem[] = [
   { to: '/config', label: 'nav.config', icon: <IconSettings /> },
+  { to: '/config-transfer', label: 'nav.configTransfer', icon: <IconSettings /> },   // CR-026
   { to: '/users', label: 'nav.users', icon: <IconUsers /> },
   { to: '/audit', label: 'nav.audit', icon: <IconLog /> },
   { to: '/logs', label: 'nav.logs', icon: <IconLog /> },
@@ -147,6 +148,21 @@ function SideBar() {
   )
 }
 
+/** CR-026: shown to everyone while the system is in Maintenance, so a refused "create task" has an obvious reason. Read-only; only an Admin switches the flag (on the transfer page). */
+function MaintenanceBanner() {
+  const t = useT()
+  const { user } = useAuth()
+  const m = useApi(useCallback(() => api.maintenance(), []), ['MaintenanceChanged'])
+  if (m.data?.enabled !== true) return null
+  return (
+    <div className="notice notice-warn maint-banner" role="status">
+      <strong>{t('transfer.banner')}</strong>
+      {m.data.reason && <span> {t('transfer.bannerReason', { reason: m.data.reason })}</span>}
+      {hasRole(user, 'Admin') && <> <NavLink to="/config-transfer">{t('transfer.bannerLink')}</NavLink></>}
+    </div>
+  )
+}
+
 export function Layout() {
   const t = useT()
   const { user } = useAuth()
@@ -161,6 +177,7 @@ export function Layout() {
       <TopBar />
       <SideBar />
       <main className="main">
+        <MaintenanceBanner />
         {denied && <div className="notice notice-warn" role="alert">{denied}</div>}
         <Outlet />
       </main>

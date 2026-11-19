@@ -31,7 +31,7 @@ public interface IRouteEngine
 public sealed class RouteEngine(
     IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IReservationRepository reservations,
     IInventoryTransactionRepository inventoryTx, IAgvRepository agvs, ITransportTaskRepository legacyTasks, RouteConditionEvaluator eval,
-    StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IClock clock, IWcsNotifier notifier,
+    StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IMaintenanceGate maintenance, IClock clock, IWcsNotifier notifier,
     ILogger<RouteEngine> logger) : IRouteEngine
 {
     private const string Wcs = "WCS";
@@ -54,6 +54,7 @@ public sealed class RouteEngine(
         var id = await uow.ExecuteAsync(async t =>
         {
             if (await routing.GetOrderByRequestKeyAsync(cmd.RequestKey.Trim(), t) is { } existing) return (Guid?)null;   // idempotent
+            await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): no new Order during Maintenance (row-locked read in this transaction)
             var (process, version) = await SelectProcessAsync(cmd, location.Code, t);
             var snapshot = ProcessSnapshot.Of(process, version);
             var order = TransportOrder.Create(cmd.RequestKey, snapshot, location.Code, cmd.RequestedBy, clock.UtcNow);
@@ -184,6 +185,8 @@ public sealed class RouteEngine(
                     var leg = order.Legs.FirstOrDefault(l => l.StepKey == step.StepKey && !l.IsTerminal);
                     if (leg is null)
                     {
+                        // CR-026: the FIRST leg of an order (nothing has started yet) is not created during Maintenance; the next legs of an order that already runs are, so it can finish
+                        if (order.Legs.Count == 0 && await maintenance.HoldNewWorkAsync(ct)) return;
                         var outcome = await CreateLegAsync(order, step, ct);
                         if (outcome == LegCreation.Continue) continue;   // alternative taken
                         if (outcome != LegCreation.Created) return;      // waiting / failed / reconciliation
@@ -368,6 +371,7 @@ public sealed class RouteEngine(
             if (leg.State is not (LegState.Ready or LegState.InProgress)) return null;
             var order = (await routing.GetOrderAsync(leg.OrderId, t))!;
             if (order.IsTerminal || order.State == OrderState.ReconciliationRequired) return null;
+            if (leg.Sequence == 1 && await maintenance.HoldNewWorkAsync(t)) return null;   // CR-026: the first leg is not sent to the AGV during Maintenance; later legs of a running order are
 
             if (!link.Allowed)
             {   // CR-008A: never dispatch where no real AGV link exists; the leg waits, nothing is lost

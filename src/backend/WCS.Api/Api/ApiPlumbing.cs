@@ -60,7 +60,7 @@ public static class ExceptionMapping
         if (status >= 500) logger.LogError(ex, "Unhandled exception {TraceId}", context.TraceIdentifier);
         else logger.LogInformation("Request rejected {Status} {Code}: {Message}", status, code, message);
 
-        object? details = ex is ValidationFailedException v ? v.Errors : null;
+        object? details = ex switch { ValidationFailedException v => v.Errors, WCS.Application.ConfigTransfer.IHasErrorDetails h => h.Details, _ => null };   // CR-026: blockers / conflicts of an import
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsJsonAsync(new ApiResponse<object>(false, null, new ApiError(code, message, details), context.TraceIdentifier));

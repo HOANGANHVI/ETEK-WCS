@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.16 – CR-026 Configuration Export / Import, Phase 2 (2026-11-19) – feature branch, not merged
+
+- **Maintenance flag** (`system_maintenance`, Admin only, audited, persistent): refuses new Task/Order/PLC requests, holds work that has not started, lets running work finish; race closed by a row lock. API `GET/PUT /api/system/maintenance`; banner for every user.
+- **Batch unit of work** (`IUnitOfWork.ExecuteBatchAsync`, `ExecuteSnapshotAsync`): one transaction the existing services join; unchanged behaviour outside a batch.
+- **Configuration transfer** (`/api/config-transfer/*`, Admin only, **on by default**; `ConfigTransfer:Enabled=false` is only an emergency switch): Location, AGV (update only), PLC Station (link/enabled, update only), Business Process (header + new Draft). Package format 1.0 (`docs/02_Interface_Specification/CONFIG_PACKAGE_FORMAT.md`), Preview with Create/Update/Unchanged/Skip/Conflict, Preview token bound to package + database state, system-wide active-work gate, verified backup in a persistent folder, one transaction with rollback. Migrations `AddSystemMaintenance`, `AddConfigTransferSessions` (additive).
+- Not in this phase: PLC connections, IO points/addresses, RCS settings, history, restore from backup (Phases 3-4). File configuration and user accounts are out of scope by decision.
+- No PLC call, no PLC runtime reload, no Publish, no deletion, no secret or approval state in a package.
+
 ## v3.15 – CR-025 Modern Industrial UI (2026-11-19)
 
 - **Style layer** (`styles/modern.css`, tokens): cool light background, borderless cards with soft shadows, one 8/12 px radius scale, gradient navy header/sidebar with a blue active marker, KPI cards with tinted icon tile and tone accent, quiet tables (small uppercase headers, soft separators), softer pills, rounded form controls with a blue focus ring, segmented range switch, rounded notices. Both themes keep working (tokens only).
