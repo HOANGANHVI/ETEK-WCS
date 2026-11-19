@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import type { PlcConnection, ProbeResultView } from '../api/plcTypes'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
@@ -12,7 +12,7 @@ import { describeError } from '../i18n/vi'
 import { Field, Switch } from './config/FormKit'
 import { fromApiError, fromNum, toInt, toStr, type Errors } from './config/formUtils'
 import { fmtTime } from './plc/plcFormat'
-import { ConfigPill } from './plc/plcUi'
+import { ConfigPill, StatePill } from './plc/plcUi'
 import { PlcProvisioning } from './plc/PlcProvisioning'
 
 const PROTOCOLS: { value: string; label: MsgKey }[] = [{ value: 'McProtocol3EBinaryTcp', label: 'plc.protocolMc' }]
@@ -23,17 +23,18 @@ const PROTOCOLS: { value: string; label: MsgKey }[] = [{ value: 'McProtocol3EBin
  */
 export function PlcConnectionsPage() {
   const t = useT()
-  const overview = useApi(useCallback(() => api.plcOverview(), []))
+  const overview = useApi(useCallback(() => api.plcOverview(), []), ['PlcStatusChanged'])
   const mode = overview.data?.runtime.effectiveMode ?? 'Simulator'
+  const states = Object.fromEntries((overview.data?.plcs ?? []).map((w) => [w.plcId, w.state]))
   return (
     <>
       <PageHeader title={t('plc.connTitle')} />
-      <PlcConnectionsBody realMode={mode !== 'Simulator'} simulator={mode === 'Simulator'} />
+      <PlcConnectionsBody realMode={mode !== 'Simulator'} simulator={mode === 'Simulator'} states={states} />
     </>
   )
 }
 
-function PlcConnectionsBody({ realMode, simulator }: { realMode: boolean; simulator: boolean }) {
+function PlcConnectionsBody({ realMode, simulator, states }: { realMode: boolean; simulator: boolean; states: Record<string, string> }) {
   const t = useT()
   const list = useApi(useCallback(() => api.plcConnections(), []))
   const [editing, setEditing] = useState<string | null>(null)
@@ -45,8 +46,8 @@ function PlcConnectionsBody({ realMode, simulator }: { realMode: boolean; simula
         {(rows) => (
           <div className="plc-config-grid">
             {rows.map((c) => (
-              <Panel key={c.plcId} title={`${c.plcId} · ${c.stations.join(', ')}`} subtitle={t('plc.updatedAt', { time: fmtTime(c.updatedAt) }) + (c.updatedBy ? t('plc.updatedBy', { user: c.updatedBy }) : '')}
-                actions={<ConfigPill status={c.configStatus} />}>
+              <Panel key={c.plcId} className="plc-conn-card" title={`${c.plcId} · ${c.stations.join(', ')}`} subtitle={t('plc.updatedAt', { time: fmtTime(c.updatedAt) }) + (c.updatedBy ? t('plc.updatedBy', { user: c.updatedBy }) : '')}
+                actions={<>{realMode && states[c.plcId] ? <StatePill state={states[c.plcId]} /> : <Pill tone="muted">{t('plc.notConnected')}</Pill>}<ConfigPill status={c.configStatus} /></>}>
                 {editing === c.plcId
                   ? <ConnectionForm c={c} realMode={realMode} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setMessage(t('plc.saved', { id: c.plcId })); list.reload() }} />
                   : <ConnectionSummary c={c} realMode={realMode} simulator={simulator} onEdit={() => setEditing(c.plcId)} />}
@@ -66,27 +67,43 @@ function ConnectionSummary({ c, onEdit, realMode, simulator }: { c: PlcConnectio
   const [probe, setProbe] = useState<ProbeResultView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const run = async (fn: () => Promise<void>) => { setBusy(true); setError(null); try { await fn() } catch (e) { setError(describeError(e)) } finally { setBusy(false) } }
-  const row = (k: string, v: string | number | null) => <><dt>{k}</dt><dd>{v === null || v === '' ? <span className="muted">{t('common.notSet')}</span> : v}</dd></>
+  const row = (k: string, v: ReactNode) => <><dt>{k}</dt><dd>{v === null || v === '' ? <span className="muted">{t('common.notSet')}</span> : v}</dd></>
+  const group = (title: string, rows: ReactNode) => <section className="kv-group"><h4 className="kv-group-title">{title}</h4><dl className="kv2 kv2-tight">{rows}</dl></section>
+  const common = t('plc.useCommonTimeout')
   return (
     <>
-      <dl className="kv2">
-        {row(t('plc.ipAddress'), c.ipAddress)}{row(t('plc.tcpPort'), c.port)}{row(t('plc.protocol'), c.protocol)}
-        {row(t('plc.networkNumber'), c.networkNumber)}{row(t('plc.pcNumber'), c.pcNumber)}{row(t('plc.moduleIo'), c.moduleIoNumber)}{row(t('plc.plcStation'), c.plcStationNumber)}
-        {row(t('plc.readMonitor'), c.monitoringTimer)}{row(t('plc.commonTimeout'), c.timeoutMs)}{row(t('plc.connectTimeout'), c.connectTimeoutMs ?? (c.timeoutMs === null ? null : t('plc.useCommonTimeout')))}
-        {row(t('plc.readTimeout'), c.readTimeoutMs ?? (c.timeoutMs === null ? null : t('plc.useCommonTimeout')))}{row(t('plc.writeTimeout'), c.writeTimeoutMs ?? (c.timeoutMs === null ? null : t('plc.useCommonTimeout')))}{row(t('plc.pollInterval'), c.pollingIntervalMs)}
-        {row(t('plc.xyBase'), c.xyAddressBase === 8 ? t('plc.octal8') : c.xyAddressBase === 16 ? t('plc.hex16') : null)}{row(t('plc.wBase'), c.wAddressBase === 10 ? t('plc.dec10') : c.wAddressBase === 16 ? t('plc.hex16') : null)}
-        <dt>{t('plc.enabled')}</dt><dd>{c.enabled ? <Pill tone="ok">{t('plc.enabledOn')}</Pill> : <Pill tone="muted">{t('plc.enabledOff')}</Pill>}</dd>
-      </dl>
       {c.missingParameters.length > 0 && (
-        <div className="notice notice-warn">{t('plc.missingParams', { list: c.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ') })}</div>
+        <div className="notice notice-warn notice-compact" role="status">{t('plc.missingParams', { list: c.missingParameters.map((m) => MISSING_PARAM_VI[m] ?? m).join(', ') })}</div>
       )}
-      {error && <div className="notice notice-bad" role="alert">{error}</div>}
-      {probe && <div className={`notice ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>{t('plc.probeResult', { mode: TEST_MODE_VI[probe.mode] ?? probe.mode, message: describeCoded(probe.message), latency: probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : '' })}</div>}
-      <div className="btn-row">
-        <Button variant="primary" onClick={onEdit}>{t('plc.edit')}</Button>
-        <Button disabled={busy} onClick={() => void run(async () => setProbe(await api.plcTestConnection(c.plcId)))}>{t('plc.testConn')}</Button>
-        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, false) })}>{t('plc.simDrop')}</Button>}
-        {simulator && ENGINEERING_TOOLS && <Button disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, true) })}>{t('plc.simRestore')}</Button>}
+      <div className="kv-groups">
+        <div className="kv-col">
+          {group(t('plc.grpConnection'), <>
+            {row(t('plc.ipAddress'), c.ipAddress)}{row(t('plc.tcpPort'), c.port)}{row(t('plc.protocol'), c.protocol)}
+            {row(t('plc.enabled'), c.enabled ? <Pill tone="ok">{t('plc.enabledOn')}</Pill> : <Pill tone="muted">{t('plc.enabledOff')}</Pill>)}
+          </>)}
+          {group(t('plc.grpRouting'), <>
+            {row(t('plc.networkNumber'), c.networkNumber)}{row(t('plc.pcNumber'), c.pcNumber)}{row(t('plc.moduleIo'), c.moduleIoNumber)}{row(t('plc.plcStation'), c.plcStationNumber)}
+          </>)}
+        </div>
+        <div className="kv-col">
+          {group(t('plc.grpComm'), <>
+            {row(t('plc.readMonitor'), c.monitoringTimer)}{row(t('plc.commonTimeout'), c.timeoutMs)}
+            {row(t('plc.connectTimeout'), c.connectTimeoutMs ?? (c.timeoutMs === null ? null : common))}{row(t('plc.readTimeout'), c.readTimeoutMs ?? (c.timeoutMs === null ? null : common))}
+            {row(t('plc.writeTimeout'), c.writeTimeoutMs ?? (c.timeoutMs === null ? null : common))}{row(t('plc.pollInterval'), c.pollingIntervalMs)}
+          </>)}
+          {group(t('plc.grpData'), <>
+            {row(t('plc.xyBase'), c.xyAddressBase === 8 ? t('plc.octal8') : c.xyAddressBase === 16 ? t('plc.hex16') : null)}
+            {row(t('plc.wBase'), c.wAddressBase === 10 ? t('plc.dec10') : c.wAddressBase === 16 ? t('plc.hex16') : null)}
+          </>)}
+        </div>
+      </div>
+      {error && <div className="notice notice-bad notice-compact" role="alert">{error}</div>}
+      {probe && <div className={`notice notice-compact ${probe.outcome === 'Failed' ? 'notice-bad' : 'notice-info'}`}>{t('plc.probeResult', { mode: TEST_MODE_VI[probe.mode] ?? probe.mode, message: describeCoded(probe.message), latency: probe.latencyMs !== null ? ` · ${probe.latencyMs} ms` : '' })}</div>}
+      <div className="btn-row btn-row-tight">
+        <Button size="sm" variant="primary" onClick={onEdit}>{t('plc.edit')}</Button>
+        <Button size="sm" disabled={busy} onClick={() => void run(async () => setProbe(await api.plcTestConnection(c.plcId)))}>{t('plc.testConn')}</Button>
+        {simulator && ENGINEERING_TOOLS && <Button size="sm" disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, false) })}>{t('plc.simDrop')}</Button>}
+        {simulator && ENGINEERING_TOOLS && <Button size="sm" disabled={busy} onClick={() => void run(async () => { await api.plcSimOnline(c.plcId, true) })}>{t('plc.simRestore')}</Button>}
       </div>
       {realMode && <p className="muted small">{t('plc.probeNote')}</p>}
     </>

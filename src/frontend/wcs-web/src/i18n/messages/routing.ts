@@ -15,7 +15,6 @@ export default defineMessages({
   startNoProcess: 'Chưa có quy trình nào được Publish',
   startNoProcessHint: 'Admin cần kiểm tra và Publish một quy trình ở màn hình Quy trình và tuyến.',
   title: 'Điều phối đa chặng',
-  subtitle: 'Transport Task gồm nhiều chặng (Leg); mỗi lần AMR vào một cổng là một Station Transaction riêng.',
   tabTasks: 'Transport Task',
   tabTransactions: 'Giao dịch tại cổng',
   none: 'Chưa có Transport Task',
@@ -94,7 +93,6 @@ export default defineMessages({
 
   // process administration
   procTitle: 'Quy trình nghiệp vụ và tuyến vận chuyển',
-  procSubtitle: 'Tuyến, thứ tự ưu tiên, buffer và nhánh điều kiện là dữ liệu cấu hình: sửa ở đây, không cần sửa mã nguồn.',
   procImport: 'Nạp quy trình tham chiếu',
   procImportDone: 'Đã nạp {imported} quy trình (bản nháp), bỏ qua {skipped} đã tồn tại. Chưa quy trình nào được Publish.',
   procNew: 'Tạo quy trình',
@@ -219,7 +217,6 @@ export default defineMessages({
   navProcesses: 'Processes and routes',
 
   title: 'Multi-leg dispatch',
-  subtitle: 'A Transport Task has several Legs; every entry of an AMR into a port is its own Station Transaction.',
   tabTasks: 'Transport Tasks',
   tabTransactions: 'Port transactions',
   none: 'No Transport Task yet',
@@ -295,7 +292,6 @@ export default defineMessages({
   txHandshakeNote: 'Steps 1–9 follow the PLC–WCS exchange table; WCS has not written any signal to a PLC.',
 
   procTitle: 'Business processes and transport routes',
-  procSubtitle: 'Routes, priorities, buffers and condition branches are configuration data: change them here, no source code change.',
   procImport: 'Load reference processes',
   procImportDone: 'Loaded {imported} process(es) as drafts, skipped {skipped} that already exist. No process is published.',
   procNew: 'New process',

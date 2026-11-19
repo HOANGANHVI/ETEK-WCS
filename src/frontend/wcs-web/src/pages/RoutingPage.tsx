@@ -38,7 +38,7 @@ export function RoutingPage() {
   const [starting, setStarting] = useState(false)
   return (
     <>
-      <PageHeader title={t('routing.title')} description={t('routing.subtitle')} actions={<Button variant="primary" onClick={() => setStarting(true)}>{t('routing.startBtn')}</Button>} />
+      <PageHeader title={t('routing.title')} actions={<Button variant="primary" onClick={() => setStarting(true)}>{t('routing.startBtn')}</Button>} />
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'tasks'} className={tab === 'tasks' ? 'tab active' : 'tab'} onClick={() => setTab('tasks')}>{t('routing.tabTasks')}</button>
         <button role="tab" aria-selected={tab === 'tx'} className={tab === 'tx' ? 'tab active' : 'tab'} onClick={() => setTab('tx')}>{t('routing.tabTransactions')}</button>
