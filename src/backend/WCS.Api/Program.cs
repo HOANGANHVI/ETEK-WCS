@@ -29,7 +29,8 @@ try
     builder.Services.AddWcsApplication(builder.Configuration);
     builder.Services.AddWcsInfrastructure(builder.Configuration);
     builder.Services.AddWcsRuntime(builder.Configuration);
-    builder.Services.AddSingleton<IWcsNotifier, SignalRWcsNotifier>(); // replaces the null notifier from Infrastructure
+    builder.Services.AddSingleton<SignalRWcsNotifier>();
+    builder.Services.AddSingleton<IWcsNotifier>(sp => new BatchAwareNotifier(sp.GetRequiredService<SignalRWcsNotifier>())); // replaces the null notifier from Infrastructure; CR-026: events raised inside a batch wait for its commit
     builder.Services.AddWcsAuth(builder.Configuration, builder.Environment);
 
     var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
