@@ -64,6 +64,8 @@ public static class DependencyInjection
             .AddInterceptors(new DbDiagnosticsInterceptor(sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<DbDiagnosticsInterceptor>>(), slowQueryMs)));
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
+        services.AddScoped<WCS.Application.Abstractions.IMaintenanceStore, WCS.Infrastructure.Maintenance.MaintenanceStore>();   // CR-026
+        services.AddScoped<WCS.Application.Abstractions.IMaintenanceGate, WCS.Infrastructure.Maintenance.MaintenanceGate>();
         services.AddScoped<IAgvRepository, AgvRepository>();
         services.AddScoped<IStationRequestRepository, StationRequestRepository>();   // CR-008B-2
         services.AddScoped<ILocationRepository, LocationRepository>();

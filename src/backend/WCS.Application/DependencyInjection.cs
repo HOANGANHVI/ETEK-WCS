@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<WcsQueries>();
         services.AddScoped<ReconciliationService>();   // CR-008B-3
         services.AddScoped<AgvHoldService>();   // CR-008B-5
+        services.AddScoped<MaintenanceService>();   // CR-026
         services.AddScoped<AgvStatusService>();
         services.AddScoped<Diagnostics.DiagnosticExportService>();   // PLC diagnostic export (P1)
         // CR-021: whole-system diagnostic export (sources are registered by the infrastructure; jobs run in the background)

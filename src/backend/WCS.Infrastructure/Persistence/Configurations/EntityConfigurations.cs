@@ -253,3 +253,17 @@ internal sealed class AuditEntryConfiguration : IEntityTypeConfiguration<WCS.Dom
         b.HasIndex(x => x.Action);
     }
 }
+
+internal sealed class SystemMaintenanceConfiguration : IEntityTypeConfiguration<SystemMaintenance>
+{
+    public void Configure(EntityTypeBuilder<SystemMaintenance> b)
+    {
+        b.ToTable("system_maintenance", t => t.HasCheckConstraint("ck_system_maintenance_singleton", "\"Id\" = 1"));   // CR-026: exactly one row
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Reason).HasMaxLength(300);
+        b.Property(x => x.ChangedBy).HasMaxLength(100);
+        b.Property(x => x.Version).IsRowVersion();
+        b.HasData(new { Id = SystemMaintenance.SingletonId, Enabled = false, UpdatedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) });   // off by default
+    }
+}

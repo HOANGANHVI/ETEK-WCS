@@ -119,6 +119,7 @@ public static class Endpoints
         // ---------------------------------------------------------------- operational API (Admin + Operator)
         var api = app.MapGroup("/api").AddEndpointFilter<ValidationFilter>().RequireAuthorization(AuthSetup.OperationsPolicy);
         var admin = AuthSetup.AdminPolicy;
+        api.MapMaintenance();   // CR-026
 
         // ---- AGV
         var agv = api.MapGroup("/agvs").WithTags("AGV");

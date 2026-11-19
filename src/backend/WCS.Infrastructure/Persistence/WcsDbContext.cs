@@ -19,6 +19,8 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
     public DbSet<WCS.Domain.Intake.StationRequestRecord> StationRequests => Set<WCS.Domain.Intake.StationRequestRecord>();
     public DbSet<ConnectionSetting> ConnectionSettings => Set<ConnectionSetting>();
+    /// <summary>CR-026: the single system-wide Maintenance flag.</summary>
+    public DbSet<SystemMaintenance> SystemMaintenance => Set<SystemMaintenance>();
     public DbSet<WCS.Domain.Users.AppUser> Users => Set<WCS.Domain.Users.AppUser>();
     public DbSet<WCS.Domain.Users.UserAvatar> UserAvatars => Set<WCS.Domain.Users.UserAvatar>();
     public DbSet<WCS.Domain.Users.AuditEntry> AuditLog => Set<WCS.Domain.Users.AuditEntry>();
