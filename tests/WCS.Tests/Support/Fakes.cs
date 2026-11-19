@@ -7,6 +7,14 @@ using WCS.Domain.Common;
 namespace WCS.Tests.Support;
 
 /// <summary>In-memory stand-ins so configuration logic can be tested without PostgreSQL.</summary>
+/// <summary>CR-026: a Maintenance gate that is never on (for tests that build their own service collection).</summary>
+public sealed class OpenMaintenanceGate : IMaintenanceGate
+{
+    public Task<bool> IsEnabledAsync(CancellationToken ct = default) => Task.FromResult(false);
+    public Task EnsureOpenAsync(CancellationToken ct = default) => Task.CompletedTask;
+    public Task<bool> HoldNewWorkAsync(CancellationToken ct = default) => Task.FromResult(false);
+}
+
 public sealed class FakeUnitOfWork : IUnitOfWork
 {
     public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => work(ct);

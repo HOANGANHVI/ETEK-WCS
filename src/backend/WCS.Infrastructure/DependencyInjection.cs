@@ -66,6 +66,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<WCS.Application.Abstractions.IMaintenanceStore, WCS.Infrastructure.Maintenance.MaintenanceStore>();   // CR-026
         services.AddScoped<WCS.Application.Abstractions.IMaintenanceGate, WCS.Infrastructure.Maintenance.MaintenanceGate>();
+        services.AddScoped<WCS.Application.ConfigTransfer.IConfigTransferStore, WCS.Infrastructure.ConfigTransfer.ConfigTransferStore>();   // CR-026
         services.AddScoped<IAgvRepository, AgvRepository>();
         services.AddScoped<IStationRequestRepository, StationRequestRepository>();   // CR-008B-2
         services.AddScoped<ILocationRepository, LocationRepository>();

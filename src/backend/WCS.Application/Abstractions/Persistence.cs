@@ -24,6 +24,9 @@ public interface IUnitOfWork
     /// Default implementation (stand-ins in tests): the work simply runs once.
     /// </summary>
     Task<T> ExecuteBatchAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => ExecuteAsync(work, ct);
+
+    /// <summary>CR-026: a batch that reads ONE consistent snapshot (REPEATABLE READ), used by Export so every group comes from the same moment. Default: the work runs once.</summary>
+    Task<T> ExecuteSnapshotAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => ExecuteAsync(work, ct);
 }
 
 /// <summary>CR-008B-2: durable store of detected station requests (see <see cref="WCS.Domain.Intake.StationRequestRecord"/>).</summary>

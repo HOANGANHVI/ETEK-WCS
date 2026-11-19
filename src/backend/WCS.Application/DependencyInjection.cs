@@ -28,6 +28,15 @@ public static class DependencyInjection
         services.AddScoped<ReconciliationService>();   // CR-008B-3
         services.AddScoped<AgvHoldService>();   // CR-008B-5
         services.AddScoped<MaintenanceService>();   // CR-026
+        services.Configure<ConfigTransfer.ConfigTransferOptions>(configuration.GetSection(ConfigTransfer.ConfigTransferOptions.SectionName));
+        services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.LocationConfigGroup>();
+        services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.AgvConfigGroup>();
+        services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.PlcStationConfigGroup>();
+        services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.BusinessProcessConfigGroup>();
+        services.AddScoped<ConfigTransfer.ConfigGroupCatalog>();
+        services.AddScoped<ConfigTransfer.ActiveWorkGate>();
+        services.AddScoped<ConfigTransfer.ConfigBackupService>();
+        services.AddScoped<ConfigTransfer.ConfigTransferService>();
         services.AddScoped<AgvStatusService>();
         services.AddScoped<Diagnostics.DiagnosticExportService>();   // PLC diagnostic export (P1)
         // CR-021: whole-system diagnostic export (sources are registered by the infrastructure; jobs run in the background)

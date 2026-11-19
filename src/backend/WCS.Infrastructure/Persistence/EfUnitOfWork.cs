@@ -17,11 +17,13 @@ internal sealed class EfUnitOfWork(WcsDbContext db, ILogger<EfUnitOfWork> logger
     private bool _inside;
     private bool _batch;
 
-    public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => RunAsync(work, batch: false, ct);
+    public Task<T> ExecuteAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => RunAsync(work, batch: false, null, ct);
 
-    public Task<T> ExecuteBatchAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => RunAsync(work, batch: true, ct);
+    public Task<T> ExecuteBatchAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => RunAsync(work, batch: true, null, ct);
 
-    private async Task<T> RunAsync<T>(Func<CancellationToken, Task<T>> work, bool batch, CancellationToken ct)
+    public Task<T> ExecuteSnapshotAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct = default) => RunAsync(work, batch: true, System.Data.IsolationLevel.RepeatableRead, ct);
+
+    private async Task<T> RunAsync<T>(Func<CancellationToken, Task<T>> work, bool batch, System.Data.IsolationLevel? isolation, CancellationToken ct)
     {
         if (_inside)
         {
@@ -37,7 +39,7 @@ internal sealed class EfUnitOfWork(WcsDbContext db, ILogger<EfUnitOfWork> logger
         for (var attempt = 1; ; attempt++)
         {
             db.ChangeTracker.Clear(); // always start from fresh database state
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await using var tx = isolation is { } level ? await db.Database.BeginTransactionAsync(level, ct) : await db.Database.BeginTransactionAsync(ct);
             _inside = true; _batch = batch;
             var effects = batch ? BatchEffects.Begin() : null;
             try
