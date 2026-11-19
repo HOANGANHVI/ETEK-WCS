@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.15 – CR-025 Modern Industrial UI (2026-11-19)
+
+- **Style layer** (`styles/modern.css`, tokens): cool light background, borderless cards with soft shadows, one 8/12 px radius scale, gradient navy header/sidebar with a blue active marker, KPI cards with tinted icon tile and tone accent, quiet tables (small uppercase headers, soft separators), softer pills, rounded form controls with a blue focus ring, segmented range switch, rounded notices. Both themes keep working (tokens only).
+- **Shared components:** `EmptyState` (icon), `ChartEmpty`, `StackedSummary` (stacked status bar + counts/share), `IconInbox` / `IconChart`.
+- **Charts from existing data only:** tasks by status (Task Management), AGV status (AGV Monitoring), racks by status (Locations & Stock), PLC connection state, Station address configuration and, for Admin in a real PLC runtime, PLC communication counters (PLC Monitoring). No new API; no statistic that the system does not already hold (the error-trend / history statistics that need new data are NOT added). Empty data shows an explicit empty state.
+- CR-023 compact PLC layout kept (only the narrow-card container breakpoint 300 → 250 px, because the wider page padding would otherwise have stacked the PLC card rows); CR-024 bilingual unchanged.
+- No backend, API, database, migration, PLC, RCS, SignalR, authorization or business-logic change. Not deployed.
+
 ## v3.14 – CR-024 Bilingual Description of IO signals (2026-11-19)
 
 - The Description column of **IO Address Mapping** (and the same text in the **PLC monitoring IO tab**) now follows the selected language: VI shows the Vietnamese text of the controlled IO workbook, EN an English text; the language switch updates the table immediately, without reload.

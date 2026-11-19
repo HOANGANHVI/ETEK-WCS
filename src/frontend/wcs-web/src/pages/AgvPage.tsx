@@ -1,8 +1,9 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { AgvCard } from '../components/AgvCard'
 import { Async, PageHeader, Panel, TaskStatePill } from '../components/ui'
+import { StackedSummary, type SummaryItem } from '../components/charts'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
 import { isActive, useCodeMaps } from '../hooks/useLookups'
@@ -19,12 +20,26 @@ export function AgvPage() {
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])
   const locations = useApi(useCallback(() => api.locations(), []))
   const codes = useCodeMaps(locations.data, agvs.data)
+  const summary = useMemo<SummaryItem[]>(() => {
+    const l = agvs.data ?? []
+    const down = (a: (typeof l)[number]) => a.connectionStatus === 'Offline' || a.connectionStatus === 'Error'
+    return [
+      { key: 'work', label: t('agv.sumWorking'), tone: 'ok', value: l.filter((a) => !a.dispatchHold && !down(a) && a.connectionStatus === 'Online' && a.busy).length },
+      { key: 'ready', label: t('agv.sumReady'), tone: 'info', value: l.filter((a) => !a.dispatchHold && a.connectionStatus === 'Online' && !a.busy).length },
+      { key: 'hold', label: t('agv.sumHold'), tone: 'warn', value: l.filter((a) => a.dispatchHold).length },
+      { key: 'down', label: t('agv.sumDown'), tone: 'bad', value: l.filter((a) => !a.dispatchHold && down(a)).length },
+      { key: 'unk', label: t('agv.sumUnknown'), tone: 'muted', value: l.filter((a) => !a.dispatchHold && a.connectionStatus === 'Unknown').length },
+    ]
+  }, [agvs.data, t])
 
   return (
     <>
       <PageHeader
         title={t('agv.pageTitle')}
       />
+      <Panel title={t('agv.sumTitle')} subtitle={t('agv.sumSub', { n: agvs.data?.length ?? 0 })} className="mb">
+        <StackedSummary items={summary} ariaLabel={t('agv.sumTitle')} emptyTitle={t('agv.sumEmpty')} />
+      </Panel>
       <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
         {(list) => (
           <div className="agv-grid wide">

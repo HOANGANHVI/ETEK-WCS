@@ -50,7 +50,7 @@ table.grid.station-io th, table.grid.station-io td { padding-top: 5px; padding-b
 .notice-compact { padding: 5px 10px; margin: 0 0 8px; font-size: var(--fs-xs); }
 .btn-row-tight { margin-top: 10px; gap: 6px; flex-wrap: wrap; }
 /* a card too narrow for label + value side by side (phone, narrow column): the label goes above its value instead of squeezing the value into a column of letters */
-@container (max-width: 300px) { .kv2-tight { grid-template-columns: 1fr; gap: 0; } .kv2-tight dt { padding-top: 3px; } .kv2-tight dd { margin-bottom: 2px; } }
+@container (max-width: 250px) { .kv2-tight { grid-template-columns: 1fr; gap: 0; } .kv2-tight dt { padding-top: 3px; } .kv2-tight dd { margin-bottom: 2px; } }
 /* a PLC card that is narrow (small window, tablet, phone) puts its two parameter columns under each other */
 @container (max-width: 520px) { .kv-groups { grid-template-columns: 1fr; } .kv-col + .kv-col { margin-top: 8px; } }
 .text-bad { color: var(--bad); }
