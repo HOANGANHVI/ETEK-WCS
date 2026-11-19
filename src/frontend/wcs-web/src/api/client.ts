@@ -11,6 +11,7 @@ import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, Or
 import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
+import type { FleetView } from './fleetTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, ReconciliationDetail, SimulationStep, SystemHealth,
@@ -124,6 +125,8 @@ const realApi = {
   /** Server resources, container and host kept apart (Admin only). */
   resources: (signal?: AbortSignal) => request<ResourceSnapshot>('/api/system/resources', { signal }),
   agvs: () => request<Agv[]>('/api/agvs'),
+  /** CR-027: the AMR fleet reported by the RCS (read-only). */
+  agvFleet: () => request<FleetView>('/api/agvs/fleet'),
   flows: () => request<FlowOption[]>('/api/flows'),
   locations: () => request<Location[]>('/api/locations'),
   racks: (location?: string) => request<Rack[]>(`/api/inventory/racks${qs({ location, take: 500 })}`),

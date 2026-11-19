@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.17 – CR-027 Dynamic AMR monitoring from the RCS, Phase 1 (2026-11-19) – feature branch, not merged
+
+- **RCS fleet read model** (`rcs_amr_snapshots`, `rcs_fleet_state`; additive migration `AddRcsFleetSnapshots`), separate from `agvs`; simulator and real rows stored apart.
+- **`queryAgvStatus` client** (RCS-2000 API V3.3, 5.2.14; read-only) and parser; `IRcsClient.QueryFleetAsync` (default not supported); simulator fleet 0..N; `Rcs:Fleet:*` options (default simulator, 5 s). One polling loop (`AgvStatusHostedService`).
+- **AGV Monitoring:** fleet panel with any number of AMRs, fresh / stale / missing, last-seen time, VI/EN; `GET /api/agvs/fleet`; realtime `FleetChanged`.
+- **Unchanged (verified):** Task lifecycle, `AgvId`, `PER_AGV`, AGV1/AGV2 roles, dispatch, `genAgvSchedulingTask`, PLC, Station, Inventory, Rack binding, Dashboard / KPI / statistics (golden before/after), existing schema blocks (byte-identical). Phase 2 deferred.
+- Baseline: `CR-027_BASELINE.md`; RCS API PDF added under `docs/03_RCS_Interface/`.
+
 ## v3.16 – CR-026 Configuration Export / Import, Phase 2 (2026-11-19) – feature branch, not merged
 
 - **Maintenance flag** (`system_maintenance`, Admin only, audited, persistent): refuses new Task/Order/PLC requests, holds work that has not started, lets running work finish; race closed by a row lock. API `GET/PUT /api/system/maintenance`; banner for every user.

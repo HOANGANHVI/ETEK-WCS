@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { AgvCard } from '../components/AgvCard'
+import { FleetPanel } from '../components/FleetPanel'
 import { Async, PageHeader, Panel, TaskStatePill } from '../components/ui'
 import { StackedSummary, type SummaryItem } from '../components/charts'
 import { useApi } from '../hooks/useApi'
@@ -17,6 +18,7 @@ export function AgvPage() {
   const t = useT()
   const now = useClock(5000).getTime()
   const agvs = useApi(useCallback(() => api.agvs(), []), [...EVENTS])
+  const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged'])
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])
   const locations = useApi(useCallback(() => api.locations(), []))
   const codes = useCodeMaps(locations.data, agvs.data)
@@ -40,6 +42,7 @@ export function AgvPage() {
       <Panel title={t('agv.sumTitle')} subtitle={t('agv.sumSub', { n: agvs.data?.length ?? 0 })} className="mb">
         <StackedSummary items={summary} ariaLabel={t('agv.sumTitle')} emptyTitle={t('agv.sumEmpty')} />
       </Panel>
+      <Async state={fleet} empty={{ title: t('agv.fleetNoData') }}>{(f) => <FleetPanel fleet={f} />}</Async>
       <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
         {(list) => (
           <div className="agv-grid wide">

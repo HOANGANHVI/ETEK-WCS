@@ -126,7 +126,8 @@ public static class DependencyInjection
                 "are not implemented until addresses, API version and mappings are confirmed.");
 
         services.AddSingleton<PlcSimulator>();
-        services.AddSingleton<RcsSimulator>();
+        // CR-027: Rcs:Fleet:SimulatorSize (default 0 = an empty simulated fleet) fills the RCS SIMULATOR with that many AMRs (SIM-001..) for a demo / test. Real AMRs are never simulated by default.
+        services.AddSingleton(_ => { var sim = new RcsSimulator(); sim.SetFleetSize(configuration.GetValue("Rcs:Fleet:SimulatorSize", 0)); return sim; });
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
         // CR-021: every RCS call is logged (operation, request code, outcome, duration, adapter); the Production guard looks through the wrapper (IRcsClientDecorator.Unwrap)
