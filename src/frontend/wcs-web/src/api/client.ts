@@ -45,11 +45,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body.data as T
 }
 
-/** Downloads the PLC diagnostic ZIP (binary, so it bypasses the JSON envelope of request()). Errors keep the same ApiRequestError shape. */
-async function downloadPlcDiagnostics(f: { plcId?: string; quick?: string; from?: string; to?: string }): Promise<void> {
-  return downloadZip(`/api/diagnostics/plc/export${qs(f)}`, 'WCS_Diagnostic.zip')
-}
-
 /** CR-021: the ZIP of a finished system export (Admin-only, audited by the server). */
 const downloadDiagExport = (id: string): Promise<void> => downloadZip(`/api/diagnostics/exports/${encodeURIComponent(id)}/download`, 'WCS_SystemDiagnostic.zip')
 
@@ -142,7 +137,6 @@ const realApi = {
     request<AuditRow[]>(`/api/audit${qs({ actor: f.actor, action: f.action, result: f.result, skip: f.skip ?? 0, take: f.take ?? 100 })}`),
 
   // PLC monitoring and configuration (CR-002)
-  downloadPlcDiagnostics,
   downloadDiagExport,
   diagExportOptions: () => request<DiagExportOptions>('/api/diagnostics/export-options'),
   diagStartExport: (b: DiagExportBody) => request<DiagExportJob>('/api/diagnostics/exports', { method: 'POST', body: JSON.stringify(b) }),

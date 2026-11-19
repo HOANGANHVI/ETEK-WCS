@@ -1,5 +1,10 @@
 # Change Log
 
+## v3.11 – CR-022 Diagnostics screen: single export (2026-11-19)
+
+- Diagnostics page shows only the whole-system export; PLC-only export area and its frontend helper removed; backend PLC export kept. SignalR upgrades (HTTP 101) no longer counted as slow requests. Test added: PLC module / one PLC / task scope / other scopes and the `PLC/` folder. DEV database migrated (AddCorrelationIds). Not deployed.
+- Approved by: project owner. Date: 2026-11-19.
+
 ## v3.10 – CR-021 batch D End-to-end verification and performance (2026-11-18)
 
 - `SystemDiagnosticScenarioTests` (2): task reconstruction across modules on the real logging pipeline + RCS simulator + MC mock; 500 000-event export (time, size, memory) and per-source limit. Module classification by event-code prefix (fixes TASK_FINISHED being filed under RCS because its text says "RCS"). PLC folder "Partial" only when PLC events older than its cap exist. Not deployed. CR-021 closed as IMPLEMENTED.

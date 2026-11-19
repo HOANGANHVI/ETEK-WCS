@@ -52,6 +52,7 @@ public static class LogSetup
         // probes (Docker healthcheck every 15 s) stay out of the log even when the database is down: that state is reported once by the database monitor
         if (path.StartsWithSegments("/healthz") || path.StartsWithSegments("/nginx-health")) return LogEventLevel.Debug;
         if (ex is not null || ctx.Response.StatusCode >= 500) return LogEventLevel.Error;
+        if (ctx.Response.StatusCode == 101) return LogEventLevel.Information;   // protocol upgrade (SignalR/WebSocket): the connection lives for hours by design; its connect/disconnect is logged by the hub
         if (ctx.Response.StatusCode is 401 or 403 || (SlowRequestMs > 0 && elapsedMs >= SlowRequestMs)) return LogEventLevel.Warning;
         return LogEventLevel.Information;
     }
@@ -63,6 +64,7 @@ public static class LogSetup
         if (path.StartsWithSegments("/healthz") || path.StartsWithSegments("/nginx-health")) return;
         var ms = ctx.Items.TryGetValue(RequestStartKey, out var t) && t is long ts ? System.Diagnostics.Stopwatch.GetElapsedTime(ts).TotalMilliseconds : 0;
         var status = ctx.Response.StatusCode;
+        if (status == 101) return;
         var code = status >= 500 ? "API_REQUEST_FAILED" : status is 401 or 403 ? "API_ACCESS_DENIED" : SlowRequestMs > 0 && ms >= SlowRequestMs ? "API_REQUEST_SLOW" : null;
         if (code is null) return;
         diag.Set("EventCode", code);
