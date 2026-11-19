@@ -235,7 +235,7 @@ export function DashboardPage() {
         </Panel>
 
         <Panel title={t('dashboard.agvUtilTitle')} className="dc-5">
-          <div className="unavailable"><strong>{t('dashboard.agvUtilUnavailable')}</strong>{t('dashboard.agvUtilReason')}</div>
+          <div className="unavailable"><strong>{t('dashboard.agvUtilUnavailable')}</strong></div>
           <h3 className="mini-title" style={{ marginTop: 16 }}>{t('dashboard.agvDoneTitle')}</h3>
           {!stats || !agvList ? <div className="chart-empty">{t('dashboard.loadingStats')}</div> : (
             <ul className="hbars">

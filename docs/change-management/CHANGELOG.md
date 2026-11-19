@@ -1,5 +1,10 @@
 # Change Log
 
+## v3.12 – CR-023 Compact PLC screens (2026-11-19)
+
+- PLC connection cards (2-column parameters, groups, state in title, one action row), PLC monitoring (compact cards, 16 compact Station tiles in 8 columns on wide screens), responsive rules, four explanation texts removed, icon-only menu on phones. Frontend only; no API/database/PLC change. Not deployed.
+- Approved by: project owner. Date: 2026-11-19.
+
 ## v3.11 – CR-022 Diagnostics screen: single export (2026-11-19)
 
 - Diagnostics page shows only the whole-system export; PLC-only export area and its frontend helper removed; backend PLC export kept. SignalR upgrades (HTTP 101) no longer counted as slow requests. Test added: PLC module / one PLC / task scope / other scopes and the `PLC/` folder. DEV database migrated (AddCorrelationIds). Not deployed.

@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AddressIssue, IoPointConfig } from '../api/plcTypes'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
@@ -62,7 +61,6 @@ export function PlcIoMappingPage() {
     <>
       <PageHeader title={t('plc.ioTitle')} />
       {notice && <div className="notice notice-ok" role="status">{notice}</div>}
-      <div className="notice notice-info" role="note">{t('plc.mapOpsHint')} <Link to="/plc?tab=points">{t('plc.mapOpsLink')}</Link></div>
       <Panel title={t('plc.filters')} subtitle={t('plc.filterSummary', { total: counts.total, configured: counts.configured, pollable: counts.pollable })}>
         <div className="form-grid">
           <label className="field"><span className="field-label">PLC</span>
