@@ -199,3 +199,13 @@ Trang *Cấu hình địa chỉ IO* hiển thị banner "Trạng thái ghi PLC" 
 1. Chạy `deployment\scripts\plc-write-config.ps1`. Script chỉ đọc: so sánh `.env` (đường dẫn được in ra) với biến môi trường **thực sự trong container backend**; chỉ hiển thị 3 khóa còn hiệu lực (CR-019).
 2. Nguyên nhân thường gặp: (a) `.env` được tạo từ `.env.example` cũ có `PLC_MODE=RealReadOnly` (ép chỉ đọc, khóa nào cũng vô hiệu); (b) thiếu `PLC_ALLOW_LIVE_CONNECTION` hoặc `PLC_WRITE_ENABLED`; (c) sửa `.env` nhưng chưa chạy lại `deploy.ps1`/`start.ps1` nên container backend chưa được tạo lại; (d) `.env` sai thư mục (`WCS_CONFIG_DIR`, mặc định `C:\ETEK-WCS\config\.env`); (e) giá trị boolean không phải `true`/`false`.
 3. Log backend khi khởi động có dòng `RUNTIME_START` nêu chế độ yêu cầu, chế độ hiệu lực và tên các khóa còn thiếu (không có giá trị).
+
+## Xuất / nhập cấu hình (CR-026)
+
+Chức năng **tắt mặc định** (`WCS_CONFIG_TRANSFER_ENABLED=false`). Khi bật (`true` trong `.env`) quản trị viên có trang *Hệ thống → Xuất / nhập cấu hình*.
+
+- **Thư mục lưu trữ bắt buộc:** compose gắn volume `etek_wcs_config_backups` vào `/config-backups` (`ConfigTransfer__BackupPath`). Gói tải lên và bản sao lưu trước mỗi lần áp dụng nằm ở đây, nên **không mất khi container được tạo lại**. Không đặt thư mục này ở nơi tạm (`/tmp`): hệ thống từ chối và không cho áp dụng.
+- Volume này **không** bị các script xóa; hãy đưa nó vào kế hoạch sao lưu máy chủ như `etek_wcs_pgdata` và `etek_wcs_keys`.
+- Gói cấu hình **không chứa** mật khẩu, token, secret RCS, trạng thái duyệt IO / quyền ghi PLC, tài khoản, tồn kho, nhiệm vụ hay nhật ký. Mật khẩu/token RCS luôn nhập lại thủ công trên máy nhận.
+- Áp dụng cần **chế độ bảo trì bật** và **không còn Task/Order/giao dịch trạm đang chạy**; sau khi áp dụng chế độ bảo trì vẫn bật cho tới khi quản trị viên tắt.
+- Khuyến nghị: thử trên môi trường kiểm thử trước; kiểm tra bản xem trước; sau khi áp dụng, kỹ sư PLC kiểm tra lại mapping IO (nếu có thay đổi) trước khi Publish quy trình.

@@ -223,7 +223,7 @@ function ImportPanel({ maint }: { maint: MaintenanceView | null }) {
         </div>
       )}
 
-      {plan && <PlanView plan={plan} stale={stale} excluded={excluded} onToggle={toggleRecord} />}
+      {plan && <PlanView plan={plan} stale={stale} excluded={excluded} onToggle={toggleRecord} known={up?.warnings ?? []} />}
 
       {plan && !result && (
         <div className="stack">
@@ -277,9 +277,11 @@ function Changes({ item }: { item: PlanItem }) {
   )
 }
 
-function PlanView({ plan, stale, excluded, onToggle }: { plan: ImportPlan; stale: boolean; excluded: string[]; onToggle: (g: string, k: string) => void }) {
+function PlanView({ plan, stale, excluded, onToggle, known }: { plan: ImportPlan; stale: boolean; excluded: string[]; onToggle: (g: string, k: string) => void; known: string[] }) {
   const t = useT()
+  const [showSame, setShowSame] = useState(false)
   const s = plan.summary
+  const warnings = plan.warnings.filter((w) => !known.includes(w))
   if (plan.items.length === 0) return <EmptyState title={t('transfer.noRecords')} />
   return (
     <div className={stale ? 'transfer-plan stale' : 'transfer-plan'}>
@@ -290,12 +292,13 @@ function PlanView({ plan, stale, excluded, onToggle }: { plan: ImportPlan; stale
         <Pill tone="muted">{t('transfer.sumSkip')}: {s.skip}</Pill>
         <Pill tone={s.conflict > 0 ? 'bad' : 'muted'}>{t('transfer.sumConflict')}: {s.conflict}</Pill>
       </div>
-      {plan.warnings.length > 0 && <div className="notice notice-warn"><ul>{plan.warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>}
+      {warnings.length > 0 && <div className="notice notice-warn"><ul>{warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>}
+      {s.unchanged > 0 && <label className="check"><input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /><span>{t('transfer.showUnchanged', { n: s.unchanged })}</span></label>}
       <div className="table-wrap">
         <table className="grid">
           <thead><tr><th>{t('transfer.colGroup')}</th><th>{t('transfer.colKey')}</th><th>{t('transfer.colAction')}</th><th>{t('transfer.colChanges')}</th><th>{t('transfer.colInclude')}</th></tr></thead>
           <tbody>
-            {plan.items.map((i) => {
+            {plan.items.filter((i) => showSame || i.action !== 'Unchanged').map((i) => {
               const off = excluded.includes(refKey(i.group, i.key))
               const conflictKey = `transfer.conflict_${i.conflictCode}` as MsgKey
               return (

@@ -1,6 +1,6 @@
 # CR-026 – Configuration Export / Import (Phase 2 MVP)
 
-- **Status:** `PENDING_APPROVAL` – scope decisions D1–D7 were approved by the project owner on 2026-11-19; this document (impact report and Phase 2 plan) awaits approval **before any source code or migration is written** (CLAUDE.md §3 step 5).
+- **Status:** `IMPLEMENTED` on `feature/cr-026-config-transfer` (Phase 2). D1–D7, the CR, OQ-1…OQ-5 and the two design confirmations (1.1 `ExecuteBatchAsync`, 1.2 "block what has not started, let what started finish") were approved by the project owner on 2026-11-19. Awaiting the owner's confirmation after testing; not merged, not deployed.
 - **Branch:** `feature/cr-026-config-transfer` (from `develop`). Not merged to `main`, not deployed.
 - **Source:** project owner instruction (2026-11-19) after the Phase 1 survey.
 - **Phases:** 2 = MVP (Location, AGV, PLC Station, Business Process); 3 = PLC Connections, PLC I/O Mapping (`Configured` only), RCS settings without secrets; 4 = history, restore from backup, UI polish and comparison report. **Only Phase 2 is planned in detail below.**
@@ -119,6 +119,15 @@ Rollback of the CR: set `ConfigTransfer:Enabled=false` (no behaviour change); re
 3. **OQ-3 Backup location.** `ConfigTransfer:BackupPath` has no default and must be set per deployment; Apply is refused if unset. Confirm.
 4. **OQ-4 Stations.** Phase 2 is update-only for stations (link and enabled); creating stations waits for Phase 3. Confirm.
 5. **OQ-5 Process update.** Importing an existing Process code adds a new Draft version and updates the header; confirm that the header update (name/description/trigger locations) is allowed, or choose "new Draft version only".
+
+## 12. Implementation notes (what was decided while building; all inside the approved scope)
+
+- `IUnitOfWork.ExecuteBatchAsync` (and `ExecuteSnapshotAsync`, REPEATABLE READ, for a consistent Export): one transaction that the existing services join. Verified with PostgreSQL for the Location, AGV, Process and PLC-port services and `IAuditLog.Enlist`. Realtime events raised inside a batch are held until the commit (`BatchEffects` / `BatchAwareNotifier`).
+- Maintenance gate: `SELECT … FOR SHARE` in every unit that starts new work, `FOR UPDATE` when Maintenance is switched; two deterministic tests fail when the lock is removed. Entry points held or refused: `CreateTask`, station-request intake (stays Pending, no attempt, no acknowledgement), `RouteEngine.StartAsync`, PLC request recording and orphan resume, `ProcessTask`, `TryDispatchNext`, `DispatchToRcs`, first-leg creation and dispatch. Later legs of a running order, signals, cancel and reconciliation are not held.
+- Export is a synchronous download (the data set is small) instead of a background job. The preview selection is stored with the session; Apply uses the previewed selection and token.
+- A **new** Business Process whose package record is REVIEW-blocked is a Conflict (`PROCESS_REVIEW_BLOCKED_NOT_TRANSFERRABLE`): an import neither creates nor changes the REVIEW block. The type of an existing Location cannot be changed by the existing update path and is reported as a Conflict.
+- Known limits: the stochastic Maintenance race test is supplementary (the deterministic tests prove the lock); package warnings coming from the server are shown in English; the readiness list is taken at Preview time (Apply re-checks everything).
+- PLC risk: while Maintenance is ON, PLC station requests wait as Pending and are not acknowledged, so a PLC handshake that has a timeout may time out on the PLC side. The PLC protocol was not changed; schedule maintenance with this in mind.
 
 ## 11. Implementation order (after approval)
 

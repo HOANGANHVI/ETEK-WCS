@@ -19,7 +19,7 @@ public static class ConfigPackage
     public const string ReadmeFile = "README.txt";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    private static readonly JsonSerializerOptions Compact = new() { WriteIndented = false };
+    private static readonly JsonSerializerOptions Compact = new() { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static string Sha256(byte[] data) => Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
     public static string Sha256(string text) => Sha256(Encoding.UTF8.GetBytes(text));

@@ -88,6 +88,7 @@ export default defineMessages({
   sumSkip: 'Bỏ qua',
   sumConflict: 'Xung đột',
   noRecords: 'Gói không có bản ghi nào để nhập.',
+  showUnchanged: 'Hiện cả {n} bản ghi không đổi',
 
   // ---- readiness / apply
   readinessTitle: 'Điều kiện áp dụng',
@@ -227,6 +228,7 @@ export default defineMessages({
   sumSkip: 'Skip',
   sumConflict: 'Conflict',
   noRecords: 'The package has no records to import.',
+  showUnchanged: 'Also show the {n} unchanged records',
 
   readinessTitle: 'Conditions to apply',
   readinessOk: 'Ready to apply.',
