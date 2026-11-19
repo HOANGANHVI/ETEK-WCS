@@ -126,6 +126,9 @@ public static class Endpoints
         var agv = api.MapGroup("/agvs").WithTags("AGV");
         agv.MapGet("", async (HttpContext c, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.ListAgvsAsync(ct)));
         agv.MapGet("{id:guid}", async (HttpContext c, Guid id, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.GetAgvAsync(id, ct)));
+        // CR-027: the AMR fleet reported by the RCS (read-only; Admin and Operator; the AMR IP address and path are shown to Admin only)
+        agv.MapGet("fleet", async (HttpContext c, WCS.Application.Fleet.FleetService f, CancellationToken ct) =>
+            ApiResults.Ok(c, await f.GetAsync(c.Actor().Role == WCS.Domain.Users.UserRole.Admin, ct)));
         // CR-008B-5 (D-8): Admin only, both confirmations mandatory, audited with the AGV, the task and both confirmations.
         agv.MapPost("{id:guid}/release-hold", async (HttpContext c, Guid id, ReleaseAgvHoldRequest r, AgvHoldService s, WcsQueries q, CancellationToken ct) =>
         {

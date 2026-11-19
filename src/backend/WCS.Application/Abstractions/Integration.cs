@@ -57,6 +57,11 @@ public interface IRcsClient
     /// <summary>Query by WCS request code (used before any re-send after a timeout / unknown result).</summary>
     Task<(RcsTaskStatus Status, string? RcsTaskCode)> QueryTaskStatusAsync(string requestCode, CancellationToken ct = default);
     Task<RcsAgvStatus?> QueryAgvStatusAsync(string robotCode, CancellationToken ct = default);
+    /// <summary>
+    /// CR-027: the whole AMR fleet in ONE query (queryAgvStatus without a robot list). Default: not supported (an adapter that cannot list the fleet says so; it never invents one).
+    /// </summary>
+    Task<WCS.Application.Fleet.RcsFleetResult> QueryFleetAsync(CancellationToken ct = default) =>
+        Task.FromResult(WCS.Application.Fleet.RcsFleetResult.Fail(WCS.Application.Fleet.FleetErrorCodes.NotSupported, "This RCS client cannot list the fleet."));
 }
 
 /// <summary>CR-021: an <see cref="IRcsClient"/> that wraps another one (for example to log calls). Safety checks that ask "which adapter is this?" must look through it with <see cref="Unwrap"/>.</summary>
