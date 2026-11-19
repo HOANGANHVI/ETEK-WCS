@@ -236,6 +236,7 @@ public class DiagnosticLoggingTests(DatabaseFixture fixture)
         Assert.Equal(LogEventLevel.Information, LogSetup.RequestLevel(Ctx("/api/tasks", 404), 5, null));       // business answers are not stored
         Assert.Equal(LogEventLevel.Warning, LogSetup.RequestLevel(Ctx("/api/plc/points", 403), 5, null));
         Assert.Equal(LogEventLevel.Debug, LogSetup.RequestLevel(Ctx("/healthz", 200), 5000, null));            // a probe is never stored, however slow
+        Assert.Equal(LogEventLevel.Information, LogSetup.RequestLevel(Ctx("/hubs/wcs", 101), 887_254, null)); // a SignalR connection that stays open for hours is not a slow request
     }
 
     [Fact]
