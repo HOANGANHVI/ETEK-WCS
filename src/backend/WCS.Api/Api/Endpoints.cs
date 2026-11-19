@@ -120,7 +120,7 @@ public static class Endpoints
         var api = app.MapGroup("/api").AddEndpointFilter<ValidationFilter>().RequireAuthorization(AuthSetup.OperationsPolicy);
         var admin = AuthSetup.AdminPolicy;
         api.MapMaintenance();   // CR-026
-        api.MapConfigTransfer();   // CR-026 (Admin only, off by default)
+        api.MapConfigTransfer();   // CR-026 (Admin only, on by default)
 
         // ---- AGV
         var agv = api.MapGroup("/agvs").WithTags("AGV");

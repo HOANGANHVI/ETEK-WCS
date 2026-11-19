@@ -202,7 +202,7 @@ Trang *Cấu hình địa chỉ IO* hiển thị banner "Trạng thái ghi PLC" 
 
 ## Xuất / nhập cấu hình (CR-026)
 
-Chức năng **tắt mặc định** (`WCS_CONFIG_TRANSFER_ENABLED=false`). Khi bật (`true` trong `.env`) quản trị viên có trang *Hệ thống → Xuất / nhập cấu hình*.
+Chức năng **bật sẵn** sau khi triển khai, **không cần** sửa `appsettings` hay `.env`: chỉ tài khoản **Admin** thấy trang *Hệ thống → Xuất / nhập cấu hình* và gọi được API (server kiểm tra quyền; Operator nhận 403). `WCS_CONFIG_TRANSFER_ENABLED=false` chỉ là công tắc khẩn cấp để tắt.
 
 - **Thư mục lưu trữ bắt buộc:** compose gắn volume `etek_wcs_config_backups` vào `/config-backups` (`ConfigTransfer__BackupPath`). Gói tải lên và bản sao lưu trước mỗi lần áp dụng nằm ở đây, nên **không mất khi container được tạo lại**. Không đặt thư mục này ở nơi tạm (`/tmp`): hệ thống từ chối và không cho áp dụng.
 - Volume này **không** bị các script xóa; hãy đưa nó vào kế hoạch sao lưu máy chủ như `etek_wcs_pgdata` và `etek_wcs_keys`.

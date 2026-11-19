@@ -75,7 +75,7 @@ Excluded in Phase 2: PLC connections, IO points and addresses, RCS, users, racks
 - **Rollback:** the whole Apply is one database transaction; any failure rolls everything back and the target is unchanged. Restoring from a backup after commit is Phase 4. Newly created records are disabled (not deleted) on restore.
 - **Idempotency:** `importId` + package hash; repeating Apply returns the first result.
 - **Writes** only through `OperationalConfigService`, `PlcProvisioningService`, `ProcessAdminService` (and their audit). No direct SQL / DbContext writes. No PLC runtime call anywhere in the module.
-- **Feature flag:** `ConfigTransfer:Enabled` (default `false`). The module is not registered when disabled.
+- **Feature flag:** `ConfigTransfer:Enabled` (default `true` since the owner's adjustment of 2026-11-19: nothing has to be configured; Admin-only authorization is enforced by the API). `false` is only an emergency switch (the API group answers 404 `CONFIG_TRANSFER_DISABLED`).
 
 ## 6. Database migration impact (additive, DEV only)
 
@@ -110,7 +110,7 @@ No change to existing tables. Rollback of the migration = drop the two new table
 | Partial apply | Single transaction + backup |
 | Scope creep into PLC/IO | Phase 2 contains no PLC data; reload code never referenced (test) |
 
-Rollback of the CR: set `ConfigTransfer:Enabled=false` (no behaviour change); revert the branch; drop the two additive tables.
+Rollback of the CR: set `ConfigTransfer:Enabled=false` (emergency switch, no other behaviour change); revert the branch; drop the two additive tables.
 
 ## 10. Open questions requiring owner decision before coding
 

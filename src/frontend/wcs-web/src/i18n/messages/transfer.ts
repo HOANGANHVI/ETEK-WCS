@@ -4,8 +4,8 @@ import { defineMessages } from '../core'
 export default defineMessages({
   title: 'Xuất / nhập cấu hình',
   description: 'Chuyển cấu hình giữa hai hệ thống WCS bằng một gói ZIP. Gói chỉ chứa cấu hình: không có mật khẩu, token hay secret, không có trạng thái duyệt, tồn kho, nhiệm vụ hay nhật ký.',
-  notEnabled: 'Chức năng xuất/nhập cấu hình chưa được bật',
-  notEnabledHint: 'Bật bằng cấu hình ConfigTransfer:Enabled trên máy chủ.',
+  notEnabled: 'Chưa có nhóm cấu hình nào để xuất/nhập',
+  notEnabledHint: 'Danh sách nhóm cấu hình trống.',
 
   // ---- maintenance
   banner: 'Hệ thống đang ở chế độ bảo trì: không nhận nhiệm vụ / lệnh mới và không điều phối thêm việc chưa bắt đầu. Việc đang chạy vẫn tiếp tục.',
@@ -149,8 +149,8 @@ export default defineMessages({
 }, {
   title: 'Configuration export / import',
   description: 'Move configuration between two WCS systems with a ZIP package. A package holds configuration only: no password, token or secret, no approval state, inventory, task or log.',
-  notEnabled: 'Configuration transfer is not enabled',
-  notEnabledHint: 'Enable it with the ConfigTransfer:Enabled setting on the server.',
+  notEnabled: 'There are no configuration groups to export or import',
+  notEnabledHint: 'The list of configuration groups is empty.',
 
   banner: 'The system is in Maintenance: no new Task or Order is accepted and no new work that has not started is dispatched. Work already running continues.',
   bannerReason: 'Reason: {reason}',

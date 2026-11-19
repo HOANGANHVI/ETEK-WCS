@@ -85,8 +85,8 @@ services:
       Serilog__MinimumLevel__Default: ${WCS_LOG_LEVEL:-Information}
       # CR-007: deployment events written by deployment/scripts/*.ps1 are imported (read-only) into Logging & Diagnostics; build label shown in the start-up summary
       DeploymentLogs__Directory: /deploy-logs
-      # CR-026: configuration export/import (Admin). OFF by default. The folder is a PERSISTENT volume (never a temporary directory): it holds uploaded packages and the backup taken before every Apply.
-      ConfigTransfer__Enabled: ${WCS_CONFIG_TRANSFER_ENABLED:-false}
+      # CR-026: configuration export/import (Admin only). ON by default (no setting needs to change; WCS_CONFIG_TRANSFER_ENABLED=false is only an emergency switch). The folder is a PERSISTENT volume (never a temporary directory): it holds uploaded packages and the backup taken before every Apply.
+      ConfigTransfer__Enabled: ${WCS_CONFIG_TRANSFER_ENABLED:-true}
       ConfigTransfer__BackupPath: /config-backups
       WCS_BUILD: ${WCS_VERSION:-local}
       TZ: ${WCS_TIMEZONE:-Asia/Ho_Chi_Minh}

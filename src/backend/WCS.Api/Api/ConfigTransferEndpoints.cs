@@ -7,7 +7,7 @@ namespace WCS.Api.Api;
 
 public sealed record ExportRequest(IReadOnlyList<string>? Groups);
 
-/// <summary>CR-026: configuration export / import. Admin only; the whole group answers 404 until <c>ConfigTransfer:Enabled</c> is switched on.</summary>
+/// <summary>CR-026: configuration export / import. Admin only (authorization is enforced here on the server, never by hiding a menu). On by default; <c>ConfigTransfer:Enabled=false</c> is only an emergency switch that makes the group answer 404.</summary>
 internal static class ConfigTransferEndpoints
 {
     public static void MapConfigTransfer(this RouteGroupBuilder api)
