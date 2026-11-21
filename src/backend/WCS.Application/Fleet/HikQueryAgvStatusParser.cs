@@ -24,7 +24,9 @@ public static class HikQueryAgvStatusParser
             {
                 var message = root.TryGetProperty("message", out var m) ? Text(m) : null;
                 // Appendix A: 1 failed, 6 no need to resend, 99 unknown error - the number and the RCS message are reported as they are
-                return RcsFleetResult.Fail($"{FleetErrorCodes.Rejected}:{code}", message, latencyMs);
+                // (only the two checked fields, bounded and stripped of anything that looks like a credential; the body itself is never kept)
+                var bounded = FleetService.Sanitize(message);
+                return RcsFleetResult.Fail($"{FleetErrorCodes.Rejected}:{code}", bounded, latencyMs) with { RcsCode = code, RcsMessage = bounded };
             }
             if (!root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null) return RcsFleetResult.Ok([], latencyMs);   // no AMR
             if (data.ValueKind != JsonValueKind.Array) return RcsFleetResult.Fail(FleetErrorCodes.InvalidResponse, "'data' is not a list.", latencyMs);

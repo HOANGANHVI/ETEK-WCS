@@ -55,7 +55,10 @@ internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings,
         var port = real.Port > 0 ? real.Port : r.Port ?? 0;
         if (port is < 1 or > 65535) return RcsFleetResult.Fail(FleetErrorCodes.NotConfigured, "The RCS port is not set (RCS connection or Rcs:Fleet:Real:Port); no port is assumed.");
         var url = $"{scheme}://{r.Host}:{port}{(real.Path.StartsWith('/') ? real.Path : "/" + real.Path)}";
-        var body = new Dictionary<string, string> { ["reqCode"] = Guid.NewGuid().ToString("N"), ["reqTime"] = clock.UtcNow.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") };
+        var reqCode = Guid.NewGuid().ToString("N");
+        var endpoint = $"{r.Host}:{port}{(real.Path.StartsWith('/') ? real.Path : "/" + real.Path)}";   // host and port only: no credential exists in this call
+        RcsFleetResult Ctx(RcsFleetResult x) => x with { Endpoint = endpoint, RequestCode = reqCode };
+        var body = new Dictionary<string, string> { ["reqCode"] = reqCode, ["reqTime"] = clock.UtcNow.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") };
         // no tokenCode: the RCS defines no authentication for this API; polling never depends on a token, a username or a password
 
         var sw = Stopwatch.StartNew();
@@ -64,10 +67,10 @@ internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings,
             using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, new MediaTypeHeaderValue("application/json")) };
             using var res = await Http.SendAsync(req, ct);
             var text = await res.Content.ReadAsStringAsync(ct);
-            if (!res.IsSuccessStatusCode) return RcsFleetResult.Fail($"{FleetErrorCodes.Http}:{(int)res.StatusCode}", $"HTTP {(int)res.StatusCode}", sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode };
-            return HikQueryAgvStatusParser.Parse(text, sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode };
+            if (!res.IsSuccessStatusCode) return Ctx(RcsFleetResult.Fail($"{FleetErrorCodes.Http}:{(int)res.StatusCode}", $"HTTP {(int)res.StatusCode}", sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode });
+            return Ctx(HikQueryAgvStatusParser.Parse(text, sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode });
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return RcsFleetResult.Fail(FleetErrorCodes.Timeout, "The RCS did not answer in time.", sw.ElapsedMilliseconds); }
-        catch (HttpRequestException ex) { return RcsFleetResult.Fail(FleetErrorCodes.Unreachable, ex.Message, sw.ElapsedMilliseconds); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return Ctx(RcsFleetResult.Fail(FleetErrorCodes.Timeout, "The RCS did not answer in time.", sw.ElapsedMilliseconds)); }
+        catch (HttpRequestException ex) { return Ctx(RcsFleetResult.Fail(FleetErrorCodes.ConnectionFailed, FleetService.Sanitize(ex.Message), sw.ElapsedMilliseconds)); }
     }
 }

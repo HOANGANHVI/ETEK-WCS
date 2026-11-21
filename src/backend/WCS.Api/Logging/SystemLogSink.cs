@@ -20,6 +20,7 @@ public static class LogClassifier
         var source = Prop(e, "SourceContext") ?? "";
         if (SkipSources.Any(p => source.StartsWith(p, StringComparison.Ordinal))) return false;       // never log the logger's own storage
         if (Prop(e, "Category") == LogCategories.Plc) return false;                                    // PLC events live in plc_comm_log
+        if (e.Properties.ContainsKey("NoPersist")) return false;                                       // CR-031: written to stdout / file only (a poll every 5 s must not fill the table)
         if (e.Level >= LogEventLevel.Warning) return true;
         return e.Properties.ContainsKey("EventCode");                                                   // tagged Information events (startup summary, db state ...)
     }

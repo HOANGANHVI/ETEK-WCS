@@ -21,7 +21,7 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
   const t = useT()
   const connTone: Tone = fleet.connection === 'Connected' ? 'ok' : fleet.connection === 'Disconnected' ? 'bad' : 'muted'
   const errKey = fleet.lastErrorCode ? (`agv.fleetErr_${fleet.lastErrorCode.split(':')[0]}` as MsgKey) : null
-  const err = fleet.lastErrorCode ? `${errKey && hasMessage(errKey) ? t(errKey) : fleet.lastErrorCode} (${fleet.lastErrorCode})` : null
+  const err = fleet.lastErrorCode ? `${errKey && hasMessage(errKey) ? t(errKey) : fleet.lastErrorCode} (${fleet.lastErrorCode}${fleet.lastErrorMessage ? ': ' + fleet.lastErrorMessage : ''})` : null
   const status = (a: FleetAmr) => {
     if (a.status === null || a.status === '') return <span className="muted">–</span>
     return hasStatus(a.status)
@@ -44,7 +44,7 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
           </div>
         </div>
       )}
-      {fleet.connection === 'Disconnected' && <div className="notice notice-bad" role="alert">{t('agv.fleetDisconnected', { time: fleet.lastSuccessAt ? formatDateTime(fleet.lastSuccessAt) : '–' })}{err ? ` ${err}` : ''}</div>}
+      {fleet.connection === 'Disconnected' && <div className="notice notice-bad" role="alert">{fleet.lastSuccessAt ? t('agv.fleetDisconnected', { time: formatDateTime(fleet.lastSuccessAt) }) : t('agv.fleetDisconnectedNever')}{err ? ` ${err}` : ''}</div>}
       <p className="muted small">
         {fleet.lastSuccessAt ? t('agv.fleetLastOk', { time: formatDateTime(fleet.lastSuccessAt), n: fleet.intervalSeconds }) : t('agv.fleetNever')}
       </p>

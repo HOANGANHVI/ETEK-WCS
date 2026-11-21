@@ -10,7 +10,8 @@ public sealed record RcsFleetAmr(string RobotCode, string? RobotDir, string? Rob
     string? Status, string? ExclType, string? Stop, string? PodCode, string? PodDir, IReadOnlyList<string> Path);
 
 /// <summary>Outcome of ONE fleet query. A failed query never carries AMRs: the caller keeps what it stored before and marks it as not updated.</summary>
-public sealed record RcsFleetResult(bool Success, IReadOnlyList<RcsFleetAmr> Amrs, string? ErrorCode = null, string? ErrorMessage = null, long? LatencyMs = null, int Skipped = 0, int? HttpStatus = null)
+public sealed record RcsFleetResult(bool Success, IReadOnlyList<RcsFleetAmr> Amrs, string? ErrorCode = null, string? ErrorMessage = null, long? LatencyMs = null, int Skipped = 0, int? HttpStatus = null,
+    string? RcsCode = null, string? RcsMessage = null, string? RequestCode = null, string? Endpoint = null)
 {
     public static RcsFleetResult Ok(IReadOnlyList<RcsFleetAmr> amrs, long? latencyMs = null, int skipped = 0) => new(true, amrs, null, null, latencyMs, skipped);
     public static RcsFleetResult Fail(string code, string? message, long? latencyMs = null) => new(false, [], code, message, latencyMs);
@@ -22,6 +23,8 @@ public static class FleetErrorCodes
     public const string NotConfigured = "RCS_NOT_CONFIGURED";
     public const string Timeout = "RCS_TIMEOUT";
     public const string Unreachable = "RCS_UNREACHABLE";
+    /// <summary>The TCP / HTTP connection could not be made (refused, no route, DNS...). Not a timeout and not an answer of the RCS.</summary>
+    public const string ConnectionFailed = "RCS_CONNECTION_FAILED";
     public const string Http = "RCS_HTTP_ERROR";
     public const string InvalidResponse = "RCS_RESPONSE_INVALID";
     public const string Rejected = "RCS_CODE_NOT_SUCCESS";
