@@ -19,7 +19,7 @@
 | Area | Change |
 |---|---|
 | Source | `Rcs:Fleet:Source=Real` selects `HikFleetQueryClient` **at start**: no fallback to the simulator at runtime, ever. The count of AMRs is the number of elements of `data[]`; nothing is fixed or invented. |
-| Port / auth | The port is the **saved RCS connection** port (`Rcs:Fleet:Real:Port` is only an override; default 0; if none is set: configuration error, no port assumed). `tokenCode` is sent for token authentication; a token connection with no stored token is a configuration error. A saved *username/password* connection is **not defined by API V3.3**: the request is sent without credentials and a warning `RCS_AUTH_MODE_NOT_IN_API` asks to confirm the authentication with the RCS engineer. |
+| Port / auth | The port is the **saved RCS connection** port (`Rcs:Fleet:Real:Port` is only an override; default 0; if none is set: configuration error, no port assumed). **Authentication (project decision, 2026-11-21): the RCS provides NO authentication for the monitoring API.** `POST /rcms-dps/rest/queryAgvStatus` is called **without username, password or `tokenCode`**: the body is only `reqCode` and `reqTime`; polling never depends on a token, never fails for a missing token, and WCS never generates a token or simulates authentication. A token/password that may still be saved in the RCS connection is ignored by the monitoring client. (The API document defines `tokenCode` as optional; the site has confirmed it is not used.) |
 | Business AGV status | While the fleet is the real RCS, `AgvStatusService` never asks the simulator: AGV rows get `Unknown` / `RCS_FLEET_REAL` (the persisted "Online – simulated" is replaced). |
 | UI | With a Real source the AGV Monitoring and Dashboard show **one list from the RCS** (no AGV1/AGV2 cards, no per-AGV history, no AGV counters); the connection pill reads **RCS DISCONNECTED** with the last successful query time; stored data that is no longer refreshed is Stale / Missing, never Live. |
 | Logs | Every executed poll: `RCS_FLEET_POLL_STARTED` (source, interval, timeout) then `RCS_FLEET_POLL_SUCCESS` (HTTP status, DurationMs, TotalAmr, RobotCodes, last successful poll) + `RCS_FLEET_SNAPSHOT_UPDATED`, or `RCS_FLEET_POLL_FAILED` (ErrorCode, HTTP status, sanitised message, ConsecutiveFailures). Token/password/secret patterns are masked; the client never writes a credential. |
@@ -30,11 +30,11 @@ Not changed: the simulator remains for development; business `agvs` rows still e
 
 ## 3. Tests (MOCK)
 
-`Cr031RealFleetMonitoringTests` (15 cases) + the CR-027 suite (32) = 47/47: 0, 1, 2, 5 AMR responses with the simulator holding AMRs that never appear; only returned fields shown (nothing invented), battery/position/status changes followed; AMR that disappears → Missing, row kept; timeout → RCS DISCONNECTED, last good time kept, old data not Fresh; loss (503) and recovery, failures reset, one poll per interval also after failures; switched-off / missing connection → configuration error, nothing sent; token only as `tokenCode` and never in a log; username/password sends no credentials; log sequence and content; 5 s cadence with an early tick and no overlap; business AGV status never from the simulator; Production guard. A mock is **never** operational data.
+`Cr031RealFleetMonitoringTests` (16 cases) + the CR-027 suite (32) = 48/48: 0, 1, 2, 5 AMR responses with the simulator holding AMRs that never appear; only returned fields shown (nothing invented), battery/position/status changes followed; AMR that disappears → Missing, row kept; timeout → RCS DISCONNECTED, last good time kept, old data not Fresh; loss (503) and recovery, failures reset, one poll per interval also after failures; switched-off / missing connection → configuration error, nothing sent; no credential of any kind in the request whatever the saved mode (token, username/password, none), polling works with no secret saved, no secret in a log; log sequence and content; 5 s cadence with an early tick and no overlap; business AGV status never from the simulator; Production guard. A mock is **never** operational data.
 
 ## 4. Deploy-machine configuration to confirm (not in Git)
 
-RCS **host**, **port** (the value saved in *Kết nối RCS*; the document's example is 8182 for this path), **authentication** (token provided by RCS-2000; the dev database holds a username/password connection that the API does not define), `RCS_FLEET_SOURCE=Real`, `RCS_FLEET_INTERVAL_SECONDS=5`. Enter host/token in the UI on the deploy machine; never in Git or chat.
+RCS **host** and **port** (the values saved in *Kết nối RCS*; expected port 8994, not hard-coded; the document's example for this path is 8182), `RCS_FLEET_SOURCE=Real`, `RCS_FLEET_INTERVAL_SECONDS=5`. **No username, password or token is required.** Enter host/port in the UI on the deploy machine; no address or credential belongs in Git.
 
 ## 5. Evidence available now (dev machine, real runtime, saved RCS connection 192.168.10.11:8994)
 
@@ -50,4 +50,4 @@ The backend was started with `Rcs__Fleet__Source=Real` and logged, every 5 s: `R
 | 4 | Number of AMRs received | **Not available (0 real responses)** |
 | 5 | Frontend shows the response | Verified with the mock only; with the real RCS: **not possible yet**. The screen shows RCS DISCONNECTED and the empty / stale state |
 | 6 | Real polling log | Attempts and timeouts only |
-| 7 | | **Real acceptance cannot be declared**: it needs a machine in the RCS network, the confirmed port and the authentication |
+| 7 | | **Real acceptance cannot be declared**: it needs a machine in the RCS network, the confirmed port (no authentication is used) |

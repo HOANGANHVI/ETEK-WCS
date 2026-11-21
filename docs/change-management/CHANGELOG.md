@@ -7,7 +7,7 @@
 
 ## v3.22 – CR-031 Real RCS fleet monitoring (2026-11-21) – feature branch, mock verified, not merged
 
-- `Rcs:Fleet:Source=Real`: WCS calls `queryAgvStatus` every 5 s (single-flight, timeout, early-tick tolerance); the AMR count is `data[]`; the port is the saved RCS connection port (no assumed 8182); token connection without token = configuration error; username/password is not in API V3.3 (request sent without credentials, warning).
+- `Rcs:Fleet:Source=Real`: WCS calls `queryAgvStatus` every 5 s (single-flight, timeout, early-tick tolerance); the AMR count is `data[]`; the port is the saved RCS connection port (no assumed 8182); NO authentication: the request carries no tokenCode/username/password (the RCS provides none for this API) and polling never depends on a token.
 - Logs per poll: `RCS_FLEET_POLL_STARTED`, `RCS_FLEET_POLL_SUCCESS`, `RCS_FLEET_POLL_FAILED`, `RCS_FLEET_SNAPSHOT_UPDATED` (credentials masked).
 - No simulated AMR data in operation: Real source hides the business AGV cards (one list from the RCS), business AGV status is never taken from the simulator (`Unknown / RCS_FLEET_REAL`), "RCS DISCONNECTED" with the last good time, Production refuses a simulated fleet (`Rcs:Fleet:AllowSimulatorInProduction`), deployment default `RCS_FLEET_SOURCE=Real`. No database change.
 

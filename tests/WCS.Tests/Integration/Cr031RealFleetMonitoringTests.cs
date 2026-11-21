@@ -223,12 +223,12 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task The_token_is_sent_as_tokenCode_and_never_written_to_a_log_and_username_password_sends_no_credentials()
+    public async Task The_query_is_sent_without_any_credential_whatever_the_saved_authentication_mode_and_no_secret_reaches_a_log()
     {
         await using var rcs = await FakeRcs.StartAsync();
         var (h, log) = await SetupAsync(rcs); await using var _h = h;
         await Refresh(h);
-        using (var body = JsonDocument.Parse(Assert.Single(rcs.Requests).Body)) Assert.Equal(Token, body.RootElement.GetProperty("tokenCode").GetString());
+        using (var body = JsonDocument.Parse(Assert.Single(rcs.Requests).Body)) Assert.Equal(["reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // a token is saved, but the RCS has no authentication for this API: none is sent
         rcs.Respond = () => (500, $"error mentioning tokenCode={Token}", 0);
         h.Clock.Advance(TimeSpan.FromSeconds(5)); await Refresh(h);
         Assert.DoesNotContain(log.Snapshot(), l => l.Contains(Token));                                  // not in any log line, success or failure
@@ -238,8 +238,22 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
         await using var rcs2 = await FakeRcs.StartAsync();
         var (h2, log2) = await SetupAsync(rcs2, auth: ConnectionOptions.AuthUserPassword); await using var _h2 = h2;
         await Refresh(h2);
-        using (var body = JsonDocument.Parse(Assert.Single(rcs2.Requests).Body)) Assert.False(body.RootElement.TryGetProperty("tokenCode", out _));   // the API defines only tokenCode
+        using (var body = JsonDocument.Parse(Assert.Single(rcs2.Requests).Body)) Assert.Equal(["reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // no username, password or token
         Assert.DoesNotContain(log2.Snapshot(), l => l.Contains("pw-secret"));
+    }
+
+    [Fact]
+    public async Task Polling_never_depends_on_a_token_username_or_password()
+    {
+        await using var rcs = await FakeRcs.StartAsync();
+        rcs.Respond = () => (200, Fleet(Amr("2048")), 0);
+        var (h, _) = await SetupAsync(rcs, auth: ConnectionOptions.AuthNone); await using var _h = h;          // no credential saved at all
+        Assert.True(await Refresh(h));
+        var v = await View(h);
+        Assert.Equal(FleetStates.Connected, v.Connection); Assert.Null(v.LastErrorCode); Assert.Single(v.Amrs);
+        await h.Db(async db => { foreach (var x in await db.ConnectionSettings.ToListAsync()) x.Update(true, x.SettingsJson, null, "test", h.Clock.UtcNow); await db.SaveChangesAsync(); return 0; });   // and no stored secret either
+        h.Clock.Advance(TimeSpan.FromSeconds(5)); Assert.True(await Refresh(h, force: false));
+        Assert.Equal(FleetStates.Connected, (await View(h)).Connection);
     }
 
     // ================================================================================================ proof of active polling: the log
