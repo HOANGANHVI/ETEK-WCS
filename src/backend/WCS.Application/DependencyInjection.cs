@@ -30,6 +30,12 @@ public static class DependencyInjection
         services.AddScoped<MaintenanceService>();   // CR-026
         services.Configure<Fleet.RcsFleetOptions>(configuration.GetSection(Fleet.RcsFleetOptions.SectionName));   // CR-027
         services.AddScoped<Fleet.FleetService>();
+        // CR-028: Rcs:Dispatch:Mode = Legacy (default) | RcsManaged. A wrong value stops the start instead of silently choosing one.
+        var dispatchMode = configuration[$"{Fleet.DispatchOptions.SectionName}:Mode"];
+        if (dispatchMode is not null && !Fleet.DispatchOptions.IsValidMode(dispatchMode))
+            throw new NotSupportedException($"Rcs:Dispatch:Mode '{dispatchMode}' is not valid. Use '{Fleet.DispatchOptions.Legacy}' or '{Fleet.DispatchOptions.RcsManagedMode}'.");
+        services.Configure<Fleet.DispatchOptions>(configuration.GetSection(Fleet.DispatchOptions.SectionName));
+        services.AddScoped<Fleet.RcsRobotMapper>();
         services.Configure<ConfigTransfer.ConfigTransferOptions>(configuration.GetSection(ConfigTransfer.ConfigTransferOptions.SectionName));
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.LocationConfigGroup>();
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.AgvConfigGroup>();

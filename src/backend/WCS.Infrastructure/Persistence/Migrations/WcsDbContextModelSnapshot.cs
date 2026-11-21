@@ -1772,8 +1772,17 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AgvId")
+                    b.Property<Guid?>("AgvId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("AssignmentCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("AssignmentSyncFailures")
+                        .HasColumnType("integer");
 
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(100)
@@ -1818,6 +1827,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<string>("RcsDispatchState")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<DateTimeOffset?>("RcsLastAttemptAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1850,6 +1863,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("RequiresReconciliation")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("RobotCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid?>("SourceLocationId")
                         .HasColumnType("uuid");
@@ -1887,7 +1904,7 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("AgvId")
                         .IsUnique()
                         .HasDatabaseName("ux_transport_tasks_one_active_per_agv")
-                        .HasFilter("\"State\" IN ('Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending')");
+                        .HasFilter("\"AgvId\" IS NOT NULL AND \"RcsDispatchState\" IS NULL AND \"State\" IN ('Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending')");
 
                     b.HasIndex("CorrelationId");
 
@@ -1904,6 +1921,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("RequestLocationId");
+
+                    b.HasIndex("RobotCode");
 
                     b.HasIndex("SourceLocationId");
 
@@ -2256,8 +2275,7 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasOne("WCS.Domain.Agvs.Agv", null)
                         .WithMany()
                         .HasForeignKey("AgvId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("WCS.Domain.Locations.Location", null)
                         .WithMany()

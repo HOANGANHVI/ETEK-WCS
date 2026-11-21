@@ -169,5 +169,16 @@ internal sealed class TransportTaskRepository(WcsDbContext db) : ITransportTaskR
     }
 
     public async Task<IReadOnlyDictionary<Guid, Guid>> ActiveTaskIdByAgvAsync(CancellationToken ct) =>
-        await db.Tasks.AsNoTracking().Where(x => Occupying.Contains(x.State)).ToDictionaryAsync(x => x.AgvId, x => x.Id, ct);
+        await db.Tasks.AsNoTracking().Where(x => x.AgvId != null && Occupying.Contains(x.State) && x.RcsDispatchState == null).ToDictionaryAsync(x => x.AgvId!.Value, x => x.Id, ct);   // CR-028: Legacy tasks only (an RcsManaged task may share a robot)
+
+    public Task<int> CountByStatesAsync(IReadOnlyCollection<TaskState> states, CancellationToken ct)
+    {
+        var arr = states.ToArray();
+        return db.Tasks.CountAsync(x => arr.Contains(x.State), ct);
+    }
+
+    private static readonly TaskState[] Finished = [TaskState.Completed, TaskState.Failed, TaskState.Cancelled];
+
+    public async Task<IReadOnlyList<TransportTask>> ListActiveRcsManagedAsync(int take, CancellationToken ct) =>
+        await WithHistory.Where(x => x.RcsDispatchState != null && !Finished.Contains(x.State)).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Take(take).ToListAsync(ct);
 }

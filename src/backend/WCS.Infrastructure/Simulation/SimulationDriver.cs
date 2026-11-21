@@ -23,8 +23,11 @@ public sealed class SimulationDriver(ITransportTaskRepository tasks, ILocationRe
 
         if (kind == SignalKind.RcsCancelConfirmed) rcs.ConfirmCancel(task.RcsRequestCode);
         var key = $"sim:{task.Id}:{kind}:{task.CurrentLeg}";
-        var result = await orchestrator.HandleSignalAsync(new TaskSignal(kind.Value, task.Id, EventKey: key,
+        // CR-028: the RCS callback names the robot it chose (agvCallback robotCode); a Legacy task never sends one (unchanged behaviour)
+        var robot = task.IsRcsManaged ? rcs.RobotOf(task.RcsRequestCode) : null;
+        var result = await orchestrator.HandleSignalAsync(new TaskSignal(kind.Value, task.Id, RobotCode: robot, EventKey: key,
             Source: ConfirmationSource.Simulator, User: "simulator"), ct);
+        if (task.IsRcsManaged && result.Task?.State is nameof(TaskState.Completed) or nameof(TaskState.Cancelled)) rcs.SetStatus(task.RcsRequestCode, result.Task.State == nameof(TaskState.Completed) ? RcsTaskStatus.Completed : RcsTaskStatus.Cancelled);   // frees the simulated robot
         return new SimulationStep(kind.ToString(), $"{result.Outcome}: {result.Message}", result.Task ?? task.ToDto());
     }
 

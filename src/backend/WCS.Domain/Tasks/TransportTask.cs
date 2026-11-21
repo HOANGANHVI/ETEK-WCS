@@ -12,8 +12,9 @@ public class TransportTask
 
     private TransportTask() { }
 
-    public static TransportTask Create(string requestKey, ProcessFlow flow, RackKind rackKind, Guid agvId,
-        Guid requestLocationId, string? requestedBy, DateTimeOffset now)
+    /// <param name="agvId">The business AGV chosen by WCS (Legacy dispatch). Null when the RCS chooses the AMR (<paramref name="rcsManaged"/>): the task then has no AGV until the RCS reports one.</param>
+    public static TransportTask Create(string requestKey, ProcessFlow flow, RackKind rackKind, Guid? agvId,
+        Guid requestLocationId, string? requestedBy, DateTimeOffset now, bool rcsManaged = false)
     {
         if (string.IsNullOrWhiteSpace(requestKey)) throw new DomainException("REQUEST_KEY_REQUIRED", "RequestKey is required for idempotency.");
         var id = Guid.NewGuid();
@@ -24,6 +25,7 @@ public class TransportTask
             Flow = flow,
             RackKind = rackKind,
             AgvId = agvId,
+            RcsDispatchState = rcsManaged ? Tasks.RcsDispatchState.NotSent : null,
             RequestLocationId = requestLocationId,
             RequestedBy = requestedBy,
             State = TaskState.Pending,
@@ -42,7 +44,22 @@ public class TransportTask
     public string RequestKey { get; private set; } = default!;
     public ProcessFlow Flow { get; private set; }
     public RackKind RackKind { get; private set; }
-    public Guid AgvId { get; private set; }
+    /// <summary>
+    /// The business AGV (a row of <c>agvs</c>). Legacy dispatch: set at creation by WCS. RcsManaged dispatch (CR-028): NULL until the RCS reports an AMR AND that robot code
+    /// belongs to an <c>agvs</c> row; the identity of the real AMR is <see cref="RobotCode"/>. A null value means "no AGV known", never "AGV1".
+    /// </summary>
+    public Guid? AgvId { get; private set; }
+    /// <summary>CR-028: the AMR (RCS robotCode / agvCode) that the RCS reported for this task, exactly as reported. Null until the RCS assigned one.</summary>
+    public string? RobotCode { get; private set; }
+    /// <summary>CR-028: when WCS first learned the robot of the task from the RCS.</summary>
+    public DateTimeOffset? AssignedAt { get; private set; }
+    /// <summary>CR-028: hand-over tracking for RcsManaged dispatch; null for Legacy dispatch and for tasks created before CR-028.</summary>
+    public RcsDispatchState? RcsDispatchState { get; private set; }
+    /// <summary>CR-028: the last time the assignment was asked from the RCS (drives the check interval).</summary>
+    public DateTimeOffset? AssignmentCheckedAt { get; private set; }
+    /// <summary>CR-028: consecutive failed assignment queries.</summary>
+    public int AssignmentSyncFailures { get; private set; }
+    public bool IsRcsManaged => RcsDispatchState is not null;
     /// <summary>Station/location that raised the request.</summary>
     public Guid RequestLocationId { get; private set; }
     public Guid? SourceLocationId { get; private set; }
@@ -159,7 +176,7 @@ public class TransportTask
     /// Identity (id, request key, requester, RCS codes) is never changed. Source/destination selection is cleared so it is re-evaluated;
     /// the caller releases reservations and re-reserves.
     /// </summary>
-    public void ReconfigureRequest(ProcessFlow flow, RackKind rackKind, Guid agvId, Guid requestLocationId, string detail, string source, DateTimeOffset now, HistoryDetail? code = null)
+    public void ReconfigureRequest(ProcessFlow flow, RackKind rackKind, Guid? agvId, Guid requestLocationId, string detail, string source, DateTimeOffset now, HistoryDetail? code = null)
     {
         if (!IsUntouchedByAgvAndRcs) throw new DomainException("TASK_NOT_EDITABLE", $"Task in state {State} can no longer be edited.");
         Flow = flow; RackKind = rackKind; AgvId = agvId; RequestLocationId = requestLocationId;
@@ -168,7 +185,53 @@ public class TransportTask
         _history.Add(new TaskHistoryEntry(Id, State, State, "TASK_EDITED", detail, source, now, code));
     }
 
-    public void RegisterDispatchAttempt(DateTimeOffset now) { DispatchAttempts++; RegisterRcsAttempt(now); }
+    public void RegisterDispatchAttempt(DateTimeOffset now)
+    {
+        DispatchAttempts++; RegisterRcsAttempt(now);
+        if (RcsDispatchState is Tasks.RcsDispatchState.NotSent or Tasks.RcsDispatchState.Sending) RcsDispatchState = Tasks.RcsDispatchState.Sending;   // CR-028: a call is under way; a timeout leaves it here
+    }
+
+    /// <summary>CR-028: the RCS answered "successful" to the create request. Never moves an already assigned task backwards.</summary>
+    public void MarkRcsAccepted(DateTimeOffset now)
+    {
+        if (RcsDispatchState is null or Tasks.RcsDispatchState.Assigned) return;
+        RcsDispatchState = Tasks.RcsDispatchState.Accepted; UpdatedAt = now;
+    }
+
+    /// <summary>
+    /// CR-028: records what the RCS said about the AMR of this task (queryTaskStatus agvCode or the robotCode of a callback). An empty code means "not assigned yet".
+    /// <paramref name="agvId"/> is the <c>agvs</c> row of that robot code when one exists (never invented).
+    /// </summary>
+    public AssignmentOutcome RecordAssignment(string? robotCode, Guid? agvId, DateTimeOffset now)
+    {
+        AssignmentCheckedAt = now; AssignmentSyncFailures = 0; UpdatedAt = now;
+        var code = string.IsNullOrWhiteSpace(robotCode) ? null : robotCode.Trim();
+        if (code is null)
+        {
+            if (RcsDispatchState is Tasks.RcsDispatchState.Assigned) return AssignmentOutcome.NoChange;   // the RCS no longer names a robot (for example the task finished): what was learned stays
+            RcsDispatchState = Tasks.RcsDispatchState.AwaitingAssignment;
+            return AssignmentOutcome.Waiting;
+        }
+        if (RobotCode is null)
+        {
+            RobotCode = code; AgvId = agvId ?? AgvId; AssignedAt = now; RcsDispatchState = Tasks.RcsDispatchState.Assigned;
+            return AssignmentOutcome.Assigned;
+        }
+        if (string.Equals(RobotCode, code, StringComparison.Ordinal))
+        {
+            RcsDispatchState = Tasks.RcsDispatchState.Assigned; AgvId ??= agvId;
+            return AssignmentOutcome.NoChange;
+        }
+        RobotCode = code; AgvId = agvId; AssignedAt = now; RcsDispatchState = Tasks.RcsDispatchState.Assigned;   // the RCS named another robot: WCS follows the RCS
+        return AssignmentOutcome.RobotChanged;
+    }
+
+    /// <summary>CR-028: the assignment query failed. A task that already has a robot keeps it; any other task shows the synchronisation error until a query succeeds.</summary>
+    public void RegisterAssignmentSyncFailure(DateTimeOffset now)
+    {
+        AssignmentCheckedAt = now; AssignmentSyncFailures++; UpdatedAt = now;
+        if (RcsDispatchState is not null and not Tasks.RcsDispatchState.Assigned) RcsDispatchState = Tasks.RcsDispatchState.SyncError;
+    }
 
     public void AttachRcsTask(string rcsTaskCode, DateTimeOffset now)
     {
