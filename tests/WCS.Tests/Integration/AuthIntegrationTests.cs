@@ -513,7 +513,7 @@ public class AuthIntegrationTests(DatabaseFixture fixture)
         await using var h = await Harness.CreateAsync(fixture);
         async Task<int> Run(Dictionary<string, string?> cfg)
         {
-            await using var f = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => { c.AddInMemoryCollection(cfg); c.AddInMemoryCollection(new Dictionary<string, string?> { ["Plc:AllowSimulatorInProduction"] = "true" }); }); });   // CR-006: explicit simulator exception (test host has no PLC)
+            await using var f = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => { c.AddInMemoryCollection(cfg); c.AddInMemoryCollection(new Dictionary<string, string?> { ["Plc:AllowSimulatorInProduction"] = "true", ["Rcs:Fleet:AllowSimulatorInProduction"] = "true" }); }); });   // CR-006: explicit simulator exception (test host has no PLC)
             using var scope = f.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<AdminBootstrapper>().RunAsync();
             return await h.Db(db => db.Users.CountAsync());

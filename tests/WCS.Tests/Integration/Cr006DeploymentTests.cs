@@ -59,7 +59,7 @@ public class Cr006DeploymentTests(DatabaseFixture fixture)
         Assert.ThrowsAny<Exception>(() => refused.CreateClient());
         await refused.DisposeAsync();
 
-        await using var allowed = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { [ProductionSafety.AllowKey] = "true" })); });
+        await using var allowed = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { [ProductionSafety.AllowKey] = "true", [ProductionSafety.FleetAllowKey] = "true" })); });
         var anon = allowed.CreateClient();
         Assert.Equal(200, (int)(await anon.GetAsync("/healthz")).StatusCode);
     }
