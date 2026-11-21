@@ -1,5 +1,12 @@
 # Change Log
 
+## Unreleased – CR-029 PLC interface 20/11/2026 specification (2026-11-21) – documentation only, PENDING_APPROVAL
+
+- New specification set `docs/02_Interface_Specification/PLC_20_11_2026/` (Interface, Handshake, IO Mapping, Architecture, Transaction Lifecycle, Error Handling & Recovery, Test Specification, Change Impact Analysis, Vendor Questions PQ-01…PQ-25) based on `AGV_PLC Interface_List_20_11_2026.xlsx`.
+- Older PLC drafts marked SUPERSEDED / partly obsolete (kept, not deleted); `PLC_IO_Map/README.md` records the status of the three workbooks.
+- Conflicts recorded, not resolved: one transaction per PLC vs per Station (ADR-0008), `Mission_Feedback` AGV1–3 vs dynamic AMR fleet (CR-028), CLAUDE.md §7 vs the new interface, G1/G2 vs G3/G7.
+- No code, database, migration, Docker, `.env`, PLC address or running mapping changed.
+
 ## v3.16 – CR-026 Configuration Export / Import, Phase 2 (2026-11-19) – feature branch, not merged
 
 - **Maintenance flag** (`system_maintenance`, Admin only, audited, persistent): refuses new Task/Order/PLC requests, holds work that has not started, lets running work finish; race closed by a row lock. API `GET/PUT /api/system/maintenance`; banner for every user.
