@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.18 – CR-028 Dynamic fleet dispatch (2026-11-21) – feature branch (stacked on CR-027), not merged
+
+- **`Rcs:Dispatch:Mode`** `Legacy` (default, unchanged) | `RcsManaged`: the task is sent **without** an AMR code and the (simulated) RCS chooses; WCS learns the robot from `queryTaskStatus` / the callback (`RobotCode`, `AssignedAt`); `RcsDispatchState` tracks NotSent / Sending / Accepted / AwaitingAssignment / Assigned / SyncError (the 13 task states are unchanged).
+- **Data:** `TransportTask.AgvId` nullable; new columns; PER_AGV index narrowed to Legacy tasks (migration `AddRcsManagedDispatch`).
+- **Fleet-level `MaxInFlightTasks`** (default no limit); retries keep the request code and query before re-sending.
+- **UI:** one fleet list in RcsManaged mode (no AGV1/AGV2 cards); tasks show robot / hand-over state; dashboard per-robot figure.
+- **Not done:** real create-task adapter and real callback (vendor questions), routing legs in RcsManaged mode.
+
 ## v3.17 – CR-027 Dynamic AMR monitoring from the RCS, Phase 1 (2026-11-19) – feature branch, not merged
 
 - **RCS fleet read model** (`rcs_amr_snapshots`, `rcs_fleet_state`; additive migration `AddRcsFleetSnapshots`), separate from `agvs`; simulator and real rows stored apart.

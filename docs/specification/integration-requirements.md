@@ -107,6 +107,8 @@ Các nhóm chức năng cần adapter:
 - Truy vấn trạng thái task (`queryTaskStatus`).
 - Truy vấn trạng thái AGV (`queryAgvStatus`).
 
+> **CR-028 (2026-11-21):** với `Rcs:Dispatch:Mode = RcsManaged` WCS gửi task **không** có `agvCode` để RCS tự chọn xe (API V3.3, mục 5.2.1) và nhận xe thực tế qua `queryTaskStatus` / callback; mặc định vẫn là `Legacy`. Mới chạy trên bộ mô phỏng; adapter thật chờ nhà cung cấp xác nhận (`docs/03_RCS_Interface/VENDOR_QUESTIONS_CR-028.md`). Xem `CR-028_DYNAMIC_FLEET_DISPATCH.md`.
+
 > **CR-027 Phase 1 (2026-11-19):** WCS lấy danh sách và trạng thái toàn bộ AMR từ RCS bằng `queryAgvStatus` (RCS-2000 API V3.3, mục 5.2.14, Appendix B) để **giám sát**; số AMR do RCS quyết định. Việc giao Task (mã AGV trong `genAgvSchedulingTask`) **không đổi** ở Pha 1; Pha 2 chưa được phê duyệt. Xem `docs/change-management/CR-027_DYNAMIC_AMR_MONITORING.md`.
 
 RCS có thể lựa chọn AGV nếu không truyền mã AGV, nhưng nghiệp vụ dự án đang phân công AGV1/AGV2 theo loại rack. Vì vậy cần xác nhận cách ràng buộc robot cụ thể trong API/task template thực tế.
