@@ -5,7 +5,8 @@ namespace WCS.Application.Routing;
 
 public sealed record LegDto(Guid Id, int Sequence, string StepKey, string StepType, string? SourceLocationCode, string? DestinationLocationCode, string RackKind,
     Guid? RackId, Guid? AgvId, string? AgvTaskCode, string State, string WaitKind, string? StateReason, bool RackOnAgv,
-    DateTimeOffset? PickConfirmedAt, DateTimeOffset? DropConfirmedAt, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt);
+    DateTimeOffset? PickConfirmedAt, DateTimeOffset? DropConfirmedAt, DateTimeOffset CreatedAt, DateTimeOffset? FinishedAt,
+    string? RobotCode = null, DateTimeOffset? AssignedAt = null);   // CR-028 (additive): the AMR the RCS chose for this leg
 
 public sealed record StationTransactionDto(Guid Id, string PortId, string PlcId, string LocationCode, string Operation, Guid? OrderId, Guid? LegId, string? RequestId,
     string State, int HandshakeStep, Guid? AgvId, bool Suspended, string? SuspendedReason, string? ReconciliationReason, string? FailureReason,
@@ -21,7 +22,7 @@ public static class RoutingMapping
 {
     public static LegDto ToDto(this TransportLeg l) => new(l.Id, l.Sequence, l.StepKey, l.StepType.ToString(), l.SourceLocationCode, l.DestinationLocationCode,
         l.RackKind.ToString(), l.RackId, l.AgvId, l.AgvTaskCode, l.State.ToString(), l.WaitKind.ToString(), l.StateReason, l.RackOnAgv,
-        l.PickConfirmedAt, l.DropConfirmedAt, l.CreatedAt, l.FinishedAt);
+        l.PickConfirmedAt, l.DropConfirmedAt, l.CreatedAt, l.FinishedAt, l.RobotCode, l.AssignedAt);
 
     public static StationTransactionDto ToDto(this StationTransaction t) => new(t.Id, t.PortId, t.PlcId, t.LocationCode, t.Operation.ToString(), t.OrderId, t.LegId,
         t.RequestId, t.State.ToString(), t.HandshakeStep, t.AgvId, t.Suspended, t.SuspendedReason, t.ReconciliationReason, t.FailureReason,

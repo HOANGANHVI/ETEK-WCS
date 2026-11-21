@@ -1525,6 +1525,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1554,6 +1557,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<string>("RobotCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("Sequence")
                         .HasColumnType("integer");
@@ -1607,6 +1614,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AgvRequestCode")
                         .IsUnique();
+
+                    b.HasIndex("RobotCode");
 
                     b.HasIndex("OrderId", "Sequence")
                         .IsUnique();

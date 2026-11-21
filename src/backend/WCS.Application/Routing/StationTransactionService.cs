@@ -61,6 +61,13 @@ public sealed class StationTransactionService(IUnitOfWork uow, IRoutingRepositor
         if (active.State < StationTransactionState.HandoverCompleted) active.Advance(StationTransactionState.HandoverCompleted, clock.UtcNow);
     }
 
+    /// <summary>CR-028 (RcsManaged): the RCS named the AMR of the leg, so the active transactions of the leg that were opened without an AMR are now "AgvAssigned". Only moves forward; the AGV id stays empty (the robot code is on the leg).</summary>
+    public async Task MarkAgvAssignedForLegAsync(Guid legId, CancellationToken ct)
+    {
+        foreach (var tx in await routing.ListTransactionsAsync(true, null, null, 200, ct))
+            if (tx.LegId == legId && tx.State < StationTransactionState.AgvAssigned && tx.State != StationTransactionState.ReconciliationRequired) tx.Advance(StationTransactionState.AgvAssigned, clock.UtcNow);
+    }
+
     public async Task FailForLegAsync(Guid legId, string reason, CancellationToken ct)
     {
         foreach (var tx in await routing.ListTransactionsAsync(true, null, null, 200, ct))

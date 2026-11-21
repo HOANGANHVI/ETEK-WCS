@@ -17,3 +17,7 @@ Additive migration (one table altered; rollback requires no RcsManaged task with
 7. **RouteEngine legs follow the same rule:** in RcsManaged mode a leg is an independent RCS task sent without a robot code; no role, PER_AGV or hold for legs. No multi-leg API of the RCS is assumed. The real leg dispatcher, the leg's AMR record and the Location / task-type mapping stay open (Q-MLEG-1, vendor questions).
 8. **A rollback must not force data:** `Down` of `AddRcsManagedDispatch` stops with `ROLLBACK_REFUSED` while tasks lack an AGV or RcsManaged tasks are active; no AGV is invented, nothing is deleted.
 9. **The mode is changed only when the old mode is drained:** WCS refuses to start in a mode while the other mode has active work, and a configuration edited at run time is reported as restart pending, never applied silently.
+
+## Follow-up decisions (2026-11-21, second)
+10. **The AMR of each leg is stored on the leg** (`RobotCode`, `AssignedAt`), only from a valid `agvCode` of the RCS; never copied from the task, never defaulted, `AgvId` stays empty for RcsManaged legs.
+11. **Continuity of transport:** while a rack is on an AMR the WCS does not follow a change of AMR (recorded, no state change); no hand-over, no pinning of the AMR between legs is implemented until the owner approves a design (open decisions: CR-028 section 12; vendor questions 9-13).

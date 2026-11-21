@@ -109,6 +109,20 @@ public sealed class RcsSimulator : IRcsClient
         }
     }
 
+    /// <summary>CR-028: registers a ROUTING LEG sent without a robot code: the simulated RCS chooses the AMR (or none yet) exactly as for a task. Repeating the request code returns the same task.</summary>
+    public string CreateLegTask(string requestCode)
+    {
+        lock (_gate)
+        {
+            if (!_tasks.TryGetValue(requestCode, out var task))
+            {
+                _tasks[requestCode] = task = new SimTask(requestCode, $"SIM-{++_counter:D5}");
+                task.AgvCode = AutoAssign ? ChooseRobot() : null;
+            }
+            return task.RcsTaskCode;
+        }
+    }
+
     public Task<RcsCallResult> ContinueTaskAsync(string requestCode, string? rcsTaskCode, string destinationLocationCode, CancellationToken ct = default)
     {
         lock (_gate)

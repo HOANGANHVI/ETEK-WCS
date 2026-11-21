@@ -34,7 +34,7 @@ public sealed class RouteEngine(
     IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IReservationRepository reservations,
     IInventoryTransactionRepository inventoryTx, IAgvRepository agvs, ITransportTaskRepository legacyTasks, RouteConditionEvaluator eval,
     StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IMaintenanceGate maintenance, IClock clock, IWcsNotifier notifier,
-    IOptions<DispatchOptions> dispatchOptions, ILogger<RouteEngine> logger) : IRouteEngine
+    IOptions<DispatchOptions> dispatchOptions, RcsRobotMapper robotMapper, LegAssignmentThrottle legThrottle, ILogger<RouteEngine> logger) : IRouteEngine
 {
     private const string Wcs = "WCS";
     private const int MaxStepsPerAdvance = 50;
@@ -353,7 +353,75 @@ public sealed class RouteEngine(
     {
         var ids = await uow.ExecuteAsync(t => routing.ListOpenOrderIdsAsync(200, t), ct);
         foreach (var id in ids) await AdvanceAsync(id, ct);
+        await SyncLegRobotsAsync(ct);
         return ids.Count;
+    }
+
+    /// <summary>
+    /// CR-028 (RcsManaged): asks the RCS which AMR carries each leg that was sent (queryTaskStatus agvCode) and records it on THAT leg (`RobotCode`, `AssignedAt`). The robot of the Transport Task / Order is never
+    /// copied to a leg, AgvId is never set (PER_AGV does not apply), AGV1/AGV2 are never assumed, and a code that is not in the fleet read model is kept and flagged (no AGV is created).
+    /// A different AMR reported while the rack is on the AMR is NOT followed (no approved hand-over): the event LEG_ROBOT_CHANGE_REFUSED is recorded and the leg keeps its robot.
+    /// </summary>
+    public async Task<int> SyncLegRobotsAsync(CancellationToken ct = default)
+    {
+        if (!dispatchOptions.Value.IsRcsManaged) return 0;
+        var o = dispatchOptions.Value; var now = clock.UtcNow; var changed = 0;
+        var ids = await uow.ExecuteAsync(t => routing.ListManagedLegIdsToSyncAsync(200, t), ct);
+        foreach (var legId in ids)
+        {
+            var plan = await uow.ExecuteAsync<(string? RobotCode, string AgvRequestCode)?>(async t =>
+            {
+                var leg = await routing.GetLegAsync(legId, t);
+                return leg is null || leg.IsTerminal || leg.AgvTaskCode is null ? null : (leg.RobotCode, leg.AgvRequestCode);
+            }, ct);
+            if (plan is null) { legThrottle.Forget(legId); continue; }
+            var every = TimeSpan.FromSeconds(Math.Max(1, plan.Value.RobotCode is null ? o.AssignmentCheckSeconds : o.AssignedRecheckSeconds));
+            if (!legThrottle.IsDue(legId, now, every)) continue;
+            using var _frame = DiagnosticContext.Begin(await CorrelationOfLegAsync(legId, ct));
+            RcsTaskInfo? info = null; string? error = null;
+            try { info = await dispatcher.QueryAsync(plan.Value.AgvRequestCode, ct); }   // external call outside any transaction
+            catch (Exception ex) when (ex is not OperationCanceledException) { error = ex.Message; }
+            var failed = info is null || info.Status is RcsTaskStatus.Unknown or RcsTaskStatus.NotFound;
+            var wasFailing = legThrottle.WasFailing(legId); var lastRefused = legThrottle.LastRefused(legId);
+            string? refused = null;
+            var map = failed ? null : await uow.ExecuteAsync(t => robotMapper.MapAsync(info!.AgvCode, t), ct);
+            var did = await uow.ExecuteAsync(async t =>
+            {
+                var leg = await routing.GetLegAsync(legId, t);
+                if (leg is null || leg.IsTerminal) return false;
+                var order = (await routing.GetOrderAsync(leg.OrderId, t))!;
+                if (failed)
+                {
+                    if (!wasFailing) Event(order, leg, null, "LEG_ROBOT_SYNC_ERROR", info?.Status.ToString() ?? error, "RCS");   // a synchronisation problem, NOT a failed leg
+                    return false;
+                }
+                var previous = leg.RobotCode;
+                switch (leg.RecordRobot(info!.AgvCode, clock.UtcNow))
+                {
+                    case LegRobotOutcome.Assigned:
+                        Event(order, leg, null, "LEG_ROBOT_ASSIGNED", leg.RobotCode, "RCS");
+                        if (!map!.InFleet) Event(order, leg, null, "LEG_ROBOT_NOT_IN_FLEET", leg.RobotCode, "RCS");
+                        await stations.MarkAgvAssignedForLegAsync(leg.Id, t);
+                        // information only: legs of one order are separate RCS tasks; say when the AMR differs from the one of the previous leg (no action is taken)
+                        var before = order.Legs.Where(l => l.Sequence < leg.Sequence && l.RobotCode is not null).OrderByDescending(l => l.Sequence).FirstOrDefault();
+                        if (before is not null && before.RobotCode != leg.RobotCode)
+                            Event(order, leg, null, "LEG_ROBOT_DIFFERS_FROM_PREVIOUS_LEG", $"leg {before.Sequence}: {before.RobotCode} -> leg {leg.Sequence}: {leg.RobotCode}", "RCS");
+                        return true;
+                    case LegRobotOutcome.Changed:
+                        Event(order, leg, null, "LEG_ROBOT_CHANGED", $"{previous} -> {leg.RobotCode}", "RCS");
+                        if (!map!.InFleet) Event(order, leg, null, "LEG_ROBOT_NOT_IN_FLEET", leg.RobotCode, "RCS");
+                        return true;
+                    case LegRobotOutcome.RefusedRackOnAmr:
+                        refused = info.AgvCode;
+                        if (lastRefused != refused) Event(order, leg, null, "LEG_ROBOT_CHANGE_REFUSED", $"rack is on {leg.RobotCode}; the RCS reports {refused}. No hand-over is approved: the leg keeps {leg.RobotCode}; reconcile in the RCS", "RCS");
+                        return false;
+                    default: return false;
+                }
+            }, ct);
+            legThrottle.Checked(legId, now, failed, refused);
+            if (did) { changed++; await notifier.PublishAsync([new WcsEvent("OrderChanged", new { legId })], ct); }
+        }
+        return changed;
     }
 
     private async Task DispatchPendingAsync(CancellationToken ct)

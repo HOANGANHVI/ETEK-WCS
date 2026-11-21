@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.Configure<Fleet.DispatchOptions>(configuration.GetSection(Fleet.DispatchOptions.SectionName));
         services.AddScoped<Fleet.RcsRobotMapper>();
         services.AddScoped<Fleet.DispatchModeGuard>();
+        services.AddSingleton<Routing.LegAssignmentThrottle>();   // CR-028
         services.AddSingleton<Fleet.DispatchModeState>();   // CR-028: effective mode vs the mode configured now
         services.Configure<ConfigTransfer.ConfigTransferOptions>(configuration.GetSection(ConfigTransfer.ConfigTransferOptions.SectionName));
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.LocationConfigGroup>();

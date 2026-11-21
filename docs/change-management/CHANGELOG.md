@@ -7,7 +7,8 @@
 - **Fleet-level `MaxInFlightTasks`** (default no limit); retries keep the request code and query before re-sending.
 - **UI:** one fleet list in RcsManaged mode (no AGV1/AGV2 cards); tasks show robot / hand-over state; dashboard per-robot figure.
 - **Follow-up:** `RouteEngine` legs in RcsManaged mode no longer choose an AGV by role (no robot code, no PER_AGV / hold, Station Transaction not "AgvAssigned"); rollback of `AddRcsManagedDispatch` stops with `ROLLBACK_REFUSED` while tasks have no AGV or RcsManaged tasks are active; WCS refuses to start in a dispatch mode while the other mode has active tasks/legs, and a configuration edited at run time is shown as "restart pending".
-- **Not done:** real create-task adapter, real leg dispatcher and real callback (vendor questions); AMR of a leg not recorded.
+- **Follow-up 2 (approved):** `transport_legs.RobotCode` / `AssignedAt` (migration `AddLegRobotCode`, additive, rollback keeps the data in `transport_leg_robot_backup`): each leg stores the AMR the RCS chose for it; a change while the rack is on the AMR is not followed (`LEG_ROBOT_CHANGE_REFUSED`); classification of BP-01…06 and the open decisions about AMR change between legs (CR-028 sections 11-12); vendor questions 9-13.
+- **Not done:** real create-task adapter, real leg dispatcher and real callback (vendor questions); hand-over / pinning of the AMR between legs (no approved design).
 
 ## v3.17 – CR-027 Dynamic AMR monitoring from the RCS, Phase 1 (2026-11-19) – feature branch, not merged
 

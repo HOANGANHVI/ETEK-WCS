@@ -132,7 +132,7 @@ function OrderDetailPanel({ id }: { id: string }) {
               {order.legs.length === 0 ? <p className="muted">{t('routing.legsNone')}</p> : (
                 <div className="table-wrap">
                   <table className="grid">
-                    <thead><tr><th>{t('routing.legSeq')}</th><th>{t('routing.legStep')}</th><th>{t('routing.legRoute')}</th><th>{t('routing.legState')}</th><th>{t('routing.legRack')}</th><th>{t('routing.legAgv')}</th>{isAdmin && <th />}</tr></thead>
+                    <thead><tr><th>{t('routing.legSeq')}</th><th>{t('routing.legStep')}</th><th>{t('routing.legRoute')}</th><th>{t('routing.legState')}</th><th>{t('routing.legRack')}</th><th>{t('routing.legAgv')}</th><th>{t('routing.legRobot')}</th>{isAdmin && <th />}</tr></thead>
                     <tbody>
                       {order.legs.map((l) => (
                         <tr key={l.id}>
@@ -145,6 +145,7 @@ function OrderDetailPanel({ id }: { id: string }) {
                           </td>
                           <td>{l.rackOnAgv ? <Pill tone="warn">{t('routing.rackOnAmr')}</Pill> : <span className="muted">{t('routing.rackNotOnAmr')}</span>}</td>
                           <td className="mono">{l.agvTaskCode ?? '—'}</td>
+                          <td className="mono">{l.robotCode ?? (l.agvTaskCode && !l.agvId ? <span className="muted">{t('routing.legRobotWaiting')}</span> : '—')}</td>
                           {isAdmin && (
                             <td className="nowrap">
                               {l.state === 'InProgress' && !l.pickConfirmedAt && <Button size="sm" onClick={() => setDialog({ kind: 'pick', leg: l })}>{t('routing.btnPick')}</Button>}
