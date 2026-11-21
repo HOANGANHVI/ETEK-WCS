@@ -1,5 +1,10 @@
 # Change Log
 
+## v3.20 – Deployment configuration for the real RCS fleet source (2026-11-21)
+
+- `deployment/docker-compose.yml` and `.env.example` pass `Rcs:Fleet:Source` (`RCS_FLEET_SOURCE`, default `Simulator`), `Rcs:Fleet:IntervalSeconds` (`RCS_FLEET_INTERVAL_SECONDS`, default 5) and `Rcs:Dispatch:Mode` (`RCS_DISPATCH_MODE`, default `Legacy`) to the backend. Defaults keep the previous behaviour; `Integration__Mode` stays `Simulator` (no real create-task adapter exists). No PLC/RCS address or credential is stored in the repository.
+- `docs/reviews/REAL_DEVICE_COMMISSIONING_PLAN_2026-11-21.md`: what the code supports in Real mode, environment limits found, deployment steps for the Deploy machine, commissioning levels, missing integration.
+
 ## v3.19 – CR-029 PLC interface 20/11/2026 specification (2026-11-21) – merged into main, documentation only, PENDING_APPROVAL (pending PLC clarification)
 
 - New specification set `docs/02_Interface_Specification/PLC_20_11_2026/` (Interface, Handshake, IO Mapping, Architecture, Transaction Lifecycle, Error Handling & Recovery, Test Specification, Change Impact Analysis, Vendor Questions PQ-01…PQ-25) based on `AGV_PLC Interface_List_20_11_2026.xlsx`.
