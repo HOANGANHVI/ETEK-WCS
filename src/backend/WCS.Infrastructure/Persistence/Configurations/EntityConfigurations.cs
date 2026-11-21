@@ -287,3 +287,33 @@ internal sealed class ConfigTransferSessionConfiguration : IEntityTypeConfigurat
         b.HasIndex(x => x.CreatedAt);
     }
 }
+
+internal sealed class RcsAmrSnapshotConfiguration : IEntityTypeConfiguration<WCS.Domain.Fleet.RcsAmrSnapshot>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Fleet.RcsAmrSnapshot> b)
+    {
+        b.ToTable("rcs_amr_snapshots");   // CR-027: read model of the RCS fleet; never replaces the agvs table
+        b.HasKey(x => new { x.Source, x.RobotCode });
+        b.Property(x => x.RobotCode).HasMaxLength(64);
+        foreach (var p in new[] { nameof(WCS.Domain.Fleet.RcsAmrSnapshot.RobotDir), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Battery), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.PosX), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.PosY),
+                     nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Speed), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Status), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.ExclType), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Stop),
+                     nameof(WCS.Domain.Fleet.RcsAmrSnapshot.PodDir) })
+            b.Property(p).HasMaxLength(32);
+        b.Property(x => x.RobotIp).HasMaxLength(64);
+        b.Property(x => x.MapCode).HasMaxLength(64);
+        b.Property(x => x.PodCode).HasMaxLength(64);
+        b.Property(x => x.PathJson).HasColumnType("text");
+        b.HasIndex(x => new { x.Source, x.LastSeenAt });
+    }
+}
+
+internal sealed class RcsFleetStateConfiguration : IEntityTypeConfiguration<WCS.Domain.Fleet.RcsFleetState>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Fleet.RcsFleetState> b)
+    {
+        b.ToTable("rcs_fleet_state");
+        b.HasKey(x => x.Source);
+        b.Property(x => x.LastErrorCode).HasMaxLength(100);
+        b.Property(x => x.LastErrorMessage).HasMaxLength(300);
+    }
+}

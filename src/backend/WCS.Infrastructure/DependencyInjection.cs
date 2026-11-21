@@ -67,6 +67,10 @@ public static class DependencyInjection
         services.AddScoped<WCS.Application.Abstractions.IMaintenanceStore, WCS.Infrastructure.Maintenance.MaintenanceStore>();   // CR-026
         services.AddScoped<WCS.Application.Abstractions.IMaintenanceGate, WCS.Infrastructure.Maintenance.MaintenanceGate>();
         services.AddScoped<WCS.Application.ConfigTransfer.IConfigTransferStore, WCS.Infrastructure.ConfigTransfer.ConfigTransferStore>();   // CR-026
+        // CR-027: the AMR fleet read model and where the list comes from (Rcs:Fleet:Source = Simulator (default) | Real = HTTP queryAgvStatus)
+        services.AddScoped<WCS.Application.Fleet.IRcsFleetRepository, WCS.Infrastructure.Fleet.RcsFleetRepository>();
+        if (string.Equals(configuration[$"{WCS.Application.Fleet.RcsFleetOptions.SectionName}:Source"], "Real", StringComparison.OrdinalIgnoreCase)) services.AddScoped<WCS.Application.Fleet.IRcsFleetQuery, WCS.Infrastructure.Fleet.HikFleetQueryClient>();
+        else services.AddScoped<WCS.Application.Fleet.IRcsFleetQuery, WCS.Infrastructure.Fleet.SimulatorFleetQuery>();
         services.AddScoped<IAgvRepository, AgvRepository>();
         services.AddScoped<IStationRequestRepository, StationRequestRepository>();   // CR-008B-2
         services.AddScoped<ILocationRepository, LocationRepository>();
@@ -122,7 +126,8 @@ public static class DependencyInjection
                 "are not implemented until addresses, API version and mappings are confirmed.");
 
         services.AddSingleton<PlcSimulator>();
-        services.AddSingleton<RcsSimulator>();
+        // CR-027: Rcs:Fleet:SimulatorSize (default 0 = an empty simulated fleet) fills the RCS SIMULATOR with that many AMRs (SIM-001..) for a demo / test. Real AMRs are never simulated by default.
+        services.AddSingleton(_ => { var sim = new RcsSimulator(); sim.SetFleetSize(configuration.GetValue("Rcs:Fleet:SimulatorSize", 0)); return sim; });
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
         // CR-021: every RCS call is logged (operation, request code, outcome, duration, adapter); the Production guard looks through the wrapper (IRcsClientDecorator.Unwrap)

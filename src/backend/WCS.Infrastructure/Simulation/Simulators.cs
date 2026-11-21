@@ -145,6 +145,29 @@ public sealed class RcsSimulator : IRcsClient
     public Task<RcsAgvStatus?> QueryAgvStatusAsync(string robotCode, CancellationToken ct = default) =>
         Task.FromResult<RcsAgvStatus?>(new RcsAgvStatus(robotCode, true, "simulated"));
 
+    // ------------------------------------------------------------------ CR-027: the simulated AMR fleet (empty unless a test / Development fills it; never derived from the agvs table)
+    private List<WCS.Application.Fleet.RcsFleetAmr> _fleet = [];
+    /// <summary>How the next fleet queries fail: null = they succeed.</summary>
+    public WCS.Application.Fleet.RcsFleetResult? FleetFailure { get; set; }
+    public int FleetQueryCalls { get; private set; }
+
+    public void SetFleet(IEnumerable<WCS.Application.Fleet.RcsFleetAmr> amrs) { lock (_gate) _fleet = [.. amrs]; }
+
+    /// <summary>N simulated AMRs with codes SIM-001..SIM-N and plausible, deterministic values (idle, charged, spread on a line). 0 = an empty fleet.</summary>
+    public void SetFleetSize(int n) => SetFleet(Enumerable.Range(1, Math.Max(0, n)).Select(i => new WCS.Application.Fleet.RcsFleetAmr($"SIM-{i:D3}", "90", null, (100 - i % 50).ToString(),
+        (i * 1000).ToString(), "2000", "SIM-MAP", "0", "4", "0", "0", null, null, [])));
+
+    public Task<WCS.Application.Fleet.RcsFleetResult> QueryFleetAsync(CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            FleetQueryCalls++;
+            if (Unreachable) return Task.FromResult(WCS.Application.Fleet.RcsFleetResult.Fail(WCS.Application.Fleet.FleetErrorCodes.Unreachable, "Simulated RCS outage"));
+            if (FleetFailure is { } f) return Task.FromResult(f);
+            return Task.FromResult(WCS.Application.Fleet.RcsFleetResult.Ok([.. _fleet]));
+        }
+    }
+
     /// <summary>Simulates the RCS finishing the cancellation (what a real callback / status poll would report).</summary>
     public void ConfirmCancel(string requestCode) { lock (_gate) { if (_tasks.TryGetValue(requestCode, out var t)) t.Status = RcsTaskStatus.Cancelled; } }
     /// <summary>CR-008A: force the status RCS reports for a task (Completed, Interrupted, ...), as a real status poll would.</summary>

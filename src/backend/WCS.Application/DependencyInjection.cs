@@ -28,6 +28,8 @@ public static class DependencyInjection
         services.AddScoped<ReconciliationService>();   // CR-008B-3
         services.AddScoped<AgvHoldService>();   // CR-008B-5
         services.AddScoped<MaintenanceService>();   // CR-026
+        services.Configure<Fleet.RcsFleetOptions>(configuration.GetSection(Fleet.RcsFleetOptions.SectionName));   // CR-027
+        services.AddScoped<Fleet.FleetService>();
         services.Configure<ConfigTransfer.ConfigTransferOptions>(configuration.GetSection(ConfigTransfer.ConfigTransferOptions.SectionName));
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.LocationConfigGroup>();
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.AgvConfigGroup>();

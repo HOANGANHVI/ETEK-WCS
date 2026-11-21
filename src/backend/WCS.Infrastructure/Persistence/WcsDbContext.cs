@@ -23,6 +23,9 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<SystemMaintenance> SystemMaintenance => Set<SystemMaintenance>();
     /// <summary>CR-026: bookkeeping of configuration imports.</summary>
     public DbSet<ConfigTransferSession> ConfigTransferSessions => Set<ConfigTransferSession>();
+    /// <summary>CR-027: AMRs reported by the RCS (read model) and the health of the fleet query.</summary>
+    public DbSet<WCS.Domain.Fleet.RcsAmrSnapshot> RcsAmrSnapshots => Set<WCS.Domain.Fleet.RcsAmrSnapshot>();
+    public DbSet<WCS.Domain.Fleet.RcsFleetState> RcsFleetStates => Set<WCS.Domain.Fleet.RcsFleetState>();
     public DbSet<WCS.Domain.Users.AppUser> Users => Set<WCS.Domain.Users.AppUser>();
     public DbSet<WCS.Domain.Users.UserAvatar> UserAvatars => Set<WCS.Domain.Users.UserAvatar>();
     public DbSet<WCS.Domain.Users.AuditEntry> AuditLog => Set<WCS.Domain.Users.AuditEntry>();

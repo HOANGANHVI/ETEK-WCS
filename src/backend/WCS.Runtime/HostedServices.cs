@@ -43,24 +43,37 @@ public sealed class SchedulerHostedService(IServiceScopeFactory scopes, IOptions
     }
 }
 
-public sealed class AgvStatusHostedService(IServiceScopeFactory scopes, ILogger<AgvStatusHostedService> logger) : BackgroundService
+public sealed class AgvStatusHostedService(IServiceScopeFactory scopes, Microsoft.Extensions.Options.IOptions<WCS.Application.Fleet.RcsFleetOptions> fleetOptions, ILogger<AgvStatusHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
-        do
+        // CR-027: ONE loop. Its tick is the fleet interval (default 5 s); the existing per-AGV refresh keeps its own 10 s cadence (every n-th tick), the fleet query runs every tick
+        // (FleetService applies the configured interval itself). No second polling service exists.
+        var tick = Math.Max(1, fleetOptions.Value.IntervalSeconds);
+        var agvEvery = Math.Max(1, (int)Math.Ceiling(10.0 / tick));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(tick));
+        for (long n = 0; ; n++)
         {
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<AgvStatusService>().RefreshAsync(stoppingToken);
+                if (n % agvEvery == 0) await scope.ServiceProvider.GetRequiredService<AgvStatusService>().RefreshAsync(stoppingToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogError(ex, "AGV status refresh failed");
             }
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<WCS.Application.Fleet.FleetService>().RefreshAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "RCS fleet refresh failed");
+            }
+            if (!await timer.WaitForNextTickAsync(stoppingToken)) break;
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }
 
