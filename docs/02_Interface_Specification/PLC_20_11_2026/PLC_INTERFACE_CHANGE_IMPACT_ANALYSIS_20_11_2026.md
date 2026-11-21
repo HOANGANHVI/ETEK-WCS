@@ -143,3 +143,37 @@ Phân loại: **G** giữ nguyên · **Đ** điều chỉnh · **T** thiết k�
 
 ## 8. Những gì **không** thay đổi bởi CR này
 Mã nguồn, database/migration, Docker/`.env`, IP/cấu hình kết nối PLC, địa chỉ/IO mapping đang chạy, các CR khác (CR-027/CR-028 chưa merge không bị đụng).
+
+## 9. Ảnh hưởng của quyết định D-1…D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md)) – đánh giá, **chưa sửa mã**
+
+### 9.1. D-1 – tối đa một Handshake hoạt động mỗi PLC, FIFO riêng từng PLC
+
+| Thành phần | Hiện trạng đã kiểm tra | Ảnh hưởng | Phân loại |
+|---|---|---|---|
+| **ADR-0008** QĐ 4 ("một giao dịch hoạt động mỗi cổng; không có khóa cấp PLC"), §4 ("một khóa mỗi PLC" bị loại) | Đã triển khai theo cổng | **Bị thay thế một phần** bởi ADR-0011 (khóa/hàng đợi cấp PLC cho Handshake) | Thiết kế lại |
+| `StationTransaction` + chỉ mục duy nhất giao dịch hoạt động theo cổng (`StationTransactionConfiguration`) | Một hoạt động mỗi cổng | Cần ràng buộc/khóa **mỗi PLC** (thực thể hàng đợi + khóa hoạt động); có thể migration | Thiết kế lại |
+| `StationTransactionService` (`CanOpenAsync`, `OpenForLegAsync`) | Kiểm tra theo cổng | Kiểm tra theo PLC; cấp lượt | Điều chỉnh/thiết kế lại |
+| `PlcRequestService.HandleRequestAsync` | Từ chối `PORT_BUSY` khi cổng bận; không có FIFO | Xếp hàng thay vì từ chối; **cần thêm FIFO cấp PLC (chưa có)** | Thiết kế lại |
+| `StationRequestProcessor`, `PlcStationSignalService` | Cạnh lên; mỗi lần quét đọc lại | Ghi nhận bền yêu cầu chờ (nếu PLC phát xung); thứ tự nhận ra | Thiết kế lại |
+| `HandshakeCoordinator` | Mỗi Station độc lập | Chỉ Station `Active` được ghi/điều phối | Thiết kế lại |
+| RouteEngine (`DispatchLegAsync`, `CanOpenAsync` ở cổng nguồn/đích) | Chặng chờ `PORT_BUSY` theo cổng | Chặng chờ theo PLC; tương tác PER_AGV/RCS | Điều chỉnh |
+| Test `Cr010MultiLegTests.Test07` (hai cổng cùng PLC có hai giao dịch hoạt động), `Test09`, `Cr008b2PlcIntakeTests`, `PlcWcsIntegrationTests` | Mô tả mô hình theo cổng | Viết lại/đổi kỳ vọng theo D-1 và định nghĩa cửa sổ | Điều chỉnh |
+| UI giao dịch trạm / giám sát PLC | Hiển thị theo cổng | Hiển thị hàng đợi và lượt của PLC | Điều chỉnh |
+| **Không đổi** | Các PLC độc lập, song song; worker mỗi PLC | – | Giữ nguyên |
+
+Rủi ro: dùng nguyên vòng đời Station Transaction (mở từ lúc dispatch) làm "Handshake hoạt động" sẽ tuần tự hóa cả hành trình AMR trong một PLC → giảm thông lượng; cần định nghĩa cửa sổ (PQ-26) trước khi thiết kế. Không được ghi nhận rằng mã hiện hỗ trợ FIFO cấp PLC.
+
+### 9.2. D-2 – `Mission_Feedback` và đội AMR động
+`TaskOrchestrator`/CR-028 (`RobotCode` theo Task/Leg) giữ nguyên và là nguồn `RobotCode`; **không** thêm ánh xạ AGV1–3. Cần: giao diện phản hồi mới (trạng thái), tuỳ chọn vùng `RobotCode` thật (PQ-29), ghi tín hiệu phản hồi bởi bộ ghi mới (chưa có) chỉ sau khi được duyệt. Ảnh hưởng mã: bộ ghi `Mission_Feedback` (mới), chính sách ghi (tên mới), UI (nhãn). Phụ thuộc CR-028 được duyệt/merge.
+
+### 9.3. D-3 – CLAUDE.md
+Đã cập nhật (§7 ghi chú trạng thái, §7.1 đánh dấu baseline cũ, §7.8). Catalog `plc-io-catalog.json` và ADR-0004 vẫn mô tả mẫu cũ (xem mục 4–5); không đổi cho đến CR triển khai.
+
+### 9.4. D-4 – đối chiếu rack vật lý
+Rack có mặt, danh tính rack, định danh giao dịch duy nhất, điều kiện an toàn: **chưa có nguồn** trong giao diện 20/11. Ảnh hưởng: `PlcRequestService` (đối chiếu PLC↔tồn kho `RECON_PLC_INVENTORY_MISMATCH` hiện dùng `Rack_Full/Rack_Empty`), điều kiện xác nhận bàn giao (`ConfirmDropAsync` – WCS), RouteEngine, `InventoryService` (không đổi nguyên tắc: WCS sở hữu), giao diện/thiết bị cung cấp dữ liệu rack (chưa xác định; ứng viên: tín hiệu PLC bổ sung, đầu đọc/cảm biến, `podCode` do RCS báo, quét/xác nhận của người vận hành – chưa chọn). Không thể triển khai xác nhận bàn giao dựa chỉ vào `PLC_MissionCompleted`.
+
+### 9.5. Bảng giải quyết xung đột
+C-1 → D-1 (đã giải quyết, chưa triển khai) · C-2 → D-2 · C-3 → D-3 (đã thực hiện) · **C-4 vẫn mở (PQ-20)** · C-5 → D-4 (như yêu cầu; nguồn dữ liệu mở).
+
+### 9.6. Điều chỉnh thứ tự triển khai (mục 7)
+Bước 1 (quyết định kiến trúc) **đã hoàn tất** (ADR-0011). Thêm các điều kiện trước bước 4–6: PQ-26 (cửa sổ Handshake), PQ-27/PQ-28 (nguồn dữ liệu rack), PQ-29/IF-P3 (giao diện phản hồi), PQ-10 (định danh giao dịch). Thiết kế bộ điều phối cấp PLC + hàng đợi bền là hạng mục mới của bước 4–5.

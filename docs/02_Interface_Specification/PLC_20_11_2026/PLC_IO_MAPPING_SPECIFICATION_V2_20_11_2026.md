@@ -82,3 +82,9 @@ Hệ quả cho dữ liệu/cấu hình (**chưa thực hiện** – xem [Impact 
 ## 6. Việc cần có từ bên PLC để hoàn tất mapping
 
 PQ-01 (địa chỉ thực từng tín hiệu từng trạm: thanh ghi, bit/word), PQ-19, PQ-20, PQ-21; thông số kết nối (cổng TCP, MC Protocol, QJ71E71-100…) vẫn là `NEEDS_CONFIGURATION` theo CLAUDE.md §7.5 và không thuộc phạm vi tài liệu này.
+
+## 7. Cập nhật theo D-2, D-3, D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md))
+
+- **D-3:** workbook 20/11 là **giao diện mới chờ xác nhận/phê duyệt**, **không** phải mapping đã duyệt; IO Map v2 (mẫu 23 tín hiệu) là **baseline cũ**, chỉ để tham khảo/đối chiếu (CLAUDE.md §7.8). Không dùng IO Map v2 làm căn cứ mặc định cho thiết kế mapping mới.
+- **D-2:** enum của `Mission_Feedback` (0/AGV1–3/>10) **giữ nguyên nguyên văn**, không sửa. Mapping IO không được dùng nó như định danh AMR; mọi vùng dữ liệu truyền `RobotCode` thật chỉ được thêm sau khi hai bên thống nhất (IF-P3, PQ-29).
+- **D-4:** mẫu 6 tín hiệu/trạm **không đủ** cho rack có mặt, danh tính rack, định danh giao dịch, điều kiện an toàn. Mẫu mapping phải mở rộng hoặc thêm nguồn dữ liệu ngoài PLC (IF-P1, IF-P2, IF-P4; PQ-27, PQ-28); **chưa** thêm tín hiệu nào vào mapping khi chưa có thỏa thuận (không đặt tên/địa chỉ).

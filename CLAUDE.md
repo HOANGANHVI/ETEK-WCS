@@ -75,9 +75,13 @@ After implementation, report:
 
 ## 7. Approved PLC interface architecture update (2026-11-06)
 
+> **Status update – CR-029, decisions D-1 to D-4 of 2026-11-21 (ADR-0011).** Sections 7.1–7.7 are kept **as the historical record**. The PLC interface workbook of 20/11/2026 is the **new interface document, pending PLC engineer confirmation and owner approval**; the IO Map v2 workbook named in 7.1 is the **old baseline** (reference and historical comparison only, not the default basis for new design). Section **7.8** governs new PLC interface design work and prevails over 7.1, 7.3 and 7.4 where they conflict.
+
 This section records the project owner's approved direction for the Phase 1 PLC interface. It supersedes only the conflicting PLC connection and station-IO assumptions in earlier baseline text; all unrelated business rules and implementation safeguards remain unchanged.
 
 ### 7.1 Official IO Map
+
+> **Superseded as a design basis by Section 7.8 (CR-029 / ADR-0011, 2026-11-21): this workbook is the OLD baseline – historical reference only.**
 
 The current PLC IO interface workbook is:
 
@@ -138,3 +142,23 @@ Do not replace it with the older 352-signal per-station workbook or the earlier 
 ### 7.7 Superseded assumption
 
 The earlier rule in Section 2 stating that a single PLC connection serves the stations is superseded by Section 7.2: the current Phase 1 topology is four physical PLCs and four independent WCS PLC connections. The protected business rules in Section 2 otherwise remain in force, including `PER_AGV`, BP-04 `REVIEW`, WCS inventory ownership, A3/A4 and D1/D2 `UNCHANGED`, and no rack binding where the process says “Không bind rack”.
+
+
+### 7.8 PLC interface of 20/11/2026 – status and decisions D-1 to D-4 (CR-029, ADR-0011, 2026-11-21)
+
+Source documents and specification set: `docs/02_Interface_Specification/PLC_IO_Map/AGV_PLC Interface_List_20_11_2026.xlsx` and `docs/02_Interface_Specification/PLC_20_11_2026/`. Change Request: `docs/change-management/CR-029_PLC_INTERFACE_20_11_2026.md` (status `PENDING_APPROVAL`: pending PLC confirmation; **not** approved and **not** ready for implementation). Decision record: `docs/decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md`.
+
+**Status of the documents**
+- The 20/11/2026 workbook is the **new interface document, pending confirmation/approval**. It is **not an approved mapping**: do not implement it against, write to, or deploy it to a real PLC. Its register-address column is empty; do not invent addresses, data encodings, reset ownership, timeouts or handshake transitions (see 7.5, which still applies).
+- The IO Map v2 workbook (7.1) and its 23-signal template are the **old baseline**, kept for reference and historical comparison. Do not use them as the default basis for new design. Do not delete them or the older PLC documents (they are marked SUPERSEDED / partly obsolete, not removed).
+- Station naming of the fourth PLC (E1, E2, G3, G7 in 7.2 versus E1, E2, G1, G2 in the 20/11/2026 workbook) is **still open**; do not change the configured stations until the PLC engineer answers (PQ-20).
+
+**D-1 – PLC transaction concurrency (target architecture, not implemented).** At most **one active Handshake transaction per PLC**, with **one FIFO queue per PLC**. The four PLCs run independently and in parallel; Stations of one PLC never perform a Handshake at the same time. This supersedes in part ADR-0008 decision 4 ("one active Station Transaction per port"). The current code has **no PLC-level FIFO** (a busy port is rejected, not queued) and the existing tests describe the per-port model: never state that PLC-level FIFO is supported until code and tests exist. The start and end of the "active Handshake" window are not defined by any source and must not be assumed.
+
+**D-2 – Mission_Feedback and the dynamic AMR fleet.** AGV1/AGV2/AGV3 are not a fixed identity of an AMR in the WCS–RCS architecture. The RCS manages the dynamic fleet and chooses the AMR; WCS stores the real `RobotCode` supplied by the RCS. `Mission_Feedback` reflects the receipt/processing status of the request and does **not** represent a `RobotCode` by default. Do not edit the source workbook's enum and do not write 1–3 as an AMR identity. A new feedback interface, and any data area carrying the real `RobotCode`, must be agreed with the PLC side.
+
+**D-3 – This update.** The 20/11/2026 interface is recorded as new and pending; IO Map v2 is the old baseline; nothing historical was removed.
+
+**D-4 – Physical rack reconciliation.** The loss of physical-rack-versus-inventory reconciliation is **not accepted**. The following must be established: rack presence at the Station; rack identity when the process requires it; a unique transaction identity / duplicate protection; the safety/interlock conditions; and, if the PLC cannot provide rack identification, another device or system that does. `PLC_MissionCompleted = 1` is necessary but **not sufficient** evidence that the correct rack was handed over at the correct location; WCS confirms a hand-over only when presence (and identity when required) is confirmed, the rack is at the right Location, the rack status and position are updated successfully in WCS and the history records it. WCS keeps owning inventory.
+
+**Implementation gate.** No code, migration, database or configuration change for the 20/11/2026 interface until CR-029 is approved, the PLC engineer has answered the clarification questions that block the change, and a migration plan has been approved (Section 3 workflow).

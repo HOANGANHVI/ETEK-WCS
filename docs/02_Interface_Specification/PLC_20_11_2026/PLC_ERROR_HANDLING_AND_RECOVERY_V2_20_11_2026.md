@@ -51,3 +51,9 @@
 ## 5. Việc chưa thực hiện
 
 Không có thay đổi mã. Chức năng hiện có xử lý các lỗi giao tiếp (kết nối lại có back-off, ghi mơ hồ, chất lượng dữ liệu, treo/tiếp tục giao dịch, đối soát) là **nền tảng giữ nguyên**; phần phụ thuộc tín hiệu cũ cần làm lại sau khi có câu trả lời của bên PLC.
+
+## 6. Cập nhật theo D-1, D-2, D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md))
+
+- **E-3 (`PLC_MissionCompleted`=1/0):** theo D-4, giá trị 1 **không** là bằng chứng đủ rằng đúng rack đã được giao/nhận đúng vị trí; thiếu bằng chứng rack (có mặt/danh tính) ⇒ `ReconciliationRequired`, không tự hoàn thành.
+- **Hàng đợi sau sự cố (D-1):** hàng đợi cấp PLC phải **bền**; sau khởi động lại WCS hoặc PLC, thứ tự FIFO và lượt `Active` được khôi phục từ DB, không được cấp hai lượt cho một PLC; mất liên lạc PLC ⇒ lượt `Active` giữ nguyên (không hủy, không reset), các yêu cầu chờ giữ nguyên.
+- **Feedback lỗi (D-2):** WCS không ghi định danh AMR vào `Mission_Feedback`; mã lỗi và trạng thái do giao diện phản hồi mới quy định (IF-P3, PQ-05, PQ-15).

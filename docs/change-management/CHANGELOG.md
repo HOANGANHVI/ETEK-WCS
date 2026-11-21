@@ -6,6 +6,7 @@
 - Older PLC drafts marked SUPERSEDED / partly obsolete (kept, not deleted); `PLC_IO_Map/README.md` records the status of the three workbooks.
 - Conflicts recorded, not resolved: one transaction per PLC vs per Station (ADR-0008), `Mission_Feedback` AGV1–3 vs dynamic AMR fleet (CR-028), CLAUDE.md §7 vs the new interface, G1/G2 vs G3/G7.
 - No code, database, migration, Docker, `.env`, PLC address or running mapping changed.
+- **2026-11-21 decisions recorded (ADR-0011):** D-1 at most one active Handshake per PLC with one FIFO queue per PLC (not implemented; the current code has no PLC-level FIFO; ADR-0008 decision 4 superseded in part); D-2 AGV1–3 are not an AMR identity, WCS stores the real `RobotCode`, `Mission_Feedback` = request status, new feedback interface to be agreed; D-3 CLAUDE.md section 7 updated (20/11 interface = new, pending; IO Map v2 = old baseline); D-4 loss of physical rack reconciliation not accepted (rack presence, identity, transaction uniqueness, interlock; `PLC_MissionCompleted=1` is not sufficient). Vendor questions reorganised (pending questions / decisions / interface proposals IF-P1…IF-P5), PQ-26…PQ-29 added. CR-029 stays PENDING_APPROVAL.
 
 ## v3.16 – CR-026 Configuration Export / Import, Phase 2 (2026-11-19) – feature branch, not merged
 

@@ -49,8 +49,8 @@ Mã test: `T20-<nhóm>-<số>`. Loại: **U** đơn vị · **I** tích hợp (P
 | ID | Kịch bản | Kỳ vọng | Loại |
 |---|---|---|---|
 | T20-PAR-01 | 4 PLC cùng có giao dịch | Chạy đồng thời, không khóa chung | I |
-| T20-PAR-02 | Hai trạm cùng PLC phát yêu cầu gần như đồng thời | Theo quyết định C-1: A (tuần tự theo PLC, FIFO) hoặc B (song song theo trạm) | I |
-| T20-PAR-03 | FIFO trong phạm vi PLC theo thời điểm WCS tiếp nhận; không ưu tiên Pick/Drop | Theo quy tắc ưu tiên PQ-14 | I |
+| T20-PAR-02 | Hai trạm cùng PLC phát yêu cầu gần như đồng thời | **Theo D-1 (đã chốt):** chỉ một Handshake `Active`; trạm kia `Queued` theo FIFO; không Handshake đồng thời | I |
+| T20-PAR-03 | FIFO trong phạm vi PLC theo thời điểm WCS tiếp nhận; không ưu tiên Pick/Drop | Thứ tự đúng; khóa phá thế hòa theo thiết kế | I |
 | T20-PAR-04 | Một PLC offline | Ba PLC còn lại không bị ảnh hưởng | I (đã có test tương tự) |
 
 ## 5. Heartbeat, lỗi, phục hồi (điều kiện: PQ-11, PQ-12, PQ-19)
@@ -89,3 +89,26 @@ Quy tắc: **không xóa** test cũ khi chưa có test mới tương đương; t
 
 ## 8. Tiêu chí hoàn thành đặc tả test
 Mỗi test có (a) PQ liên quan đã trả lời, (b) dữ liệu/tín hiệu rõ ràng, (c) kết quả mong đợi không dựa trên giả định chưa duyệt.
+
+## 9. Test bổ sung theo D-1…D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md)) – đặc tả, chưa viết
+
+Điều kiện chung: định nghĩa cửa sổ Handshake (PQ-26) và nguồn dữ liệu rack (PQ-27/PQ-28) cho nhóm tương ứng.
+
+| ID | Kịch bản | Kỳ vọng | Loại |
+|---|---|---|---|
+| T20-D1-01 | Hai Station cùng PLC có yêu cầu; Station A tới trước | A `Active`; B `Queued`; khi A xong B được cấp lượt; **không** có hai `Active` trong một PLC | I |
+| T20-D1-02 | Ba yêu cầu liên tiếp trên một PLC | Phục vụ đúng FIFO (theo thời điểm WCS nhận ra) | I |
+| T20-D1-03 | Hai PLC khác nhau có yêu cầu | Mỗi PLC một `Active`, **song song**, không khóa chung | I |
+| T20-D1-04 | WCS khởi động lại khi có `Active` và hàng đợi | Hàng đợi và lượt khôi phục từ DB; thứ tự giữ nguyên; không cấp hai lượt | I |
+| T20-D1-05 | PLC mất kết nối khi `Active` | Lượt giữ nguyên (không hủy/reset); yêu cầu chờ giữ nguyên | I |
+| T20-D1-06 | Yêu cầu của Station đang `Queued` bị PLC hạ xuống (nếu PLC phát xung/hủy) | Hành vi theo PQ-02/PQ-26 | I |
+| T20-D1-07 | Mã hiện tại **không** có FIFO cấp PLC: test hiện có (ví dụ `Cr010MultiLegTests.Test07`) được đánh dấu để viết lại, không được dùng làm bằng chứng cho D-1 | Danh sách test cần sửa nêu rõ | – |
+| T20-D2-01 | Không bao giờ ghi 1–3 làm định danh AMR; không ánh xạ `RobotCode`→AGV1–3 | Không có ghi | I |
+| T20-D2-02 | `Mission_Feedback` chỉ phản ánh trạng thái tiếp nhận/xử lý theo giao diện phản hồi được duyệt; `RobotCode` thật được WCS lưu (CR-028) | Đúng | I |
+| T20-D2-03 | Đội AMR >3 xe hoặc `RobotCode` ngoài bảng AGV | Không tạo AGV giả, không lỗi do enum | I |
+| T20-D4-01 | `PLC_MissionCompleted`=1 nhưng thiếu xác nhận rack có mặt | Không hoàn thành bàn giao; `ReconciliationRequired`; không dispatch chặng kế | I |
+| T20-D4-02 | Danh tính rack không khớp (khi quy trình yêu cầu) | Dừng, đối soát; không cập nhật vị trí rack | I |
+| T20-D4-03 | Cùng giao dịch báo hai lần / yêu cầu lặp | Không xử lý trùng (cơ chế định danh được duyệt) | I |
+| T20-D4-04 | Điều kiện an toàn/interlock không thỏa | WCS không ra lệnh mở cửa/kẹp | I/C |
+| T20-D4-05 | Rack có mặt và danh tính khớp, WCS cập nhật vị trí/trạng thái thành công, lịch sử ghi | Bàn giao hoàn tất, cho phép chặng kế | I |
+| T20-D4-06 | Nguồn dữ liệu rack (PLC bổ sung/thiết bị khác) mất kết nối | Giao dịch dừng/đối soát; không giả định có rack | I |

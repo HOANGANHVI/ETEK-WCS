@@ -98,3 +98,10 @@ Các tương đương trên là **suy luận [SL]** để rà soát ảnh hưở
 ## 5. Trạng thái cần có trước khi triển khai mã
 
 Không triển khai handshake cho đến khi: (1) PQ-01 (địa chỉ), PQ-02…PQ-10 (ngữ nghĩa tín hiệu, reset, chống trùng) có câu trả lời; (2) chủ dự án quyết định C-1 và C-2 ([Interface Specification](PLC_INTERFACE_SPECIFICATION_V2_20_11_2026.md) mục 7); (3) có kế hoạch chuyển đổi được duyệt (CR-029). Bắt đầu commissioning ở chế độ **chỉ đọc**; chỉ bật ghi sau khi kỹ sư PLC duyệt từng tín hiệu và quy trình thử an toàn; tuyệt đối không ghi `AGV_RequestTranfer` (lệnh mở cửa/kẹp) để thử kết nối **[KT]**.
+
+## 6. Cập nhật theo quyết định D-1…D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md))
+
+- **D-1:** 6 bước chỉ chạy cho **một** Station mỗi PLC tại một thời điểm; Station khác của cùng PLC chờ trong FIFO của PLC. Ranh giới "Handshake đang hoạt động" chưa xác định (PQ-26); chưa triển khai.
+- **D-2:** bước 2 (`Mission_Feedback`) là **trạng thái tiếp nhận/xử lý**, không phải định danh AMR; không ghi 1–3 làm `RobotCode`.
+- **D-4:** bước 6 (`PLC_MissionCompleted`=1) **không** đủ để coi rack đã được bàn giao đúng; cần thêm bằng chứng rack (có mặt, danh tính khi yêu cầu), định danh giao dịch, điều kiện an toàn – nguồn dữ liệu chưa xác định (PQ-10, PQ-18, PQ-27, PQ-28; IF-P1…IF-P5).
+- Workbook nguồn **không đổi**; sơ đồ ở mục 1 vẫn là bản dựng lại nguyên trạng của nguồn.

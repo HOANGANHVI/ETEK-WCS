@@ -14,8 +14,8 @@
 | 2 | Một kết nối TCP mỗi PLC, không 16 kết nối | `IPlcEndpoint` + worker là người dùng duy nhất của socket; ghi qua hàng đợi, không pipeline | Không ảnh hưởng | **Giữ nguyên** |
 | 3 | Không hardcode IP; không đổi cấu hình kết nối hiện có | IP/port trong `plc_connections` (dữ liệu) | Workbook ghi IP 192.168.10.131 cho khối `EF-G` (ô A4) – **chỉ tham chiếu** | **Giữ nguyên**; không đổi cấu hình |
 | 4 | FIFO trong phạm vi từng PLC | **Chưa có hàng đợi FIFO theo PLC.** `PlcRequestService` từ chối (`PORT_BUSY`) yêu cầu mới tại cổng đang có Station Transaction; yêu cầu PLC được đọc lại ở chu kỳ sau. FIFO có trong hàng đợi **AGV** (Legacy), không phải hàng đợi PLC | Không nêu hàng đợi/ưu tiên | **Chưa thực hiện – ghi nhận** (PQ-13, PQ-14, PQ-22) |
-| 5 | Mỗi PLC tối đa **một** giao dịch tại một thời điểm | ADR-0008: **một giao dịch hoạt động mỗi cổng/Trạm**, ràng buộc bởi chỉ mục duy nhất trong DB; hai trạm cùng PLC chạy song song (test `Test07`) | Mỗi **trạm** có bộ tín hiệu riêng (hỗ trợ song song vật lý theo trạm) | **MÂU THUẪN GIỮA HAI NGUYÊN TẮC ĐÃ THỐNG NHẤT (C-1).** Không tự chọn; chờ chủ dự án + PLC |
-| 6 | RCS chọn AMR (đội AMR động); WCS quản lý nghiệp vụ/giao dịch | CR-028 (`RcsManaged`, chưa merge): `RobotCode` theo Task/Leg | `Mission_Feedback` biểu diễn AGV1–AGV3 | **MÂU THUẪN KHẢ DĨ (C-2)**, PQ-06 |
+| 5 | Mỗi PLC tối đa **một** giao dịch tại một thời điểm | ADR-0008: **một giao dịch hoạt động mỗi cổng/Trạm**, ràng buộc bởi chỉ mục duy nhất trong DB; hai trạm cùng PLC chạy song song (test `Test07`) | Mỗi **trạm** có bộ tín hiệu riêng (hỗ trợ song song vật lý theo trạm) | **C-1 – ĐÃ GIẢI QUYẾT bằng D-1 (2026-11-21): chọn mô hình tối đa một Handshake mỗi PLC (phương án A).** Chưa triển khai; xem mục 6 |
+| 6 | RCS chọn AMR (đội AMR động); WCS quản lý nghiệp vụ/giao dịch | CR-028 (`RcsManaged`, chưa merge): `RobotCode` theo Task/Leg | `Mission_Feedback` biểu diễn AGV1–AGV3 | **C-2 – ĐÃ GIẢI QUYẾT bằng D-2**: AGV1–3 không là định danh AMR; xem mục 6 |
 | 7 | Cô lập adapter PLC/RCS khỏi logic nghiệp vụ | `McTcpClient`/`McFrame`/`McPlcEndpoint` ở Infrastructure; `IStationSignalService` ở Application | Không ảnh hưởng | **Giữ nguyên** |
 | 8 | Chỉ-đọc trước, ghi sau khi kỹ sư PLC duyệt; không ghi tín hiệu an toàn/cho phép chuyển động để thử kết nối | Chính sách ghi, duyệt từng điểm, allow-list (CR-004/CR-019) | `AGV_RequestTranfer` là lệnh mở cửa/kẹp; `Mission_Feedback`, `AGV_TranferCompleted` là phản hồi | Cơ chế **giữ**; **danh sách tên bị chặn phải làm lại** (PQ-18) |
 | 9 | WCS sở hữu tồn kho; dữ liệu PLC không ghi đè tồn kho | Bất biến trong `InventoryService`/`PlcRequestService` (mâu thuẫn ⇒ đối soát) | Giao diện mới **không còn dữ liệu rack** | **Giữ nguyên nguyên tắc**; mất khả năng đối chiếu PLC↔WCS (xem 3.4) |
@@ -73,3 +73,22 @@ Chưa chọn. Một thay đổi sang A **không thể** hạn chế ở tài li�
 ## 5. Trạng thái và điều kiện tiếp theo
 
 `NEEDS_CONFIRMATION` cho: địa chỉ, ngữ nghĩa tín hiệu, hàng đợi PLC, heartbeat, ánh xạ AGV. Thứ tự triển khai đề xuất ở [Impact Analysis](PLC_INTERFACE_CHANGE_IMPACT_ANALYSIS_20_11_2026.md) mục 7. Không triển khai trước khi CR-029 được duyệt và có kế hoạch chuyển đổi.
+
+## 6. Cập nhật theo quyết định D-1…D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md))
+
+### 6.1. D-1 – tối đa một Handshake hoạt động mỗi PLC, FIFO riêng từng PLC
+
+- **Phương án A của mục 4 được chọn.** Các PLC vẫn độc lập, song song, không khóa chung giữa các PLC. Trong **một** PLC, các Station không Handshake đồng thời; yêu cầu của Station khác xếp hàng FIFO của PLC đó.
+- **Hiện trạng [HT] (không được ghi là đã hỗ trợ):** chưa có hàng đợi FIFO cấp PLC. `PlcRequestService` từ chối (`PORT_BUSY`) yêu cầu tại cổng đang có Station Transaction; DB chỉ ràng buộc một giao dịch hoạt động **mỗi cổng**; kiến trúc hiện tại cho phép hai cổng cùng PLC hoạt động cùng lúc (`Cr010MultiLegTests.Test07`).
+- **Cần thiết kế lại (CR sau):** điều phối cấp PLC (bộ cấp lượt), hàng đợi bền (sống sót khi WCS/PLC khởi động lại), khóa hoạt động theo PLC (thay/ bổ sung chỉ mục duy nhất theo cổng), hành vi `PlcRequestService` (xếp hàng thay vì từ chối), tương tác với RouteEngine/Leg khi hai Station cùng PLC đều có AMR tới.
+- **Điểm chưa xác định:** ranh giới "Handshake đang hoạt động" (PQ-26). Station Transaction hiện mở từ lúc dispatch chặng (ADR-0008, O-3) – nếu dùng nguyên làm cửa sổ Handshake sẽ tuần tự hóa cả hành trình AMR; **không được giả định**.
+- Hàng đợi/khóa cấp PLC thuộc tầng **điều phối giao dịch**, tách khỏi driver PLC và khỏi mapping IO (giữ nguyên phân tầng).
+
+### 6.2. D-2 – `Mission_Feedback` và đội AMR động
+RCS chọn AMR và báo `RobotCode`; WCS lưu `RobotCode` thật (CR-028). Ranh giới adapter: RCS → WCS (`RobotCode`) tách khỏi WCS → PLC (`Mission_Feedback` = trạng thái). WCS **không** ánh xạ `RobotCode` sang AGV1–3 và không ghi 1–3 làm định danh. Giao diện phản hồi mới/vùng `RobotCode` do hai bên thống nhất (IF-P3, PQ-29).
+
+### 6.3. D-4 – đối chiếu rack vật lý
+Giao diện 20/11 không đủ để kiểm tra rack; kiến trúc phải có **nguồn dữ liệu** cho: rack có mặt, danh tính rack (khi quy trình yêu cầu), định danh giao dịch duy nhất, điều kiện an toàn. Nguồn có thể là tín hiệu PLC bổ sung hoặc thiết bị/hệ thống khác (chưa chọn). `PLC_MissionCompleted=1` chỉ là điều kiện cần. WCS vẫn sở hữu tồn kho; dữ liệu ngoài không ghi đè tồn kho.
+
+### 6.4. Cập nhật bảng mục 1
+Dòng 5 (một giao dịch mỗi PLC): quyết định D-1, chưa triển khai. Dòng 6 (RCS chọn AMR): quyết định D-2. Dòng 9 (WCS sở hữu tồn kho): giữ; D-4 yêu cầu nguồn đối chiếu vật lý.

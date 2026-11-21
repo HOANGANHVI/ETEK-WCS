@@ -57,3 +57,9 @@ Lưu ý quan trọng:
 
 ## 6. Điều kiện trước khi triển khai
 Chốt PQ-02…PQ-10, PQ-16, C-1; xem [Impact Analysis](PLC_INTERFACE_CHANGE_IMPACT_ANALYSIS_20_11_2026.md).
+
+## 7. Cập nhật theo D-1 và D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md))
+
+**D-1 – hàng đợi và hoạt động theo PLC.** Vòng đời một yêu cầu của Station (đề xuất, chưa triển khai): `Received` (WCS đọc `PLC_MissionRequest` hợp lệ) → `Queued` (xếp FIFO của PLC; nếu PLC đang có Handshake hoạt động) → `Active` (được cấp lượt; chỉ **một** `Active` mỗi PLC) → các trạng thái giao dịch ở mục 3 → `Completed/Failed/ReconciliationRequired` → lượt kế. Thứ tự FIFO theo thời điểm WCS **nhận ra** yêu cầu (khóa phụ phá thế hòa do thiết kế quyết định). Hiện trạng: **không có** trạng thái `Queued` cấp PLC trong mã (`PORT_BUSY` từ chối). Ranh giới `Active` (bắt đầu/kết thúc) **chưa xác định** (PQ-26). Station Transaction theo cổng (ADR-0008) vẫn tồn tại như thực thể bàn giao, nhưng nguyên tắc "một hoạt động mỗi cổng" được bao hàm bởi "một mỗi PLC" cho phần Handshake.
+
+**D-4 – điều kiện xác nhận bàn giao.** `PLC_MissionCompleted=1` **không đủ** để chuyển giao dịch/chặng sang hoàn thành bàn giao. Điều kiện (cộng gộp): (1) rack có mặt tại Station được xác nhận; (2) danh tính rack khớp khi quy trình yêu cầu; (3) rack ở đúng Location; (4) WCS cập nhật thành công trạng thái và vị trí rack; (5) lịch sử ghi bàn giao; (6) giao dịch có định danh duy nhất/không bị xử lý trùng; (7) điều kiện an toàn/interlock đã thỏa. Thiếu hoặc mâu thuẫn dữ liệu ⇒ dừng và `ReconciliationRequired`, không dispatch chặng kế (nhất quán CR-028 §13). Nguồn dữ liệu (1), (2), (6), (7): chưa xác định (PQ-10, PQ-18, PQ-27, PQ-28).

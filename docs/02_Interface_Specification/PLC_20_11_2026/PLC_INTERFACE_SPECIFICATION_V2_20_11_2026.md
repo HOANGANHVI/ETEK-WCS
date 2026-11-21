@@ -101,6 +101,18 @@ Chi tiết từng tín hiệu: [Change Impact Analysis](PLC_INTERFACE_CHANGE_IMP
 | C-4 | CLAUDE.md §7.2: PLC-04 = E1, E2, G3, G7 | Workbook: E1, E2, **G1, G2** | PQ-20 |
 | C-5 | Tên PLC "PLC-01…PLC-04" | Workbook gọi khối này "EF-G" | PQ-20 |
 
+### 7.1. Giải quyết theo quyết định D-1…D-4 (2026-11-21, [ADR-0011](../../decisions/ADR/ADR-0011-plc-interface-20-11-2026-architectural-decisions.md))
+
+| ID | Kết quả | Còn lại |
+|---|---|---|
+| C-1 | **Giải quyết bằng D-1**: tối đa một Handshake hoạt động mỗi PLC, FIFO riêng từng PLC. **Chưa triển khai**; ADR-0008 QĐ 4 bị thay thế một phần | PLC xác nhận khả thi (PQ-13/14/22); ranh giới cửa sổ Handshake (PQ-26) |
+| C-2 | **Giải quyết bằng D-2**: không dùng AGV1–3 làm định danh AMR; `Mission_Feedback` = trạng thái tiếp nhận/xử lý; WCS lưu `RobotCode` thật | Giao diện phản hồi mới/vùng `RobotCode` (PQ-06, PQ-29, IF-P3) |
+| C-3 | **Giải quyết bằng D-3**: CLAUDE.md §7 đã cập nhật; IO Map v2 = baseline cũ; workbook 20/11 = giao diện mới **chưa được duyệt** | – |
+| C-4 | **Vẫn mở** (G1/G2 ↔ G3/G7) | PQ-20 |
+| C-5 | **Giải quyết bằng D-4 như một yêu cầu**: không chấp nhận mất đối chiếu rack; `PLC_MissionCompleted=1` không đủ | Nguồn dữ liệu rack/danh tính (PQ-27, PQ-28; IF-P1, IF-P2, IF-P4) |
+
+**Điều chỉnh cách đọc các mục trước:** mọi chỗ trong bộ tài liệu này ghi "C-1 chưa quyết định", "chờ quyết định D-1…D-4" phải đọc theo bảng trên. Workbook 20/11 **không** phải mapping đã phê duyệt để triển khai lên PLC thật (CLAUDE.md §7.8).
+
 ## 8. Trạng thái các tài liệu cũ
 
 Không xóa. Các bản nháp cũ được đánh dấu `SUPERSEDED / OBSOLETE (một phần)` bằng một khối ghi chú ở đầu tài liệu (xem CR-029 mục "Tài liệu bị ảnh hưởng"). Workbook 10/11 và IO Map v2 được giữ nguyên làm lịch sử; `PLC_IO_Map/README.md` ghi trạng thái từng tệp.
