@@ -10,7 +10,7 @@ public sealed record RcsFleetAmr(string RobotCode, string? RobotDir, string? Rob
     string? Status, string? ExclType, string? Stop, string? PodCode, string? PodDir, IReadOnlyList<string> Path);
 
 /// <summary>Outcome of ONE fleet query. A failed query never carries AMRs: the caller keeps what it stored before and marks it as not updated.</summary>
-public sealed record RcsFleetResult(bool Success, IReadOnlyList<RcsFleetAmr> Amrs, string? ErrorCode = null, string? ErrorMessage = null, long? LatencyMs = null, int Skipped = 0)
+public sealed record RcsFleetResult(bool Success, IReadOnlyList<RcsFleetAmr> Amrs, string? ErrorCode = null, string? ErrorMessage = null, long? LatencyMs = null, int Skipped = 0, int? HttpStatus = null)
 {
     public static RcsFleetResult Ok(IReadOnlyList<RcsFleetAmr> amrs, long? latencyMs = null, int skipped = 0) => new(true, amrs, null, null, latencyMs, skipped);
     public static RcsFleetResult Fail(string code, string? message, long? latencyMs = null) => new(false, [], code, message, latencyMs);
@@ -67,8 +67,8 @@ public sealed class RcsFleetOptions
 /// <summary>Where the real query goes. The defaults are the ones written in the API document (5.2.14); the host comes from the saved RCS connection setting.</summary>
 public sealed class RcsFleetRealOptions
 {
-    /// <summary>"http://[address]:8182/rcms-dps/rest/queryAgvStatus" (API document 5.2.14).</summary>
-    public int Port { get; set; } = 8182;
+    /// <summary>Override of the RCS port. 0 (default) = the port saved in the RCS connection (the value the site confirmed); nothing is assumed. (The API document 5.2.14 shows "http://[address]:8182/rcms-dps/rest/queryAgvStatus".) If both are missing the query reports a configuration error.</summary>
+    public int Port { get; set; }
     public string Path { get; set; } = "/rcms-dps/rest/queryAgvStatus";
 }
 

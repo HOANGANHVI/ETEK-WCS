@@ -45,7 +45,7 @@ export function DashboardPage() {
 
   const agvs = useApi(useCallback(() => api.agvs(), []), ['TaskStateChanged', 'AgvStatusChanged'])
   const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged', 'TaskStateChanged'])   // CR-028
-  const managed = fleet.data?.dispatchMode === 'RcsManaged'
+  const managed = fleet.data?.dispatchMode === 'RcsManaged' || fleet.data?.source === 'Real'
   const locations = useApi(useCallback(() => api.locations(), []), [...EVENTS_INV])
   const racks = useApi(useCallback(() => api.racks(), []), [...EVENTS_INV])
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS_TASK])

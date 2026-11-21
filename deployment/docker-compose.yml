@@ -83,7 +83,7 @@ services:
       Rcs__AllowSimulatorInProduction: ${RCS_ALLOW_SIMULATOR_IN_PRODUCTION:-false}
       Integration__AllowNetworkProbe: ${WCS_ALLOW_NETWORK_PROBE:-false}
       # CR-027: where the AMR fleet list comes from. Simulator (default, an EMPTY simulated list) or Real (read-only queryAgvStatus to the RCS saved by an Admin in "Kết nối RCS"; sends no task command).
-      Rcs__Fleet__Source: ${RCS_FLEET_SOURCE:-Simulator}
+      Rcs__Fleet__Source: ${RCS_FLEET_SOURCE:-Real}
       Rcs__Fleet__IntervalSeconds: ${RCS_FLEET_INTERVAL_SECONDS:-5}
       # CR-028: who chooses the AMR of a task. Legacy (default, unchanged). RcsManaged only works with the RCS SIMULATOR (no real create-task adapter exists): do NOT set it in operation.
       Rcs__Dispatch__Mode: ${RCS_DISPATCH_MODE:-Legacy}

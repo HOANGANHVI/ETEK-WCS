@@ -6,7 +6,7 @@ namespace WCS.Application.Services;
 
 /// <summary>Refreshes AGV connection status from the RCS client and publishes changes in real time.</summary>
 public sealed class AgvStatusService(IUnitOfWork uow, IAgvRepository agvs, IRcsClient rcs, IRcsDispatchGuard guard, IWcsNotifier notifier, IClock clock,
-    ILogger<AgvStatusService> logger)
+    Microsoft.Extensions.Options.IOptions<WCS.Application.Fleet.RcsFleetOptions> fleetOptions, ILogger<AgvStatusService> logger)
 {
     public async Task RefreshAsync(CancellationToken ct = default)
     {
@@ -16,7 +16,12 @@ public sealed class AgvStatusService(IUnitOfWork uow, IAgvRepository agvs, IRcsC
             using var _frame = WCS.Application.Diagnostics.DiagnosticContext.Begin(null, agvId: snapshot.Code);   // CR-021
             AgvConnectionStatus status; string? detail;
             var link = guard.Check();
-            if (!link.Allowed)
+            if (fleetOptions.Value.SourceKind == WCS.Domain.Fleet.FleetSource.Real)
+            {
+                // the AMR list comes from the REAL RCS (queryAgvStatus). The per-AGV answer of the RCS simulator is never used or shown while that is the case.
+                (status, detail) = (AgvConnectionStatus.Unknown, "RCS_FLEET_REAL");
+            }
+            else if (!link.Allowed)
             {
                 // CR-008A: the only RCS adapter is a simulator; its "Online" must never be shown as a real AGV.
                 (status, detail) = (AgvConnectionStatus.Unknown, link.Code);

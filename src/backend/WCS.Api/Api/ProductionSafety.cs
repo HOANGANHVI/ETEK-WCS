@@ -10,6 +10,22 @@ public static class ProductionSafety
 {
     public const string AllowKey = "Plc:AllowSimulatorInProduction";
 
+    public const string FleetAllowKey = "Rcs:Fleet:AllowSimulatorInProduction";
+
+    /// <summary>
+    /// CR-031: in Production the AMR list must come from the REAL RCS (Rcs:Fleet:Source=Real). A simulated fleet is refused at start unless <c>Rcs:Fleet:AllowSimulatorInProduction=true</c> is set explicitly
+    /// (never defaulted). Returns true when that explicit exception is active.
+    /// </summary>
+    public static bool ValidateFleet(IConfiguration config, IHostEnvironment env)
+    {
+        if (!env.IsProduction()) return false;
+        if (string.Equals(config["Rcs:Fleet:Source"], "Real", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!config.GetValue(FleetAllowKey, false))
+            throw new InvalidOperationException("Production refuses to start with a simulated AMR fleet (Rcs:Fleet:Source is not 'Real'). Set Rcs:Fleet:Source=Real (RCS_FLEET_SOURCE=Real) and save the RCS connection, " +
+                $"or - only for a deliberate, supervised start without an RCS - set {FleetAllowKey}=true.");
+        return true;
+    }
+
     /// <summary>Throws when the configuration is unsafe for Production. Returns true when the explicit simulator exception is active (caller logs a warning).</summary>
     public static bool Validate(IConfiguration config, IHostEnvironment env)
     {

@@ -19,7 +19,8 @@ export function AgvPage() {
   const now = useClock(5000).getTime()
   const agvs = useApi(useCallback(() => api.agvs(), []), [...EVENTS])
   const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged', 'TaskStateChanged'])
-  const managed = fleet.data?.dispatchMode === 'RcsManaged'   // CR-028: the RCS chooses the AMR: one fleet list, no AGV1 / AGV2 cards
+  // CR-028 / CR-031: when the RCS chooses the AMR, or the list comes from the REAL RCS, there is ONE fleet list from the RCS: no AGV1 / AGV2 cards and no per-AGV history
+  const managed = fleet.data?.dispatchMode === 'RcsManaged' || fleet.data?.source === 'Real'
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])
   const locations = useApi(useCallback(() => api.locations(), []))
   const codes = useCodeMaps(locations.data, agvs.data)

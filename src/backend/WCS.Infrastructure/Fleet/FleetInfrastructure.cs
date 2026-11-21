@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -34,8 +35,9 @@ internal sealed class SimulatorFleetQuery(IRcsClient rcs) : IRcsFleetQuery
 /// (RCS-2000 API Developer Guide V3.3, 5.2.14). It sends only reqCode, reqTime and - when the connection uses token authentication - tokenCode. It never sends a task command
 /// and is the only RCS call this class can make. NOT verified against a real RCS yet: only against a local test server that answers like the document.
 /// </summary>
-internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings, ISecretProtector protector, IOptions<RcsFleetOptions> options, IClock clock) : IRcsFleetQuery
+internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings, ISecretProtector protector, IOptions<RcsFleetOptions> options, IClock clock, Microsoft.Extensions.Logging.ILogger<HikFleetQueryClient> logger) : IRcsFleetQuery
 {
+    private static int _credentialsWarned;
     private static readonly HttpClient Http = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5), ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = Timeout.InfiniteTimeSpan };
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private sealed record Secrets(string? Password, string? Token);
@@ -51,7 +53,10 @@ internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings,
         if (r is null || string.IsNullOrWhiteSpace(r.Host)) return RcsFleetResult.Fail(FleetErrorCodes.NotConfigured, "The RCS address (host) is not set.");
 
         string? token = null;
-        if (r.AuthMode == ConnectionOptions.AuthToken && !string.IsNullOrEmpty(s.ProtectedSecrets))
+        if (r.AuthMode == ConnectionOptions.AuthUserPassword && Interlocked.Exchange(ref _credentialsWarned, 1) == 0)
+            logger.LogWarning("The saved RCS connection uses username/password, which RCS-2000 API V3.3 does not define (it authenticates with tokenCode). queryAgvStatus is sent WITHOUT credentials; confirm the authentication with the RCS engineer. {EventCode}", "RCS_AUTH_MODE_NOT_IN_API");
+        if (r.AuthMode == ConnectionOptions.AuthToken && string.IsNullOrEmpty(s.ProtectedSecrets)) return RcsFleetResult.Fail(FleetErrorCodes.NotConfigured, "The RCS connection uses a token but none is stored.");
+        if (r.AuthMode == ConnectionOptions.AuthToken)
         {
             try { token = JsonSerializer.Deserialize<Secrets>(protector.Unprotect(s.ProtectedSecrets), Json)?.Token; }
             catch (Exception ex) when (ex is JsonException or System.Security.Cryptography.CryptographicException) { return RcsFleetResult.Fail(FleetErrorCodes.NotConfigured, "The stored RCS token cannot be read; enter it again."); }
@@ -59,7 +64,9 @@ internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings,
 
         var real = options.Value.Real;
         var scheme = Uri.TryCreate(r.BaseUrl, UriKind.Absolute, out var b) && b.Scheme == Uri.UriSchemeHttps ? "https" : "http";
-        var url = $"{scheme}://{r.Host}:{real.Port}{(real.Path.StartsWith('/') ? real.Path : "/" + real.Path)}";
+        var port = real.Port > 0 ? real.Port : r.Port ?? 0;
+        if (port is < 1 or > 65535) return RcsFleetResult.Fail(FleetErrorCodes.NotConfigured, "The RCS port is not set (RCS connection or Rcs:Fleet:Real:Port); no port is assumed.");
+        var url = $"{scheme}://{r.Host}:{port}{(real.Path.StartsWith('/') ? real.Path : "/" + real.Path)}";
         var body = new Dictionary<string, string> { ["reqCode"] = Guid.NewGuid().ToString("N"), ["reqTime"] = clock.UtcNow.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") };
         if (!string.IsNullOrEmpty(token)) body["tokenCode"] = token;
 
@@ -69,8 +76,8 @@ internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings,
             using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, new MediaTypeHeaderValue("application/json")) };
             using var res = await Http.SendAsync(req, ct);
             var text = await res.Content.ReadAsStringAsync(ct);
-            if (!res.IsSuccessStatusCode) return RcsFleetResult.Fail($"{FleetErrorCodes.Http}:{(int)res.StatusCode}", $"HTTP {(int)res.StatusCode}", sw.ElapsedMilliseconds);
-            return HikQueryAgvStatusParser.Parse(text, sw.ElapsedMilliseconds);
+            if (!res.IsSuccessStatusCode) return RcsFleetResult.Fail($"{FleetErrorCodes.Http}:{(int)res.StatusCode}", $"HTTP {(int)res.StatusCode}", sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode };
+            return HikQueryAgvStatusParser.Parse(text, sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return RcsFleetResult.Fail(FleetErrorCodes.Timeout, "The RCS did not answer in time.", sw.ElapsedMilliseconds); }
         catch (HttpRequestException ex) { return RcsFleetResult.Fail(FleetErrorCodes.Unreachable, ex.Message, sw.ElapsedMilliseconds); }
