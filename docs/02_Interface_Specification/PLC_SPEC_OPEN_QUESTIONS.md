@@ -1,5 +1,7 @@
 # PLC Communication – Điểm cần xác nhận (TBD / Open Questions)
 
+> **⚠ SUPERSEDED một phần – CR-029, 2026-11-21.** Các câu hỏi gắn với tín hiệu của giao diện 10/11 (M9101, M9120, M9122, M9123, `Rack_Full`…) được thay bằng danh sách mới [PLC_VENDOR_CLARIFICATION_QUESTIONS_20_11_2026.md](PLC_20_11_2026/PLC_VENDOR_CLARIFICATION_QUESTIONS_20_11_2026.md) (PQ-01…PQ-25). Các câu hỏi **không** phụ thuộc tín hiệu (Q-LEG-1, Q-GATE-*, Q-MLEG-*, Q-AGV-1, Q-BUF-1, Q-INV-2, Q-LOC-1, Q-PH2-1…) **vẫn mở**. Giữ nguyên để truy vết.
+
 **Trạng thái:** `DRAFT – CR-010`. Danh sách này chỉ gồm những thông tin **thực sự chưa có căn cứ** trong `AGV_PLC_IO_Interface_List_10_11_2026.xlsx` hoặc trong yêu cầu ngày 2026-11-17. Những điều đã được xác nhận (mục 1) **không** được hỏi lại.
 **Cách dùng:** mỗi mục có mã (`Q-…`) được trích dẫn trong [Đặc tả đề xuất](PLC_COMMUNICATION_SPECIFICATION_DRAFT.md). Cột "Quyết định bởi" là đề xuất người chịu trách nhiệm. Mọi giá trị timeout/retry **chưa có** và **không được tự đặt**.
 

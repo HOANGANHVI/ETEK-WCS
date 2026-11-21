@@ -1,5 +1,7 @@
 # CR-010 – Hợp nhất quy trình nghiệp vụ và đặc tả giao tiếp PLC: mô hình Transport Task / Leg / Station Transaction (DRAFT)
 
+> **⚠ Hiệu lực một phần – CR-029, 2026-11-21.** Mô hình Transport Task / Leg / Station Transaction (ADR-0008) **còn hiệu lực**. Các mô tả tín hiệu, 9 bước và dữ liệu `Request_ID`/`Rack_Full…` dựa trên giao diện 10/11 đã bị thay bởi [PLC_20_11_2026/](PLC_20_11_2026/PLC_INTERFACE_SPECIFICATION_V2_20_11_2026.md) (Handshake, Transaction Lifecycle). Giữ nguyên để truy vết.
+
 **Trạng thái:** `DRAFT – chờ chủ dự án review/phê duyệt (CR-010)`. Chỉ là tài liệu. Không có mã nguồn, database, migration, API, UI hay cấu hình runtime nào bị thay đổi. Không sửa đặc tả baseline đã duyệt (xem §11).
 **Đọc cùng:** [Đặc tả giao tiếp PLC](PLC_COMMUNICATION_SPECIFICATION_DRAFT.md) · [Khảo sát & khoảng cách](PLC_REVIEW_CURRENT_STATE_AND_GAP_ANALYSIS.md) · [Câu hỏi cần xác nhận](PLC_SPEC_OPEN_QUESTIONS.md).
 

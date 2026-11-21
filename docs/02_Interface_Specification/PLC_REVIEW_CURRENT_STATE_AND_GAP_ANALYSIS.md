@@ -1,5 +1,7 @@
 # PLC Communication – Khảo sát hiện trạng và đối chiếu yêu cầu mới
 
+> **⚠ SUPERSEDED (cơ sở tín hiệu) – CR-029, 2026-11-21.** Bảng khoảng cách này dựa trên giao diện 10/11/2026. Phân tích tác động mới: [PLC_INTERFACE_CHANGE_IMPACT_ANALYSIS_20_11_2026.md](PLC_20_11_2026/PLC_INTERFACE_CHANGE_IMPACT_ANALYSIS_20_11_2026.md). Giữ nguyên để truy vết.
+
 **Trạng thái:** `DRAFT – CR-010 PENDING_APPROVAL`. Đây là tài liệu phân tích. Không có mã nguồn, database schema, migration hay cấu hình runtime nào bị thay đổi. Tài liệu baseline đã được duyệt (`docs/specification/*`, `README.md`, ADR, workbook v2) **không bị sửa**.
 **Ngày:** 2026-11-17 · **Nguồn đầu vào:** `AGV_PLC_IO_Interface_List_10_11_2026.xlsx` (sheet `IO Matrix`, `Trang_tính1`), yêu cầu của chủ dự án (task ngày 2026-11-17), mã nguồn tại commit `970b1e7`, workbook baseline v2 lấy từ `git HEAD`.
 **Tài liệu liên quan:** [Đặc tả đề xuất](PLC_COMMUNICATION_SPECIFICATION_DRAFT.md) · [Danh sách cần xác nhận](PLC_SPEC_OPEN_QUESTIONS.md) · CR-010 trong `docs/change-management/CHANGE_REQUESTS.md`.
