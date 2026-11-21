@@ -36,6 +36,9 @@ public static class DependencyInjection
             throw new NotSupportedException($"Rcs:Dispatch:Mode '{dispatchMode}' is not valid. Use '{Fleet.DispatchOptions.Legacy}' or '{Fleet.DispatchOptions.RcsManagedMode}'.");
         services.Configure<Fleet.DispatchOptions>(configuration.GetSection(Fleet.DispatchOptions.SectionName));
         services.AddScoped<Fleet.RcsRobotMapper>();
+        // CR-030: the REAL RCS dispatch adapter. OFF and EMPTY by default (Rcs:RealDispatch:Enabled=false, no mapping, no callback secret); the callback service is inert until enabled and authenticated.
+        services.Configure<RealDispatch.RealDispatchOptions>(configuration.GetSection(RealDispatch.RealDispatchOptions.SectionName));
+        services.AddScoped<RealDispatch.RcsCallbackService>();
         services.AddScoped<Fleet.DispatchModeGuard>();
         services.AddSingleton<Routing.LegAssignmentThrottle>();   // CR-028
         services.AddSingleton<Fleet.DispatchModeState>();   // CR-028: effective mode vs the mode configured now

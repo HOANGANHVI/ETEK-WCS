@@ -87,6 +87,13 @@ services:
       Rcs__Fleet__IntervalSeconds: ${RCS_FLEET_INTERVAL_SECONDS:-5}
       # CR-028: who chooses the AMR of a task. Legacy (default, unchanged). RcsManaged only works with the RCS SIMULATOR (no real create-task adapter exists): do NOT set it in operation.
       Rcs__Dispatch__Mode: ${RCS_DISPATCH_MODE:-Legacy}
+      # CR-030: the REAL RCS dispatch adapter (genAgvSchedulingTask, queryTaskStatus, continueTask, cancelTask, agvCallback). OFF by default. It also needs the RCS connection saved in the UI, a location/process
+      # mapping (a JSON file, see .env.example: RCS_REAL_DISPATCH_CONFIG_FILE) and, for the RCS -> WCS callback, a shared secret and/or allowed source addresses. Nothing is sent while anything is missing.
+      Rcs__RealDispatch__Enabled: ${RCS_REAL_DISPATCH_ENABLED:-false}
+      Rcs__RealDispatch__ConfigFile: ${RCS_REAL_DISPATCH_CONFIG_FILE:-}
+      Rcs__RealDispatch__Callback__Enabled: ${RCS_CALLBACK_ENABLED:-false}
+      Rcs__RealDispatch__Callback__SharedSecret: ${RCS_CALLBACK_SHARED_SECRET:-}
+      Rcs__RealDispatch__Callback__AllowedSources__0: ${RCS_CALLBACK_ALLOWED_SOURCE:-}
       Serilog__MinimumLevel__Default: ${WCS_LOG_LEVEL:-Information}
       # CR-007: deployment events written by deployment/scripts/*.ps1 are imported (read-only) into Logging & Diagnostics; build label shown in the start-up summary
       DeploymentLogs__Directory: /deploy-logs

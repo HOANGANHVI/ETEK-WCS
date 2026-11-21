@@ -81,7 +81,11 @@ public static class DependencyInjection
         services.AddScoped<IProcessedEventRepository, ProcessedEventRepository>();
         // CR-010: configurable Business Process / Route Engine persistence and the simulator-only leg dispatcher
         services.AddScoped<WCS.Application.Routing.IRoutingRepository, RoutingRepository>();
-        services.AddScoped<WCS.Application.Routing.ILegDispatcher, SimulatedLegDispatcher>();
+        // CR-030: Rcs:RealDispatch:Enabled=true replaces the RCS SIMULATOR by the real adapter (never switched automatically). Routing legs have NO real dispatcher yet (no confirmed leg mapping): with the
+        // real adapter they are refused (Blocked) instead of being "accepted" by the simulator.
+        var realRcsDispatch = configuration.GetValue<bool>($"{WCS.Application.RealDispatch.RealDispatchOptions.SectionName}:Enabled");
+        if (realRcsDispatch) services.AddScoped<WCS.Application.Routing.ILegDispatcher, WCS.Infrastructure.RealDispatch.RealLegDispatcher>();
+        else services.AddScoped<WCS.Application.Routing.ILegDispatcher, SimulatedLegDispatcher>();
         services.AddSingleton<WCS.Application.Routing.IPlcLinkStatus, PlcRuntimeLinkStatus>();
         services.AddSingleton<WCS.Application.Routing.IPlcObservationSource, UnavailablePlcObservationSource>();
         services.AddScoped<WcsDataSeeder>();
@@ -131,7 +135,12 @@ public static class DependencyInjection
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
         // CR-021: every RCS call is logged (operation, request code, outcome, duration, adapter); the Production guard looks through the wrapper (IRcsClientDecorator.Unwrap)
-        services.AddSingleton<IRcsClient>(sp => new LoggingRcsClient(sp.GetRequiredService<RcsSimulator>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LoggingRcsClient>>()));
+        if (realRcsDispatch)
+        {
+            services.AddSingleton<WCS.Infrastructure.RealDispatch.HikRcsClient>();
+            services.AddSingleton<IRcsClient>(sp => new LoggingRcsClient(sp.GetRequiredService<WCS.Infrastructure.RealDispatch.HikRcsClient>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LoggingRcsClient>>()));
+        }
+        else services.AddSingleton<IRcsClient>(sp => new LoggingRcsClient(sp.GetRequiredService<RcsSimulator>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LoggingRcsClient>>()));
         // CR-008A: Production must not dispatch to the simulator (explicit opt-in only).
         var allowRcsSimulatorInProduction = configuration.GetValue("Rcs:AllowSimulatorInProduction", false);
         services.AddSingleton<IRcsDispatchGuard>(sp => new RcsDispatchGuard(sp.GetRequiredService<IRcsClient>(),

@@ -1,5 +1,11 @@
 # Change Log
 
+## v3.21 – CR-030 Real RCS dispatch adapter (2026-11-21) – feature branch, MOCK verified, not merged
+
+- `HikRcsClient` (`IRcsClient`) for RCS-2000 API V3.3: `genAgvSchedulingTask`, `queryTaskStatus`, `continueTask`, `cancelTask`; RCS → WCS `agvCallback` endpoint (not mapped unless enabled; authenticated by WCS-side checks only; refused when none is configured; never completes a task or confirms a drop).
+- **OFF by default** (`Rcs:RealDispatch:Enabled=false`); location / process mapping is configuration and empty by default; missing mapping, RCS connection or port → fail closed (nothing sent, clear error, no token in logs). No `agvCode` in RcsManaged requests; `taskCode` = WCS request code; deterministic `reqCode` (≤ 32); code 6 accepted; 99 / timeouts / connection errors = unknown outcome.
+- Routing legs are blocked with the real RCS (no confirmed leg mapping); the simulator API is not exposed in real mode. Compose / `.env.example` / nginx (`/rcs/`) / `appsettings.example.json` carry the (default-off) keys. No database change. Verified with a mock RCS server only.
+
 ## v3.20 – Deployment configuration for the real RCS fleet source (2026-11-21)
 
 - `deployment/docker-compose.yml` and `.env.example` pass `Rcs:Fleet:Source` (`RCS_FLEET_SOURCE`, default `Simulator`), `Rcs:Fleet:IntervalSeconds` (`RCS_FLEET_INTERVAL_SECONDS`, default 5) and `Rcs:Dispatch:Mode` (`RCS_DISPATCH_MODE`, default `Legacy`) to the backend. Defaults keep the previous behaviour; `Integration__Mode` stays `Simulator` (no real create-task adapter exists). No PLC/RCS address or credential is stored in the repository.

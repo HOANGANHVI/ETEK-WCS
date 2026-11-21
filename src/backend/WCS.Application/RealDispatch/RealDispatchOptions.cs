@@ -1,0 +1,137 @@
+using WCS.Domain.Common;
+
+namespace WCS.Application.RealDispatch;
+
+/// <summary>
+/// CR-030: configuration of the REAL RCS dispatch adapter (HIKROBOT RCS-2000 API Developer Guide V3.3: genAgvSchedulingTask, queryTaskStatus, continueTask, cancelTask, agvCallback).
+/// Everything is OFF and EMPTY by default and is never hard-coded: <c>Enabled=false</c>, no location mapping, no process mapping, no callback secret. The RCS host, port and token are NOT here:
+/// they come from the RCS connection that an Admin saved in the UI (token stored encrypted). Missing information makes every call fail closed (nothing is sent, the reason is returned).
+/// </summary>
+public sealed class RealDispatchOptions
+{
+    public const string SectionName = "Rcs:RealDispatch";
+
+    /// <summary>The master switch. false (default) = the RCS SIMULATOR is used exactly as before. true = the real adapter replaces the simulator (never switched automatically).</summary>
+    public bool Enabled { get; set; }
+    /// <summary>Optional override of the RCS API port. 0 = use the port saved in the RCS connection. If both are missing the adapter fails closed.</summary>
+    public int Port { get; set; }
+    /// <summary>The path of the RCS REST services (API document 5.2: <c>/rcms/services/rest/hikRpcService/&lt;api&gt;</c>).</summary>
+    public string ServicePath { get; set; } = "/rcms/services/rest/hikRpcService";
+    /// <summary>"clientCode": third-party platform ID (max 16 characters, optional in the API). Empty = not sent.</summary>
+    public string ClientCode { get; set; } = "";
+    /// <summary>Seconds to wait for one RCS call before it counts as a timeout (an unknown outcome, never a certain failure).</summary>
+    public int TimeoutSeconds { get; set; } = 10;
+    /// <summary>"forceCancel" of cancelTask. Empty = not sent (the RCS default "0": the AMR puts the rack down at its current location - the rack position becomes uncertain for WCS).</summary>
+    public string CancelMode { get; set; } = "";
+
+    /// <summary>WCS Location code -> RCS position. EMPTY by default; never generated.</summary>
+    public Dictionary<string, LocationMapping> Locations { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>WCS process flow (Bp01, Bp02, Bp03, Bp05, Bp06) -> RCS task type and parameters. EMPTY by default; never generated.</summary>
+    public Dictionary<string, ProcessMapping> Processes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public CallbackOptions Callback { get; set; } = new();
+
+    public static string FlowKey(ProcessFlow flow) => flow.ToString();
+    public ProcessMapping? ProcessOf(ProcessFlow flow)
+    {
+        foreach (var (k, v) in Processes)
+            if (Normalise(k) == Normalise(flow.ToString())) return v;
+        return null;
+    }
+    private static string Normalise(string key) => new(key.Where(char.IsLetterOrDigit).ToArray().Select(char.ToUpperInvariant).ToArray());
+}
+
+/// <summary>RCS "positionCode" and its "type" ("00" actual location on map ... "13", API document 5.2.1). Both must be given.</summary>
+public sealed class LocationMapping
+{
+    public string PositionCode { get; set; } = "";
+    public string Type { get; set; } = "";
+}
+
+/// <summary>How a WCS process flow is sent: "taskTyp" (required by the API) and the positions of "positionCodePath", named by role.</summary>
+public sealed class ProcessMapping
+{
+    /// <summary>"taskTyp" configured in RCS-2000 (for example "F01"); max 16 characters. Required.</summary>
+    public string TaskTyp { get; set; } = "";
+    /// <summary>The locations of "positionCodePath" in order, by role: <c>Source</c> (where the rack is picked) and <c>Request</c> (the station that asked). Required, at least one. A destination chosen after the pick is sent later by continueTask.</summary>
+    public List<string> PositionPath { get; set; } = [];
+    public string? PodDir { get; set; }
+    public string? PodTyp { get; set; }
+    public string? Priority { get; set; }
+    public string? TaskMode { get; set; }
+}
+
+/// <summary>
+/// The RCS -> WCS callback (agvCallback, 5.3.1). The API document defines NO authentication for it, so none is invented: with neither a shared secret nor an allowed-source list the callback
+/// is refused. These settings are WCS-side checks only (a header that the RCS side / a reverse proxy must be configured to send, and/or the source address).
+/// </summary>
+public sealed class CallbackOptions
+{
+    public bool Enabled { get; set; }
+    /// <summary>Path WCS listens on (the API document shows "/xxx/agv/agvCallbackService/agvCallback": the prefix is chosen by the integrator). Must not be under /api (that prefix needs the browser client header).</summary>
+    public string Path { get; set; } = "/rcs/agv/agvCallbackService/agvCallback";
+    public string HeaderName { get; set; } = "X-Rcs-Callback-Token";
+    /// <summary>Shared secret expected in <see cref="HeaderName"/>. EMPTY by default. Never put a real value in Git: use the environment (Rcs__RealDispatch__Callback__SharedSecret).</summary>
+    public string SharedSecret { get; set; } = "";
+    /// <summary>IP addresses or CIDR ranges the callback may come from. EMPTY by default.</summary>
+    public List<string> AllowedSources { get; set; } = [];
+    public int MaxBodyBytes { get; set; } = 65536;
+
+    /// <summary>The allowed sources without blank entries (a deployment that leaves the setting empty passes one blank entry).</summary>
+    public IReadOnlyList<string> EffectiveSources => AllowedSources.Where(s => !string.IsNullOrWhiteSpace(s)).ToList();
+    public bool AuthenticationConfigured => !string.IsNullOrEmpty(SharedSecret) || EffectiveSources.Count > 0;
+}
+
+/// <summary>Whether the real adapter has everything it needs. Pure function of the options: used at start (log) and before every call (fail closed).</summary>
+public static class RealDispatchReadiness
+{
+    private static readonly string[] PositionTypes = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13"];
+    private static readonly string[] Roles = ["Source", "Request"];
+
+    /// <summary>Problems that prevent ANY call (global configuration).</summary>
+    public static IReadOnlyList<string> GlobalProblems(RealDispatchOptions o)
+    {
+        var p = new List<string>();
+        if (!o.Enabled) p.Add("Rcs:RealDispatch:Enabled is false.");
+        if (string.IsNullOrWhiteSpace(o.ServicePath) || !o.ServicePath.StartsWith('/')) p.Add("Rcs:RealDispatch:ServicePath must start with '/'.");
+        if (o.ClientCode.Length > 16) p.Add("Rcs:RealDispatch:ClientCode is longer than 16 characters.");
+        if (o.TimeoutSeconds < 1) p.Add("Rcs:RealDispatch:TimeoutSeconds must be at least 1.");
+        if (o.CancelMode.Length > 16) p.Add("Rcs:RealDispatch:CancelMode is longer than 16 characters.");
+        return p;
+    }
+
+    /// <summary>Problems of one location mapping (null = valid).</summary>
+    public static string? LocationProblem(string locationCode, LocationMapping? m)
+    {
+        if (m is null || string.IsNullOrWhiteSpace(m.PositionCode)) return $"Location '{locationCode}' has no RCS positionCode in Rcs:RealDispatch:Locations.";
+        if (m.PositionCode.Length > 16) return $"positionCode of '{locationCode}' is longer than 16 characters.";
+        if (!PositionTypes.Contains(m.Type)) return $"The position type of '{locationCode}' must be one of \"00\"-\"13\" (API document 5.2.1).";
+        return null;
+    }
+
+    /// <summary>Problems of one process mapping (null = valid).</summary>
+    public static string? ProcessProblem(ProcessFlow flow, ProcessMapping? m)
+    {
+        if (m is null || string.IsNullOrWhiteSpace(m.TaskTyp)) return $"Process {flow} has no taskTyp in Rcs:RealDispatch:Processes.";
+        if (m.TaskTyp.Length > 16) return $"taskTyp of {flow} is longer than 16 characters.";
+        if (m.PositionPath.Count == 0) return $"Process {flow} has no PositionPath (which locations form positionCodePath).";
+        if (m.PositionPath.Any(r => !Roles.Contains(r, StringComparer.OrdinalIgnoreCase))) return $"PositionPath of {flow} may contain only 'Source' and 'Request'.";
+        if (m.PodDir is not null && m.PodDir != "" && m.PodDir is not ("180" or "0" or "90" or "-90")) return $"podDir of {flow} must be \"180\", \"0\", \"90\" or \"-90\".";
+        if (m.Priority is { Length: > 0 } pr && !(int.TryParse(pr, out var n) && n is >= 1 and <= 127)) return $"priority of {flow} must be 1-127.";
+        if (m.TaskMode is { Length: > 0 } tm && tm is not ("0" or "1" or "2" or "3")) return $"taskMode of {flow} must be 0-3.";
+        return null;
+    }
+
+    /// <summary>Everything that is missing for the configured flows (used for the start-up log; a call checks only what it needs).</summary>
+    public static IReadOnlyList<string> Report(RealDispatchOptions o)
+    {
+        var p = new List<string>(GlobalProblems(o));
+        if (o.Processes.Count == 0) p.Add("Rcs:RealDispatch:Processes is empty: no process flow can be sent.");
+        foreach (var flow in Enum.GetValues<ProcessFlow>())
+            if (o.ProcessOf(flow) is { } m && ProcessProblem(flow, m) is { } pp) p.Add(pp);
+        if (o.Locations.Count == 0) p.Add("Rcs:RealDispatch:Locations is empty: no location can be sent.");
+        foreach (var (code, m) in o.Locations)
+            if (LocationProblem(code, m) is { } lp) p.Add(lp);
+        if (o.Callback.Enabled && !o.Callback.AuthenticationConfigured) p.Add("Rcs:RealDispatch:Callback is enabled but has neither SharedSecret nor AllowedSources: every callback will be refused.");
+        return p;
+    }
+}
