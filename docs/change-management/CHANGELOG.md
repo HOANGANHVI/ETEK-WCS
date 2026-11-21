@@ -1,5 +1,14 @@
 # Change Log
 
+## v3.19 – CR-029 PLC interface 20/11/2026 specification (2026-11-21) – merged into main, documentation only, PENDING_APPROVAL (pending PLC clarification)
+
+- New specification set `docs/02_Interface_Specification/PLC_20_11_2026/` (Interface, Handshake, IO Mapping, Architecture, Transaction Lifecycle, Error Handling & Recovery, Test Specification, Change Impact Analysis, Vendor Questions PQ-01…PQ-25) based on `AGV_PLC Interface_List_20_11_2026.xlsx`.
+- Older PLC drafts marked SUPERSEDED / partly obsolete (kept, not deleted); `PLC_IO_Map/README.md` records the status of the three workbooks.
+- Conflicts recorded, not resolved: one transaction per PLC vs per Station (ADR-0008), `Mission_Feedback` AGV1–3 vs dynamic AMR fleet (CR-028), CLAUDE.md §7 vs the new interface, G1/G2 vs G3/G7.
+- No code, database, migration, Docker, `.env`, PLC address or running mapping changed.
+- **2026-11-21 decisions recorded (ADR-0011):** D-1 at most one active Handshake per PLC with one FIFO queue per PLC (not implemented; the current code has no PLC-level FIFO; ADR-0008 decision 4 superseded in part); D-2 AGV1–3 are not an AMR identity, WCS stores the real `RobotCode`, `Mission_Feedback` = request status, new feedback interface to be agreed; D-3 CLAUDE.md section 7 updated (20/11 interface = new, pending; IO Map v2 = old baseline); D-4 loss of physical rack reconciliation not accepted (rack presence, identity, transaction uniqueness, interlock; `PLC_MissionCompleted=1` is not sufficient). Vendor questions reorganised (pending questions / decisions / interface proposals IF-P1…IF-P5), PQ-26…PQ-29 added. CR-029 stays PENDING_APPROVAL.
+
+
 ## v3.18 – CR-028 Dynamic fleet dispatch (2026-11-21) – merged into main (RcsManaged verified on the RCS simulator only)
 
 - **`Rcs:Dispatch:Mode`** `Legacy` (default, unchanged) | `RcsManaged`: the task is sent **without** an AMR code and the (simulated) RCS chooses; WCS learns the robot from `queryTaskStatus` / the callback (`RobotCode`, `AssignedAt`); `RcsDispatchState` tracks NotSent / Sending / Accepted / AwaitingAssignment / Assigned / SyncError (the 13 task states are unchanged).
@@ -18,14 +27,6 @@
 - **AGV Monitoring:** fleet panel with any number of AMRs, fresh / stale / missing, last-seen time, VI/EN; `GET /api/agvs/fleet`; realtime `FleetChanged`.
 - **Unchanged (verified):** Task lifecycle, `AgvId`, `PER_AGV`, AGV1/AGV2 roles, dispatch, `genAgvSchedulingTask`, PLC, Station, Inventory, Rack binding, Dashboard / KPI / statistics (golden before/after), existing schema blocks (byte-identical). Phase 2 deferred.
 - Baseline: `CR-027_BASELINE.md`; RCS API PDF added under `docs/03_RCS_Interface/`.
-
-## v3.19 – CR-029 PLC interface 20/11/2026 specification (2026-11-21) – merged into main, documentation only, PENDING_APPROVAL (pending PLC clarification)
-
-- New specification set `docs/02_Interface_Specification/PLC_20_11_2026/` (Interface, Handshake, IO Mapping, Architecture, Transaction Lifecycle, Error Handling & Recovery, Test Specification, Change Impact Analysis, Vendor Questions PQ-01…PQ-25) based on `AGV_PLC Interface_List_20_11_2026.xlsx`.
-- Older PLC drafts marked SUPERSEDED / partly obsolete (kept, not deleted); `PLC_IO_Map/README.md` records the status of the three workbooks.
-- Conflicts recorded, not resolved: one transaction per PLC vs per Station (ADR-0008), `Mission_Feedback` AGV1–3 vs dynamic AMR fleet (CR-028), CLAUDE.md §7 vs the new interface, G1/G2 vs G3/G7.
-- No code, database, migration, Docker, `.env`, PLC address or running mapping changed.
-- **2026-11-21 decisions recorded (ADR-0011):** D-1 at most one active Handshake per PLC with one FIFO queue per PLC (not implemented; the current code has no PLC-level FIFO; ADR-0008 decision 4 superseded in part); D-2 AGV1–3 are not an AMR identity, WCS stores the real `RobotCode`, `Mission_Feedback` = request status, new feedback interface to be agreed; D-3 CLAUDE.md section 7 updated (20/11 interface = new, pending; IO Map v2 = old baseline); D-4 loss of physical rack reconciliation not accepted (rack presence, identity, transaction uniqueness, interlock; `PLC_MissionCompleted=1` is not sufficient). Vendor questions reorganised (pending questions / decisions / interface proposals IF-P1…IF-P5), PQ-26…PQ-29 added. CR-029 stays PENDING_APPROVAL.
 
 ## v3.16 – CR-026 Configuration Export / Import, Phase 2 (2026-11-19) – feature branch, not merged
 
