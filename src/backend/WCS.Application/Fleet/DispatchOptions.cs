@@ -21,6 +21,8 @@ public sealed class DispatchOptions
     public int AssignmentCheckSeconds { get; set; } = 5;
     /// <summary>Seconds between two re-checks of a task that already has an AMR (detects a change of robot).</summary>
     public int AssignedRecheckSeconds { get; set; } = 60;
+    /// <summary>RcsManaged legs: how many CONSECUTIVE queries must report the same different AMR (while the rack is on the old AMR) before the Order goes to ReconciliationRequired. At least 2: one query alone never does it. Technical proposal, not a business rule.</summary>
+    public int RobotChangeConfirmChecks { get; set; } = 2;
 
     public bool IsRcsManaged => string.Equals(Mode, RcsManagedMode, StringComparison.OrdinalIgnoreCase);
     public static bool IsValidMode(string? mode) => string.Equals(mode, Legacy, StringComparison.OrdinalIgnoreCase) || string.Equals(mode, RcsManagedMode, StringComparison.OrdinalIgnoreCase);

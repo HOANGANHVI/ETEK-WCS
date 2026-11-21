@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using WCS.Application.Abstractions;
 using WCS.Application.Fleet;
 using WCS.Application.Routing;
 using WCS.Domain.Common;
@@ -137,7 +138,7 @@ public class Cr028LegRobotTests(DatabaseFixture fixture)
 
         await kit.PickAsync(leg.Id);                                                                // the rack is on the AMR now
         kit.H.Rcs.ReassignRobot(leg.AgvRequestCode, first);
-        await SyncAsync(kit, 61); await SyncAsync(kit, 61);
+        await SyncAsync(kit, 61);                                                                   // the FIRST sighting of another AMR is only a warning (a second identical one would confirm it)
         var held = await LegAsync(kit, o.Id);
         Assert.Equal(other, held.RobotCode);                                                        // NOT changed: no approved hand-over
         Assert.Equal(LegState.InProgress, held.State);                                              // and nothing else happens either
@@ -159,6 +160,100 @@ public class Cr028LegRobotTests(DatabaseFixture fixture)
         Assert.Equal(LegState.Completed, a.State);                                                  // leg 1 is finished and keeps its history
         Assert.Contains("LEG_ROBOT_DIFFERS_FROM_PREVIOUS_LEG", await EventsAsync(kit, o.Id));       // reported, no action taken, state untouched
         Assert.Equal(LegState.InProgress, b.State);
+    }
+
+    // ================================================================================================ LEG_ROBOT_CHANGE_REFUSED: warning first, ReconciliationRequired only when confirmed
+    private static async Task<(Guid OrderId, TransportLeg Leg, string First, string Other)> PickedLegAsync(RoutingKit kit)
+    {
+        var o = (await kit.StartAsync("o1", "A1", RequestType.PickupRequest, RackKind.Full)).Order;
+        var leg = await LegAsync(kit, o.Id);
+        await SyncAsync(kit);
+        var first = (await LegAsync(kit, o.Id)).RobotCode!;
+        await kit.PickAsync(leg.Id);                                                                // the rack is on the AMR
+        return (o.Id, leg, first, first == "SIM-001" ? "SIM-002" : "SIM-001");
+    }
+
+    [Fact]
+    public async Task One_inconsistent_report_is_a_warning_and_is_cleared_when_the_RCS_names_the_original_AMR_again()
+    {
+        await using var kit = await KitAsync(fixture, managed: true, amrs: 2);
+        var (oid, leg, first, other) = await PickedLegAsync(kit);
+        kit.H.Rcs.ReassignRobot(leg.AgvRequestCode, other); await SyncAsync(kit, 61);                 // sighting 1 (an assigned leg is re-checked every 60 s)
+        kit.H.Rcs.ReassignRobot(leg.AgvRequestCode, first); await SyncAsync(kit);                   // the RCS is consistent again: cleared
+        kit.H.Rcs.ReassignRobot(leg.AgvRequestCode, other); await SyncAsync(kit, 61);                   // a new sighting 1 - NOT consecutive with the first
+        var order = await kit.OrderAsync(oid);
+        Assert.Equal(OrderState.InProgress, order.State);                                           // never recoverable-by-hand because of a transient answer
+        Assert.Equal(first, (await LegAsync(kit, oid)).RobotCode);
+        Assert.DoesNotContain("LEG_ROBOT_CHANGE_CONFIRMED", await EventsAsync(kit, oid));
+        Assert.Equal(2, (await EventsAsync(kit, oid)).Count(k => k == "LEG_ROBOT_CHANGE_REFUSED"));
+    }
+
+    [Fact]
+    public async Task A_failing_query_between_two_reports_neither_confirms_nor_clears()
+    {
+        await using var kit = await KitAsync(fixture, managed: true, amrs: 2);
+        var (oid, leg, first, other) = await PickedLegAsync(kit);
+        kit.H.Rcs.ReassignRobot(leg.AgvRequestCode, other); await SyncAsync(kit, 61);                 // sighting 1
+        kit.H.Rcs.TaskQueryFailure = true; await SyncAsync(kit);                                    // inconclusive: nothing changes
+        Assert.Equal(OrderState.InProgress, (await kit.OrderAsync(oid)).State);
+        kit.H.Rcs.TaskQueryFailure = false; await SyncAsync(kit);                                   // sighting 2 (consecutive): confirmed
+        Assert.Equal(OrderState.ReconciliationRequired, (await kit.OrderAsync(oid)).State);
+        Assert.Equal(first, (await LegAsync(kit, oid)).RobotCode);
+    }
+
+    [Fact]
+    public async Task A_confirmed_change_while_the_rack_is_on_the_AMR_stops_the_Order_and_updates_nothing()
+    {
+        await using var kit = await KitAsync(fixture, managed: true, amrs: 2, twoStep: true);
+        var (oid, leg, first, other) = await PickedLegAsync(kit);
+        var before = await LegAsync(kit, oid);
+        var rackBefore = (await kit.RacksAsync()).Single(r => r.Id == before.RackId);
+        var invTx = await kit.H.Db(db => db.InventoryTransactions.CountAsync());
+        var tasksInRcs = kit.H.Rcs.TaskCount;
+
+        kit.H.Rcs.ReassignRobot(leg.AgvRequestCode, other);
+        await SyncAsync(kit, 61); await SyncAsync(kit);                                             // the same different AMR in two consecutive queries
+        var order = await kit.OrderAsync(oid);
+        Assert.Equal(OrderState.ReconciliationRequired, order.State);
+        var kinds = await EventsAsync(kit, oid);
+        Assert.Contains("LEG_ROBOT_CHANGE_CONFIRMED", kinds); Assert.Contains("RECONCILIATION_REQUIRED", kinds);
+
+        var after = await LegAsync(kit, oid);
+        Assert.Equal(first, after.RobotCode); Assert.Equal(before.AssignedAt, after.AssignedAt);   // RobotCode NOT updated
+        Assert.Equal(LegState.InProgress, after.State); Assert.Null(after.DropConfirmedAt);        // no hand-over confirmed
+        var rack = (await kit.RacksAsync()).Single(r => r.Id == before.RackId);
+        Assert.Equal(RackStatus.InTransit, rack.Status); Assert.Null(rack.CurrentLocationId);       // rack position NOT touched
+        Assert.Equal(rackBefore.Status, rack.Status);
+        Assert.Equal(invTx, await kit.H.Db(db => db.InventoryTransactions.CountAsync()));          // inventory untouched
+
+        kit.H.Rcs.ReassignRobot(leg.AgvRequestCode, first); await SyncAsync(kit); await SyncAsync(kit);   // later answers do not change anything either
+        await kit.TickAsync();
+        Assert.Single((await kit.OrderAsync(oid)).Legs);                                            // no next leg is created or dispatched
+        Assert.Equal(tasksInRcs, kit.H.Rcs.TaskCount);
+        Assert.Equal(OrderState.ReconciliationRequired, (await kit.OrderAsync(oid)).State);
+    }
+
+    // ================================================================================================ the RCS saying "completed" is not a hand-over
+    [Fact]
+    public async Task RCS_reports_the_task_completed_but_without_a_confirmed_drop_nothing_advances_until_the_drop_is_confirmed()
+    {
+        await using var kit = await KitAsync(fixture, managed: true, amrs: 2, twoStep: true);
+        var (oid, leg, _, _) = await PickedLegAsync(kit);
+        kit.H.Rcs.SetStatus(leg.AgvRequestCode, RcsTaskStatus.Completed);
+        var tasksInRcs = kit.H.Rcs.TaskCount;
+        await SyncAsync(kit, 61); await SyncAsync(kit, 61); await kit.TickAsync();
+        var waiting = await LegAsync(kit, oid);
+        Assert.Equal(LegState.InProgress, waiting.State); Assert.Null(waiting.DropConfirmedAt);     // not completed
+        Assert.Single((await kit.OrderAsync(oid)).Legs);                                            // the next leg is NOT dispatched
+        Assert.Equal(tasksInRcs, kit.H.Rcs.TaskCount);
+        Assert.Equal(1, (await EventsAsync(kit, oid)).Count(k => k == "LEG_RCS_COMPLETED_WITHOUT_DROP"));   // reported once, state untouched
+        Assert.Equal(OrderState.InProgress, (await kit.OrderAsync(oid)).State);
+
+        await kit.DropAsync(leg.Id);                                                                // the confirmed drop: rack placed, inventory updated, history written
+        var order = await kit.OrderAsync(oid);
+        Assert.Equal(LegState.Completed, order.Legs.Single(l => l.Sequence == 1).State);
+        Assert.Equal(2, order.Legs.Count);                                                          // only now the next leg exists
+        Assert.Contains("DROP_CONFIRMED", await EventsAsync(kit, oid));
     }
 
     // ================================================================================================ Legacy

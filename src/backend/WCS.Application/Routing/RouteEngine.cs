@@ -372,24 +372,34 @@ public sealed class RouteEngine(
             var plan = await uow.ExecuteAsync<(string? RobotCode, string AgvRequestCode)?>(async t =>
             {
                 var leg = await routing.GetLegAsync(legId, t);
-                return leg is null || leg.IsTerminal || leg.AgvTaskCode is null ? null : (leg.RobotCode, leg.AgvRequestCode);
+                if (leg is null || leg.IsTerminal || leg.AgvTaskCode is null) return null;
+                var ord = await routing.GetOrderAsync(leg.OrderId, t);
+                if (ord is null || ord.IsTerminal || ord.State == OrderState.ReconciliationRequired) return null;   // an Order under reconciliation: nothing is updated automatically
+                return (leg.RobotCode, leg.AgvRequestCode);
             }, ct);
             if (plan is null) { legThrottle.Forget(legId); continue; }
-            var every = TimeSpan.FromSeconds(Math.Max(1, plan.Value.RobotCode is null ? o.AssignmentCheckSeconds : o.AssignedRecheckSeconds));
+            var pendingConfirmation = legThrottle.LastRefused(legId) is not null;   // a different AMR was reported: ask again soon to confirm or clear it
+            var every = TimeSpan.FromSeconds(Math.Max(1, plan.Value.RobotCode is null || pendingConfirmation ? o.AssignmentCheckSeconds : o.AssignedRecheckSeconds));
             if (!legThrottle.IsDue(legId, now, every)) continue;
             using var _frame = DiagnosticContext.Begin(await CorrelationOfLegAsync(legId, ct));
             RcsTaskInfo? info = null; string? error = null;
             try { info = await dispatcher.QueryAsync(plan.Value.AgvRequestCode, ct); }   // external call outside any transaction
             catch (Exception ex) when (ex is not OperationCanceledException) { error = ex.Message; }
             var failed = info is null || info.Status is RcsTaskStatus.Unknown or RcsTaskStatus.NotFound;
-            var wasFailing = legThrottle.WasFailing(legId); var lastRefused = legThrottle.LastRefused(legId);
-            string? refused = null;
+            var wasFailing = legThrottle.WasFailing(legId); var lastRefused = legThrottle.LastRefused(legId); var countBefore = legThrottle.RefusedCount(legId); var completedNoted = legThrottle.CompletedNoted(legId);
+            string? refused = null; var refusedCount = 0; var needed = Math.Max(2, o.RobotChangeConfirmChecks);
             var map = failed ? null : await uow.ExecuteAsync(t => robotMapper.MapAsync(info!.AgvCode, t), ct);
             var did = await uow.ExecuteAsync(async t =>
             {
                 var leg = await routing.GetLegAsync(legId, t);
                 if (leg is null || leg.IsTerminal) return false;
                 var order = (await routing.GetOrderAsync(leg.OrderId, t))!;
+                if (order.IsTerminal || order.State == OrderState.ReconciliationRequired) return false;
+                if (!failed && info!.Status == RcsTaskStatus.Completed && leg.DropConfirmedAt is null && !completedNoted)
+                {   // the RCS says the task is done, but the drop was NOT confirmed: that is not a hand-over. Nothing advances; the leg waits for the confirmed drop (see CR-028 section 13)
+                    Event(order, leg, null, "LEG_RCS_COMPLETED_WITHOUT_DROP", "The RCS reports the task completed; the drop of the rack has not been confirmed. The leg is not completed and the next leg is not dispatched.", "RCS");
+                    completedNoted = true;
+                }
                 if (failed)
                 {
                     if (!wasFailing) Event(order, leg, null, "LEG_ROBOT_SYNC_ERROR", info?.Status.ToString() ?? error, "RCS");   // a synchronisation problem, NOT a failed leg
@@ -413,12 +423,22 @@ public sealed class RouteEngine(
                         return true;
                     case LegRobotOutcome.RefusedRackOnAmr:
                         refused = info.AgvCode;
-                        if (lastRefused != refused) Event(order, leg, null, "LEG_ROBOT_CHANGE_REFUSED", $"rack is on {leg.RobotCode}; the RCS reports {refused}. No hand-over is approved: the leg keeps {leg.RobotCode}; reconcile in the RCS", "RCS");
+                        refusedCount = (lastRefused == refused ? countBefore : 0) + 1;
+                        // 1st sighting: a WARNING only (the answer may be inconsistent / transient). The robot, the rack and the hand-over are not touched.
+                        if (refusedCount == 1) Event(order, leg, null, "LEG_ROBOT_CHANGE_REFUSED", $"rack is on {leg.RobotCode}; the RCS reports {refused}. Not followed (no hand-over is approved); it is checked again", "RCS");
+                        if (refusedCount >= needed)
+                        {   // the RCS repeats the same different AMR while the rack is on the old one: that is the confirmation. Stop, do not guess: an Admin reconciles with the physical reality.
+                            Event(order, leg, null, "LEG_ROBOT_CHANGE_CONFIRMED", $"the RCS reported {refused} in {refusedCount} consecutive queries while the rack is on {leg.RobotCode}", "RCS");
+                            order.TransitionTo(OrderState.ReconciliationRequired, "RACK_ON_AMR_RCS_REPORTS_OTHER_AMR", WaitKind.None, clock.UtcNow);
+                            Event(order, null, null, "RECONCILIATION_REQUIRED", $"leg {leg.Sequence}: the rack is on {leg.RobotCode} but the RCS reports {refused}; RobotCode, rack position and hand-over are NOT updated", "RCS");
+                            return true;
+                        }
                         return false;
                     default: return false;
                 }
             }, ct);
-            legThrottle.Checked(legId, now, failed, refused);
+            if (failed) { refused = lastRefused; refusedCount = countBefore; }   // an inconclusive query neither confirms nor clears a sighting
+            legThrottle.Checked(legId, now, failed, refused, refusedCount, completedNoted);
             if (did) { changed++; await notifier.PublishAsync([new WcsEvent("OrderChanged", new { legId })], ct); }
         }
         return changed;

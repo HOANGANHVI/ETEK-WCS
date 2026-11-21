@@ -108,7 +108,7 @@ There is no runtime switch (no API/UI): the mode is configuration read at start.
 - **Robot not in the fleet read model** (current source only): stored as reported, event `LEG_ROBOT_NOT_IN_FLEET`; no AGV is created.
 - **Query failure / unknown task:** event `LEG_ROBOT_SYNC_ERROR` once (not at every tick); the leg is not failed; recovers by itself.
 - **Station Transaction:** when the AMR becomes known the active transactions of the leg move to `AgvAssigned` (forward only; `AgvId` of the transaction stays empty).
-- **A different AMR reported:** *before the pick* it is followed (`LEG_ROBOT_CHANGED`); *while the rack is on the AMR* it is **not followed** – the leg keeps its robot and `LEG_ROBOT_CHANGE_REFUSED` is recorded once (no hand-over is approved; reconcile in the RCS). A leg that is finished keeps its robot as history.
+- **A different AMR reported:** *before the pick* it is followed (`LEG_ROBOT_CHANGED`); *while the rack is on the AMR* it is **not followed** – the leg keeps its robot; the first report is a warning (`LEG_ROBOT_CHANGE_REFUSED`) and only a **confirmed** change sends the Order to `ReconciliationRequired` (section 13). A leg that is finished keeps its robot as history.
 - **Consecutive legs:** each leg keeps its own robot. If a later leg is carried by another AMR than the previous leg of the order, `LEG_ROBOT_DIFFERS_FROM_PREVIOUS_LEG` is recorded as **information only**; no state change, no action.
 
 **API / DTO / UI.** `LegDto` (inside `OrderDto`, `/api/routing/orders…`) gets trailing optional `RobotCode`, `AssignedAt` (older clients ignore them). Routing page: new column "AMR (chosen by the RCS)" ("Waiting for the RCS" until reported). Repositories: `ListManagedLegIdsToSyncAsync`. No other consumer of legs exists (statistics and the fleet view use tasks). Simulator: a leg sent without a robot code is registered with the simulated RCS, which chooses the AMR exactly as for tasks (Legacy legs are unchanged).
@@ -132,7 +132,7 @@ Source: `reference-processes.json` (reference drafts derived from the approved m
 
 Conclusion: **every approved flow today (BP-01…06) is a single continuous leg**, so no approved flow depends on an AMR change; the multi-leg question concerns processes that an Admin may configure later (and the Phase 2 drafts).
 
-## 12. Rule for the AMR between legs and what is enforced / still open
+## 12. Rule for the AMR between legs and what is enforced / still open (decisions of 2026-11-21 are in section 13; this section is the state before them)
 
 | Case | Rule (owner decision 2026-11-21) | State |
 |---|---|---|
@@ -145,3 +145,31 @@ Conclusion: **every approved flow today (BP-01…06) is a single continuous leg*
 2. If continuity is required between two legs, may WCS send the previous leg's `agvCode` in the next `genAgvSchedulingTask`? (This is WCS choosing the AMR for that leg, an exception to "only the RCS chooses"; it also needs vendor question 12.)
 3. What must happen on `LEG_ROBOT_CHANGE_REFUSED` (a rack on an AMR that the RCS says is another AMR): Order to `ReconciliationRequired`, alarm only, …?
 4. What exactly confirms a hand-over (the confirmed drop at the Location, or an additional event)?
+
+## 13. Owner decisions of 2026-11-21 (third round): principles, what CR-028 enforces, what is deferred
+
+**Accepted and kept:** one `RobotCode` per leg; updated only from a valid `agvCode` of the RCS; never inherited from the task or the previous leg; no invented AGV; Legacy unchanged.
+
+**Principles (architecture only, nothing more is built in CR-028).**
+1. Independent legs with a clear hand-over of the rack / goods may each use another AMR; **the RCS chooses the AMR of every leg**.
+2. No arbitrary change of AMR between continuous legs while the rack is on the AMR.
+3. `AmrContinuity` in the Business Process definition: **a separate CR later** (not part of CR-028).
+4. **WCS never sends the `agvCode` of the previous leg in the next request** to force the same AMR. A process that *must* use the same AMR is not implemented on an assumption: it first needs the RCS to confirm that it keeps the AMR across sub tasks and the `continueTask` mechanism (vendor questions 9-13).
+5. **A hand-over is confirmed only by WCS**: the rack is placed at the right Location / buffer, a drop-confirmed event arrives, WCS updates the status and the position of the rack successfully, and the history records it (`ConfirmDropAsync`: `DROP_CONFIRMED`, inventory transaction, rack placed). The RCS reporting the task **completed** is not a hand-over: legs are completed and the next leg is created only by the confirmed drop. Missing signals / inconsistent data stop the flow for reconciliation.
+
+**What CR-028 enforces now (RcsManaged, simulator).**
+
+| Situation | Behaviour |
+|---|---|
+| The RCS names another AMR while the rack is **not yet picked** | followed (`LEG_ROBOT_CHANGED`) – nothing is on the AMR |
+| First report of another AMR while the rack **is on the AMR** | **warning** `LEG_ROBOT_CHANGE_REFUSED`; nothing is changed; checked again every `AssignmentCheckSeconds` |
+| The RCS names the original AMR again | the sighting is cleared (inconsistent data = warning only) |
+| An inconclusive query (error / unknown task) between two reports | neither confirms nor clears (`LEG_ROBOT_SYNC_ERROR` once) |
+| The **same different AMR** in `Rcs:Dispatch:RobotChangeConfirmChecks` (default and minimum **2**) consecutive queries while the rack is on the old AMR | **confirmed**: events `LEG_ROBOT_CHANGE_CONFIRMED` and `RECONCILIATION_REQUIRED`; the Order goes to `ReconciliationRequired` (an existing state, no state-machine change) |
+| Order in `ReconciliationRequired` | no further leg is created or dispatched; `RobotCode`, `AssignedAt`, the rack status / position, the inventory and the hand-over are **not** updated automatically; the robot sync skips the Order; only an Admin decision after checking the physical reality leaves the state (existing rule) |
+| The RCS reports the leg's task **completed** but the drop is not confirmed | `LEG_RCS_COMPLETED_WITHOUT_DROP` once (information); the leg stays InProgress, no next leg, no inventory change; it advances only by the confirmed drop |
+| Next leg whose rack is not at the previous destination | existing rule: `RACK_NOT_AT_PREVIOUS_DESTINATION` → `ReconciliationRequired` (never chooses another position) |
+
+The confirmation rule (N identical consecutive reports) is a **technical proposal** for "evidence before ReconciliationRequired", configurable; it is not a business rule and the owner may replace it. A single transient query can never move an Order.
+
+**Deferred (not built, no approved process / design).** Rack hand-over between AMRs; keeping the same AMR across legs or sub tasks (pinning by `agvCode`, `continueTask` guarantees); the `AmrContinuity` attribute; a time limit after which "RCS completed without confirmed drop" or a waiting leg escalates to reconciliation (needs a business value); automatic confirmation of a drop from the RCS; per-process rules for which legs may change AMR.

@@ -52,3 +52,16 @@ Still not verified with a real RCS: everything listed in section 4; additionally
 Cases: each leg stores its own AMR (two legs over two AMRs, `AgvId` empty, no AGV created, station transaction moves to `AgvAssigned`) · sent is not assigned, assigned later · failing query = one `LEG_ROBOT_SYNC_ERROR`, leg not failed, recovers · robot not in the fleet read model kept and flagged · the Transport Task's robot never overwrites the leg's robot (and the reverse) · a change before the pick is followed; after the pick it is refused and recorded once · consecutive legs keep their own AMR, a difference is only reported · Legacy legs unchanged (AGV1, no `RobotCode`, no RCS query) · rollback of `AddLegRobotCode` on a scratch database keeps every leg, saves the robot codes in `transport_leg_robot_backup` and restores them on re-apply.
 
 Not verified with a real RCS: whether `queryTaskStatus` returns `agvCode` for a leg that waits for `continueTask`, and every question 9–13 of the vendor list. Not implemented (no approved design): hand-over or pinning of the AMR between legs.
+
+## 7. Follow-up 3 (owner decisions 2026-11-21): LEG_ROBOT_CHANGE_REFUSED and hand-over conditions
+
+| Check | Result |
+|---|---|
+| Backend build | succeeded |
+| `Cr028LegRobotTests` (13 cases: 9 + 4 new) | **13 / 13** |
+| Focused regression (same set as section 6) | **328 / 328** |
+| Full suite, frontend | not run (no frontend change in this round) |
+
+New cases: one inconsistent report is a warning and is cleared when the RCS names the original AMR again (no Order change) · a failing query between two reports neither confirms nor clears · a confirmed change while the rack is on the AMR sends the Order to `ReconciliationRequired` and changes **nothing else** (RobotCode / AssignedAt unchanged, rack still IN_TRANSIT with no location, inventory transaction count unchanged, no next leg, no new RCS task, later answers change nothing) · the RCS reporting "completed" without a confirmed drop completes nothing and dispatches nothing; the confirmed drop then completes the leg and creates the next one. The earlier test of the refused change was adjusted: one sighting is now a warning only.
+
+Not verified with a real RCS: what `queryTaskStatus` shows for a leg waiting for `continueTask`, the status values that mean "completed", and vendor questions 9-13. Deferred functions: CR-028 section 13.
