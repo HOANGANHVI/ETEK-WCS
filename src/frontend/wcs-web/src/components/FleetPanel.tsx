@@ -32,6 +32,17 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
     <Panel title={t('agv.fleetTitle')} subtitle={t('agv.fleetSub', { n: fleet.count, fresh: fleet.freshCount })} className="mb"
       actions={<><Pill tone={fleet.simulatedData ? 'warn' : 'info'} dot={false}>{fleet.simulatedData ? t('agv.fleetSimulated') : t('agv.fleetReal')}</Pill><Pill tone={connTone}>{t(`agv.fleetConn_${fleet.connection}` as MsgKey)}</Pill></>}>
       {fleet.simulatedData && <div className="notice notice-warn" role="note">{t('agv.fleetSimulatedNote')}</div>}
+      {fleet.dispatchMode === 'RcsManaged' && (
+        <div className="notice notice-info" role="note">
+          <strong>{t('agv.mgdTitle')}</strong> {t('agv.mgdNote')}
+          <div className="btn-row">
+            <Pill tone="info">{t('agv.mgdInFlight', { n: fleet.tasksInFlight ?? 0 })}</Pill>
+            <Pill tone={(fleet.tasksAwaitingAssignment ?? 0) > 0 ? 'warn' : 'muted'}>{t('agv.mgdAwaiting', { n: fleet.tasksAwaitingAssignment ?? 0 })}</Pill>
+            <Pill tone="muted">{t('agv.mgdQueued', { n: fleet.tasksQueued ?? 0 })}</Pill>
+            {(fleet.maxInFlightTasks ?? 0) > 0 && <Pill tone="muted" dot={false}>{t('agv.mgdLimit', { n: fleet.maxInFlightTasks ?? 0 })}</Pill>}
+          </div>
+        </div>
+      )}
       {fleet.connection === 'Disconnected' && <div className="notice notice-bad" role="alert">{t('agv.fleetDisconnected', { time: fleet.lastSuccessAt ? formatDateTime(fleet.lastSuccessAt) : '–' })}{err ? ` ${err}` : ''}</div>}
       <p className="muted small">
         {fleet.lastSuccessAt ? t('agv.fleetLastOk', { time: formatDateTime(fleet.lastSuccessAt), n: fleet.intervalSeconds }) : t('agv.fleetNever')}

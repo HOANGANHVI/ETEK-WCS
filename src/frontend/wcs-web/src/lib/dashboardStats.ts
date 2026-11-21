@@ -8,7 +8,7 @@ export type RangeKey = 'today' | '7d' | '30d'
 export const RANGES: readonly RangeKey[] = ['today', '7d', '30d']
 
 export interface Bucket { start: number; end: number }
-export interface FinishedTask { state: string; createdAt: string; finishedAt: string | null; agvId: string }
+export interface FinishedTask { state: string; createdAt: string; finishedAt: string | null; agvId: string | null; robotCode?: string | null }
 
 const HOUR = 3_600_000
 
@@ -73,6 +73,19 @@ export function meanCycle(completed: FinishedTask[]): number | null {
 /** Number of Completed tasks per AGV (the only per-AGV figure the available data supports; utilisation needs AGV status history). */
 export function completedPerAgv(completed: FinishedTask[]): Map<string, number> {
   const m = new Map<string, number>()
-  for (const t of completed) m.set(t.agvId, (m.get(t.agvId) ?? 0) + 1)
+  for (const t of completed) { if (t.agvId === null) continue; m.set(t.agvId, (m.get(t.agvId) ?? 0) + 1) }   // CR-028: a task without an AGV row is never counted for an AGV
   return m
+}
+
+/**
+ * CR-028: Completed tasks per ROBOT as the RCS reported it (`robotCode`), plus the number of Completed tasks that have no robot (reported separately, never added to any robot).
+ * Used when the RCS chooses the AMR; the per-AGV figure above is unchanged for Legacy dispatch and for historical tasks.
+ */
+export function completedPerRobot(completed: FinishedTask[]): { byRobot: Map<string, number>; withoutRobot: number } {
+  const byRobot = new Map<string, number>(); let withoutRobot = 0
+  for (const t of completed) {
+    if (t.robotCode) byRobot.set(t.robotCode, (byRobot.get(t.robotCode) ?? 0) + 1)
+    else withoutRobot++
+  }
+  return { byRobot, withoutRobot }
 }

@@ -85,7 +85,13 @@ export interface TransportTask {
   requestKey: string
   flow: string
   rackKind: string
-  agvId: string
+  /** CR-028: null while no business AGV row is linked (RcsManaged dispatch: the RCS chooses the AMR). Never means "AGV1". */
+  agvId: string | null
+  /** CR-028: the AMR the RCS reported for the task (exactly as reported); null until the RCS assigned one. */
+  robotCode?: string | null
+  /** CR-028: NotSent | Sending | Accepted | AwaitingAssignment | Assigned | SyncError; null for Legacy dispatch and for older tasks. */
+  rcsDispatchState?: string | null
+  assignedAt?: string | null
   requestLocationId: string
   sourceLocationId: string | null
   destinationLocationId: string | null
