@@ -1,6 +1,7 @@
 # ADR-0004 – PLC communication architecture (CR-002)
 
 Status: Accepted (architecture); protocol parameters NEEDS_CONFIRMATION
+Status note (CR-029, 2026-11-21, pending approval): the architecture decisions (one worker per PLC, MC codec, no derived addresses, read-first) stand. Decisions 6 (write-block list by signal name), 8 (idempotency key from `Request_ID`) and the 23-signal template (Context, 10) rest on the 10/11/2026 interface and are affected by the 20/11/2026 interface; decision 5 was simplified by CR-019. See `docs/02_Interface_Specification/PLC_20_11_2026/PLC_INTERFACE_CHANGE_IMPACT_ANALYSIS_20_11_2026.md`. No decision text was changed.
 Date: 2026-11-06
 
 ## Context

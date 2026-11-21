@@ -63,12 +63,21 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await cmd.ExecuteNonQueryAsync();
     }
 
+    /// <summary>CR-028: runs one SQL statement on this fixture's database (arranging data that the domain does not allow to create, for example a rollback scenario).</summary>
+    public async Task ExecAsync(string sql)
+    {
+        await using var c = new NpgsqlConnection(ConnectionString);
+        await c.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, c);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public async Task ResetAsync()
     {
         await using var c = new NpgsqlConnection(ConnectionString);
         await c.OpenAsync();
         await using var cmd = new NpgsqlCommand(
-            "TRUNCATE routing_events, station_transactions, transport_legs, transport_orders, route_candidates, route_steps, business_process_versions, business_processes, station_requests, task_history, transport_tasks, reservations, inventory_transactions, racks, processed_events, locations, agvs, connection_settings, app_users, audit_log, plc_comm_log, plc_exchange_log, system_log, station_io_points, plc_stations, plc_connections CASCADE", c);
+            "TRUNCATE rcs_amr_snapshots, rcs_fleet_state, routing_events, station_transactions, transport_legs, transport_orders, route_candidates, route_steps, business_process_versions, business_processes, station_requests, task_history, transport_tasks, reservations, inventory_transactions, racks, processed_events, locations, agvs, connection_settings, app_users, audit_log, plc_comm_log, plc_exchange_log, system_log, station_io_points, plc_stations, plc_connections CASCADE", c);
         await cmd.ExecuteNonQueryAsync();
         await using var maintenance = new NpgsqlCommand("UPDATE system_maintenance SET \"Enabled\" = false, \"Reason\" = NULL, \"ChangedBy\" = NULL", c);   // CR-026: every test starts with Maintenance off
         await maintenance.ExecuteNonQueryAsync();
@@ -95,9 +104,11 @@ public sealed class Harness : IAsyncDisposable
     public StationSignalSimulator Stations => Services.GetRequiredService<StationSignalSimulator>();
     public SchedulerOptions SchedulerOptions => Services.GetRequiredService<IOptions<SchedulerOptions>>().Value;
 
-    private Harness(DatabaseFixture db, Action<IServiceCollection>? configure)
+    private readonly IReadOnlyDictionary<string, string?>? _extra;
+
+    private Harness(DatabaseFixture db, Action<IServiceCollection>? configure, IReadOnlyDictionary<string, string?>? extra = null)
     {
-        _db = db; _configure = configure;
+        _db = db; _configure = configure; _extra = extra;
         Build();
     }
 
@@ -118,6 +129,7 @@ public sealed class Harness : IAsyncDisposable
         var config = new ConfigurationBuilder()
             .AddConfiguration(db.Configuration)
             .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:WcsDatabase"] = db.ConnectionString })
+            .AddInMemoryCollection(_extra ?? new Dictionary<string, string?>())   // CR-027: a test may add configuration keys (for example Rcs:Fleet:Source)
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
@@ -132,10 +144,10 @@ public sealed class Harness : IAsyncDisposable
         SchedulerOptions.RcsRetryInitialDelayMs = 0;
     }
 
-    public static async Task<Harness> CreateAsync(DatabaseFixture db, Action<IServiceCollection>? configure = null)
+    public static async Task<Harness> CreateAsync(DatabaseFixture db, Action<IServiceCollection>? configure = null, IReadOnlyDictionary<string, string?>? extraConfig = null)
     {
         await db.ResetAsync();
-        return new Harness(db, configure);
+        return new Harness(db, configure, extraConfig);
     }
 
     public ValueTask DisposeAsync() => Services.DisposeAsync();

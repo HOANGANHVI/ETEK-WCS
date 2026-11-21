@@ -30,7 +30,7 @@ public sealed class StationTransactionService(IUnitOfWork uow, IRoutingRepositor
     }
 
     /// <summary>Opens (or links the PLC-created) Station Transaction of the leg at the port of <paramref name="locationCode"/>. A location without a port needs none.</summary>
-    public async Task OpenForLegAsync(TransportOrder order, TransportLeg leg, string locationCode, StationOperation operation, CancellationToken ct, Guid? agvId = null)
+    public async Task OpenForLegAsync(TransportOrder order, TransportLeg leg, string locationCode, StationOperation operation, CancellationToken ct, Guid? agvId = null, bool markAgvAssigned = true)
     {
         var port = await routing.FindPortByLocationAsync(locationCode, ct);
         if (port is null) return;
@@ -48,7 +48,7 @@ public sealed class StationTransactionService(IUnitOfWork uow, IRoutingRepositor
             routing.Add(active);
         }
         if (agvId is { } a) active.AssignAgv(a, now);
-        if (active.State < StationTransactionState.AgvAssigned && active.State != StationTransactionState.ReconciliationRequired) active.Advance(StationTransactionState.AgvAssigned, now);
+        if (markAgvAssigned && active.State < StationTransactionState.AgvAssigned && active.State != StationTransactionState.ReconciliationRequired) active.Advance(StationTransactionState.AgvAssigned, now);
     }
 
     /// <summary>The rack was picked / dropped at the port: the physical handover is done (the AMR may now leave).</summary>
@@ -59,6 +59,13 @@ public sealed class StationTransactionService(IUnitOfWork uow, IRoutingRepositor
         var active = await routing.GetActiveTransactionForPortAsync(port.Id, ct);
         if (active is null || active.LegId != leg.Id || active.State == StationTransactionState.ReconciliationRequired) return;
         if (active.State < StationTransactionState.HandoverCompleted) active.Advance(StationTransactionState.HandoverCompleted, clock.UtcNow);
+    }
+
+    /// <summary>CR-028 (RcsManaged): the RCS named the AMR of the leg, so the active transactions of the leg that were opened without an AMR are now "AgvAssigned". Only moves forward; the AGV id stays empty (the robot code is on the leg).</summary>
+    public async Task MarkAgvAssignedForLegAsync(Guid legId, CancellationToken ct)
+    {
+        foreach (var tx in await routing.ListTransactionsAsync(true, null, null, 200, ct))
+            if (tx.LegId == legId && tx.State < StationTransactionState.AgvAssigned && tx.State != StationTransactionState.ReconciliationRequired) tx.Advance(StationTransactionState.AgvAssigned, clock.UtcNow);
     }
 
     public async Task FailForLegAsync(Guid legId, string reason, CancellationToken ct)

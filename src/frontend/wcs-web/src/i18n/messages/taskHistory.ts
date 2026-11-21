@@ -6,6 +6,12 @@ import { defineMessages } from '../core'
  * the hold `reason`, which are display labels of known enums / codes (resolved in logCatalog.describeHistory).
  */
 export default defineMessages({
+  d_QUEUED_FLEET_LIMIT: 'Đã đạt giới hạn nhiệm vụ đang chạy của đội xe; yêu cầu xếp hàng chờ',
+  d_DISPATCHING_RCS_MANAGED: 'Đã gửi RCS; RCS tự chọn xe',
+  d_RCS_ASSIGNED_AMR: 'RCS đã gán xe {robot}',
+  d_RCS_ROBOT_NOT_IN_FLEET: 'Xe {robot} chưa có trong danh sách đội xe',
+  d_RCS_ROBOT_CHANGED: 'RCS đổi xe từ {from} sang {to}',
+  d_RCS_ASSIGNMENT_SYNC_ERROR: 'Không đọc được xe được gán từ RCS',
   d_TASK_CREATED: 'Tạo nhiệm vụ theo quy trình {flow}',
   d_TASK_EDITED: 'Sửa yêu cầu: quy trình {oldFlow} / trạm {oldStation} → {flow} / {station}',
   d_VALIDATING: 'Đang kiểm tra điều kiện nghiệp vụ',
@@ -54,6 +60,12 @@ export default defineMessages({
   d_RCS_NOTFOUND_AFTER_ACCEPT: 'RCS không còn bản ghi của nhiệm vụ đã tiếp nhận: cần đối soát',
   d_RCS_ENDED_WITHOUT_DROP: 'RCS báo kết thúc nhưng WCS chưa nhận xác nhận thả rack',
 }, {
+  d_QUEUED_FLEET_LIMIT: 'The fleet limit of tasks in flight is reached; the request was queued',
+  d_DISPATCHING_RCS_MANAGED: 'Sent to the RCS; the RCS chooses the AMR',
+  d_RCS_ASSIGNED_AMR: 'The RCS assigned AMR {robot}',
+  d_RCS_ROBOT_NOT_IN_FLEET: 'AMR {robot} is not in the fleet list',
+  d_RCS_ROBOT_CHANGED: 'The RCS changed the AMR from {from} to {to}',
+  d_RCS_ASSIGNMENT_SYNC_ERROR: 'The assigned AMR could not be read from the RCS',
   d_TASK_CREATED: 'Task created for flow {flow}',
   d_TASK_EDITED: 'Request edited: flow {oldFlow} / station {oldStation} → {flow} / {station}',
   d_VALIDATING: 'Validating business conditions',

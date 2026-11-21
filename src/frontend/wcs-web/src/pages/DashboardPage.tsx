@@ -20,7 +20,7 @@ import { useLang, useT } from '../i18n'
 import { describeHistory } from '../i18n/logCatalog'
 import { flowInfo, INVENTORY_EVENT_VI, reasonVi, TASK_STATE_VI, taskCode, type Tone } from '../i18n/vi'
 import { formatUptime } from '../lib/resourceMonitor'
-import { buildBuckets, completedPerAgv, countByBucket, failureRate, meanCycle, meanCycleByBucket, RANGES, type RangeKey } from '../lib/dashboardStats'
+import { buildBuckets, completedPerAgv, completedPerRobot, countByBucket, failureRate, meanCycle, meanCycleByBucket, RANGES, type RangeKey } from '../lib/dashboardStats'
 
 const EVENTS_TASK = ['TaskCreated', 'TaskStateChanged'] as const
 const EVENTS_INV = ['InventoryChanged', 'TaskStateChanged'] as const
@@ -44,6 +44,8 @@ export function DashboardPage() {
   const setRange = (r: RangeKey) => { setRangeState(r); try { window.localStorage.setItem(RANGE_KEY, r) } catch { /* the choice is only a convenience */ } }
 
   const agvs = useApi(useCallback(() => api.agvs(), []), ['TaskStateChanged', 'AgvStatusChanged'])
+  const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged', 'TaskStateChanged'])   // CR-028
+  const managed = fleet.data?.dispatchMode === 'RcsManaged'
   const locations = useApi(useCallback(() => api.locations(), []), [...EVENTS_INV])
   const racks = useApi(useCallback(() => api.racks(), []), [...EVENTS_INV])
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS_TASK])
@@ -74,6 +76,7 @@ export function DashboardPage() {
       cycleByBucket: meanCycleByBucket(completed, buckets),
       cycleCount: buckets.map((b) => completed.filter((x) => x.finishedAt && Date.parse(x.finishedAt) >= b.start && Date.parse(x.finishedAt) < b.end).length),
       perAgv: completedPerAgv(completed),
+      perRobot: completedPerRobot(completed),
       truncated: data.truncated,
     }
   }, [finished.data, range, minute])
@@ -108,7 +111,7 @@ export function DashboardPage() {
       list.push({
         id: `t-${tk.id}-${tk.updatedAt}`, at: tk.updatedAt,
         tone: tk.state === 'Failed' ? 'bad' : tk.state === 'Completed' || tk.state === 'Executing' ? 'ok' : tk.state === 'Cancelled' ? 'muted' : 'warn',
-        text: `${taskCode(tk.id)} · ${flowInfo(tk.flow).code} · ${codes.agv(tk.agvId)}: ${TASK_STATE_VI[tk.state]}`,
+        text: `${taskCode(tk.id)} · ${flowInfo(tk.flow).code} · ${tk.robotCode ?? codes.agv(tk.agvId)}: ${TASK_STATE_VI[tk.state]}`,
         detail: describeHistory(tk.stateReasonCode, tk.stateReasonArgs, tk.stateReason),
       })
     }
@@ -237,7 +240,14 @@ export function DashboardPage() {
         <Panel title={t('dashboard.agvUtilTitle')} className="dc-5">
           <div className="unavailable"><strong>{t('dashboard.agvUtilUnavailable')}</strong></div>
           <h3 className="mini-title" style={{ marginTop: 16 }}>{t('dashboard.agvDoneTitle')}</h3>
-          {!stats || !agvList ? <div className="chart-empty">{t('dashboard.loadingStats')}</div> : (
+          {managed && stats ? (
+            <ul className="hbars">
+              {[...stats.perRobot.byRobot.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([code, n]) => (
+                <li key={code}><span>{code}</span><span className="track"><span className="fill" style={{ width: `${(n / Math.max(1, ...stats.perRobot.byRobot.values())) * 100}%` }} /></span><strong>{n}</strong></li>
+              ))}
+              <li key="__none"><span className="muted">{t('dashboard.perRobotNone')}</span><span className="track" /><strong>{stats.perRobot.withoutRobot}</strong></li>
+            </ul>
+          ) : !stats || !agvList ? <div className="chart-empty">{t('dashboard.loadingStats')}</div> : (
             <ul className="hbars">
               {agvList.map((a) => { const n = stats.perAgv.get(a.id) ?? 0; return (
                 <li key={a.id}><span>{a.code}</span><span className="track"><span className="fill" style={{ width: `${(n / maxPerAgv) * 100}%` }} /></span><strong>{n}</strong></li>
@@ -255,13 +265,13 @@ export function DashboardPage() {
             <div className="live-link"><i className={`led ${rtTone}`} /><strong>{t('dashboard.liveRealtime')}</strong><span>{t(`nav.rt${realtime[0].toUpperCase()}${realtime.slice(1)}` as 'nav.rtConnected')}</span></div>
             {simulator && <div className="live-link"><i className="led warn" /><span>{t('dashboard.liveSimulator')}</span></div>}
           </div>
-          <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
+          {managed ? <p className="muted">{t('dashboard.liveFleet', { n: fleet.data?.count ?? 0, w: fleet.data?.tasksAwaitingAssignment ?? 0 })}</p> : <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
             {(list) => (
               <div className="live-agvs">
                 {list.map((a) => { const cur = tasksByAgv(a.id); return <AgvCard key={a.id} agv={a} task={cur.current} lastTask={cur.last} code={codes.loc} now={now} compact /> })}
               </div>
             )}
-          </Async>
+          </Async>}
           <h3 className="mini-title" style={{ marginTop: 16 }}>{t('dashboard.liveInProgress')}</h3>
           {running.length === 0 ? <p className="muted">{t('dashboard.liveNone')}</p> : (
             <ul className="live-tasks">

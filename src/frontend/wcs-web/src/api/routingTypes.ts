@@ -20,6 +20,9 @@ export interface Leg {
   rackId: string | null
   agvId: string | null
   agvTaskCode: string | null
+  /** CR-028: the AMR the RCS chose for this leg (RcsManaged); null until the RCS reports it, always null for Legacy legs */
+  robotCode?: string | null
+  assignedAt?: string | null
   state: LegState
   waitKind: WaitKind
   stateReason: string | null

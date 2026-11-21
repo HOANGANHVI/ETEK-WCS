@@ -82,6 +82,11 @@ services:
       # CR-008A: Production refuses tasks (RCS_NOT_CONNECTED) while only the RCS simulator exists. true = supervised test with a simulated RCS (no AGV moves).
       Rcs__AllowSimulatorInProduction: ${RCS_ALLOW_SIMULATOR_IN_PRODUCTION:-false}
       Integration__AllowNetworkProbe: ${WCS_ALLOW_NETWORK_PROBE:-false}
+      # CR-027: where the AMR fleet list comes from. Simulator (default, an EMPTY simulated list) or Real (read-only queryAgvStatus to the RCS saved by an Admin in "Kết nối RCS"; sends no task command).
+      Rcs__Fleet__Source: ${RCS_FLEET_SOURCE:-Simulator}
+      Rcs__Fleet__IntervalSeconds: ${RCS_FLEET_INTERVAL_SECONDS:-5}
+      # CR-028: who chooses the AMR of a task. Legacy (default, unchanged). RcsManaged only works with the RCS SIMULATOR (no real create-task adapter exists): do NOT set it in operation.
+      Rcs__Dispatch__Mode: ${RCS_DISPATCH_MODE:-Legacy}
       Serilog__MinimumLevel__Default: ${WCS_LOG_LEVEL:-Information}
       # CR-007: deployment events written by deployment/scripts/*.ps1 are imported (read-only) into Logging & Diagnostics; build label shown in the start-up summary
       DeploymentLogs__Directory: /deploy-logs

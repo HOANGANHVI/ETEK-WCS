@@ -49,6 +49,16 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
     public Task<TransportLeg?> GetActiveLegForAgvAsync(Guid agvId, CancellationToken ct) =>
         db.TransportLegs.FirstOrDefaultAsync(l => l.AgvId == agvId && (l.State == LegState.InProgress || l.State == LegState.Waiting), ct);
 
+    public Task<int> CountInFlightLegsByModeAsync(bool rcsManaged, CancellationToken ct) => rcsManaged
+        ? db.TransportLegs.CountAsync(l => l.AgvId == null && (l.AgvTaskCode != null || l.State == LegState.InProgress || l.State == LegState.Waiting)
+                                           && l.State != LegState.Completed && l.State != LegState.Failed && l.State != LegState.Cancelled, ct)
+        : db.TransportLegs.CountAsync(l => l.AgvId != null && l.State != LegState.Completed && l.State != LegState.Failed && l.State != LegState.Cancelled, ct);
+
+    public async Task<IReadOnlyList<Guid>> ListManagedLegIdsToSyncAsync(int take, CancellationToken ct) =>
+        await db.TransportLegs.AsNoTracking()
+            .Where(l => l.AgvId == null && l.AgvTaskCode != null && l.State != LegState.Completed && l.State != LegState.Failed && l.State != LegState.Cancelled)
+            .OrderBy(l => l.CreatedAt).Select(l => l.Id).Take(take).ToListAsync(ct);
+
     public async Task<IReadOnlyList<Guid>> ListOpenOrderIdsAsync(int take, CancellationToken ct) =>
         await db.TransportOrders.AsNoTracking()
             .Where(o => o.State == OrderState.Created || o.State == OrderState.Accepted || o.State == OrderState.InProgress || o.State == OrderState.Waiting)

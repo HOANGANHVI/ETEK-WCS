@@ -48,6 +48,12 @@ public enum RcsTaskStatus { NotFound = 0, Created = 1, Executing = 2, Completed 
 
 public sealed record RcsAgvStatus(string RobotCode, bool Online, string? Detail);
 
+/// <summary>
+/// CR-028: what the RCS says about ONE task (queryTaskStatus, RCS-2000 API V3.3 5.2.15): its status and - only when the task has been assigned - the AMR (<c>agvCode</c>).
+/// <see cref="AgvCode"/> null means "no AMR assigned (yet)". <see cref="RcsTaskStatus.Unknown"/> means the query was inconclusive.
+/// </summary>
+public sealed record RcsTaskInfo(RcsTaskStatus Status, string? RcsTaskCode, string? AgvCode);
+
 /// <summary>integration-requirements.md 5.4 RCS client (create / continue / cancel / query).</summary>
 public interface IRcsClient
 {
@@ -57,6 +63,18 @@ public interface IRcsClient
     /// <summary>Query by WCS request code (used before any re-send after a timeout / unknown result).</summary>
     Task<(RcsTaskStatus Status, string? RcsTaskCode)> QueryTaskStatusAsync(string requestCode, CancellationToken ct = default);
     Task<RcsAgvStatus?> QueryAgvStatusAsync(string robotCode, CancellationToken ct = default);
+    /// <summary>CR-028: status AND assigned AMR of a task, by WCS request code. Default: the status only, without an AMR (an adapter that cannot tell the AMR says so by returning none).</summary>
+    async Task<RcsTaskInfo> QueryTaskAsync(string requestCode, CancellationToken ct = default)
+    {
+        var (status, code) = await QueryTaskStatusAsync(requestCode, ct);
+        return new RcsTaskInfo(status, code, null);
+    }
+
+    /// <summary>
+    /// CR-027: the whole AMR fleet in ONE query (queryAgvStatus without a robot list). Default: not supported (an adapter that cannot list the fleet says so; it never invents one).
+    /// </summary>
+    Task<WCS.Application.Fleet.RcsFleetResult> QueryFleetAsync(CancellationToken ct = default) =>
+        Task.FromResult(WCS.Application.Fleet.RcsFleetResult.Fail(WCS.Application.Fleet.FleetErrorCodes.NotSupported, "This RCS client cannot list the fleet."));
 }
 
 /// <summary>CR-021: an <see cref="IRcsClient"/> that wraps another one (for example to log calls). Safety checks that ask "which adapter is this?" must look through it with <see cref="Unwrap"/>.</summary>

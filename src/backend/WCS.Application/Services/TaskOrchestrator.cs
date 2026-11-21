@@ -32,9 +32,14 @@ public sealed class TaskOrchestrator(
     Auth.IAuditLog audit,
     IOptions<ProcessFlowOptions> flowOptions,
     IOptions<SchedulerOptions> schedulerOptions,
+    IOptions<WCS.Application.Fleet.DispatchOptions> dispatchOptions,   // CR-028
+    WCS.Application.Fleet.RcsRobotMapper robotMapper,                   // CR-028
     ILogger<TaskOrchestrator> logger) : ITaskOrchestrator
 {
     private const string Wcs = "WCS";
+
+    /// <summary>CR-028: true when the RCS chooses the AMR (Rcs:Dispatch:Mode = RcsManaged). Legacy (default) is exactly the behaviour before CR-028.</summary>
+    private bool Managed => dispatchOptions.Value.IsRcsManaged;
 
     private delegate Task<T> TxWork<T>(List<WcsEvent> events, List<Func<Task>> after, CancellationToken ct);
 
@@ -70,9 +75,14 @@ public sealed class TaskOrchestrator(
                       ?? throw AppException.NotFound("STATION_NOT_FOUND", $"Station '{cmd.StationCode}' not found.");
         if (!rule.AllowedRequestStations.Contains(station.Code))
             throw AppException.Rejected("STATION_NOT_ALLOWED", $"Station {station.Code} cannot request {flow}.");
-        var agv = await agvs.GetByRoleAsync(rule.AgvRole, ct)
+        // CR-028: in RcsManaged dispatch the RCS chooses the AMR: WCS neither looks for an AGV row nor requires one (no role, no AGV1 / AGV2)
+        Domain.Agvs.Agv? agv = null;
+        if (!Managed)
+        {
+            agv = await agvs.GetByRoleAsync(rule.AgvRole, ct)
                   ?? throw AppException.Rejected("AGV_NOT_CONFIGURED", $"No AGV with role {rule.AgvRole} is configured.");
-        if (!agv.Enabled) throw AppException.Rejected("AGV_DISABLED", $"{agv.Code} is disabled.");
+            if (!agv.Enabled) throw AppException.Rejected("AGV_DISABLED", $"{agv.Code} is disabled.");
+        }
 
         string? createdCorrelation = null;
         var created = await Tx(async (events, _, t) =>
@@ -80,7 +90,7 @@ public sealed class TaskOrchestrator(
             var existing = await tasks.GetByRequestKeyAsync(cmd.RequestKey.Trim(), t);
             if (existing is not null) return (Guid?)null;
             await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): row-locked read in THIS transaction - a task cannot slip in while Maintenance is being switched on
-            var task = TransportTask.Create(cmd.RequestKey, flow, rule.RackKind, agv.Id, station.Id, cmd.RequestedBy, clock.UtcNow);
+            var task = TransportTask.Create(cmd.RequestKey, flow, rule.RackKind, agv?.Id, station.Id, cmd.RequestedBy, clock.UtcNow, rcsManaged: Managed);
             task.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021: the task keeps the id of the request that created it (or a new one)
             CorrelationCache.Remember(task.Id, task.CorrelationId);
             createdCorrelation = task.CorrelationId;
@@ -91,9 +101,9 @@ public sealed class TaskOrchestrator(
 
         if (created is { } id)
         {
-            using (DiagnosticContext.Begin(createdCorrelation, taskId: id.ToString("D"), agvId: agv.Code, stationId: station.Code))
+            using (DiagnosticContext.Begin(createdCorrelation, taskId: id.ToString("D"), agvId: agv?.Code, stationId: station.Code))
                 logger.LogInformation("Task {TaskId} created: flow {Flow}, station {Station}, AGV {Agv}, rack kind {RackKind}, requested by {RequestedBy}, request key {RequestKey}. {EventCode}",
-                    id, flow, station.Code, agv.Code, rule.RackKind, cmd.RequestedBy, cmd.RequestKey, "TASK_CREATED");
+                    id, flow, station.Code, agv?.Code ?? "RCS", rule.RackKind, cmd.RequestedBy, cmd.RequestKey, "TASK_CREATED");
             await ProcessTaskAsync(id, ct);
             return new CreateTaskResult(await GetDto(id, ct), true);
         }
@@ -118,8 +128,8 @@ public sealed class TaskOrchestrator(
 
             if (task.State == TaskState.Pending) task.TransitionTo(TaskState.Validating, "Validating business conditions", Wcs, clock.UtcNow, HistoryDetail.Of("VALIDATING"));
 
-            var agv = await agvs.GetAsync(task.AgvId, t);
-            if (agv is null || !agv.Enabled)
+            var agv = task.AgvId is { } processAgvId ? await agvs.GetAsync(processAgvId, t) : null;
+            if (!task.IsRcsManaged && (agv is null || !agv.Enabled))
             {
                 await FinishAsync(task, TaskState.Failed, "AGV_UNAVAILABLE", Wcs, events, after, t);
                 return false;
@@ -137,6 +147,18 @@ public sealed class TaskOrchestrator(
                 events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
                 return false;
             }
+
+            if (task.IsRcsManaged)
+            {
+                // CR-028: no AGV queue, no PER_AGV, no dispatch hold: the RCS chooses the robot. WCS only keeps the (optional) fleet-level limit of tasks in flight.
+                var limit = dispatchOptions.Value.MaxInFlightTasks;
+                var wait = limit > 0 && (await tasks.CountByStatesAsync(TaskStateMachine.AgvOccupyingStates, t) >= limit || await tasks.CountByStatesAsync([TaskState.Queued], t) > 0);   // FIFO: nothing jumps the queue
+                if (wait) task.TransitionTo(TaskState.Queued, "Fleet limit of tasks in flight reached; request queued", Wcs, clock.UtcNow, HistoryDetail.Of("QUEUED_FLEET_LIMIT"));
+                else task.TransitionTo(TaskState.Dispatching, "Sent to the RCS; the RCS chooses the AMR", Wcs, clock.UtcNow, HistoryDetail.Of("DISPATCHING_RCS_MANAGED"));
+                events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+                return !wait;
+            }
+            if (agv is null) return false;   // not reachable in Legacy dispatch (checked above)
 
             // CR-008B-5 (D-7): an AGV on dispatch hold takes no new task; the request waits in the queue (never moved to the other AGV)
             // The hold flag is read AFTER the active-task check and with a fresh query: a task that finished (and set the hold) in the same commit as its terminal state can then never look
@@ -228,7 +250,7 @@ public sealed class TaskOrchestrator(
                 await FinishAsync(task, TaskState.Failed, "RCS_DISPATCH_UNCERTAIN", Wcs, events, after, t, forceUncertain: true, physicalUnproven: true);   // CR-008B-5 (D-6)
                 return null;
             }
-            var agv = await agvs.GetAsync(task.AgvId, t);
+            var agv = !task.IsRcsManaged && task.AgvId is { } dispatchAgvId ? await agvs.GetAsync(dispatchAgvId, t) : null;   // CR-028: RcsManaged sends no robot code
             if (agv is { DispatchHold: true }) { logger.LogWarning("Dispatch of {TaskId} skipped: AGV {Agv} is on dispatch hold", taskId, agv.Code); return null; }   // CR-008B-5: last check before the RCS call
             var src = await locations.GetAsync(task.SourceLocationId ?? Guid.Empty, t);
             var req = await locations.GetAsync(task.RequestLocationId, t);
@@ -271,6 +293,7 @@ public sealed class TaskOrchestrator(
                 case RcsCallOutcome.Accepted when !string.IsNullOrWhiteSpace(result.RcsTaskCode):
                     task.AttachRcsTask(result.RcsTaskCode!, clock.UtcNow);
                     task.TransitionTo(TaskState.Accepted, "RCS accepted the task", "RCS", clock.UtcNow, HistoryDetail.Of("RCS_ACCEPTED"));
+                    task.MarkRcsAccepted(clock.UtcNow);   // CR-028: accepted by the RCS - NOT yet assigned to an AMR
                     break;
                 case RcsCallOutcome.Rejected:
                     await FinishAsync(task, TaskState.Failed, $"RCS_REJECTED: {result.Message}", "RCS", events, after, t);
@@ -282,6 +305,88 @@ public sealed class TaskOrchestrator(
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
             return true;
         }, ct);
+    }
+
+    // ============================================================================ CR-028: RCS-managed dispatch
+
+    /// <summary>After a task finishes: Legacy frees the queue of ITS AGV, RcsManaged frees the fleet-level queue. A task without an AGV (RcsManaged, robot unknown) has no AGV queue to free.</summary>
+    private Task ReleaseNextAsync(Guid? agvId, bool managed) =>
+        managed ? TryDispatchFleetQueueAsync() : agvId is { } id ? TryDispatchNextAsync(id) : Task.CompletedTask;
+
+    public async Task TryDispatchFleetQueueAsync(CancellationToken ct = default)
+    {
+        if (!Managed) return;
+        for (var i = 0; i < 50; i++)
+        {
+            var next = await Tx(async (events, _, t) =>
+            {
+                var limit = dispatchOptions.Value.MaxInFlightTasks;
+                if (limit > 0 && await tasks.CountByStatesAsync(TaskStateMachine.AgvOccupyingStates, t) >= limit) return (Guid?)null;
+                var oldest = (await tasks.ListByStatesAsync([TaskState.Queued], 200, t)).Where(x => x.IsRcsManaged).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).FirstOrDefault();
+                if (oldest is null) return null;
+                if (await maintenance.HoldNewWorkAsync(t)) return null;   // CR-026: a queued task is not sent while Maintenance is on
+                var task = await tasks.GetAsync(oldest.Id, t);
+                if (task is null || task.State != TaskState.Queued) return null;
+                task.TransitionTo(TaskState.Dispatching, "Fleet capacity free; sent to the RCS from the queue", Wcs, clock.UtcNow, HistoryDetail.Of("DISPATCHING_RCS_MANAGED"));
+                events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+                return task.Id;
+            }, ct);
+            if (next is not { } id) break;
+            await DispatchToRcsAsync(id, ct);
+        }
+    }
+
+    public async Task SyncAssignmentsAsync(CancellationToken ct = default)
+    {
+        if (!Managed) return;
+        var o = dispatchOptions.Value; var now = clock.UtcNow;
+        var candidates = await Tx((_, _, t) => tasks.ListActiveRcsManagedAsync(200, t), ct);
+        var due = candidates.Where(x => x.RcsTaskCode is not null && (x.AssignmentCheckedAt is not { } last
+            || now - last >= TimeSpan.FromSeconds(x.RcsDispatchState == RcsDispatchState.Assigned ? Math.Max(1, o.AssignedRecheckSeconds) : Math.Max(1, o.AssignmentCheckSeconds)))).Select(x => (x.Id, x.RcsRequestCode)).ToList();
+        foreach (var (taskId, requestCode) in due)
+        {
+            using var _frame = DiagnosticContext.Begin(await CorrelationOfAsync(taskId, ct), taskId: taskId.ToString("D"));
+            RcsTaskInfo? info = null; string? error = null;
+            try { info = await rcs.QueryTaskAsync(requestCode, ct); }   // external call outside any transaction
+            catch (Exception ex) when (ex is not OperationCanceledException) { error = ex.Message; }
+            await Tx(async (events, _, t) =>
+            {
+                var task = await tasks.GetAsync(taskId, t);
+                if (task is null || task.IsTerminal || !task.IsRcsManaged) return 0;
+                if (info is null || info.Status is RcsTaskStatus.Unknown or RcsTaskStatus.NotFound)
+                {
+                    // the query failed or the RCS does not know the task: a synchronisation error, NOT a failed task; a robot that is already known is kept
+                    task.RegisterAssignmentSyncFailure(clock.UtcNow);
+                    task.NoteIfChanged("RCS_ASSIGNMENT_SYNC_ERROR", info?.Status.ToString() ?? error, "RCS", clock.UtcNow, HistoryDetail.Of("RCS_ASSIGNMENT_SYNC_ERROR"));
+                    events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+                    return 0;
+                }
+                if (await RecordAssignmentAsync(task, info.AgvCode, "RCS", t) != AssignmentOutcome.NoChange) events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
+                return 0;
+            }, ct);
+        }
+    }
+
+    /// <summary>
+    /// Records the AMR the RCS reported for the task. The AMR is identified by its robot code (stored as reported); <c>AgvId</c> is set only when a business AGV row has that robot code.
+    /// A code that is not in the fleet read model is kept and flagged - no AGV is created and AGV1 is never assumed.
+    /// </summary>
+    private async Task<AssignmentOutcome> RecordAssignmentAsync(TransportTask task, string? robotCode, string source, CancellationToken t)
+    {
+        var map = await robotMapper.MapAsync(robotCode, t);
+        var previous = task.RobotCode;
+        var outcome = task.RecordAssignment(robotCode, map.AgvId, clock.UtcNow);
+        if (outcome == AssignmentOutcome.Assigned)
+        {
+            task.Note("RCS_ASSIGNED_AMR", $"RCS assigned AMR {task.RobotCode}", source, clock.UtcNow, HistoryDetail.Of("RCS_ASSIGNED_AMR", ("robot", task.RobotCode!)));
+            if (!map.InFleet) task.Note("RCS_ROBOT_NOT_IN_FLEET", $"AMR {task.RobotCode} is not in the fleet list", source, clock.UtcNow, HistoryDetail.Of("RCS_ROBOT_NOT_IN_FLEET", ("robot", task.RobotCode!)));
+        }
+        else if (outcome == AssignmentOutcome.RobotChanged)
+        {
+            task.Note("RCS_ROBOT_CHANGED", $"RCS changed the AMR from {previous} to {task.RobotCode}", source, clock.UtcNow, HistoryDetail.Of("RCS_ROBOT_CHANGED", ("from", previous ?? ""), ("to", task.RobotCode!)));
+            if (!map.InFleet) task.Note("RCS_ROBOT_NOT_IN_FLEET", $"AMR {task.RobotCode} is not in the fleet list", source, clock.UtcNow, HistoryDetail.Of("RCS_ROBOT_NOT_IN_FLEET", ("robot", task.RobotCode!)));
+        }
+        return outcome;
     }
 
     private sealed record DispatchPlan(RcsCreateTaskRequest Request, int AttemptsBefore);
@@ -302,7 +407,10 @@ public sealed class TaskOrchestrator(
             if (!string.IsNullOrWhiteSpace(signal.EventKey) && await processed.ExistsAsync(source, signal.EventKey, t))
                 return new SignalResult(SignalOutcome.Duplicate, "Event already processed.", task.ToDto());
 
-            var agv = await agvs.GetAsync(task.AgvId, t);
+            var agv = !task.IsRcsManaged && task.AgvId is { } signalAgvId ? await agvs.GetAsync(signalAgvId, t) : null;
+            if (task.IsRcsManaged && signal.RobotCode is not null && !task.IsTerminal
+                && await RecordAssignmentAsync(task, signal.RobotCode, signal.Source.ToString(), t) != AssignmentOutcome.NoChange)
+                events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));   // CR-028: the callback names the robot the RCS chose
             if (signal.RobotCode is not null && agv?.RcsRobotCode is not null &&
                 !string.Equals(signal.RobotCode, agv.RcsRobotCode, StringComparison.OrdinalIgnoreCase))
                 return new SignalResult(SignalOutcome.Rejected, "Robot code does not match the task's AGV.", task.ToDto());
@@ -402,7 +510,7 @@ public sealed class TaskOrchestrator(
                 task.ConfirmDrop(now);
                 task.TransitionTo(TaskState.Completed, "Drop confirmed; inventory updated", src, now, HistoryDetail.Of("DROP_CONFIRMED"));
                 logger.LogInformation("Task {TaskId} finished as {State}: {Reason} (source {Source}; physical outcome possible: {Physical}). {EventCode}", task.Id, TaskState.Completed, "Drop confirmed; inventory updated", src, true, "TASK_FINISHED");   // CR-021
-                after.Add(() => TryDispatchNextAsync(task.AgvId));
+                after.Add(() => ReleaseNextAsync(task.AgvId, task.IsRcsManaged));
                 return Applied("Completed");
             }
 
@@ -557,7 +665,7 @@ public sealed class TaskOrchestrator(
                     break;
             }
             events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
-            if (task.IsTerminal) after.Add(() => TryDispatchNextAsync(task.AgvId));
+            if (task.IsTerminal) after.Add(() => ReleaseNextAsync(task.AgvId, task.IsRcsManaged));
             return !task.IsTerminal;
         }, ct);
 
@@ -601,15 +709,20 @@ public sealed class TaskOrchestrator(
                           ?? throw AppException.NotFound("STATION_NOT_FOUND", $"Không tìm thấy trạm '{stationCode}'.");
             if (!rule.AllowedRequestStations.Contains(station.Code))
                 throw AppException.Rejected("STATION_NOT_ALLOWED", $"Trạm {station.Code} không được phép yêu cầu quy trình {flow}.");
-            var agv = await agvs.GetByRoleAsync(rule.AgvRole, t)
-                      ?? throw AppException.Rejected("AGV_NOT_CONFIGURED", $"No AGV with role {rule.AgvRole} is configured.");
-            if (!agv.Enabled) throw AppException.Rejected("AGV_DISABLED", $"{agv.Code} is disabled.");
+            Guid? newAgvId = null;   // CR-028: a task of the RcsManaged dispatch has no AGV chosen by WCS
+            if (!task.IsRcsManaged)
+            {
+                var agv = await agvs.GetByRoleAsync(rule.AgvRole, t)
+                          ?? throw AppException.Rejected("AGV_NOT_CONFIGURED", $"No AGV with role {rule.AgvRole} is configured.");
+                if (!agv.Enabled) throw AppException.Rejected("AGV_DISABLED", $"{agv.Code} is disabled.");
+                newAgvId = agv.Id;
+            }
             if (flow == task.Flow && station.Id == task.RequestLocationId) return task.ToDto();   // nothing to change
 
             var oldStation = (await locations.GetAsync(task.RequestLocationId, t))?.Code ?? "?";
             var oldFlow = task.Flow;
             await inventory.ReleaseReservationsAsync(task, t);
-            task.ReconfigureRequest(flow, rule.RackKind, agv.Id, station.Id, $"flow {oldFlow}/{oldStation} -> {flow}/{station.Code}", actor.Username, clock.UtcNow,
+            task.ReconfigureRequest(flow, rule.RackKind, newAgvId, station.Id, $"flow {oldFlow}/{oldStation} -> {flow}/{station.Code}", actor.Username, clock.UtcNow,
                 HistoryDetail.Of("TASK_EDITED", ("oldFlow", oldFlow), ("oldStation", oldStation), ("flow", flow), ("station", station.Code)));
             // A task that is already queued holds a source rack: re-select it for the new request. If none exists the whole edit is
             // refused and rolled back. Pending/Validating tasks have no reservation; the normal processing step reserves later.
@@ -803,7 +916,7 @@ public sealed class TaskOrchestrator(
         List<Func<Task>> after, CancellationToken t, bool forceUncertain = false, bool physicalUnproven = false, HistoryDetail? code = null)
     {
         var physical = forceUncertain || physicalUnproven || task.RcsTaskCode is not null || task.PickConfirmedAt is not null;
-        var wasQueuedBehind = task.AgvId;
+        var wasQueuedBehind = task.AgvId; var wasManaged = task.IsRcsManaged;
         task.TransitionTo(terminal, reason, source, clock.UtcNow, code);
         logger.Log(terminal == TaskState.Failed ? LogLevel.Warning : LogLevel.Information, "Task {TaskId} finished as {State}: {Reason} (source {Source}; physical outcome possible: {Physical}). {EventCode}",
             task.Id, terminal, reason, source, physical, "TASK_FINISHED");   // CR-021
@@ -821,13 +934,14 @@ public sealed class TaskOrchestrator(
         }
         else await inventory.ReleaseReservationsAsync(task, t);
         events.Add(new WcsEvent("TaskStateChanged", task.ToDto()));
-        after.Add(() => TryDispatchNextAsync(wasQueuedBehind));
+        after.Add(() => ReleaseNextAsync(wasQueuedBehind, wasManaged));
     }
 
     /// <summary>CR-008B-5: puts the task's AGV on dispatch hold (idempotent). Runs inside the caller's transaction.</summary>
     private async Task HoldAgvAsync(TransportTask task, string reason, CancellationToken t)
     {
-        if (await agvs.GetAsync(task.AgvId, t) is not { } agv) return;
+        // CR-028: when the RCS chooses the AMR there is no WCS AGV to hold; a task without an AGV row (robot unknown) cannot hold one either
+        if (task.IsRcsManaged || task.AgvId is not { } holdAgvId || await agvs.GetAsync(holdAgvId, t) is not { } agv) return;
         if (agv.PlaceDispatchHold(reason, task.Id, clock.UtcNow))
         {
             task.Note("AGV_DISPATCH_HOLD", $"{agv.Code} placed on dispatch hold: {reason}", Wcs, clock.UtcNow, HistoryDetail.Of("AGV_DISPATCH_HOLD", ("agv", agv.Code), ("reason", reason)));

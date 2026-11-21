@@ -291,6 +291,120 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("WCS.Domain.Fleet.RcsAmrSnapshot", b =>
+                {
+                    b.Property<string>("Source")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("RobotCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Battery")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ExclType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MapCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PathJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PodCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PodDir")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PosX")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("PosY")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("RobotDir")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("RobotIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Speed")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Stop")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Source", "RobotCode");
+
+                    b.HasIndex("Source", "LastSeenAt");
+
+                    b.ToTable("rcs_amr_snapshots", (string)null);
+                });
+
+            modelBuilder.Entity("WCS.Domain.Fleet.RcsFleetState", b =>
+                {
+                    b.Property<string>("Source")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LastAmrCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("LastAttemptOk")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<long?>("LastLatencyMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("LastSuccessAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Source");
+
+                    b.ToTable("rcs_fleet_state", (string)null);
+                });
+
             modelBuilder.Entity("WCS.Domain.Intake.StationRequestRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1411,6 +1525,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1440,6 +1557,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<string>("RobotCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<int>("Sequence")
                         .HasColumnType("integer");
@@ -1493,6 +1614,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AgvRequestCode")
                         .IsUnique();
+
+                    b.HasIndex("RobotCode");
 
                     b.HasIndex("OrderId", "Sequence")
                         .IsUnique();
@@ -1658,8 +1781,17 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AgvId")
+                    b.Property<Guid?>("AgvId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("AssignmentCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("AssignmentSyncFailures")
+                        .HasColumnType("integer");
 
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(100)
@@ -1704,6 +1836,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<string>("RcsDispatchState")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
                     b.Property<DateTimeOffset?>("RcsLastAttemptAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1736,6 +1872,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("RequiresReconciliation")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("RobotCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid?>("SourceLocationId")
                         .HasColumnType("uuid");
@@ -1773,7 +1913,7 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("AgvId")
                         .IsUnique()
                         .HasDatabaseName("ux_transport_tasks_one_active_per_agv")
-                        .HasFilter("\"State\" IN ('Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending')");
+                        .HasFilter("\"AgvId\" IS NOT NULL AND \"RcsDispatchState\" IS NULL AND \"State\" IN ('Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing', 'CancelPending')");
 
                     b.HasIndex("CorrelationId");
 
@@ -1790,6 +1930,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("RequestLocationId");
+
+                    b.HasIndex("RobotCode");
 
                     b.HasIndex("SourceLocationId");
 
@@ -2142,8 +2284,7 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasOne("WCS.Domain.Agvs.Agv", null)
                         .WithMany()
                         .HasForeignKey("AgvId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("WCS.Domain.Locations.Location", null)
                         .WithMany()

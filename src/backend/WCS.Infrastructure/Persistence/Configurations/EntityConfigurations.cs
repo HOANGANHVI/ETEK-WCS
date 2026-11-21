@@ -137,6 +137,9 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
         b.Property(x => x.CorrelationId).HasMaxLength(100);   // CR-021
         b.HasIndex(x => x.CorrelationId);
         b.Property(x => x.RcsTaskCode).HasMaxLength(100);
+        b.Property(x => x.RobotCode).HasMaxLength(64);   // CR-028
+        b.HasIndex(x => x.RobotCode);
+        b.Ignore(x => x.IsRcsManaged);
         b.Property(x => x.StateReason).HasMaxLength(1000);
         b.Property(x => x.StateReasonCode).HasMaxLength(100);
         b.Property(x => x.StateReasonArgsJson).HasColumnType("text");
@@ -160,9 +163,11 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
         b.HasIndex(x => x.State);
 
         // PER_AGV (BR-01): at most ONE AGV-occupying task per AGV, enforced by the database itself.
+        // CR-028: this rule belongs to the Legacy dispatch (WCS chooses the AGV). A task of the RcsManaged dispatch (RcsDispatchState not null) is chosen by the RCS, which may queue
+        // several tasks on one robot, so it is outside the rule; every task created before CR-028 has RcsDispatchState NULL and stays under it exactly as before.
         var occupying = string.Join(", ", TaskStateMachine.AgvOccupyingStates.Select(s => $"'{s}'"));
         b.HasIndex(x => x.AgvId).IsUnique().HasDatabaseName("ux_transport_tasks_one_active_per_agv")
-            .HasFilter($"\"State\" IN ({occupying})");
+            .HasFilter($"\"AgvId\" IS NOT NULL AND \"RcsDispatchState\" IS NULL AND \"State\" IN ({occupying})");
     }
 }
 
@@ -285,5 +290,35 @@ internal sealed class ConfigTransferSessionConfiguration : IEntityTypeConfigurat
         b.Property(x => x.ErrorCode).HasMaxLength(100);
         b.Property(x => x.Version).IsRowVersion();
         b.HasIndex(x => x.CreatedAt);
+    }
+}
+
+internal sealed class RcsAmrSnapshotConfiguration : IEntityTypeConfiguration<WCS.Domain.Fleet.RcsAmrSnapshot>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Fleet.RcsAmrSnapshot> b)
+    {
+        b.ToTable("rcs_amr_snapshots");   // CR-027: read model of the RCS fleet; never replaces the agvs table
+        b.HasKey(x => new { x.Source, x.RobotCode });
+        b.Property(x => x.RobotCode).HasMaxLength(64);
+        foreach (var p in new[] { nameof(WCS.Domain.Fleet.RcsAmrSnapshot.RobotDir), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Battery), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.PosX), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.PosY),
+                     nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Speed), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Status), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.ExclType), nameof(WCS.Domain.Fleet.RcsAmrSnapshot.Stop),
+                     nameof(WCS.Domain.Fleet.RcsAmrSnapshot.PodDir) })
+            b.Property(p).HasMaxLength(32);
+        b.Property(x => x.RobotIp).HasMaxLength(64);
+        b.Property(x => x.MapCode).HasMaxLength(64);
+        b.Property(x => x.PodCode).HasMaxLength(64);
+        b.Property(x => x.PathJson).HasColumnType("text");
+        b.HasIndex(x => new { x.Source, x.LastSeenAt });
+    }
+}
+
+internal sealed class RcsFleetStateConfiguration : IEntityTypeConfiguration<WCS.Domain.Fleet.RcsFleetState>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.Fleet.RcsFleetState> b)
+    {
+        b.ToTable("rcs_fleet_state");
+        b.HasKey(x => x.Source);
+        b.Property(x => x.LastErrorCode).HasMaxLength(100);
+        b.Property(x => x.LastErrorMessage).HasMaxLength(300);
     }
 }

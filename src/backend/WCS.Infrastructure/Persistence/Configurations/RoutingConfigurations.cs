@@ -121,6 +121,8 @@ internal sealed class TransportLegConfiguration : IEntityTypeConfiguration<Trans
         b.Property(x => x.DestinationLocationCode).HasMaxLength(50);
         b.Property(x => x.AgvRequestCode).HasMaxLength(100).IsRequired();
         b.Property(x => x.AgvTaskCode).HasMaxLength(100);
+        b.Property(x => x.RobotCode).HasMaxLength(64);   // CR-028
+        b.HasIndex(x => x.RobotCode);
         b.Property(x => x.StateReason).HasMaxLength(1000);
         b.Property(x => x.Version).IsRowVersion();
         b.Ignore(x => x.IsTerminal);

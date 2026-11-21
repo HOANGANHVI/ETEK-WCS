@@ -9,7 +9,7 @@ export function useCodeMaps(locations: Location[] | null | undefined, agvs: Agv[
     const agv = new Map((agvs ?? []).map((a) => [a.id, a.code]))
     return {
       loc: (id: string | null) => (id ? loc.get(id) ?? id.slice(0, 8) : '—'),
-      agv: (id: string) => agv.get(id) ?? '—',
+      agv: (id: string | null | undefined) => (id ? agv.get(id) ?? '—' : '—'),
     }
   }, [locations, agvs])
 }
