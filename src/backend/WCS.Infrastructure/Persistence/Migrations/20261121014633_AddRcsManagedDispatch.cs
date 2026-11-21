@@ -72,6 +72,20 @@ namespace WCS.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // CR-028 rollback guard. The previous schema has AgvId NOT NULL and one active task per AGV. WCS never invents an AGV and never deletes tasks or history to force a rollback:
+            // the rollback STOPS (nothing is changed - the migration runs in one transaction) while a task has no AgvId or an RcsManaged task is still active.
+            migrationBuilder.Sql(@"
+DO $$
+DECLARE no_agv integer; active_managed integer;
+BEGIN
+    SELECT COUNT(*) INTO no_agv FROM transport_tasks WHERE ""AgvId"" IS NULL;
+    SELECT COUNT(*) INTO active_managed FROM transport_tasks
+        WHERE ""RcsDispatchState"" IS NOT NULL AND ""State"" NOT IN ('Completed', 'Failed', 'Cancelled');
+    IF no_agv > 0 OR active_managed > 0 THEN
+        RAISE EXCEPTION 'ROLLBACK_REFUSED (AddRcsManagedDispatch): % task(s) have no AgvId and % RcsManaged task(s) are still active. Nothing was changed. Drain the RcsManaged tasks first (let them finish or cancel them in WCS and the RCS) and have the owner decide what to do with the tasks that have no AGV; see docs/change-management/CR-028_DYNAMIC_FLEET_DISPATCH.md (Rollback).', no_agv, active_managed;
+    END IF;
+END $$;");
+
             migrationBuilder.DropIndex(
                 name: "IX_transport_tasks_RobotCode",
                 table: "transport_tasks");

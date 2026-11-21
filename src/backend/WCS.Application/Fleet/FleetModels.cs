@@ -81,7 +81,8 @@ public sealed record FleetAmrView(string RobotCode, string State, string? RobotD
 /// <param name="SimulatedData">True when the list comes from the RCS simulator: it must never be presented as real AMRs.</param>
 public sealed record FleetView(string Source, bool SimulatedData, string Connection, DateTimeOffset? LastAttemptAt, DateTimeOffset? LastSuccessAt, string? LastErrorCode,
     string? LastErrorMessage, int ConsecutiveFailures, int IntervalSeconds, int StaleAfterSeconds, int Count, int FreshCount, IReadOnlyList<FleetAmrView> Amrs,
-    string DispatchMode = "Legacy", int MaxInFlightTasks = 0, int TasksInFlight = 0, int TasksAwaitingAssignment = 0, int TasksQueued = 0);   // CR-028 (additive): the dispatch mode and the task counters of RcsManaged dispatch
+    string DispatchMode = "Legacy", int MaxInFlightTasks = 0, int TasksInFlight = 0, int TasksAwaitingAssignment = 0, int TasksQueued = 0,
+    string? DispatchModePending = null);   // CR-028 (additive): the dispatch mode and the task counters of RcsManaged dispatch
 
 public static class FleetStates
 {

@@ -32,6 +32,7 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
     <Panel title={t('agv.fleetTitle')} subtitle={t('agv.fleetSub', { n: fleet.count, fresh: fleet.freshCount })} className="mb"
       actions={<><Pill tone={fleet.simulatedData ? 'warn' : 'info'} dot={false}>{fleet.simulatedData ? t('agv.fleetSimulated') : t('agv.fleetReal')}</Pill><Pill tone={connTone}>{t(`agv.fleetConn_${fleet.connection}` as MsgKey)}</Pill></>}>
       {fleet.simulatedData && <div className="notice notice-warn" role="note">{t('agv.fleetSimulatedNote')}</div>}
+      {fleet.dispatchModePending && <div className="notice notice-warn" role="alert">{t('agv.mgdPending', { mode: fleet.dispatchModePending })}</div>}
       {fleet.dispatchMode === 'RcsManaged' && (
         <div className="notice notice-info" role="note">
           <strong>{t('agv.mgdTitle')}</strong> {t('agv.mgdNote')}

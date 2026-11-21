@@ -104,6 +104,8 @@ public interface ITransportTaskRepository
     Task<int> CountByStatesAsync(IReadOnlyCollection<TaskState> states, CancellationToken ct = default);
     /// <summary>CR-028: tasks of the RcsManaged dispatch that are not finished (oldest first). Tracked, so the caller may change them inside its unit of work.</summary>
     Task<IReadOnlyList<TransportTask>> ListActiveRcsManagedAsync(int take, CancellationToken ct = default);
+    /// <summary>CR-028: tasks that are not finished and belong to the given dispatch mode (RcsManaged = RcsDispatchState is set; Legacy = it is not).</summary>
+    Task<int> CountActiveByModeAsync(bool rcsManaged, CancellationToken ct = default);
     /// <summary>CR-008B-3: tasks whose physical outcome still has to be reconciled by an Admin (newest first).</summary>
     Task<IReadOnlyList<TransportTask>> ListRequiringReconciliationAsync(int take, CancellationToken ct = default);
 }

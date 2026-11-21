@@ -35,10 +35,10 @@ public sealed class RoutingKit : IAsyncDisposable
 
     private RoutingKit(Harness h, FakeLinkStatus link, FakeObservationSource obs) { H = h; Link = link; Observations = obs; }
 
-    public static async Task<RoutingKit> CreateAsync(DatabaseFixture db, bool seedPorts = true, bool approvePorts = true, Action<IServiceCollection>? more = null)
+    public static async Task<RoutingKit> CreateAsync(DatabaseFixture db, bool seedPorts = true, bool approvePorts = true, Action<IServiceCollection>? more = null, IReadOnlyDictionary<string, string?>? extraConfig = null)
     {
         var link = new FakeLinkStatus(); var obs = new FakeObservationSource();
-        var h = await Harness.CreateAsync(db, s => { s.AddSingleton<IPlcLinkStatus>(link); s.AddSingleton<IPlcObservationSource>(obs); more?.Invoke(s); });
+        var h = await Harness.CreateAsync(db, s => { s.AddSingleton<IPlcLinkStatus>(link); s.AddSingleton<IPlcObservationSource>(obs); more?.Invoke(s); }, extraConfig);
         await h.SeedStandardAsync(bufferCapacity: 3, stationCapacity: 1);
         await h.Db(async d => { d.Locations.Add(new Location("C1", "C1", LocationType.Station, 1, AllowedRackKind.Any, true, h.Clock.UtcNow)); await d.SaveChangesAsync(); return 0; });
         var kit = new RoutingKit(h, link, obs);

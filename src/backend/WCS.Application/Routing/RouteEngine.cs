@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
 using WCS.Application.Diagnostics;
+using WCS.Application.Fleet;
 using WCS.Domain.Common;
 using WCS.Domain.Inventory;
 using WCS.Domain.Locations;
@@ -32,7 +34,7 @@ public sealed class RouteEngine(
     IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IReservationRepository reservations,
     IInventoryTransactionRepository inventoryTx, IAgvRepository agvs, ITransportTaskRepository legacyTasks, RouteConditionEvaluator eval,
     StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IMaintenanceGate maintenance, IClock clock, IWcsNotifier notifier,
-    ILogger<RouteEngine> logger) : IRouteEngine
+    IOptions<DispatchOptions> dispatchOptions, ILogger<RouteEngine> logger) : IRouteEngine
 {
     private const string Wcs = "WCS";
     private const int MaxStepsPerAdvance = 50;
@@ -378,6 +380,26 @@ public sealed class RouteEngine(
                 if (leg.State == LegState.InProgress && leg.PickConfirmedAt is null) leg.TransitionTo(LegState.Ready, link.Code, WaitKind.None, clock.UtcNow);
                 else leg.TransitionTo(leg.State, link.Code, WaitKind.None, clock.UtcNow);
                 return null;
+            }
+
+            if (dispatchOptions.Value.IsRcsManaged)
+            {   // CR-028: WCS does not choose the AMR - no role lookup, no PER_AGV, no dispatch hold, no AGV1/AGV2. The RCS chooses; the leg carries no robot code and no AgvId.
+                //         One leg = one independent RCS task (the contract of ILegDispatcher). Only the PORT check stays: a port with another active Station Transaction is a PLC / Station matter.
+                if (leg.State == LegState.Ready)
+                {
+                    if (!await stations.CanOpenAsync(order, leg, leg.SourceLocationCode!, t)
+                        || (leg.DestinationLocationCode is { } mdc && !await stations.CanOpenAsync(order, leg, mdc, t)))
+                    {
+                        if (leg.StateReason != "PORT_BUSY") Event(order, leg, null, "LEG_QUEUED", "A port of the leg has an active Station Transaction");
+                        leg.TransitionTo(LegState.Ready, "PORT_BUSY", WaitKind.None, clock.UtcNow);
+                        return null;
+                    }
+                    leg.TransitionTo(LegState.InProgress, "Sent to the RCS (the RCS chooses the AMR)", WaitKind.None, clock.UtcNow);
+                    await stations.OpenForLegAsync(order, leg, leg.SourceLocationCode!, StationOperation.Pickup, t, null, false);   // no AMR yet: the transaction is not "AgvAssigned"
+                    if (leg.DestinationLocationCode is { } md) await stations.OpenForLegAsync(order, leg, md, StationOperation.Delivery, t, null, false);
+                    Event(order, leg, null, "LEG_DISPATCHING", "RCS");
+                }
+                return new LegDispatchRequest(leg.Id, leg.AgvRequestCode, null, leg.RackKind, leg.SourceLocationCode!, leg.DestinationLocationCode);
             }
 
             var agv = await agvs.GetByRoleAsync(RoleOf(leg.RackKind), t);

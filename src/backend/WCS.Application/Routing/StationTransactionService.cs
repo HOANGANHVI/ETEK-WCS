@@ -30,7 +30,7 @@ public sealed class StationTransactionService(IUnitOfWork uow, IRoutingRepositor
     }
 
     /// <summary>Opens (or links the PLC-created) Station Transaction of the leg at the port of <paramref name="locationCode"/>. A location without a port needs none.</summary>
-    public async Task OpenForLegAsync(TransportOrder order, TransportLeg leg, string locationCode, StationOperation operation, CancellationToken ct, Guid? agvId = null)
+    public async Task OpenForLegAsync(TransportOrder order, TransportLeg leg, string locationCode, StationOperation operation, CancellationToken ct, Guid? agvId = null, bool markAgvAssigned = true)
     {
         var port = await routing.FindPortByLocationAsync(locationCode, ct);
         if (port is null) return;
@@ -48,7 +48,7 @@ public sealed class StationTransactionService(IUnitOfWork uow, IRoutingRepositor
             routing.Add(active);
         }
         if (agvId is { } a) active.AssignAgv(a, now);
-        if (active.State < StationTransactionState.AgvAssigned && active.State != StationTransactionState.ReconciliationRequired) active.Advance(StationTransactionState.AgvAssigned, now);
+        if (markAgvAssigned && active.State < StationTransactionState.AgvAssigned && active.State != StationTransactionState.ReconciliationRequired) active.Advance(StationTransactionState.AgvAssigned, now);
     }
 
     /// <summary>The rack was picked / dropped at the port: the physical handover is done (the AMR may now leave).</summary>

@@ -25,4 +25,17 @@ Golden statistics (`Cr027StatisticsBaselineTests`, Legacy) identical. Schema fin
 
 ## 4. Not verified with a real RCS
 
-Everything real: the create request without `agvCode`, the `queryTaskStatus` answer and when `agvCode` appears, callbacks, behaviour on a repeated `reqCode`, robot changes, queued tasks per robot, cancel before assignment, limits of the status query. See `VENDOR_QUESTIONS_CR-028.md`. Also untested: multi-leg orders in RcsManaged mode (not implemented), long-run / load tests, switching the mode with active tasks.
+Everything real: the create request without `agvCode`, the `queryTaskStatus` answer and when `agvCode` appears, callbacks, behaviour on a repeated `reqCode`, robot changes, queued tasks per robot, cancel before assignment, limits of the status query. See `VENDOR_QUESTIONS_CR-028.md`. Also untested: long-run / load tests, switching the mode with active tasks.
+
+## 5. Follow-up (owner request 2026-11-21): legs, rollback guard, mode switch
+
+| Check | Result |
+|---|---|
+| Backend build; frontend `tsc -b`, ESLint, `i18n:check`, `build` | clean |
+| `Cr028ModeAndLegTests` (new, 11 cases) | **11 / 11** |
+| Focused regression (`Cr028*`, `Cr027*`, `Cr010*` routing / multi-leg / ports, `Cr008*`, `Cr026*`, `Concurrency`, `ProcessFlow`, `Routing`, `Robustness`, `ConfigApi`, `Correlation`, `Station*`) | **315 / 315** |
+| Full suite | not run (decision: lean testing) |
+
+New cases: RcsManaged legs sent with no robot, **no AGV row at all**, two legs of one rack kind not serialised, Station Transaction not "AgvAssigned" · legs ignore `DispatchHold` and never use AGV1 / `R-FULL` even when AGV rows exist · multi-leg order (buffer storage) with no AGV on any leg · `AfterPick` destination continued by task code · Legacy legs unchanged (AGV1, `R-FULL`, `AGV_BUSY` queue, `AgvAssigned`) · migration rollback on a scratch database: refused with an active unassigned task, refused with a finished task without AGV (task and history kept, schema unchanged), allowed when nothing blocks (rows kept, `AgvId` NOT NULL again, forward again) · mode switch refused in both directions (tasks and legs), allowed after completion, nothing converted · startup check refuses to start · changed configuration reported as restart pending.
+
+Still not verified with a real RCS: everything listed in section 4; additionally the leg flows of section 7a (no real leg dispatcher exists).

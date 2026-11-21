@@ -25,7 +25,7 @@ Backend **901 / 901** passed (full run, 2026-11-19). Frontend: `tsc -b`, ESLint,
 - **Assignment at creation:** `TaskOrchestrator.CreateTaskCoreAsync` / `UpdateTaskAsync` choose the AGV by role (`IAgvRepository.GetByRoleAsync`: FullRack → AGV1, EmptyRack → AGV2); `TransportTask.AgvId` is NOT NULL and a foreign key to `agvs`; the AGV's `RcsRobotCode` is sent in `RcsCreateTaskRequest.RobotCode`.
 - **PER_AGV:** unique index `ux_transport_tasks_one_active_per_agv` (`AgvId` where `State` in the AGV-occupying states); per-AGV FIFO queue (`TryDispatchNextAsync`, `NextQueuedForAgvAsync`); `DispatchHold` per AGV (`AgvHoldService`); scheduler loop "for each AGV: TryDispatchNext".
 - **RCS dispatch:** `DispatchToRcsAsync`: prepare (tx) → RCS call outside any transaction → apply (tx); after an unknown outcome it queries `QueryTaskStatusAsync(requestCode)` before re-sending; backoff by `RcsRetryPolicy`; `MaxDispatchAttempts` then Failed + reconciliation. The request code `WCS-<taskId>` never changes (idempotent). Only implementation of `IRcsClient`: the simulator.
-- **Routing legs:** `RouteEngine.DispatchLegAsync` also picks the AGV by role and applies PER_AGV for legs.
+- **Routing legs:** `RouteEngine.DispatchLegAsync` also picks the AGV by role and applies PER_AGV for legs. (Changed for RcsManaged in the follow-up, see `CR-028_DYNAMIC_FLEET_DISPATCH.md` 7a.)
 - **Config:** `Scheduler:*` (tick, `MaxDispatchAttempts`, state timeouts, RCS retry delays). No dispatch-mode setting existed.
 
 ## 5. Statistics baseline

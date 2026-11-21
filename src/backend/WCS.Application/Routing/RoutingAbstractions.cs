@@ -40,6 +40,8 @@ public interface IRoutingRepository
     void Add(TransportLeg leg);
     Task<TransportLeg?> GetLegAsync(Guid id, CancellationToken ct = default);
     Task<TransportLeg?> GetActiveLegForAgvAsync(Guid agvId, CancellationToken ct = default);
+    /// <summary>CR-028: legs that are on their way (an AGV chosen by WCS, or sent to the RCS) and not finished. Legacy legs carry an AgvId; RcsManaged legs are sent (task code / in progress) with no AgvId.</summary>
+    Task<int> CountInFlightLegsByModeAsync(bool rcsManaged, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListOpenOrderIdsAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListReadyLegIdsAsync(int take, CancellationToken ct = default);
     Task<(IReadOnlyList<TransportOrder> Items, int Total)> QueryOrdersAsync(OrderState? state, int skip, int take, CancellationToken ct = default);

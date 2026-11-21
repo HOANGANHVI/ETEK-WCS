@@ -12,7 +12,7 @@ namespace WCS.Application.Fleet;
 /// It only READS from the RCS, never writes the <c>agvs</c> table, never touches a task, never creates an AMR of its own and never deletes a snapshot.
 /// </summary>
 public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo, IAgvRepository agvs, ITransportTaskRepository tasks, IUnitOfWork uow, IWcsNotifier notifier,
-    IClock clock, IOptions<RcsFleetOptions> options, IOptions<DispatchOptions> dispatch, ILogger<FleetService> logger)
+    IClock clock, IOptions<RcsFleetOptions> options, IOptions<DispatchOptions> dispatch, DispatchModeState modeState, ILogger<FleetService> logger)
 {
     private RcsFleetOptions O => options.Value;
     private FleetSource Source => query.Source;
@@ -110,6 +110,7 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
             state?.ConsecutiveFailures ?? 0, O.EffectiveInterval, O.EffectiveStaleAfter, list.Count, list.Count(a => a.State == FleetStates.Fresh), list,
             dispatch.Value.IsRcsManaged ? DispatchOptions.RcsManagedMode : DispatchOptions.Legacy, dispatch.Value.MaxInFlightTasks,
             managed.Count(m => m.State != TaskState.Queued && m.State != TaskState.Pending && m.State != TaskState.Validating),
-            managed.Count(m => m.RcsTaskCode is not null && m.RobotCode is null), managed.Count(m => m.State == TaskState.Queued));
+            managed.Count(m => m.RcsTaskCode is not null && m.RobotCode is null), managed.Count(m => m.State == TaskState.Queued),
+            modeState.RestartPending ? modeState.ConfiguredMode : null);
     }, ct);
 }

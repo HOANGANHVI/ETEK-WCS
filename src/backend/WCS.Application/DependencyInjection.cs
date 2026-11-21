@@ -36,6 +36,8 @@ public static class DependencyInjection
             throw new NotSupportedException($"Rcs:Dispatch:Mode '{dispatchMode}' is not valid. Use '{Fleet.DispatchOptions.Legacy}' or '{Fleet.DispatchOptions.RcsManagedMode}'.");
         services.Configure<Fleet.DispatchOptions>(configuration.GetSection(Fleet.DispatchOptions.SectionName));
         services.AddScoped<Fleet.RcsRobotMapper>();
+        services.AddScoped<Fleet.DispatchModeGuard>();
+        services.AddSingleton<Fleet.DispatchModeState>();   // CR-028: effective mode vs the mode configured now
         services.Configure<ConfigTransfer.ConfigTransferOptions>(configuration.GetSection(ConfigTransfer.ConfigTransferOptions.SectionName));
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.LocationConfigGroup>();
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.AgvConfigGroup>();

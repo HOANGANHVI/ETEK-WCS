@@ -179,6 +179,10 @@ internal sealed class TransportTaskRepository(WcsDbContext db) : ITransportTaskR
 
     private static readonly TaskState[] Finished = [TaskState.Completed, TaskState.Failed, TaskState.Cancelled];
 
+    public Task<int> CountActiveByModeAsync(bool rcsManaged, CancellationToken ct) => rcsManaged
+        ? db.Tasks.CountAsync(x => x.RcsDispatchState != null && !Finished.Contains(x.State), ct)
+        : db.Tasks.CountAsync(x => x.RcsDispatchState == null && !Finished.Contains(x.State), ct);
+
     public async Task<IReadOnlyList<TransportTask>> ListActiveRcsManagedAsync(int take, CancellationToken ct) =>
         await WithHistory.Where(x => x.RcsDispatchState != null && !Finished.Contains(x.State)).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Take(take).ToListAsync(ct);
 }
