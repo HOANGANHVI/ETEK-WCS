@@ -1,6 +1,6 @@
 # ADR-0010 – RCS-managed dispatch (CR-028)
 
-- **Date:** 2026-11-21 · **Status:** accepted; implemented on the simulator; real adapter blocked by missing mapping.
+- **Date:** 2026-11-21 · **Status:** accepted and confirmed by the owner (scope final, 2026-11-21); implemented on the simulator; real adapter blocked by missing mapping.
 
 ## Decisions
 1. **One fleet, managed by the RCS.** In `RcsManaged` mode WCS does not choose a robot: the create request carries no `agvCode` and the RCS selects (RCS-2000 API V3.3, 5.2.1).

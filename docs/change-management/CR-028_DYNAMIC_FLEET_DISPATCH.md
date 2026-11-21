@@ -1,6 +1,6 @@
 # CR-028 – Dynamic fleet dispatch (RCS-managed dispatch, Phase 2 of the AMR work)
 
-- **Status:** `IMPLEMENTED` on `feature/cr-028-dynamic-fleet-dispatch`, **on the RCS simulator only**. Stacked on `feature/cr-027-dynamic-amr-monitoring` (`00d24b0`, not merged); `main` is unchanged. Not merged, not deployed, no migration run on a deployed database.
+- **Status:** **READY FOR MERGE** (owner approval of the final scope, 2026-11-21) – implemented on `feature/cr-028-dynamic-fleet-dispatch`, **on the RCS simulator only**; Legacy is the default. Stacked on `feature/cr-027-dynamic-amr-monitoring` (`00d24b0`, not merged); `main` is unchanged. Not merged, not deployed, no migration run on a deployed database.
 - **Approved by the project owner (2026-11-21):** A1-B (branch from CR-027), `RcsManaged` on the Simulator, data model (`AgvId` nullable, `RobotCode`, `AssignedAt`, tracking fields, index adjustment), integration states, `MaxInFlightTasks`, robot-code mapping rules, UI/Dashboard rules, vendor questions.
 - **Baseline (never edited):** `CR-028_BASELINE.md`. **Vendor questions:** `docs/03_RCS_Interface/VENDOR_QUESTIONS_CR-028.md`. **API reference:** RCS-2000 API Developer Guide V3.3 (`docs/03_RCS_Interface/`).
 

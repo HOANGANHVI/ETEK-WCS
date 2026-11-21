@@ -1,6 +1,6 @@
 # Change Log
 
-## v3.18 – CR-028 Dynamic fleet dispatch (2026-11-21) – feature branch (stacked on CR-027), not merged
+## v3.18 – CR-028 Dynamic fleet dispatch (2026-11-21) – READY FOR MERGE (feature branch, stacked on CR-027), not merged
 
 - **`Rcs:Dispatch:Mode`** `Legacy` (default, unchanged) | `RcsManaged`: the task is sent **without** an AMR code and the (simulated) RCS chooses; WCS learns the robot from `queryTaskStatus` / the callback (`RobotCode`, `AssignedAt`); `RcsDispatchState` tracks NotSent / Sending / Accepted / AwaitingAssignment / Assigned / SyncError (the 13 task states are unchanged).
 - **Data:** `TransportTask.AgvId` nullable; new columns; PER_AGV index narrowed to Legacy tasks (migration `AddRcsManagedDispatch`).
