@@ -18,12 +18,32 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
     private FleetSource Source => query.Source;
 
     /// <summary>One poll. Called by the existing AGV status loop on every tick; the interval is applied here, so a faster tick never queries faster than configured.</summary>
+    /// <summary>One poll at a time per process: a manual refresh and the 5-second loop never overlap (the second caller returns at once).</summary>
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
     public async Task<bool> RefreshAsync(CancellationToken ct = default, bool force = false)
+    {
+        if (!await Gate.WaitAsync(0, ct)) return false;
+        try { return await RefreshCoreAsync(ct, force); }
+        finally { Gate.Release(); }
+    }
+
+    /// <summary>Removes anything that looks like a credential from a text that goes to a log (the client never puts one there; this is the second line of defence).</summary>
+    public static string? Sanitize(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        var t = System.Text.RegularExpressions.Regex.Replace(text, "(?i)(\\w*(?:token|password|passwd|secret|authorization)\\w*)\\s*[\"']?\\s*[:=]\\s*[\"']?[^\\s\"',;}]+", "$1=***");
+        return t.Length > 200 ? t[..200] : t;
+    }
+
+    private async Task<bool> RefreshCoreAsync(CancellationToken ct, bool force)
     {
         var now = clock.UtcNow;
         var state = await uow.ExecuteAsync(t => repo.GetStateAsync(Source, t), ct);
-        if (!force && state?.LastAttemptAt is { } last && now - last < TimeSpan.FromSeconds(O.EffectiveInterval)) return false;
+        // a tick of the 5-second timer may arrive a few milliseconds early: without the tolerance every second tick would be skipped (a 10-second poll)
+        if (!force && state?.LastAttemptAt is { } last && now - last < TimeSpan.FromSeconds(O.EffectiveInterval) - TimeSpan.FromMilliseconds(500)) return false;
 
+        logger.LogInformation("RCS fleet poll started (source {Source}, interval {IntervalSeconds} s, timeout {TimeoutSeconds} s). {EventCode}", Source, O.EffectiveInterval, Math.Max(1, O.TimeoutSeconds), "RCS_FLEET_POLL_STARTED");
         RcsFleetResult result;
         using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
         {
@@ -33,7 +53,7 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
             catch (Exception ex) when (ex is not OperationCanceledException) { result = RcsFleetResult.Fail(FleetErrorCodes.Unreachable, ex.Message); }
         }
 
-        bool wasOk = false, changed = false; int count = 0;
+        bool wasOk = false, changed = false; int count = 0, failures = 0, newAmrs = 0, missingAmrs = 0;
         await uow.ExecuteAsync(async t =>
         {
             changed = false;
@@ -45,6 +65,7 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
             {
                 s.Failed(now, result.ErrorCode ?? FleetErrorCodes.Unreachable, result.ErrorMessage, result.LatencyMs);   // the stored AMRs stay as they were: they are shown as not updated, never replaced by invented ones
                 changed = before.LastAttemptOk != s.LastAttemptOk || before.LastErrorCode != s.LastErrorCode;
+                failures = s.ConsecutiveFailures;
                 return 0;
             }
             var known = (await repo.ListAsync(Source, t)).ToDictionary(x => x.RobotCode, StringComparer.Ordinal);
@@ -55,10 +76,11 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
                 {
                     snap = new RcsAmrSnapshot(Source, a.RobotCode, now);
                     repo.Add(snap);
-                    changed = true;                                                           // a new AMR appeared
+                    changed = true; newAmrs++;                                                // a new AMR appeared
                 }
                 if (snap.Apply(a.RobotDir, a.RobotIp, a.Battery, a.PosX, a.PosY, a.MapCode, a.Speed, a.Status, a.ExclType, a.Stop, a.PodCode, a.PodDir, path, now)) changed = true;
             }
+            missingAmrs = known.Values.Count(k => result.Amrs.All(a => a.RobotCode != k.RobotCode));
             // an AMR that is not in this response keeps its row and its old LastSeenAt: it is then shown as "missing", not deleted
             if (known.Values.Any(k => k.LastSeenAt == s.LastSuccessAt && result.Amrs.All(a => a.RobotCode != k.RobotCode))) changed = true;
             s.Succeeded(now, result.Amrs.Count, result.LatencyMs);
@@ -67,6 +89,15 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
             return 0;
         }, ct);
 
+        if (result.Success)
+        {
+            logger.LogInformation("RCS fleet poll succeeded: HTTP {HttpStatus}, {DurationMs} ms, {TotalAmr} AMR(s) [{RobotCodes}], last successful poll {LastSuccessfulPollAt:O}. {EventCode}",
+                result.HttpStatus, result.LatencyMs, count, string.Join(",", result.Amrs.Select(a => a.RobotCode)), now, "RCS_FLEET_POLL_SUCCESS");
+            logger.LogInformation("RCS fleet snapshot updated: {TotalAmr} AMR(s) in the response, {NewAmr} new, {MissingAmr} not in this response. {EventCode}", count, newAmrs, missingAmrs, "RCS_FLEET_SNAPSHOT_UPDATED");
+        }
+        else
+            logger.LogWarning("RCS fleet poll failed: {ErrorCode}, HTTP {HttpStatus}, {ErrorMessage}, consecutive failures {ConsecutiveFailures}. {EventCode}",
+                result.ErrorCode, result.HttpStatus, Sanitize(result.ErrorMessage), failures, "RCS_FLEET_POLL_FAILED");
         if (!result.Success && wasOk)
             logger.LogWarning("RCS fleet query failed ({Code}); the last AMR data is kept and shown as not updated. {EventCode}", result.ErrorCode, "RCS_FLEET_QUERY_FAILED");
         else if (result.Success && !wasOk && state is not null && state.LastAttemptAt is not null)

@@ -43,6 +43,7 @@ try
 
     // CR-006: Production must not silently run on the PLC simulator (explicit opt-in only). Checked on the final configuration, before anything starts.
     var simulatorInProduction = ProductionSafety.Validate(app.Configuration, app.Environment);
+    if (ProductionSafety.ValidateFleet(app.Configuration, app.Environment)) app.Logger.LogWarning("Rcs:Fleet:AllowSimulatorInProduction=true: the AMR fleet is SIMULATED in Production (labelled as simulated; supervised start only). {EventCode}", "CONFIG_FLEET_SIMULATOR_IN_PRODUCTION");
 
     // Fail fast on an invalid flow configuration (e.g. a Bp04 entry).
     _ = app.Services.GetRequiredService<IFlowCatalog>();
