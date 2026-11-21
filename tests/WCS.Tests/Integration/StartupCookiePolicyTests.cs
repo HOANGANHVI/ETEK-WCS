@@ -97,7 +97,7 @@ public class StartupCookiePolicyTests(DatabaseFixture fixture)
                 if (!db.Users.Any(u => u.Username == "admin1")) { db.Users.Add(TestUsers.Make("admin1", UserRole.Admin)); await db.SaveChangesAsync(); }
             }
             await f0.DisposeAsync();
-            using var f = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Plc:RuntimeEnabled"] = "false", ["Plc:AllowSimulatorInProduction"] = "true", ["Rcs:AllowSimulatorInProduction"] = "true" })); });
+            using var f = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(new Dictionary<string, string?> { ["Rcs:Fleet:Source"] = "Real", ["Plc:RuntimeEnabled"] = "false", ["Plc:AllowSimulatorInProduction"] = "true", ["Rcs:AllowSimulatorInProduction"] = "true" })); });
             var client = f.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri(scheme + "://localhost") }).WithClientHeader();   // building the host runs the start-up summary
             var res = await client.PostAsJsonAsync("/api/auth/login", new { username = "admin1", password = TestUsers.Password });
             Assert.Equal(System.Net.HttpStatusCode.OK, res.StatusCode);

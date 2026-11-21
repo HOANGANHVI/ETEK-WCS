@@ -42,7 +42,7 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
             await scope.ServiceProvider.GetRequiredService<PlcCatalogSeeder>().SeedAsync();
         }
         await f0.DisposeAsync();
-        var all = new Dictionary<string, string?> { ["Plc:ReconnectInitialDelayMs"] = "50", ["Plc:ReconnectMaxDelayMs"] = "200" };
+        var all = new Dictionary<string, string?> { ["Plc:ReconnectInitialDelayMs"] = "50", ["Plc:ReconnectMaxDelayMs"] = "200", ["Rcs:Fleet:Source"] = "Real" };   // CR-031: Production needs a real fleet source (the RCS is never contacted here: no RCS connection is saved)
         foreach (var kv in cfg) all[kv.Key] = kv.Value;
         var f = new DbApiFactory(fixture).WithWebHostBuilder(b => { b.UseEnvironment("Production"); b.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(all)); });
         await f.Services.GetRequiredService<IPlcRuntime>().StartAsync();
