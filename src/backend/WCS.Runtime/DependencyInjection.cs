@@ -9,6 +9,7 @@ public static class DependencyInjection
     public static IServiceCollection AddWcsRuntime(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHostedService<ApplicationLifecycleHostedService>();   // CR-021
+        services.AddHostedService<DispatchModeStartupCheck>();   // CR-028: refuse a mode change while the old mode still has active work
         services.AddHostedService<DatabaseSeedHostedService>();
         if (configuration.GetValue("Runtime:EnableWorkers", true))
         {

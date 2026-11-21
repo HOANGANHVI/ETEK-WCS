@@ -37,6 +37,8 @@ public sealed class LoggingRcsClient(IRcsClient inner, ILogger<LoggingRcsClient>
         }
     }
 
+    public Task<RcsTaskInfo> QueryTaskAsync(string requestCode, CancellationToken ct = default) => inner.QueryTaskAsync(requestCode, ct);   // CR-028: status + assigned AMR (read-only), passed through
+
     public Task<WCS.Application.Fleet.RcsFleetResult> QueryFleetAsync(CancellationToken ct = default) => inner.QueryFleetAsync(ct);   // CR-027: a read-only query, passed through
 
     public Task<RcsAgvStatus?> QueryAgvStatusAsync(string robotCode, CancellationToken ct = default) => inner.QueryAgvStatusAsync(robotCode, ct);

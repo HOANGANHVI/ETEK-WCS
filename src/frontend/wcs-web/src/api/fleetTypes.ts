@@ -14,4 +14,8 @@ export interface FleetView {
   source: 'Simulator' | 'Real'; simulatedData: boolean; connection: FleetConnection
   lastAttemptAt: string | null; lastSuccessAt: string | null; lastErrorCode: string | null; lastErrorMessage: string | null; consecutiveFailures: number
   intervalSeconds: number; staleAfterSeconds: number; count: number; freshCount: number; amrs: FleetAmr[]
+  /** CR-028 */
+  dispatchMode?: 'Legacy' | 'RcsManaged'; maxInFlightTasks?: number; tasksInFlight?: number; tasksAwaitingAssignment?: number; tasksQueued?: number
+  /** CR-028: the mode configured now when it differs from the running one (restart pending) */
+  dispatchModePending?: string | null
 }

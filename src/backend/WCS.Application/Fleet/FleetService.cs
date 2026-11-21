@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Domain.Fleet;
+using WCS.Domain.Tasks;
 
 namespace WCS.Application.Fleet;
 
@@ -11,7 +12,7 @@ namespace WCS.Application.Fleet;
 /// It only READS from the RCS, never writes the <c>agvs</c> table, never touches a task, never creates an AMR of its own and never deletes a snapshot.
 /// </summary>
 public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo, IAgvRepository agvs, ITransportTaskRepository tasks, IUnitOfWork uow, IWcsNotifier notifier,
-    IClock clock, IOptions<RcsFleetOptions> options, ILogger<FleetService> logger)
+    IClock clock, IOptions<RcsFleetOptions> options, IOptions<DispatchOptions> dispatch, DispatchModeState modeState, ILogger<FleetService> logger)
 {
     private RcsFleetOptions O => options.Value;
     private FleetSource Source => query.Source;
@@ -87,6 +88,8 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
 
         // read-only link to the business AGV (matched by robot code) and its active task, when there is one
         var byRobot = (await agvs.ListAsync(t)).Where(a => !string.IsNullOrWhiteSpace(a.RcsRobotCode)).GroupBy(a => a.RcsRobotCode!, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        // CR-028: tasks of the RcsManaged dispatch are linked to the AMR by the robot code the RCS reported; a task without one is "awaiting assignment", never attributed to an AMR
+        var managed = dispatch.Value.IsRcsManaged ? await tasks.ListActiveRcsManagedAsync(1000, t) : [];
         var list = new List<FleetAmrView>();
         foreach (var s in snaps.OrderBy(x => x.RobotCode, StringComparer.Ordinal))
         {
@@ -98,11 +101,16 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
                 agvCode = agv.Code;
                 if (await tasks.GetActiveForAgvAsync(agv.Id, t) is { } task) { taskId = task.Id; taskState = task.State.ToString(); }
             }
+            if (taskId is null && managed.FirstOrDefault(m => string.Equals(m.RobotCode, s.RobotCode, StringComparison.Ordinal)) is { } mine) { taskId = mine.Id; taskState = mine.State.ToString(); }
             IReadOnlyList<string> path = s.PathJson is null ? [] : JsonSerializer.Deserialize<List<string>>(s.PathJson) ?? [];
             list.Add(new FleetAmrView(s.RobotCode, st, s.RobotDir, includeNetwork ? s.RobotIp : null, s.Battery, s.PosX, s.PosY, s.MapCode, s.Speed, s.Status, s.ExclType, s.Stop,
                 s.PodCode, s.PodDir, includeNetwork ? path : [], s.FirstSeenAt, s.LastSeenAt, agvCode, taskId, taskState));
         }
         return new FleetView(Source.ToString(), Source == FleetSource.Simulator, connection, state?.LastAttemptAt, state?.LastSuccessAt, state?.LastErrorCode, state?.LastErrorMessage,
-            state?.ConsecutiveFailures ?? 0, O.EffectiveInterval, O.EffectiveStaleAfter, list.Count, list.Count(a => a.State == FleetStates.Fresh), list);
+            state?.ConsecutiveFailures ?? 0, O.EffectiveInterval, O.EffectiveStaleAfter, list.Count, list.Count(a => a.State == FleetStates.Fresh), list,
+            dispatch.Value.IsRcsManaged ? DispatchOptions.RcsManagedMode : DispatchOptions.Legacy, dispatch.Value.MaxInFlightTasks,
+            managed.Count(m => m.State != TaskState.Queued && m.State != TaskState.Pending && m.State != TaskState.Validating),
+            managed.Count(m => m.RcsTaskCode is not null && m.RobotCode is null), managed.Count(m => m.State == TaskState.Queued),
+            modeState.RestartPending ? modeState.ConfiguredMode : null);
     }, ct);
 }

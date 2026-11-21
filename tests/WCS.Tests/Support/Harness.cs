@@ -63,6 +63,15 @@ public sealed class DatabaseFixture : IAsyncLifetime
         await cmd.ExecuteNonQueryAsync();
     }
 
+    /// <summary>CR-028: runs one SQL statement on this fixture's database (arranging data that the domain does not allow to create, for example a rollback scenario).</summary>
+    public async Task ExecAsync(string sql)
+    {
+        await using var c = new NpgsqlConnection(ConnectionString);
+        await c.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, c);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public async Task ResetAsync()
     {
         await using var c = new NpgsqlConnection(ConnectionString);

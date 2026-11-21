@@ -69,6 +69,8 @@ public sealed class RcsSimulator : IRcsClient
         public string RequestCode { get; } = requestCode;
         public string RcsTaskCode { get; } = rcsTaskCode;
         public RcsTaskStatus Status { get; set; } = RcsTaskStatus.Created;
+        /// <summary>CR-028: the AMR the simulated RCS gave the task (null = none yet). Legacy: the robot code WCS sent.</summary>
+        public string? AgvCode { get; set; }
     }
 
     private readonly object _gate = new();
@@ -96,10 +98,28 @@ public sealed class RcsSimulator : IRcsClient
             if (fault == RcsFault.RejectNextCreate) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Rejected, null, "Simulated rejection"));
             if (fault == RcsFault.TimeoutBeforeCreate) return Task.FromResult(new RcsCallResult(RcsCallOutcome.Unknown, null, "Simulated timeout (not created)"));
             if (!_tasks.TryGetValue(request.RequestCode, out var task))
+            {
                 _tasks[request.RequestCode] = task = new SimTask(request.RequestCode, $"SIM-{++_counter:D5}");
+                // CR-028: a request WITHOUT a robot code is what RcsManaged dispatch sends: the simulated RCS chooses the AMR itself (repeating the same request code never creates or re-assigns a second task)
+                task.AgvCode = request.RobotCode ?? (AutoAssign ? ChooseRobot() : null);
+            }
             return Task.FromResult(fault == RcsFault.TimeoutAfterCreate
                 ? new RcsCallResult(RcsCallOutcome.Unknown, null, "Simulated timeout (task WAS created)")
                 : new RcsCallResult(RcsCallOutcome.Accepted, task.RcsTaskCode, null));
+        }
+    }
+
+    /// <summary>CR-028: registers a ROUTING LEG sent without a robot code: the simulated RCS chooses the AMR (or none yet) exactly as for a task. Repeating the request code returns the same task.</summary>
+    public string CreateLegTask(string requestCode)
+    {
+        lock (_gate)
+        {
+            if (!_tasks.TryGetValue(requestCode, out var task))
+            {
+                _tasks[requestCode] = task = new SimTask(requestCode, $"SIM-{++_counter:D5}");
+                task.AgvCode = AutoAssign ? ChooseRobot() : null;
+            }
+            return task.RcsTaskCode;
         }
     }
 
@@ -144,6 +164,40 @@ public sealed class RcsSimulator : IRcsClient
 
     public Task<RcsAgvStatus?> QueryAgvStatusAsync(string robotCode, CancellationToken ct = default) =>
         Task.FromResult<RcsAgvStatus?>(new RcsAgvStatus(robotCode, true, "simulated"));
+
+    // ------------------------------------------------------------------ CR-028: the simulated RCS chooses the AMR (queryTaskStatus agvCode, 5.2.15)
+    /// <summary>True (default): a task created without a robot code gets the least-loaded free AMR of the simulated fleet at once. False: tasks stay unassigned until <see cref="AssignPending"/>.</summary>
+    public bool AutoAssign { get; set; } = true;
+    /// <summary>Makes the task status query inconclusive (as an outage of that API would).</summary>
+    public bool TaskQueryFailure { get; set; }
+
+    private static bool Finished(RcsTaskStatus s) => s is RcsTaskStatus.Completed or RcsTaskStatus.Cancelled;
+
+    /// <summary>The least-loaded AMR of the simulated fleet that is not excluded; null when the fleet is empty. Ties: the smaller robot code.</summary>
+    private string? ChooseRobot() =>
+        _fleet.Where(a => a.ExclType != "1").Select(a => a.RobotCode)
+            .OrderBy(code => _tasks.Values.Count(t => t.AgvCode == code && !Finished(t.Status))).ThenBy(code => code, StringComparer.Ordinal).FirstOrDefault();
+
+    /// <summary>Assigns every task that has no AMR yet (used after the fleet was filled or AutoAssign was off).</summary>
+    public void AssignPending() { lock (_gate) foreach (var t in _tasks.Values.Where(t => t.AgvCode is null && !Finished(t.Status))) t.AgvCode = ChooseRobot(); }
+
+    /// <summary>The AMR the simulated RCS gave the task (null = none).</summary>
+    public string? RobotOf(string requestCode) { lock (_gate) return _tasks.TryGetValue(requestCode, out var t) ? t.AgvCode : null; }
+
+    /// <summary>Forces another AMR for a task (a robot change by the RCS).</summary>
+    public void ReassignRobot(string requestCode, string? robotCode) { lock (_gate) if (_tasks.TryGetValue(requestCode, out var t)) t.AgvCode = robotCode; }
+
+    public int TaskCount { get { lock (_gate) return _tasks.Count; } }
+
+    public Task<RcsTaskInfo> QueryTaskAsync(string requestCode, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            QueryCalls++;
+            if (Unreachable || TaskQueryFailure) return Task.FromResult(new RcsTaskInfo(RcsTaskStatus.Unknown, null, null));
+            return Task.FromResult(_tasks.TryGetValue(requestCode, out var t) ? new RcsTaskInfo(t.Status, t.RcsTaskCode, t.AgvCode) : new RcsTaskInfo(RcsTaskStatus.NotFound, null, null));
+        }
+    }
 
     // ------------------------------------------------------------------ CR-027: the simulated AMR fleet (empty unless a test / Development fills it; never derived from the agvs table)
     private List<WCS.Application.Fleet.RcsFleetAmr> _fleet = [];

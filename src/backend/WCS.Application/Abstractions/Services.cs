@@ -99,6 +99,11 @@ public interface ITaskOrchestrator
     Task SendContinueAsync(Guid taskId, CancellationToken ct = default);
     Task ReconcileCancelPendingAsync(Guid taskId, CancellationToken ct = default);
     Task EnforceTimeoutAsync(Guid taskId, CancellationToken ct = default);
+
+    /// <summary>CR-028 (RcsManaged only): sends the next queued task(s) to the RCS while the fleet-level limit allows. No-op in Legacy dispatch.</summary>
+    Task TryDispatchFleetQueueAsync(CancellationToken ct = default) => Task.CompletedTask;
+    /// <summary>CR-028 (RcsManaged only): asks the RCS which AMR each sent task got and records it. No-op in Legacy dispatch.</summary>
+    Task SyncAssignmentsAsync(CancellationToken ct = default) => Task.CompletedTask;
 }
 
 public sealed class SchedulerOptions

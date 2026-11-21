@@ -36,6 +36,10 @@ public sealed class TaskScheduler(
         foreach (var agv in await agvs.ListAsync(ct))
             await Safe($"dispatch {agv.Code}", () => orchestrator.TryDispatchNextAsync(agv.Id, ct));
 
+        // CR-028 (RcsManaged only; both are no-ops in Legacy dispatch): fleet-level queue, then "which AMR did the RCS choose?"
+        await Safe("fleet queue", () => orchestrator.TryDispatchFleetQueueAsync(ct));
+        await Safe("assignment sync", () => orchestrator.SyncAssignmentsAsync(ct));
+
         foreach (var t in await tasks.ListByStatesAsync([TaskState.Dispatching], 100, ct).ContinueWith(r => r.Result.Where(x => x.RcsTaskCode is null).ToList(), ct))
             await Safe($"recover-dispatch {t.Id}", () => orchestrator.DispatchToRcsAsync(t.Id, ct));
 

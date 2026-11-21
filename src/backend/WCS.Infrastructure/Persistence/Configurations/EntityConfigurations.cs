@@ -137,6 +137,9 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
         b.Property(x => x.CorrelationId).HasMaxLength(100);   // CR-021
         b.HasIndex(x => x.CorrelationId);
         b.Property(x => x.RcsTaskCode).HasMaxLength(100);
+        b.Property(x => x.RobotCode).HasMaxLength(64);   // CR-028
+        b.HasIndex(x => x.RobotCode);
+        b.Ignore(x => x.IsRcsManaged);
         b.Property(x => x.StateReason).HasMaxLength(1000);
         b.Property(x => x.StateReasonCode).HasMaxLength(100);
         b.Property(x => x.StateReasonArgsJson).HasColumnType("text");
@@ -160,9 +163,11 @@ internal sealed class TransportTaskConfiguration : IEntityTypeConfiguration<Tran
         b.HasIndex(x => x.State);
 
         // PER_AGV (BR-01): at most ONE AGV-occupying task per AGV, enforced by the database itself.
+        // CR-028: this rule belongs to the Legacy dispatch (WCS chooses the AGV). A task of the RcsManaged dispatch (RcsDispatchState not null) is chosen by the RCS, which may queue
+        // several tasks on one robot, so it is outside the rule; every task created before CR-028 has RcsDispatchState NULL and stays under it exactly as before.
         var occupying = string.Join(", ", TaskStateMachine.AgvOccupyingStates.Select(s => $"'{s}'"));
         b.HasIndex(x => x.AgvId).IsUnique().HasDatabaseName("ux_transport_tasks_one_active_per_agv")
-            .HasFilter($"\"State\" IN ({occupying})");
+            .HasFilter($"\"AgvId\" IS NOT NULL AND \"RcsDispatchState\" IS NULL AND \"State\" IN ({occupying})");
     }
 }
 

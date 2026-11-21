@@ -1,5 +1,5 @@
 // Dashboard figures: formulas checked on hand-made tasks (no backend). Run: npm run dashboard:test
-import { buildBuckets, completedPerAgv, countByBucket, failureRate, meanCycle, meanCycleByBucket, rangeStart, type FinishedTask } from '../src/lib/dashboardStats.ts'
+import { buildBuckets, completedPerAgv, completedPerRobot, countByBucket, failureRate, meanCycle, meanCycleByBucket, rangeStart, type FinishedTask } from '../src/lib/dashboardStats.ts'
 
 const results: string[] = []
 const check = (name: string, ok: boolean, info = '') => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !info ? '' : ' — ' + info}`); if (!ok) process.exitCode = 1 }
@@ -41,4 +41,10 @@ const byBucket = meanCycleByBucket(completed, b7)
 check('mean cycle per day, gaps stay null', byBucket[5] === null && byBucket[4] === 30 * 60_000 && byBucket[6] === (10 + 20 + 10) / 3 * 60_000, JSON.stringify(byBucket))
 const per = completedPerAgv(completed)
 check('completed per AGV', per.get('A') === 2 && per.get('B') === 2)
+// CR-028: a task without an AGV row / robot is never attributed to one
+const mixed: FinishedTask[] = [...completed, { state: 'Completed', createdAt: at(2026, 11, 17, 9), finishedAt: at(2026, 11, 17, 9, 5), agvId: null, robotCode: null }, { state: 'Completed', createdAt: at(2026, 11, 17, 9), finishedAt: at(2026, 11, 17, 9, 6), agvId: null, robotCode: '1001' }, { state: 'Completed', createdAt: at(2026, 11, 17, 9), finishedAt: at(2026, 11, 17, 9, 7), agvId: null, robotCode: '1001' }]
+const perMixed = completedPerAgv(mixed)
+check('per AGV: tasks without an AGV are not counted for any AGV', perMixed.get('A') === 2 && perMixed.get('B') === 2 && perMixed.size === 2)
+const perRobot = completedPerRobot(mixed)
+check('per robot: by robotCode, tasks without a robot reported separately', perRobot.byRobot.get('1001') === 2 && perRobot.withoutRobot === 5 && perRobot.byRobot.size === 1, JSON.stringify([...perRobot.byRobot]) + perRobot.withoutRobot)
 console.log(results.join(String.fromCharCode(10)))

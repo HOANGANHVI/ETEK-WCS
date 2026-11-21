@@ -18,7 +18,8 @@ export function AgvPage() {
   const t = useT()
   const now = useClock(5000).getTime()
   const agvs = useApi(useCallback(() => api.agvs(), []), [...EVENTS])
-  const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged'])
+  const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged', 'TaskStateChanged'])
+  const managed = fleet.data?.dispatchMode === 'RcsManaged'   // CR-028: the RCS chooses the AMR: one fleet list, no AGV1 / AGV2 cards
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])
   const locations = useApi(useCallback(() => api.locations(), []))
   const codes = useCodeMaps(locations.data, agvs.data)
@@ -39,11 +40,13 @@ export function AgvPage() {
       <PageHeader
         title={t('agv.pageTitle')}
       />
-      <Panel title={t('agv.sumTitle')} subtitle={t('agv.sumSub', { n: agvs.data?.length ?? 0 })} className="mb">
-        <StackedSummary items={summary} ariaLabel={t('agv.sumTitle')} emptyTitle={t('agv.sumEmpty')} />
-      </Panel>
+      {!managed && (
+        <Panel title={t('agv.sumTitle')} subtitle={t('agv.sumSub', { n: agvs.data?.length ?? 0 })} className="mb">
+          <StackedSummary items={summary} ariaLabel={t('agv.sumTitle')} emptyTitle={t('agv.sumEmpty')} />
+        </Panel>
+      )}
       <Async state={fleet} empty={{ title: t('agv.fleetNoData') }}>{(f) => <FleetPanel fleet={f} />}</Async>
-      <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
+      {!managed && <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
         {(list) => (
           <div className="agv-grid wide">
             {list.map((a) => {
@@ -52,9 +55,9 @@ export function AgvPage() {
             })}
           </div>
         )}
-      </Async>
+      </Async>}
 
-      <div className="agv-history">
+      {!managed && <div className="agv-history">
         {(agvs.data ?? []).map((a) => {
           const mine = (tasks.data?.items ?? []).filter((t) => t.agvId === a.id).slice(0, 8)
           return (
@@ -82,7 +85,7 @@ export function AgvPage() {
             </Panel>
           )
         })}
-      </div>
+      </div>}
     </>
   )
 }

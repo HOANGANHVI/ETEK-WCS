@@ -11,7 +11,7 @@ import { StackedSummary, type SummaryItem } from '../components/charts'
 import { DEMO_MODE, ENGINEERING_TOOLS } from '../config'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
-import { useT } from '../i18n'
+import { useT, type MsgKey } from '../i18n'
 import { describeHistory } from '../i18n/logCatalog'
 import { formatDateTime, formatTime } from '../i18n/format'
 import {
@@ -110,7 +110,7 @@ export function TasksPage() {
                         <td className="mono nowrap">{taskCode(t.id)}</td>
                         <td className="nowrap num">{formatTime(t.createdAt)}</td>
                         <td className="nowrap"><strong>{flowInfo(t.flow).code}</strong></td>
-                        <td>{codes.agv(t.agvId)}</td>
+                        <td>{t.robotCode ?? codes.agv(t.agvId)}{t.rcsDispatchState && t.rcsDispatchState !== 'Assigned' && !['Completed', 'Failed', 'Cancelled'].includes(t.state) && <> <Pill tone={t.rcsDispatchState === 'SyncError' ? 'bad' : 'muted'} dot={false}>{tr(`tasks.dispatchState_${t.rcsDispatchState}` as MsgKey)}</Pill></>}</td>
                         <td>{codes.loc(t.sourceLocationId ?? t.requestLocationId)}</td>
                         <td>{codes.loc(t.destinationLocationId)}</td>
                         <td><TaskStatePill state={t.state} />{t.requiresReconciliation && <span className="flag" title={tr('tasks.reconFlag')}> ⚠</span>}</td>
@@ -204,7 +204,7 @@ function TaskDetail({ id, codes, askCancel, isAdmin, onCancelDone, onEdit, onDel
               <section className="detail-sec">
                 <h3>{tr('tasks.secAgv')}</h3>
                 <dl className="kv2">
-                  <dt>{tr('tasks.rowAgv')}</dt><dd><strong>{codes.agv(t.agvId)}</strong>{agv && <> · {AGV_ROLE_VI[agv.role]}</>}</dd>
+                  <dt>{tr('tasks.rowAgv')}</dt><dd><strong>{t.robotCode ?? codes.agv(t.agvId)}</strong>{agv && <> · {AGV_ROLE_VI[agv.role]}</>}{t.rcsDispatchState && <> · {tr(`tasks.dispatchState_${t.rcsDispatchState}` as MsgKey)}</>}</dd>
                   <dt>{tr('tasks.rowLeg')}</dt><dd>{LEG_VI[t.leg] ?? t.leg}</dd>
                   <dt>{tr('tasks.rowPlcPermission')}</dt><dd>{t.plcPermissionGranted ? <Pill tone="ok">{tr('tasks.plcGranted')}</Pill> : <Pill tone="muted">{tr('tasks.plcNotGranted')}</Pill>}</dd>
                   <dt>{tr('tasks.rowRcsRequest')}</dt><dd className="mono">{t.rcsRequestCode}</dd>

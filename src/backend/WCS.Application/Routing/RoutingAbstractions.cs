@@ -40,6 +40,10 @@ public interface IRoutingRepository
     void Add(TransportLeg leg);
     Task<TransportLeg?> GetLegAsync(Guid id, CancellationToken ct = default);
     Task<TransportLeg?> GetActiveLegForAgvAsync(Guid agvId, CancellationToken ct = default);
+    /// <summary>CR-028: legs that are on their way (an AGV chosen by WCS, or sent to the RCS) and not finished. Legacy legs carry an AgvId; RcsManaged legs are sent (task code / in progress) with no AgvId.</summary>
+    Task<int> CountInFlightLegsByModeAsync(bool rcsManaged, CancellationToken ct = default);
+    /// <summary>CR-028: legs of RcsManaged dispatch that were sent to the RCS (task code set, no AgvId) and are not finished: their AMR is asked from the RCS.</summary>
+    Task<IReadOnlyList<Guid>> ListManagedLegIdsToSyncAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListOpenOrderIdsAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListReadyLegIdsAsync(int take, CancellationToken ct = default);
     Task<(IReadOnlyList<TransportOrder> Items, int Total)> QueryOrdersAsync(OrderState? state, int skip, int take, CancellationToken ct = default);
@@ -83,4 +87,7 @@ public interface ILegDispatcher
 {
     Task<LegDispatchResult> DispatchAsync(LegDispatchRequest request, CancellationToken ct = default);
     Task<LegDispatchResult> ContinueAsync(string requestCode, string? agvTaskCode, string destinationLocationCode, CancellationToken ct = default);
+    /// <summary>CR-028: asks the RCS which AMR carries the leg (queryTaskStatus, `agvCode` "exists when the task has been assigned"). Default: inconclusive (an adapter that cannot ask reports nothing).</summary>
+    Task<WCS.Application.Abstractions.RcsTaskInfo> QueryAsync(string requestCode, CancellationToken ct = default) =>
+        Task.FromResult(new WCS.Application.Abstractions.RcsTaskInfo(WCS.Application.Abstractions.RcsTaskStatus.Unknown, null, null));
 }

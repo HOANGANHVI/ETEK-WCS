@@ -115,6 +115,10 @@ public class TransportLeg
     public RackKind RackKind { get; private set; }
     public Guid? RackId { get; private set; }
     public Guid? AgvId { get; private set; }
+    /// <summary>CR-028 (RcsManaged): the AMR the RCS chose for THIS leg, as the RCS reported it (queryTaskStatus agvCode). Null = none reported yet. Never copied from the Transport Task / Order and never a default;
+    /// <c>AgvId</c> stays empty for these legs (PER_AGV does not apply). Legacy legs keep RobotCode null.</summary>
+    public string? RobotCode { get; private set; }
+    public DateTimeOffset? AssignedAt { get; private set; }
     /// <summary>Idempotent request code of the AGV dispatch of this leg.</summary>
     public string AgvRequestCode { get; private set; } = default!;
     public string? AgvTaskCode { get; private set; }
@@ -146,6 +150,19 @@ public class TransportLeg
 
     public void AssignAgv(Guid agvId, DateTimeOffset now) { AgvId = agvId; UpdatedAt = now; }
     public void ReleaseAgv(DateTimeOffset now) { AgvId = null; UpdatedAt = now; }
+
+    /// <summary>
+    /// Records the AMR the RCS reported for this leg (RcsManaged). An empty code changes nothing. The first code is stored. A different code BEFORE the rack was picked is followed (the RCS may re-plan).
+    /// A different code while the rack is on the AMR is REFUSED: the continuity of the transport must not be changed silently, and no hand-over procedure is approved; the leg keeps the robot it had.
+    /// </summary>
+    public LegRobotOutcome RecordRobot(string? robotCode, DateTimeOffset now)
+    {
+        var code = robotCode?.Trim();
+        if (string.IsNullOrEmpty(code) || code == RobotCode) return LegRobotOutcome.NoChange;
+        if (RobotCode is null) { RobotCode = code; AssignedAt = now; UpdatedAt = now; return LegRobotOutcome.Assigned; }
+        if (RackOnAgv) return LegRobotOutcome.RefusedRackOnAmr;
+        RobotCode = code; AssignedAt = now; UpdatedAt = now; return LegRobotOutcome.Changed;
+    }
     public void AttachAgvTask(string code, DateTimeOffset now)
     {
         if (AgvTaskCode is not null && AgvTaskCode != code) throw new DomainException("AGV_TASK_CODE_MISMATCH", "Leg is already mapped to a different AGV task code.");
