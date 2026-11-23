@@ -7,6 +7,32 @@
     <UserSecretsId>a60f32ab-562a-416e-b6e8-35d8c59525b9</UserSecretsId>
   </PropertyGroup>
 
+  <!-- Release metadata, stamped into the assembly at build time. Single source: the VERSION file at the repository root; a build argument (-p:AppVersion / GitCommit / BuildTime, passed by deployment/scripts/deploy.ps1 through Docker) overrides it. -->
+  <PropertyGroup>
+    <AppVersionFile>$(MSBuildThisFileDirectory)..\..\..\VERSION</AppVersionFile>
+    <AppVersion Condition="'$(AppVersion)' == '' And Exists('$(AppVersionFile)')">$([System.IO.File]::ReadAllText('$(AppVersionFile)').Trim())</AppVersion>
+    <AppVersion Condition="'$(AppVersion)' == ''">0.0.0</AppVersion>
+    <BuildTime Condition="'$(BuildTime)' == ''">$([System.DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'))</BuildTime>
+    <Version>$(AppVersion)</Version>
+  </PropertyGroup>
+
+  <!-- A local build (no GitCommit given) asks git once; in Docker the commit is always passed in because the image build has no .git folder. -->
+  <Target Name="ResolveGitCommit" BeforeTargets="GetAssemblyAttributes" Condition="'$(GitCommit)' == ''">
+    <Exec Command="git rev-parse --short HEAD" WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommit" />
+    </Exec>
+  </Target>
+  <Target Name="StampBuildMetadata" BeforeTargets="GetAssemblyAttributes" DependsOnTargets="ResolveGitCommit">
+    <PropertyGroup>
+      <GitCommit Condition="'$(GitCommit)' == '' Or $(GitCommit.Contains(' '))">unknown</GitCommit>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="AppVersion" Value="$(AppVersion)" />
+      <AssemblyMetadata Include="GitCommit" Value="$(GitCommit)" />
+      <AssemblyMetadata Include="BuildTime" Value="$(BuildTime)" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">

@@ -10,6 +10,7 @@ import { formatDate, formatTime } from '../i18n/format'
 import { useT, type MsgKey } from '../i18n'
 import { LangSwitch } from './LangSwitch'
 import { UserMenu } from './UserMenu'
+import { VersionBadge } from './VersionBadge'
 import { plcView, rcsView, type LinkView } from './linkStatus'
 import { useRealtime } from '../realtime/RealtimeProvider'
 import { usePreferences } from '../preferences/PreferencesContext'
@@ -181,6 +182,7 @@ export function Layout() {
         <MaintenanceBanner />
         {denied && <div className="notice notice-warn" role="alert">{denied}</div>}
         <Outlet />
+        <VersionBadge />
       </main>
       {DEMO_MODE && hasRole(user, 'Admin') && <DemoDock />}
     </div>

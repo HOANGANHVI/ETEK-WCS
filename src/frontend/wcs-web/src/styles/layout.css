@@ -128,3 +128,7 @@
   .clock { min-width: 0; padding-left: 10px; }
   .clock strong { font-size: 16px; }
 }
+
+/* application version / build (footer of the main area) */
+.version-badge { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--border, rgba(128, 128, 128, .25)); font-size: 11.5px; opacity: .7; text-align: right; cursor: default; }
+.version-badge .version-warn { color: var(--warn); font-weight: 600; }

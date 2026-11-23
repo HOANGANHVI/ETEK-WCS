@@ -103,6 +103,13 @@ try
         return Results.Json(new { application = "Up", database = dbOk ? "Up" : "Down" }, statusCode: dbOk ? StatusCodes.Status200OK : StatusCodes.Status503ServiceUnavailable);
     }).AllowAnonymous();
 
+    // Release information: application version, Git commit and build time stamped into the binary at build time (anonymous, so the sign-in page and the deployer can read it; it reveals no configuration).
+    app.MapGet("/api/version", () =>
+    {
+        var b = WCS.Application.Common.BuildInfo.Current;
+        return Results.Json(new { version = b.Version, gitCommit = b.GitCommit, buildTime = b.BuildTime });
+    }).AllowAnonymous();
+
     if (simulatorInProduction)
         app.Logger.LogWarning("Plc:AllowSimulatorInProduction=true: the PLC layer runs on the in-memory SIMULATOR (no real PLC is read) and RCS is a simulator adapter. This is not an operating configuration. {EventCode}", "CONFIG_SIMULATOR_IN_PRODUCTION");
 

@@ -35,6 +35,10 @@ services:
       context: ..
       dockerfile: deployment/docker/backend/Dockerfile
       target: migrator
+      args:
+        APP_VERSION: ${WCS_APP_VERSION:-}
+        GIT_COMMIT: ${WCS_GIT_COMMIT:-}
+        BUILD_TIME: ${WCS_BUILD_TIME:-}
     image: etek-wcs-migrator:${WCS_VERSION:-local}
     restart: "no"
     depends_on:
@@ -51,6 +55,10 @@ services:
       context: ..
       dockerfile: deployment/docker/backend/Dockerfile
       target: runtime
+      args:
+        APP_VERSION: ${WCS_APP_VERSION:-}
+        GIT_COMMIT: ${WCS_GIT_COMMIT:-}
+        BUILD_TIME: ${WCS_BUILD_TIME:-}
     image: etek-wcs-backend:${WCS_VERSION:-local}
     restart: unless-stopped
     depends_on:
@@ -109,6 +117,10 @@ services:
     build:
       context: ..
       dockerfile: deployment/docker/frontend/Dockerfile
+      args:
+        APP_VERSION: ${WCS_APP_VERSION:-}
+        GIT_COMMIT: ${WCS_GIT_COMMIT:-}
+        BUILD_TIME: ${WCS_BUILD_TIME:-}
     image: etek-wcs-frontend:${WCS_VERSION:-local}
     restart: unless-stopped
     depends_on:

@@ -13,7 +13,12 @@ COPY src/backend/WCS.Runtime/WCS.Runtime.csproj src/backend/WCS.Runtime/
 COPY src/backend/WCS.Api/WCS.Api.csproj src/backend/WCS.Api/
 RUN dotnet restore src/backend/WCS.Api/WCS.Api.csproj
 COPY src/backend/ src/backend/
-RUN dotnet publish src/backend/WCS.Api/WCS.Api.csproj -c Release --no-restore -o /app/publish /p:UseAppHost=false
+# Release metadata (single source: VERSION at the repository root; the commit and build time are passed by deploy.ps1). Stamped into the assembly at build time.
+COPY VERSION /src/VERSION
+ARG APP_VERSION=
+ARG GIT_COMMIT=
+ARG BUILD_TIME=
+RUN dotnet publish src/backend/WCS.Api/WCS.Api.csproj -c Release --no-restore -o /app/publish /p:UseAppHost=false     ${APP_VERSION:+/p:AppVersion=$APP_VERSION} ${GIT_COMMIT:+/p:GitCommit=$GIT_COMMIT} ${BUILD_TIME:+/p:BuildTime=$BUILD_TIME}
 
 # ---- migration bundle: a self-contained executable that applies the existing EF Core migrations (forward only, never drops data)
 FROM build AS bundle

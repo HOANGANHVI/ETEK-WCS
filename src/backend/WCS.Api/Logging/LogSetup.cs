@@ -93,6 +93,8 @@ public static class LogSetup
         if (!string.IsNullOrWhiteSpace(c["DeploymentLogs:Directory"]) && !Directory.Exists(c["DeploymentLogs:Directory"]))
             app.Logger.LogWarning("DeploymentLogs:Directory is set but the folder does not exist: deployment events cannot be imported. {EventCode}", "STARTUP_CONFIG_WARNING");
 
+        var build = WCS.Application.Common.BuildInfo.Current;
+        app.Logger.LogInformation("WCS build: application version {AppVersion}, git commit {GitCommit}, build time {BuildTime}. {EventCode}", build.Version, build.GitCommit, build.BuildTime, "BUILD_INFO");
         var version = Environment.GetEnvironmentVariable("WCS_BUILD") ?? typeof(Program).Assembly.GetName().Version?.ToString() ?? "unknown";
         app.Logger.LogInformation(
             "WCS backend starting: environment {Environment}, version {Version}, PLC mode {PlcMode} (live connection allowed: {AllowLive}), integration {IntegrationMode}, " +

@@ -6,6 +6,12 @@ COPY src/frontend/wcs-web/package.json src/frontend/wcs-web/package-lock.json ./
 RUN npm ci
 COPY src/frontend/wcs-web/ ./
 # Same-origin API (VITE_API_BASE_URL stays empty): Nginx proxies /api and /hubs. Demo Mode and engineering tools are off in this build.
+# Release metadata: the version comes from VERSION at the repository root, the commit and build time from deploy.ps1 (same values as the backend image).
+COPY VERSION /VERSION
+ARG APP_VERSION=
+ARG GIT_COMMIT=
+ARG BUILD_TIME=
+ENV WCS_APP_VERSION=$APP_VERSION WCS_GIT_COMMIT=$GIT_COMMIT WCS_BUILD_TIME=$BUILD_TIME
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime

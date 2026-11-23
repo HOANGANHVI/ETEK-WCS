@@ -52,6 +52,13 @@ $logFile = Join-Path $script:ConfigDir 'deployments.log'
 Add-Content -LiteralPath $logFile -Value ("{0}  from={1} to={2}" -f (Get-Date -Format 's'), $previous, (& git rev-parse HEAD).Trim())
 
 $env:WCS_VERSION = $commit
+# Release metadata embedded into BOTH images at build time (backend assembly + web bundle): application version (VERSION file), git commit, build time (UTC).
+$versionFile = Join-Path (Get-Location) 'VERSION'
+$env:WCS_APP_VERSION = if (Test-Path -LiteralPath $versionFile) { (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim() } else { '' }
+$env:WCS_GIT_COMMIT = $commit
+$env:WCS_BUILD_TIME = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+Write-Ok "Release: version $($env:WCS_APP_VERSION), commit $commit, build time $($env:WCS_BUILD_TIME)"
+Add-Content -LiteralPath $logFile -Value ("{0}  release version={1} commit={2} buildTime={3}" -f (Get-Date -Format 's'), $env:WCS_APP_VERSION, $commit, $env:WCS_BUILD_TIME)
 Write-Step 'Building images (this can take several minutes the first time)'
 if ((Invoke-Compose @('build')) -ne 0) { Fail 'Image build failed. The running system (if any) was not changed.' }
 
