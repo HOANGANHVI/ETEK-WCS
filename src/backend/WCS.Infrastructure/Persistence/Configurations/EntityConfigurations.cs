@@ -322,3 +322,37 @@ internal sealed class RcsFleetStateConfiguration : IEntityTypeConfiguration<WCS.
         b.Property(x => x.LastErrorMessage).HasMaxLength(300);
     }
 }
+
+internal sealed class RcsApiTestConfiguration : IEntityTypeConfiguration<WCS.Domain.RcsDiagnostics.RcsApiTest>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.RcsDiagnostics.RcsApiTest> b)
+    {
+        b.ToTable("rcs_api_tests");   // CR-032: diagnostic history of manual RCS API calls (masked request / response); never read by dispatch, inventory or the fleet monitor
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Username).HasMaxLength(100); b.Property(x => x.UserRole).HasMaxLength(30);
+        b.Property(x => x.Api).HasMaxLength(60); b.Property(x => x.Group).HasMaxLength(30); b.Property(x => x.RequestId).HasMaxLength(100); b.Property(x => x.Endpoint).HasMaxLength(300);
+        b.Property(x => x.RcsCode).HasMaxLength(20); b.Property(x => x.RcsMessage).HasMaxLength(300); b.Property(x => x.Outcome).HasMaxLength(40); b.Property(x => x.ErrorMessage).HasMaxLength(500);
+        b.HasIndex(x => x.ExecutedAt); b.HasIndex(x => new { x.Api, x.ExecutedAt });
+    }
+}
+
+internal sealed class RcsCallbackLogConfiguration : IEntityTypeConfiguration<WCS.Domain.RcsDiagnostics.RcsCallbackLogEntry>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.RcsDiagnostics.RcsCallbackLogEntry> b)
+    {
+        b.ToTable("rcs_callback_log");   // CR-032: callbacks RECEIVED from the RCS (empty while WCS has no receiver; nothing is fabricated)
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Callback).HasMaxLength(40); b.Property(x => x.Path).HasMaxLength(200); b.Property(x => x.SourceAddress).HasMaxLength(60); b.Property(x => x.ErrorMessage).HasMaxLength(500);
+        b.HasIndex(x => x.ReceivedAt);
+    }
+}
+
+internal sealed class RcsDiagParamConfiguration : IEntityTypeConfiguration<WCS.Domain.RcsDiagnostics.RcsDiagParam>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.RcsDiagnostics.RcsDiagParam> b)
+    {
+        b.ToTable("rcs_diag_params");   // CR-032: Admin-saved defaults of the RCS diagnostics parameters (map alias, client code ...); pre-fill only
+        b.HasKey(x => x.Key);
+        b.Property(x => x.Key).HasMaxLength(40); b.Property(x => x.Value).HasMaxLength(64); b.Property(x => x.UpdatedBy).HasMaxLength(100);
+    }
+}

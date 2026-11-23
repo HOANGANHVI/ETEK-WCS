@@ -16,6 +16,7 @@ import { InventoryPage } from './pages/InventoryPage'
 import { LoginPage } from './pages/LoginPage'
 import { ConfigTransferPage } from './pages/ConfigTransferPage'
 import { DiagnosticsPage } from './pages/DiagnosticsPage'
+import { RcsDiagnosticsPage } from './pages/RcsDiagnosticsPage'
 import { PlcConnectionsPage } from './pages/PlcConnectionsPage'
 import { PlcIoMappingPage } from './pages/PlcIoMappingPage'
 import { PlcPage } from './pages/PlcPage'
@@ -63,6 +64,7 @@ function App() {
         <Route path="config-transfer" element={<RequireRole roles={['Admin']}><ConfigTransferPage /></RequireRole>} />
         <Route path="users" element={<RequireRole roles={['Admin']}><UsersPage /></RequireRole>} />
         <Route path="audit" element={<RequireRole roles={['Admin']}><AuditPage /></RequireRole>} />
+        <Route path="rcs-diagnostics" element={<RequireRole roles={['Admin']}><RcsDiagnosticsPage /></RequireRole>} />
         <Route path="logs" element={<RequireRole roles={['Admin']}><LogsPage /></RequireRole>} />
         <Route path="*" element={<EmptyState title={t('common.notFound')} />} />
       </Route>

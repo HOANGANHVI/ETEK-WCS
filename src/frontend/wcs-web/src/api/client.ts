@@ -12,6 +12,7 @@ import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
 import type { FleetView } from './fleetTypes'
+import type { RcsParameter, RcsParameters, RcsCallbacks, RcsCatalog, RcsCheckState, RcsExecution, RcsHistoryFilter, RcsHistoryItem, RcsHistoryPage, RcsOverview, RcsPreview } from './rcsDiagTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
 import type {
   Agv, ApiResponse, FlowOption, InventoryTransaction, Location, Paged, Rack, ReconciliationDetail, SimulationStep, SystemHealth,
@@ -274,6 +275,19 @@ const realApi = {
   transferExport: (groups: TransferGroupId[]) => postForZip('/api/config-transfer/exports', { groups }, 'wcs-config.zip'),
   transferUpload: (file: File) => uploadPackage(file),
   transferPreview: (id: string, selection: Selection) => request<ImportPlan>(`/api/config-transfer/imports/${id}/preview`, { method: 'POST', body: JSON.stringify(selection) }),
+  // CR-032 RCS Diagnostics (Admin only): reading never calls the RCS; only execute / tcp-check / api-check do, and only when the Admin presses the button
+  rcsDiagOverview: () => request<RcsOverview>('/api/rcs-diagnostics/overview'),
+  rcsDiagCatalog: () => request<RcsCatalog>('/api/rcs-diagnostics/catalog'),
+  rcsDiagPreview: (api: string, body: unknown) => request<RcsPreview>('/api/rcs-diagnostics/preview', { method: 'POST', body: JSON.stringify({ api, body }) }),
+  rcsDiagExecute: (api: string, body: unknown) => request<RcsExecution>('/api/rcs-diagnostics/execute', { method: 'POST', body: JSON.stringify({ api, body }) }),
+  rcsDiagTcpCheck: () => request<RcsCheckState>('/api/rcs-diagnostics/tcp-check', { method: 'POST' }),
+  rcsDiagApiCheck: () => request<RcsExecution>('/api/rcs-diagnostics/api-check', { method: 'POST' }),
+  rcsDiagHistory: (f: RcsHistoryFilter) => request<RcsHistoryPage>('/api/rcs-diagnostics/history' + qs({ ...f })),
+  rcsDiagHistoryItem: (id: string) => request<RcsHistoryItem>(`/api/rcs-diagnostics/history/${encodeURIComponent(id)}`),
+  rcsDiagExport: (f: RcsHistoryFilter) => downloadZip('/api/rcs-diagnostics/history/export' + qs({ ...f }), 'rcs-diagnostics-history.json'),
+  rcsDiagParameters: () => request<RcsParameters>('/api/rcs-diagnostics/parameters'),
+  rcsDiagSaveParameter: (key: string, value: string) => request<RcsParameter>(`/api/rcs-diagnostics/parameters/${encodeURIComponent(key)}`, { method: 'PUT', body: JSON.stringify({ value }) }),
+  rcsDiagCallbacks: (callback?: string) => request<RcsCallbacks>('/api/rcs-diagnostics/callbacks' + qs({ callback })),
   transferApply: (id: string, body: ApplyBody) => request<ApplyResult>(`/api/config-transfer/imports/${id}/apply`, { method: 'POST', body: JSON.stringify(body) }),
 }
 

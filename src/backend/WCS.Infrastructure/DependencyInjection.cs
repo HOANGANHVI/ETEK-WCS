@@ -67,6 +67,12 @@ public static class DependencyInjection
         services.AddScoped<WCS.Application.Abstractions.IMaintenanceStore, WCS.Infrastructure.Maintenance.MaintenanceStore>();   // CR-026
         services.AddScoped<WCS.Application.Abstractions.IMaintenanceGate, WCS.Infrastructure.Maintenance.MaintenanceGate>();
         services.AddScoped<WCS.Application.ConfigTransfer.IConfigTransferStore, WCS.Infrastructure.ConfigTransfer.ConfigTransferStore>();   // CR-026
+        // CR-032: RCS Diagnostics & Manual API Tester (Admin only): own HTTP path to the saved RCS connection, history repository, in-memory gate / last checks
+        services.AddScoped<WCS.Application.RcsDiagnostics.IRcsDiagnosticsTransport, WCS.Infrastructure.RcsDiagnostics.RcsDiagnosticsTransport>();
+        services.AddScoped<WCS.Application.RcsDiagnostics.IRcsDiagnosticsRepository, WCS.Infrastructure.RcsDiagnostics.RcsDiagnosticsRepository>();
+        services.AddScoped<WCS.Application.RcsDiagnostics.RcsDiagnosticsService>();
+        services.AddSingleton<WCS.Application.RcsDiagnostics.RcsDiagnosticsState>();
+        services.Configure<WCS.Application.RcsDiagnostics.RcsDiagnosticsOptions>(configuration.GetSection(WCS.Application.RcsDiagnostics.RcsDiagnosticsOptions.SectionName));
         // CR-027: the AMR fleet read model and where the list comes from (Rcs:Fleet:Source = Simulator (default) | Real = HTTP queryAgvStatus)
         services.AddScoped<WCS.Application.Fleet.IRcsFleetRepository, WCS.Infrastructure.Fleet.RcsFleetRepository>();
         if (string.Equals(configuration[$"{WCS.Application.Fleet.RcsFleetOptions.SectionName}:Source"], "Real", StringComparison.OrdinalIgnoreCase)) services.AddScoped<WCS.Application.Fleet.IRcsFleetQuery, WCS.Infrastructure.Fleet.HikFleetQueryClient>();
