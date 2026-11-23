@@ -51,3 +51,29 @@ The backend was started with `Rcs__Fleet__Source=Real` and logged, every 5 s: `R
 | 5 | Frontend shows the response | Verified with the mock only; with the real RCS: **not possible yet**. The screen shows RCS DISCONNECTED and the empty / stale state |
 | 6 | Real polling log | Attempts and timeouts only |
 | 7 | | **Real acceptance cannot be declared**: it needs a machine in the RCS network, the confirmed port (no authentication is used) |
+
+## 7. Fix: RCS non-success response was not found in the backend log (2026-11-23)
+
+**Symptom (deploy machine).** AGV Monitoring: "Mất kết nối RCS … lần cập nhật cuối lúc – … RCS báo không thành công (RCS_CODE_NOT_SUCCESS:1)", no matching line in the backend log.
+
+**Where the code comes from.** `RCS_CODE_NOT_SUCCESS:<n>` is produced by `HikQueryAgvStatusParser` when the RCS answers with an **HTTP success status** but the JSON field `code` is not `"0"`. (An HTTP failure is `RCS_HTTP_ERROR:<status>`.) RCS-2000 API V3.3 Appendix A: `0` Succeeded, **`1` Failed – "refer to the field message for detailed error information"**, `6` no need to resend, `99` unknown error, try again. Nothing beyond that is claimed: the meaning of "1" for `queryAgvStatus` is only what the document says; the reason is in the RCS `message`.
+
+**Why there was no log (three causes).**
+1. The first implementation of the fleet loop logged only a **transition** (success → failure). A fleet that has **never** succeeded never had a "previous success", so it logged nothing (the screen showed "–" for the last update).
+2. CR-031's per-poll warning is a Warning: the log pipeline's `ThrottlingSink` (60 s window, key = source + template + first 120 characters of the rendered text) keeps one line per minute and counts the rest, so a poll every 5 s was mostly hidden.
+3. The RCS `message`, the endpoint, the HTTP status and the duration were never part of the line.
+
+**What changed.**
+- **Every poll ends with one line** on stdout / file: `RCS_FLEET_POLL_STARTED`, then `RCS_FLEET_POLL_SUCCESS` or `RCS_FLEET_POLL_FAILED` (+ `RCS_FLEET_SNAPSHOT_UPDATED` on success). They carry the property `NoThrottle`, so the 60-second throttle never hides a cycle. Fields: timestamp, endpoint (`host:port/path`, no credential exists in this call), HTTP status, RCS code, RCS message (the two checked fields only: bounded to 200 characters, credential-like text masked, the body is never logged), DurationMs, request id (`reqCode`), ConsecutiveFailures. String values are written literally (`{x:l}`) so they can be searched.
+- **Error classes:** `RCS_TIMEOUT` (no answer in time; the client times out 250 ms before the caller so the line has the endpoint and request id), `RCS_CONNECTION_FAILED` (**new**: refused / no route / DNS), `RCS_HTTP_ERROR:<status>`, `RCS_CODE_NOT_SUCCESS:<code>` (HTTP success, RCS business code not "0"), `RCS_RESPONSE_INVALID` (not JSON, not an object, no `code`, `data` not a list), plus `RCS_NOT_CONFIGURED`.
+- **Data state:** a non-success response is **not** a successful poll: no snapshot update, `LastSuccessAt` unchanged, the last good snapshot is kept and becomes Stale / Missing, never Live. With **no success ever** the API has no update time and the screen shows **"Chưa nhận được dữ liệu AMR từ RCS"** (no dash, no made-up time) plus the error code and the RCS message.
+- **system_log (searchable copy):** rate-limited by design so a 5-second poll does not fill the table: a failure is stored when it is the first, its code changed, or 60 s after the last stored one; a success only after a failure or 60 s after the last stored one; STARTED and SNAPSHOT_UPDATED are console / file only (`NoPersist`).
+
+**Where the log is.** (1) **stdout of the backend container**: `docker compose logs backend | findstr RCS_FLEET` (compose has no `Logging:File:Path`; set it for a file copy). (2) The **system log table** (screen *Nhật ký hệ thống*, search `RCS_FLEET`), rate-limited as above. `C:ETEK-WCSlogs` holds only the **deploy script** logs (imported read-only into the log screen); it is **not** where the backend writes polling logs.
+
+**Example (real runtime on the dev machine, RCS unreachable):**
+`RCS fleet poll failed: RCS_TIMEOUT (The RCS did not answer in time.), endpoint 192.168.10.11:8994/rcms-dps/rest/queryAgvStatus, HTTP null, RCS code null, RCS message null, 4764 ms, request 9a2d93…, consecutive failures 187. RCS_FLEET_POLL_FAILED`
+
+**Verification.** `Cr031PollOutcomeTests` (16, MOCK RCS; events pass through the real `ThrottlingSink`): HTTP 200 + code 1, HTTP 200 + code 0, timeout, refused connection, HTTP 404/500/503, invalid bodies, repeated failures (all logged, counter grows), failure after success (snapshot and time kept, Stale), no success ever, every cycle one SUCCESS/FAILED, stored-copy rate limit. With `Cr031RealFleetMonitoringTests` and `Cr027FleetTests`: 63/63. Real backend run: 8 STARTED / FAILED lines in 40 s, none suppressed, no simulator data, one stored row in `system_log` for several minutes.
+
+**Not verified:** the **real** RCS response (the environment cannot reach the RCS), so the actual `code`/`message` that produced `RCS_CODE_NOT_SUCCESS:1` on the deploy machine is **not observed**; after deploying this fix the line `RCS_FLEET_POLL_FAILED` will show it.
