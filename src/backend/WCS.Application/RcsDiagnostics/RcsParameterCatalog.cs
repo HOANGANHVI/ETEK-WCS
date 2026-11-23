@@ -29,7 +29,7 @@ public static class RcsParameterCatalog
         "genAgvSchedulingTask.data", "genAgvSchedulingTask.podTyp", "genAgvSchedulingTask.materialType", "genAgvSchedulingTask.materialLot", "genAgvSchedulingTask.groupId",
         "bindPodAndBerth.characterValue", "bindCtnrAndBin.characterValue", "bindCtnrAndBin.binName",
         "genPreScheduleTask.useableLayers", "genPreScheduleTask.cacheCount", "genPreScheduleTask.waitTime", "genPreScheduleTask.preTaskQty",
-        "returnPod.returnPodStrategy",
+        "returnPod.returnPodStrategy", "queryAgvStatus.mapCode",
     ];
 
     public static RcsParamDef? Find(string? key) => All.FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.Ordinal));
