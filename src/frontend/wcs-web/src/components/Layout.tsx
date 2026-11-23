@@ -144,6 +144,7 @@ function SideBar() {
       <div className="side-foot" title={collapsed ? t('nav.realtime', { status: t(RT_KEY[status]) }) : undefined}>
         <div className="row"><i className={`led ${tone}`} /><span>{t('nav.realtime', { status: t(RT_KEY[status]) })}</span></div>
         <span>ETEK WCS</span>
+        <VersionBadge />
       </div>
       {tip && <div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.label}</div>}
     </aside>
@@ -182,7 +183,6 @@ export function Layout() {
         <MaintenanceBanner />
         {denied && <div className="notice notice-warn" role="alert">{denied}</div>}
         <Outlet />
-        <VersionBadge />
       </main>
       {DEMO_MODE && hasRole(user, 'Admin') && <DemoDock />}
     </div>

@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { BUILD } from '../buildInfo'
 import { useT } from '../i18n'
 
-/** Application version and git short hash of the running build (footer). The hover text adds the build time and the BACKEND build; if the backend commit differs from this web bundle, a warning mark shows. */
+/**
+ * Application version and git short hash of the running build, shown once at the bottom of the sidebar (it belongs to the application, not to a page).
+ * The tooltip adds the build time and the BACKEND build; a warning mark shows when the backend commit differs from this web bundle. In a collapsed sidebar only a small mark remains (the tooltip is the same).
+ */
 export function VersionBadge() {
   const t = useT()
   const [server, setServer] = useState<{ version: string; gitCommit: string; buildTime: string } | null>(null)
@@ -19,8 +22,9 @@ export function VersionBadge() {
   ].filter(Boolean).join('\n')
   return (
     <div className="version-badge" title={title}>
-      {t('about.version')} <span className="mono">{BUILD.version}</span> · {t('about.commit')} <span className="mono">{BUILD.gitCommit}</span>
-      {mismatch && <span className="version-warn" role="status"> · {t('about.mismatchShort')}</span>}
+      <span className="vb-full mono">v{BUILD.version} · {BUILD.gitCommit}</span>
+      <span className="vb-mini" aria-hidden="true">v</span>
+      {mismatch && <span className="version-warn" role="status" aria-label={t('about.mismatchShort')}> ⚠</span>}
     </div>
   )
 }
