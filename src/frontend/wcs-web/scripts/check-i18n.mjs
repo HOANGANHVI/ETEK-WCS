@@ -27,7 +27,7 @@ const rel = (f) => path.relative(web, f).replaceAll('\\', '/')
 const messagesDir = path.join(src, 'i18n', 'messages')
 const feFiles = walk(src).filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes(`${path.sep}messages${path.sep}`))
 const feText = feFiles.map(read).join('\n')
-const dynamicPrefixes = ['taskHistory.d_', 'codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_', 'monitor.reason_', 'plc.writeState_', 'plc.sigDesc_', 'transfer.group_', 'transfer.groupDesc_', 'transfer.action_', 'transfer.blocker_', 'transfer.conflict_', 'transfer.field_', 'agv.amrStatus_', 'agv.fleetErr_', 'agv.fleetState_', 'agv.fleetConn_', 'tasks.dispatchState_', 'rcsDiag.outcome_', 'rcsDiag.effect_', 'rcsDiag.group_', 'rcsDiag.outcomeHint_', 'rcsDiag.effectShort_', 'rcsDiag.tab_', 'rcsDiag.apiWarn_', 'rcsDiag.param_', 'rcsDiag.paramHelp_', 'rcsDiag.paramSource_', 'rcsDiag.badge_']
+const dynamicPrefixes = ['taskHistory.d_', 'codes.field_', 'codes.fieldLabel_', 'codes.text_', 'codes.plcEvt_', 'codes.plcEvtTitle_', 'codes.auditDetail_', 'monitor.reason_', 'plc.writeState_', 'plc.sigDesc_', 'transfer.group_', 'transfer.groupDesc_', 'transfer.action_', 'transfer.blocker_', 'transfer.conflict_', 'transfer.field_', 'agv.amrStatus_', 'agv.statusCat_', 'agv.fleetErr_', 'agv.fleetState_', 'agv.fleetConn_', 'tasks.dispatchState_', 'rcsDiag.outcome_', 'rcsDiag.effect_', 'rcsDiag.group_', 'rcsDiag.outcomeHint_', 'rcsDiag.effectShort_', 'rcsDiag.tab_', 'rcsDiag.apiWarn_', 'rcsDiag.param_', 'rcsDiag.paramHelp_', 'rcsDiag.paramSource_', 'rcsDiag.badge_']
 const dictKeys = new Set()
 let keyCount = 0
 for (const f of fs.readdirSync(messagesDir)) {

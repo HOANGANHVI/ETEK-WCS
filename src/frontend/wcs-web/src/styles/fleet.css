@@ -1,0 +1,47 @@
+/* AMR monitoring (CR-027 / CR-031): KPI strip, robot cards, details drawer */
+.fleet-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+.fleet-kpi { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; border-left: 4px solid var(--line-strong); }
+.fleet-kpi-ok { border-left-color: var(--ok); }
+.fleet-kpi-warn { border-left-color: var(--warn); }
+.fleet-kpi-bad { border-left-color: var(--bad); }
+.fleet-kpi-info { border-left-color: var(--info); }
+.fleet-kpi-label { font-size: 12px; color: var(--text-2); }
+.fleet-kpi-value { font-size: 26px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.fleet-kpi-note { font-size: 11.5px; color: var(--text-3); }
+
+.fleet-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.fleet-toolbar input[type='search'] { flex: 1 1 220px; min-width: 180px; }
+.fleet-toolbar .fleet-count { margin-left: auto; }
+.fleet-view { display: inline-flex; gap: 4px; }
+
+.amr-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+.amr-card { display: flex; flex-direction: column; gap: 8px; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; box-shadow: var(--shadow, none); }
+.amr-card:hover { border-color: var(--line-strong); }
+.amr-card:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+.amr-card.is-stale { border-left: 4px solid var(--warn); }
+.amr-card.is-missing { border-left: 4px solid var(--muted-solid); opacity: .8; }
+.amr-card.is-fresh { border-left: 4px solid var(--ok); }
+.amr-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.amr-code { font-size: 17px; }
+.amr-card-status { min-height: 24px; }
+.amr-card-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
+.amr-card-grid dt { color: var(--text-3); }
+.amr-card-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.amr-card-foot { margin-top: auto; }
+.amr-moving { color: var(--info); }
+
+.amr-battery { display: inline-flex; align-items: center; gap: 8px; }
+.amr-battery-bar { display: inline-block; width: 110px; height: 8px; background: var(--muted-bg); border-radius: 4px; overflow: hidden; }
+.amr-battery-bar i { display: block; height: 100%; background: var(--accent-blue); }
+.amr-battery-num { font-variant-numeric: tabular-nums; font-size: 13px; }
+
+.amr-drawer-overlay { position: fixed; inset: 0; background: rgba(15, 25, 40, .45); z-index: 60; display: flex; justify-content: flex-end; }
+.amr-drawer { width: min(480px, 100%); height: 100%; background: var(--surface); box-shadow: -8px 0 24px rgba(0, 0, 0, .2); display: flex; flex-direction: column; }
+.amr-drawer-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 17px; }
+.amr-drawer-body { overflow: auto; padding: 4px 18px 24px; }
+.amr-drawer-body section { margin-top: 16px; }
+.amr-drawer-body h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+
+@media (max-width: 760px) {
+  .fleet-toolbar .fleet-count { margin-left: 0; }
+}
