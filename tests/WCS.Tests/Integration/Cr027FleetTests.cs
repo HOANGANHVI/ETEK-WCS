@@ -281,7 +281,7 @@ public class Cr027FleetTests(DatabaseFixture fixture)
         var req = Assert.Single(rcs.Requests);
         Assert.Equal("/rcms-dps/rest/queryAgvStatus", req.Path);                                // the endpoint of API document 5.2.14
         using var body = JsonDocument.Parse(req.Body);
-        Assert.Equal(["reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // nothing but the request id and time: no robot list, no task command
+        Assert.Equal(["mapCode", "reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // request id, time and the MAP ID (mapCode): no robot list, no task command
         Assert.Equal(32, body.RootElement.GetProperty("reqCode").GetString()!.Length);
         Assert.Matches(@"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", body.RootElement.GetProperty("reqTime").GetString()!);
 

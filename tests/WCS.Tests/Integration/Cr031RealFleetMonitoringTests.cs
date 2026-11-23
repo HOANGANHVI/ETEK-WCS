@@ -222,13 +222,50 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
         Assert.Equal(FleetErrorCodes.NotConfigured, v.LastErrorCode); Assert.Equal(0, v.Count); Assert.Equal(FleetStates.Disconnected, v.Connection); Assert.False(v.SimulatedData);
     }
 
+    // ================================================================================================ the map of the request (the real RCS answers code 1 "map number mandatory" without it)
+    [Fact]
+    public async Task The_query_carries_the_MAP_ID_as_mapCode_default_TT_then_the_central_configuration_then_the_value_the_Admin_saved_and_never_mapShortName()
+    {
+        await using var rcs = await FakeRcs.StartAsync();
+        rcs.Respond = () => (200, Fleet(Amr("R1")), 0);
+        var (h, _) = await SetupAsync(rcs); await using var _h = h;
+        await Refresh(h);
+        using (var d = JsonDocument.Parse(rcs.Requests[0].Body))
+        {
+            Assert.Equal("TT", d.RootElement.GetProperty("mapCode").GetString());                                  // the central default, not a literal of the client
+            Assert.False(d.RootElement.TryGetProperty("mapShortName", out _));
+        }
+        Assert.Equal(1, (await View(h)).Count);                                                                      // a normal answer is shown
+
+        await h.Scoped(async sp => { await sp.GetRequiredService<WCS.Application.RcsDiagnostics.RcsDiagnosticsService>().SaveParameterAsync(new WCS.Application.Auth.ActorInfo(Guid.NewGuid(), "admin", WCS.Domain.Users.UserRole.Admin), "mapId", "ZZ"); return 0; });
+        h.Clock.Advance(TimeSpan.FromSeconds(5)); await Refresh(h);
+        using (var d = JsonDocument.Parse(rcs.Requests[1].Body)) Assert.Equal("ZZ", d.RootElement.GetProperty("mapCode").GetString());   // the saved value wins
+
+        await using var rcs2 = await FakeRcs.StartAsync();
+        var (h2, _2) = await SetupAsync(rcs2, extra: new() { ["Rcs:Diagnostics:MapId"] = "QQ" }); await using var _h2 = h2;
+        await Refresh(h2);
+        using (var d = JsonDocument.Parse(Assert.Single(rcs2.Requests).Body)) Assert.Equal("QQ", d.RootElement.GetProperty("mapCode").GetString());   // changed by configuration
+    }
+
+    [Fact]
+    public async Task A_map_rejection_of_the_RCS_is_a_visible_failure_and_the_RCS_error_text_is_kept()
+    {
+        await using var rcs = await FakeRcs.StartAsync();
+        rcs.Respond = () => (200, """{"code":"1","message":"map number is mandatory","reqCode":"x","data":""}""", 0);
+        var (h, _) = await SetupAsync(rcs); await using var _h = h;
+        await Refresh(h);
+        var v = await View(h);
+        Assert.NotEqual(FleetStates.Connected, v.Connection);
+        Assert.Equal(0, v.Count); Assert.Equal(1, v.ConsecutiveFailures); Assert.StartsWith("RCS_CODE_NOT_SUCCESS", v.LastErrorCode);
+    }
+
     [Fact]
     public async Task The_query_is_sent_without_any_credential_whatever_the_saved_authentication_mode_and_no_secret_reaches_a_log()
     {
         await using var rcs = await FakeRcs.StartAsync();
         var (h, log) = await SetupAsync(rcs); await using var _h = h;
         await Refresh(h);
-        using (var body = JsonDocument.Parse(Assert.Single(rcs.Requests).Body)) Assert.Equal(["reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // a token is saved, but the RCS has no authentication for this API: none is sent
+        using (var body = JsonDocument.Parse(Assert.Single(rcs.Requests).Body)) Assert.Equal(["mapCode", "reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // a token is saved, but the RCS has no authentication for this API: none is sent
         rcs.Respond = () => (500, $"error mentioning tokenCode={Token}", 0);
         h.Clock.Advance(TimeSpan.FromSeconds(5)); await Refresh(h);
         Assert.DoesNotContain(log.Snapshot(), l => l.Contains(Token));                                  // not in any log line, success or failure
@@ -238,7 +275,7 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
         await using var rcs2 = await FakeRcs.StartAsync();
         var (h2, log2) = await SetupAsync(rcs2, auth: ConnectionOptions.AuthUserPassword); await using var _h2 = h2;
         await Refresh(h2);
-        using (var body = JsonDocument.Parse(Assert.Single(rcs2.Requests).Body)) Assert.Equal(["reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // no username, password or token
+        using (var body = JsonDocument.Parse(Assert.Single(rcs2.Requests).Body)) Assert.Equal(["mapCode", "reqCode", "reqTime"], body.RootElement.EnumerateObject().Select(p => p.Name).Order().ToArray());   // no username, password or token
         Assert.DoesNotContain(log2.Snapshot(), l => l.Contains("pw-secret"));
     }
 
