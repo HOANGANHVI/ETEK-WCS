@@ -182,8 +182,9 @@ public class Cr031PollOutcomeTests(DatabaseFixture fixture)
         var bad = await View(h);
         Assert.Equal(lastOk, bad.LastSuccessAt);                                                       // the time of the last SUCCESS is untouched
         Assert.Equal("2048", bad.Amrs.Single().RobotCode); Assert.Equal("80", bad.Amrs.Single().Battery);   // the last good snapshot is kept
-        Assert.Equal("RCS_CODE_NOT_SUCCESS:1", bad.LastErrorCode); Assert.Equal(FleetStates.Disconnected, bad.Connection);
+        Assert.Equal("RCS_CODE_NOT_SUCCESS:1", bad.LastErrorCode); Assert.Equal(FleetStates.Degraded, bad.Connection);   // CR-034: still inside the freshness window
         h.Clock.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(FleetStates.Disconnected, (await View(h)).Connection);                           // CR-034: no fresh success any more
         Assert.NotEqual(FleetStates.Fresh, (await View(h)).Amrs.Single().State);                      // not Live any more
     }
 

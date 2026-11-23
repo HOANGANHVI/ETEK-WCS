@@ -1,4 +1,5 @@
-import type { Agv, SystemHealth } from '../api/types'
+import type { FleetView } from '../api/fleetTypes'
+import type { SystemHealth } from '../api/types'
 import type { MsgKey } from '../i18n'
 import type { Tone } from '../i18n/vi'
 
@@ -23,13 +24,19 @@ export function plcView(health: SystemHealth | null): LinkView {
   }
 }
 
-/** RCS link: there is no dedicated RCS health yet, so it is derived from AGV statuses reported through RCS. */
-export function rcsView(health: SystemHealth | null, agvs: Agv[] | null): LinkView {
-  if (!health) return { tone: 'bad', text: 'nav.noData' }
-  if (health.integration.mode === 'Simulator') return { tone: 'warn', text: 'nav.notConnected' }
-  const withRobot = (agvs ?? []).filter((a) => a.rcsRobotCode)
-  if (withRobot.length === 0) return { tone: 'warn', text: 'nav.notSet' }
-  return withRobot.some((a) => a.connectionStatus === 'Online') ? { tone: 'ok', text: 'nav.connected' } : { tone: 'bad', text: 'nav.disconnected' }
+/**
+ * RCS link, from the fleet view that the AMR monitoring shows (ONE rule, evaluated by the server): Connected = the last poll succeeded and is fresh; Degraded = the last poll failed but the
+ * last success is still fresh; Disconnected = no fresh success; NoData = no poll yet. A simulated fleet is never shown as a connection. No separate RCS check is made for the header.
+ */
+export function rcsView(fleet: FleetView | null, loadFailed = false): LinkView {
+  if (!fleet) return loadFailed ? { tone: 'bad', text: 'nav.noData' } : { tone: 'muted', text: 'nav.notChecked' }
+  if (fleet.simulatedData) return { tone: 'warn', text: 'nav.notConnected' }
+  switch (fleet.connection) {
+    case 'Connected': return { tone: 'ok', text: 'nav.connected' }
+    case 'Degraded': return { tone: 'warn', text: 'nav.interrupted' }
+    case 'Disconnected': return { tone: 'bad', text: 'nav.disconnected' }
+    default: return { tone: 'muted', text: 'nav.notChecked' }
+  }
 }
 
 /** The text of a link view in the current language (`t` from useT). */

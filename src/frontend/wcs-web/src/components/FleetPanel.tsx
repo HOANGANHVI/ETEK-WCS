@@ -112,7 +112,7 @@ function AmrDrawer({ a, fleet, onClose }: { a: FleetAmr; fleet: FleetView; onClo
               <Field label={t('agv.fRobotCode')}><span className="mono">{a.robotCode}</span></Field>
               <Field label={t('agv.cardBusinessAgv')}>{has(a.linkedAgvCode) ? a.linkedAgvCode : nd}</Field>
               <Field label={t('agv.cardMap')}>{has(a.mapCode) ? <span className="mono">{a.mapCode}</span> : nd}</Field>
-              <Field label={t('agv.cardSource')}>{fleet.simulatedData ? t('agv.fSourceNoteSim') : t('agv.fSourceNote')}</Field>
+              <Field label={t('agv.cardSource')}>{fleet.simulatedData ? t('agv.fleetSimulated') : t('agv.fleetReal')}</Field>
               {a.robotIp !== null && <Field label={t('agv.fIp')}>{has(a.robotIp) ? <span className="mono">{a.robotIp}</span> : nd}</Field>}
               <Field label={t('agv.fFirstSeen')}>{formatDateTime(a.firstSeenAt)}</Field>
             </dl>
@@ -127,7 +127,6 @@ function AmrDrawer({ a, fleet, onClose }: { a: FleetAmr; fleet: FleetView; onClo
               <Field label={t('agv.fleetColExcl')}>{a.exclType === '1' ? <Pill tone="warn" dot={false}>{t('agv.fleetExcluded')}</Pill> : a.exclType === '0' ? t('agv.fleetNo') : nd}</Field>
               <Field label={t('agv.fleetColStop')}>{a.stop === '1' ? <Pill tone="warn" dot={false}>{t('agv.fleetStopped')}</Pill> : a.stop === '0' ? t('agv.fleetNo') : nd}</Field>
             </dl>
-            {!c.documented && c.raw !== null && <p className="muted small">{t('agv.amrStatusUnknownNote', { code: c.raw })}</p>}
           </section>
           <section>
             <h3>{t('agv.secMotion')}</h3>
@@ -213,7 +212,7 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
   const open = openCode ? fleet.amrs.find((a) => a.robotCode === openCode) ?? null : null
   const filtered = filter.text !== '' || filter.category !== '' || filter.map !== '' || filter.data !== ''
 
-  const connTone: Tone = fleet.connection === 'Connected' ? 'ok' : fleet.connection === 'Disconnected' ? 'bad' : 'muted'
+  const connTone: Tone = fleet.connection === 'Connected' ? 'ok' : fleet.connection === 'Degraded' ? 'warn' : fleet.connection === 'Disconnected' ? 'bad' : 'muted'
   const errKey = fleet.lastErrorCode ? (`agv.fleetErr_${fleet.lastErrorCode.split(':')[0]}` as MsgKey) : null
   const err = fleet.lastErrorCode ? `${errKey && hasMessage(errKey) ? t(errKey) : fleet.lastErrorCode} (${fleet.lastErrorCode}${fleet.lastErrorMessage ? ': ' + fleet.lastErrorMessage : ''})` : null
 
@@ -224,7 +223,7 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
       {fleet.dispatchModePending && <div className="notice notice-warn" role="alert">{t('agv.mgdPending', { mode: fleet.dispatchModePending })}</div>}
       {fleet.dispatchMode === 'RcsManaged' && (
         <div className="notice notice-info" role="note">
-          <strong>{t('agv.mgdTitle')}</strong> {t('agv.mgdNote')}
+          <strong>{t('agv.mgdTitle')}</strong>
           <div className="btn-row">
             <Pill tone="info">{t('agv.mgdInFlight', { n: fleet.tasksInFlight ?? 0 })}</Pill>
             <Pill tone={(fleet.tasksAwaitingAssignment ?? 0) > 0 ? 'warn' : 'muted'}>{t('agv.mgdAwaiting', { n: fleet.tasksAwaitingAssignment ?? 0 })}</Pill>
@@ -233,20 +232,21 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
           </div>
         </div>
       )}
+      {fleet.connection === 'Degraded' && <div className="notice notice-warn" role="status">{t('agv.fleetDegraded', { time: formatDateTime(fleet.lastSuccessAt ?? '') })}{err ? ` ${err}` : ''}</div>}
       {fleet.connection === 'Disconnected' && <div className="notice notice-bad" role="alert">{fleet.lastSuccessAt ? t('agv.fleetDisconnected', { time: formatDateTime(fleet.lastSuccessAt) }) : t('agv.fleetDisconnectedNever')}{err ? ` ${err}` : ''}</div>}
       <p className="muted small">
         {fleet.lastSuccessAt ? t('agv.fleetLastOk', { time: formatDateTime(fleet.lastSuccessAt), n: fleet.intervalSeconds }) : t('agv.fleetNever')}
       </p>
 
       {fleet.amrs.length === 0
-        ? <EmptyState title={fleet.connection === 'NoData' ? t('agv.fleetNoData') : fleet.connection === 'Connected' ? t('agv.fleetNone') : t('agv.fleetNoDataFailed')} hint={t('agv.fleetEmptyHint')} />
+        ? <EmptyState title={fleet.connection === 'NoData' ? t('agv.fleetNoData') : fleet.connection === 'Connected' ? t('agv.fleetNone') : t('agv.fleetNoDataFailed')} />
         : (
           <>
             <div className="fleet-kpis">
               <Kpi label={t('agv.kpiTotal')} value={kpi.total} />
               <Kpi label={t('agv.kpiUpdating')} value={kpi.updating} tone="ok" />
               <Kpi label={t('agv.kpiOld')} value={kpi.old} tone={kpi.old > 0 ? 'warn' : undefined} />
-              <Kpi label={t('agv.kpiMoving')} value={kpi.moving} note={t('agv.kpiMovingNote')} tone="info" />
+              <Kpi label={t('agv.kpiMoving')} value={kpi.moving} tone="info" />
               <Kpi label={t('agv.kpiAbnormal')} value={kpi.abnormal} note={kpi.unknownStatus > 0 ? t('agv.kpiAbnormalNote', { n: kpi.unknownStatus }) : undefined} tone={kpi.abnormal > 0 ? 'bad' : undefined} />
               <Kpi label={t('agv.kpiBattery')} value={kpi.avgBattery === null ? '–' : `${kpi.avgBattery} %`} note={kpi.avgBattery === null ? t('agv.noData') : t('agv.kpiBatteryNote', { n: kpi.batterySamples })} />
             </div>
@@ -281,7 +281,6 @@ export function FleetPanel({ fleet }: { fleet: FleetView }) {
                 : <ListView amrs={shown} onOpen={setOpenCode} />}
           </>
         )}
-      {fleet.amrs.some((a) => a.state === 'Missing') && <p className="muted small">{t('agv.fleetMissingNote')}</p>}
       {open && <AmrDrawer a={open} fleet={fleet} onClose={() => setOpenCode(null)} />}
     </Panel>
   )

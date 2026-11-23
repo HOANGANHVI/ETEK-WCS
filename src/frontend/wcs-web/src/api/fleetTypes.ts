@@ -1,6 +1,6 @@
 /** CR-027 – AMR fleet as reported by the RCS (queryAgvStatus). Values are the API strings; units: X/Y mm, speed mm/s, direction degrees, battery percent. */
 export type FleetDataState = 'Fresh' | 'Stale' | 'Missing'
-export type FleetConnection = 'Connected' | 'Disconnected' | 'NoData'
+export type FleetConnection = 'Connected' | 'Degraded' | 'Disconnected' | 'NoData'
 
 export interface FleetAmr {
   robotCode: string; state: FleetDataState

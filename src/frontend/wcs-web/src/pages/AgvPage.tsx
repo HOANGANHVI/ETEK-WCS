@@ -10,6 +10,7 @@ import { useClock } from '../hooks/useClock'
 import { isActive, useCodeMaps } from '../hooks/useLookups'
 import { formatDateTime } from '../i18n/format'
 import { useT } from '../i18n'
+import { useFleet } from '../fleet/fleetState'
 import { flowInfo, taskCode } from '../i18n/vi'
 
 const EVENTS = ['TaskCreated', 'TaskStateChanged', 'AgvStatusChanged'] as const
@@ -18,7 +19,7 @@ export function AgvPage() {
   const t = useT()
   const now = useClock(5000).getTime()
   const agvs = useApi(useCallback(() => api.agvs(), []), [...EVENTS])
-  const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged', 'TaskStateChanged'])
+  const fleet = useFleet()
   // CR-028 / CR-031: when the RCS chooses the AMR, or the list comes from the REAL RCS, there is ONE fleet list from the RCS: no AGV1 / AGV2 cards and no per-AGV history
   const managed = fleet.data?.dispatchMode === 'RcsManaged' || fleet.data?.source === 'Real'
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])

@@ -94,5 +94,7 @@ public static class FleetStates
     public const string Missing = "Missing";
     public const string Connected = "Connected";
     public const string Disconnected = "Disconnected";
+    /// <summary>The last poll failed but an earlier success is still inside the freshness window (a short interruption).</summary>
+    public const string Degraded = "Degraded";
     public const string NoData = "NoData";
 }

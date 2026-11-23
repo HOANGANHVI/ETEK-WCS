@@ -132,8 +132,12 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
         var state = await repo.GetStateAsync(Source, t);
         var snaps = await repo.ListAsync(Source, t);
         var staleAfter = TimeSpan.FromSeconds(O.EffectiveStaleAfter);
-        var connection = state?.LastAttemptAt is null ? FleetStates.NoData : state.LastAttemptOk && state.LastSuccessAt is { } ok && now - ok <= staleAfter ? FleetStates.Connected : FleetStates.Disconnected;
+        // ONE rule for the link to the RCS, used by the header and the AMR monitoring alike (freshness = Rcs:Fleet:StaleAfterSeconds, default three polling intervals, at least 15 s):
+        // NoData = no poll yet; Connected = the last poll succeeded and is fresh; Degraded = the last poll failed but the last success is still fresh; Disconnected = no fresh success.
         var tooOld = state?.LastSuccessAt is not { } success || now - success > staleAfter;
+        var connection = state?.LastAttemptAt is null ? FleetStates.NoData
+            : tooOld ? FleetStates.Disconnected
+            : state.LastAttemptOk ? FleetStates.Connected : FleetStates.Degraded;
 
         // read-only link to the business AGV (matched by robot code) and its active task, when there is one
         var byRobot = (await agvs.ListAsync(t)).Where(a => !string.IsNullOrWhiteSpace(a.RcsRobotCode)).GroupBy(a => a.RcsRobotCode!, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);

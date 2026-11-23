@@ -50,4 +50,27 @@ check('map filter', filterAmrs(list, { ...NO_FILTER, map: 'AA' }).map((a) => a.r
 check('data freshness filter', filterAmrs(list, { ...NO_FILTER, data: 'Missing' }).map((a) => a.robotCode).join() === '4')
 check('distinct maps', distinctMaps(list).join() === 'AA,TT')
 
+
+// ---- header link status (the same fleet view as the monitoring) ----
+import { rcsView } from '../src/components/linkStatus.ts'
+import agv from '../src/i18n/messages/agv.ts'
+import nav from '../src/i18n/messages/nav.ts'
+import about from '../src/i18n/messages/about.ts'
+const withConn = (connection: FleetView['connection'], simulatedData = false): FleetView => ({ ...fleet([]), connection, simulatedData, source: simulatedData ? 'Simulator' : 'Real' })
+const view = (f: FleetView | null, failed = false) => { const v = rcsView(f, failed); return `${v.tone}:${typeof v.text === 'string' ? v.text : v.text.raw}` }
+check('Connected fleet = header connected', view(withConn('Connected')) === 'ok:nav.connected')
+check('Degraded fleet = header interrupted (warning, not disconnected)', view(withConn('Degraded')) === 'warn:nav.interrupted')
+check('Disconnected fleet = header disconnected', view(withConn('Disconnected')) === 'bad:nav.disconnected')
+check('No poll yet = header not checked', view(withConn('NoData')) === 'muted:nav.notChecked')
+check('Fleet not loaded yet = not checked, load failed = no data', view(null) === 'muted:nav.notChecked' && view(null, true) === 'bad:nav.noData')
+check('A simulated fleet is never shown as a connection', view(withConn('Connected', true)) === 'warn:nav.notConnected')
+check('Recovery: Disconnected then Connected gives the Connected header again', view(withConn('Disconnected')) !== view(withConn('Connected')) && view(withConn('Connected')) === 'ok:nav.connected')
+
+// ---- no internal explanation left in the operator texts (VI and EN) ----
+const banned = [/mô phỏng thay thế/i, /not.*simulat.*(replace|instead)/i, /giữ nguyên mã gốc/i, /không suy diễn/i, /keeps the raw code/i, /does not guess/i, /parser/i, /fallback/i, /WCS không tạo AMR/i, /never creates an AMR/i, /không có trong tài liệu/i, /not in the (RCS|API) document/i, /hệ thống không xóa/i, /does not delete it/i, /Số AMR do RCS quyết định/i]
+const texts = [agv, nav, about].flatMap((d) => [...Object.values(d.vi), ...Object.values(d.en)] as string[])
+const hits = texts.filter((s) => banned.some((b) => b.test(s)))
+check('no developer-facing explanation remains in the AMR / header / about texts', hits.length === 0, hits.join(' | '))
+check('Unclassified status text is short and carries the raw code', agv.vi.amrStatusUnknown === 'Chưa phân loại ({code})' && agv.en.amrStatusUnknown === 'Unclassified ({code})')
+check('every status text of the fleet screen is at most 90 characters (VI and EN)', Object.entries({ ...agv.vi, ...agv.en }).filter(([k]) => /^(fleet|fMissing|fOld|amrStatus|kpi|fPoll)/.test(k)).every(([, v]) => (v as string).length <= 90))
 console.log(results.join('\n'))

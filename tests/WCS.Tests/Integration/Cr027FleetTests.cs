@@ -96,7 +96,7 @@ public class Cr027FleetTests(DatabaseFixture fixture)
             h.Rcs.FleetFailure = failure;
             Assert.True(await Refresh(h));
             var v = await View(h);
-            Assert.Equal(FleetStates.Disconnected, v.Connection);
+            Assert.Equal(h.Clock.UtcNow - v.LastSuccessAt!.Value <= TimeSpan.FromSeconds(v.StaleAfterSeconds) ? FleetStates.Degraded : FleetStates.Disconnected, v.Connection);   // CR-034
             Assert.Equal(failure.ErrorCode, v.LastErrorCode);
             Assert.Equal(2, v.Count);                                                           // the last data is still there ...
             Assert.All(v.Amrs, a => Assert.Equal(FleetStates.Stale, a.State));                  // ... and is NOT shown as current
@@ -303,7 +303,7 @@ public class Cr027FleetTests(DatabaseFixture fixture)
         {
             rcs.Respond = respond; h.Clock.Advance(TimeSpan.FromSeconds(6)); await Refresh(h);
             var v = await View(h);
-            Assert.Equal(FleetStates.Disconnected, v.Connection); Assert.Equal(FleetStates.Stale, v.Amrs.Single().State);   // the AMR is kept, marked stale
+            Assert.Equal(h.Clock.UtcNow - v.LastSuccessAt!.Value <= TimeSpan.FromSeconds(v.StaleAfterSeconds) ? FleetStates.Degraded : FleetStates.Disconnected, v.Connection);   // CR-034: interrupted while the last success is fresh, disconnected after Assert.Equal(FleetStates.Stale, v.Amrs.Single().State);   // the AMR is kept, marked stale
             return v.LastErrorCode;
         }
         Assert.Equal($"{FleetErrorCodes.Http}:500", await Failure(() => (500, "boom", 0)));

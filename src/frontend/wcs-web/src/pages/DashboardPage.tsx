@@ -8,6 +8,7 @@ import { DEMO_MODE } from '../config'
 import { BarChart, ChartEmpty, Donut, LineChart } from '../components/charts'
 import { IconAgv, IconClock, IconTasks, IconWarehouse } from '../components/icons'
 import { linkText, plcView, rcsView } from '../components/linkStatus'
+import { useFleet } from '../fleet/fleetState'
 import { useAuth } from '../auth/AuthContext'
 import { Async, EmptyState, Kpi, PageHeader, Panel, TaskStatePill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
@@ -44,7 +45,7 @@ export function DashboardPage() {
   const setRange = (r: RangeKey) => { setRangeState(r); try { window.localStorage.setItem(RANGE_KEY, r) } catch { /* the choice is only a convenience */ } }
 
   const agvs = useApi(useCallback(() => api.agvs(), []), ['TaskStateChanged', 'AgvStatusChanged'])
-  const fleet = useApi(useCallback(() => api.agvFleet(), []), ['FleetChanged', 'TaskStateChanged'])   // CR-028
+  const fleet = useFleet()   // CR-028: the one shared fleet view (also read by the header)
   const managed = fleet.data?.dispatchMode === 'RcsManaged' || fleet.data?.source === 'Real'
   const locations = useApi(useCallback(() => api.locations(), []), [...EVENTS_INV])
   const racks = useApi(useCallback(() => api.racks(), []), [...EVENTS_INV])
@@ -146,7 +147,7 @@ export function DashboardPage() {
   const cycleUnit = cycleMax < 120_000 ? { div: 1000, key: 'dashboard.unitSec' as const } : cycleMax < 7_200_000 ? { div: 60_000, key: 'dashboard.unitMin' as const } : { div: 3_600_000, key: 'dashboard.unitHour' as const }
   const hasFinished = !!stats && stats.completed + stats.failed > 0
   const plc = plcView(health.error && !health.data ? null : health.data)
-  const rcs = rcsView(health.error && !health.data ? null : health.data, agvList)
+  const rcs = rcsView(fleet.data, !!fleet.error && !fleet.data)
   const rtTone = realtime === 'connected' ? 'ok' : realtime === 'disconnected' ? 'bad' : 'warn'
   // Application health (backend process + PostgreSQL) is shown apart from the devices: a running backend says nothing about PLC, RCS or AGV.
   const hd = health.error && !health.data ? null : health.data

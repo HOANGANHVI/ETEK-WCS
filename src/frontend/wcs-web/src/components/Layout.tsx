@@ -11,6 +11,8 @@ import { useT, type MsgKey } from '../i18n'
 import { LangSwitch } from './LangSwitch'
 import { UserMenu } from './UserMenu'
 import { VersionBadge } from './VersionBadge'
+import { FleetProvider } from '../fleet/FleetProvider'
+import { useFleet } from '../fleet/fleetState'
 import { plcView, rcsView, type LinkView } from './linkStatus'
 import { useRealtime } from '../realtime/RealtimeProvider'
 import { usePreferences } from '../preferences/PreferencesContext'
@@ -56,9 +58,9 @@ function TopBar() {
   const now = useClock()
   const linkText = (m: LinkView['text']) => (typeof m === 'string' ? t(m) : m.raw)
   const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
-  const agvs = useApi(useCallback(() => api.agvs(), []), ['AgvStatusChanged'])
+  const fleet = useFleet()
   const plc = plcView(health.error && !health.data ? null : health.data)
-  const rcs = rcsView(health.error && !health.data ? null : health.data, agvs.data)
+  const rcs = rcsView(fleet.data, !!fleet.error && !fleet.data)
 
   return (
     <header className="topbar">
@@ -176,6 +178,7 @@ export function Layout() {
   const deniedKey = (location.state as { denied?: MsgKey } | null)?.denied
   const denied = deniedKey ? t(deniedKey) : null
   return (
+    <FleetProvider>
     <div className="app" data-sidebar={sidebarIsCollapsed ? 'collapsed' : 'expanded'}>
       <TopBar />
       <SideBar />
@@ -186,5 +189,6 @@ export function Layout() {
       </main>
       {DEMO_MODE && hasRole(user, 'Admin') && <DemoDock />}
     </div>
+    </FleetProvider>
   )
 }

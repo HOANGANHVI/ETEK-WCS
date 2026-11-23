@@ -166,7 +166,8 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
         rcs.Respond = () => (200, Fleet(), 3000);                                                      // the RCS does not answer within the timeout
         h.Clock.Advance(TimeSpan.FromSeconds(5)); await Refresh(h);
         var v = await View(h);
-        Assert.Equal(FleetStates.Disconnected, v.Connection); Assert.Equal(FleetErrorCodes.Timeout, v.LastErrorCode); Assert.Equal(lastOk, v.LastSuccessAt);
+        Assert.Equal(FleetStates.Degraded, v.Connection);   // CR-034: the last poll failed but the last success (5 s ago) is still fresh: interrupted, not disconnected
+         Assert.Equal(FleetErrorCodes.Timeout, v.LastErrorCode); Assert.Equal(lastOk, v.LastSuccessAt);
         Assert.Equal(1, v.ConsecutiveFailures);
         h.Clock.Advance(TimeSpan.FromSeconds(30));
         Assert.All((await View(h)).Amrs, a => Assert.NotEqual(FleetStates.Fresh, a.State));            // the old data is never shown as live
@@ -245,6 +246,35 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
         var (h2, _2) = await SetupAsync(rcs2, extra: new() { ["Rcs:Diagnostics:MapId"] = "QQ" }); await using var _h2 = h2;
         await Refresh(h2);
         using (var d = JsonDocument.Parse(Assert.Single(rcs2.Requests).Body)) Assert.Equal("QQ", d.RootElement.GetProperty("mapCode").GetString());   // changed by configuration
+    }
+
+    // ================================================================================================ CR-034: a status code the document does not list, and no simulator in Real mode
+    [Fact]
+    public async Task A_status_code_that_is_not_in_the_document_such_as_246_is_stored_and_returned_exactly_as_the_RCS_sent_it()
+    {
+        await using var rcs = await FakeRcs.StartAsync();
+        rcs.Respond = () => (200, Fleet(Amr("22445", battery: "75", x: "131000", y: "128057", status: "246")), 0);
+        var (h, _) = await SetupAsync(rcs); await using var _h = h;
+        await Refresh(h);
+        var a = Assert.Single((await View(h)).Amrs);
+        Assert.Equal("246", a.Status);                                                  // raw status kept; no meaning is added by WCS
+        Assert.Equal("75", a.Battery); Assert.Equal("131000", a.PosX); Assert.Equal("128057", a.PosY);
+        Assert.Equal(FleetStates.Connected, (await View(h)).Connection);                // an unclassified status is not a connection problem
+    }
+
+    [Fact]
+    public async Task In_Real_mode_a_failing_RCS_never_falls_back_to_the_simulator_fleet()
+    {
+        await using var rcs = await FakeRcs.StartAsync();
+        rcs.Respond = () => (500, "boom", 0);
+        var (h, _) = await SetupAsync(rcs); await using var _h = h;
+        h.Rcs.SetFleetSize(3);                                                           // the simulator HAS AMRs
+        await Refresh(h);
+        var v = await View(h);
+        Assert.Equal("Real", v.Source); Assert.False(v.SimulatedData); Assert.Equal(0, v.Count);
+        Assert.DoesNotContain(v.Amrs, x => x.RobotCode.StartsWith("SIM-"));
+        Assert.Equal(0, await h.Db(db => db.RcsAmrSnapshots.CountAsync(x => x.Source == FleetSource.Simulator)));
+        Assert.Equal(FleetStates.Disconnected, v.Connection);                           // no success ever: disconnected, not "connected to the simulator"
     }
 
     [Fact]
