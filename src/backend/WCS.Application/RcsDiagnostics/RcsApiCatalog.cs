@@ -173,7 +173,7 @@ public static class RcsApiCatalog
 
         D("syncMapDatas", "LocationMapArea", "5.2.11", RpcBase, "Synchronize map information with that in RCS-2000.", Unverified,
             [Str("mapDataCode", false, 32, "Unique location code on the map."), Str("mapShortName", true, 32, "Alias of the map that needs to be synchronized."), Str("dataTyp", false, 6, "Map element type; not set = all location codes of the map.")],
-            null, """{ "mapShortName": "AA" }""",
+            null, """{ "mapShortName": "TT" }""",
             ["UNVERIFIED: the document does not say whether the call only reads or also changes RCS-2000 (\"Synchronize map information with that in RCS-2000\"); it is NOT classed as read-only until Hikrobot confirms.", "The dataTyp values in the REQUEST are not listed (the response lists 1, 10, 11, 20, 55)."],
             [Str("code", true, 6, "Status code."), Str("message", true, 64, "Status description."), Str("reqCode", true, 64, "Request ID."), Objs("data", false, "cooX, cooY, dataTyp, direction, mapCode, mapDataCode, positionCode, berthType.", [])]),
 

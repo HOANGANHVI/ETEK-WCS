@@ -314,6 +314,8 @@ const ERROR_VI = localizedMap({
   RCS_DIAG_API_NOT_IN_CATALOG: 'API này không có trong danh mục API RCS; chỉ gọi được các API trong danh mục.',
   RCS_DIAG_BUSY: 'Đang có yêu cầu RCS thủ công khác chạy (đã đạt giới hạn đồng thời). Thử lại sau khi nó kết thúc.',
   RCS_DIAG_NOT_FOUND: 'Không tìm thấy lần gọi này trong lịch sử.',
+  RCS_DIAG_PARAM_UNKNOWN: 'Tham số này không thuộc danh sách tham số chẩn đoán RCS.',
+  RCS_DIAG_PARAM_INVALID: 'Giá trị tham số không hợp lệ (văn bản thường, không quá độ dài cho phép).',
   CANCELLED: 'Thao tác đã bị hủy.',
   DISABLED: 'Kết nối PLC đang tắt.',
   WRITE_REFUSED: 'Lệnh ghi bị từ chối.',
@@ -324,6 +326,8 @@ const ERROR_VI = localizedMap({
   RCS_DIAG_API_NOT_IN_CATALOG: 'This API is not in the RCS API catalog; only catalogued APIs can be called.',
   RCS_DIAG_BUSY: 'Another manual RCS request is running (concurrency limit reached). Try again when it has finished.',
   RCS_DIAG_NOT_FOUND: 'This execution was not found in the history.',
+  RCS_DIAG_PARAM_UNKNOWN: 'That parameter is not one of the RCS diagnostics parameters.',
+  RCS_DIAG_PARAM_INVALID: 'The parameter value is not valid (plain text, within the allowed length).',
   VALIDATION_FAILED: 'The submitted data is not valid.',
   HOLD_RELEASE_CONFIRMATION_REQUIRED: 'Both confirmations are required: rack/location reconciled AND AGV physically checked.',
   AGV_NOT_ON_HOLD: 'This AGV is not on dispatch hold.',
@@ -458,11 +462,11 @@ export const AUDIT_RESULT_TONE: Record<string, Tone> = { Success: 'ok', Denied: 
 export const AUDIT_TARGET_VI = localizedMap({
   User: 'Tài khoản', Task: 'Nhiệm vụ', Agv: 'AGV', Location: 'Vị trí', ConnectionSetting: 'Cấu hình kết nối', PlcConnection: 'Kết nối PLC',
   StationIoPoint: 'Tín hiệu IO', PlcStation: 'Trạm PLC', System: 'Hệ thống', ConfigPackage: 'Gói cấu hình', ConfigImport: 'Nhập cấu hình', BusinessProcess: 'Quy trình nghiệp vụ',
-  RcsApi: 'API RCS', RcsApiTest: 'Lịch sử gọi API RCS', RcsConnection: 'Kết nối RCS',
+  RcsApi: 'API RCS', RcsApiTest: 'Lịch sử gọi API RCS', RcsConnection: 'Kết nối RCS', RcsParameter: 'Tham số chẩn đoán RCS',
 }, {
   User: 'Account', Task: 'Task', Agv: 'AGV', Location: 'Location', ConnectionSetting: 'Connection settings', PlcConnection: 'PLC connection',
   StationIoPoint: 'IO signal', PlcStation: 'PLC station', System: 'System', ConfigPackage: 'Configuration package', ConfigImport: 'Configuration import', BusinessProcess: 'Business Process',
-  RcsApi: 'RCS API', RcsApiTest: 'RCS API call history', RcsConnection: 'RCS connection',
+  RcsApi: 'RCS API', RcsApiTest: 'RCS API call history', RcsConnection: 'RCS connection', RcsParameter: 'RCS diagnostics parameter',
 })
 
 export const AUDIT_ACTION_VI = localizedMap({
@@ -489,6 +493,7 @@ export const AUDIT_ACTION_VI = localizedMap({
   RCS_DIAG_EXECUTE: 'Gọi API RCS thủ công (chẩn đoán)',
   RCS_DIAG_TCP_CHECK: 'Kiểm tra kết nối TCP tới RCS',
   RCS_DIAG_EXPORT: 'Xuất lịch sử chẩn đoán RCS',
+  RCS_DIAG_PARAM_SAVE: 'Lưu tham số chẩn đoán RCS',
   SYSTEM_MAINTENANCE_ON: 'Bật chế độ bảo trì',
   SYSTEM_MAINTENANCE_OFF: 'Tắt chế độ bảo trì',
   CONFIG_EXPORT: 'Xuất gói cấu hình',
@@ -570,6 +575,7 @@ export const AUDIT_ACTION_VI = localizedMap({
   RCS_DIAG_EXECUTE: 'Manual RCS API call (diagnostics)',
   RCS_DIAG_TCP_CHECK: 'RCS TCP connection check',
   RCS_DIAG_EXPORT: 'RCS diagnostics history export',
+  RCS_DIAG_PARAM_SAVE: 'RCS diagnostics parameter saved',
   SYSTEM_MAINTENANCE_ON: 'Maintenance on',
   SYSTEM_MAINTENANCE_OFF: 'Maintenance off',
   CONFIG_EXPORT: 'Export configuration package',

@@ -6,6 +6,7 @@ namespace WCS.Api.Api;
 
 /// <summary>Body of <c>POST /api/rcs-diagnostics/execute</c> and <c>/preview</c>: the catalogued API name and the request fields. There is NO url / host / port in it (such keys are refused).</summary>
 public sealed record RcsExecuteBody(string? Api, JsonElement Body);
+public sealed record RcsParamBody(string? Value);
 
 /// <summary>
 /// CR-032: RCS Diagnostics &amp; Manual API Tester. EVERY endpoint is Admin-only (policy on the group, and the service checks again). Reading the catalog, the overview or the history never calls the RCS; only
@@ -27,6 +28,9 @@ public static class RcsDiagnosticsEndpoints
 
         g.MapGet("overview", async (HttpContext c, RcsDiagnosticsService s, CancellationToken ct) => ApiResults.Ok(c, await s.OverviewAsync(c.Actor(), ct)));
         g.MapGet("catalog", (HttpContext c) => ApiResults.Ok(c, new { groups = RcsApiCatalog.Groups, apis = RcsApiCatalog.All.Select(CatalogView).ToList(), callbacks = RcsApiCatalog.Callbacks }));
+
+        g.MapGet("parameters", async (HttpContext c, RcsDiagnosticsService s, CancellationToken ct) => ApiResults.Ok(c, await s.ParametersAsync(c.Actor(), ct)));
+        g.MapPut("parameters/{key}", async (HttpContext c, RcsDiagnosticsService s, string key, RcsParamBody b, CancellationToken ct) => ApiResults.Ok(c, await s.SaveParameterAsync(c.Actor(), key, b.Value, ct)));
 
         g.MapPost("preview", async (HttpContext c, RcsDiagnosticsService s, RcsExecuteBody b, CancellationToken ct) =>
             ApiResults.Ok(c, await s.PreviewAsync(c.Actor(), b.Api ?? "", b.Body, ct)));

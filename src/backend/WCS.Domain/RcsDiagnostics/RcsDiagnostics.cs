@@ -66,3 +66,21 @@ public class RcsCallbackLogEntry
     public bool Processed { get; private set; }
     public string? ErrorMessage { get; private set; }
 }
+
+/// <summary>
+/// CR-032: a deployment-wide value the Admin saved for a diagnostics parameter (for example the map alias, the third-party client code). It only pre-fills the Request Builder; it is never sent unless it is in the request the Admin executes.
+/// No row = nothing saved (the configured default, if any, applies).
+/// </summary>
+public class RcsDiagParam
+{
+    private RcsDiagParam() { }
+
+    public RcsDiagParam(string key, string value, string updatedBy, DateTimeOffset updatedAt) { Key = key; Value = value; UpdatedBy = updatedBy; UpdatedAt = updatedAt; }
+
+    public string Key { get; private set; } = default!;
+    public string Value { get; private set; } = default!;
+    public string UpdatedBy { get; private set; } = default!;
+    public DateTimeOffset UpdatedAt { get; private set; }
+
+    public void Set(string value, string updatedBy, DateTimeOffset at) { Value = value; UpdatedBy = updatedBy; UpdatedAt = at; }
+}

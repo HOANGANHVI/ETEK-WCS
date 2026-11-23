@@ -28,6 +28,7 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<WCS.Domain.Fleet.RcsFleetState> RcsFleetStates => Set<WCS.Domain.Fleet.RcsFleetState>();
     /// <summary>CR-032: manual RCS API calls made from the Admin-only diagnostics module (diagnostic records, never operational state) and the callbacks received from the RCS.</summary>
     public DbSet<WCS.Domain.RcsDiagnostics.RcsApiTest> RcsApiTests => Set<WCS.Domain.RcsDiagnostics.RcsApiTest>();
+    public DbSet<WCS.Domain.RcsDiagnostics.RcsDiagParam> RcsDiagParams => Set<WCS.Domain.RcsDiagnostics.RcsDiagParam>();
     public DbSet<WCS.Domain.RcsDiagnostics.RcsCallbackLogEntry> RcsCallbackLog => Set<WCS.Domain.RcsDiagnostics.RcsCallbackLogEntry>();
     public DbSet<WCS.Domain.Users.AppUser> Users => Set<WCS.Domain.Users.AppUser>();
     public DbSet<WCS.Domain.Users.UserAvatar> UserAvatars => Set<WCS.Domain.Users.UserAvatar>();

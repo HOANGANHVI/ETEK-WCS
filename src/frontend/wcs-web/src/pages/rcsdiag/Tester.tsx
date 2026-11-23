@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
-import { RCS_GROUPS, type RcsApiDef, type RcsCatalog, type RcsExecution, type RcsPreview } from '../../api/rcsDiagTypes'
+import { RCS_GROUPS, type RcsApiDef, type RcsCatalog, type RcsExecution, type RcsParameters, type RcsPreview } from '../../api/rcsDiagTypes'
 import { Button, EmptyState, Panel, Pill } from '../../components/ui'
 import { hasMessage, useT, type MsgKey } from '../../i18n'
 import { describeError } from '../../i18n/vi'
@@ -12,7 +12,7 @@ import { EFFECT_TONE } from './tones'
 const COMMON = ['reqCode', 'reqTime', 'clientCode', 'tokenCode']
 
 /** CR-032 – API Catalog + Request Builder + Inspector. Selecting an API sends nothing; only the Execute button does, and it sends at once (no approval step). */
-export function Tester({ catalog, onExecuted }: { catalog: RcsCatalog; onExecuted: () => void }) {
+export function Tester({ catalog, params, onExecuted }: { catalog: RcsCatalog; params: RcsParameters | null; onExecuted: () => void }) {
   const t = useT()
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('')
@@ -66,17 +66,33 @@ export function Tester({ catalog, onExecuted }: { catalog: RcsCatalog; onExecute
         })}
       </Panel>
       <div className="stack">
-        {def ? <Builder key={def.name} def={def} onExecuted={onExecuted} /> : <Panel><EmptyState title={t('rcsDiag.pickApi')} hint={t('rcsDiag.pickApiHint')} /></Panel>}
+        {def ? <Builder key={def.name} def={def} params={params} onExecuted={onExecuted} /> : <Panel><EmptyState title={t('rcsDiag.pickApi')} hint={t('rcsDiag.pickApiHint')} /></Panel>}
       </div>
     </div>
   )
 }
 
-function Builder({ def, onExecuted }: { def: RcsApiDef; onExecuted: () => void }) {
+/**
+ * The request fields that the saved / configured parameters pre-fill. A confirmed default (MAP ID) is always pre-filled into its field; a value the Admin saved for a user-input parameter is pre-filled only when the field is not part of an
+ * "one of" rule of the API (so it never forces both sides of a choice); otherwise it is offered by a button next to the field. Nothing is invented: no saved or configured value = the field stays empty.
+ */
+function paramDefaults(def: RcsApiDef, params: RcsParameters | null): JsonObject {
+  const out: JsonObject = {}
+  if (!params) return out
+  const inRule = new Set(def.rules.flatMap((r) => r.fields))
+  for (const f of def.fields) {
+    const p = params.items.find((x) => x.fields.includes(f.name) && x.effectiveValue)
+    if (p && f.type === 'string' && (p.status === 'Confirmed' || !inRule.has(f.name))) out[f.name] = p.effectiveValue as string
+  }
+  return out
+}
+
+function Builder({ def, params, onExecuted }: { def: RcsApiDef; params: RcsParameters | null; onExecuted: () => void }) {
   const t = useT()
   const [mode, setMode] = useState<'form' | 'json'>('form')
-  const [body, setBody] = useState<JsonObject>({})
-  const [text, setText] = useState('{}')
+  const [initial] = useState(() => paramDefaults(def, params))
+  const [body, setBody] = useState<JsonObject>(initial)
+  const [text, setText] = useState(() => JSON.stringify(initial, null, 2))
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [preview, setPreview] = useState<RcsPreview | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -146,8 +162,8 @@ function Builder({ def, onExecuted }: { def: RcsApiDef; onExecuted: () => void }
           <button type="button" role="tab" aria-selected={mode === 'json'} className={mode === 'json' ? 'active' : ''} onClick={() => setMode('json')}>{t('rcsDiag.modeJson')}</button>
         </div>}>
         <div className="rd-toolbar">
-          <Button size="sm" onClick={() => { try { setFormBody(JSON.parse(def.sample) as JsonObject) } catch { setFormBody({}) } }}>{t('rcsDiag.fillSample')}</Button>
-          <Button size="sm" variant="ghost" onClick={() => setFormBody({})}>{t('rcsDiag.clearForm')}</Button>
+          <Button size="sm" onClick={() => { try { setFormBody({ ...(JSON.parse(def.sample) as JsonObject), ...paramDefaults(def, params) }) } catch { setFormBody(paramDefaults(def, params)) } }}>{t('rcsDiag.fillSample')}</Button>
+          <Button size="sm" variant="ghost" onClick={() => setFormBody(paramDefaults(def, params))}>{t('rcsDiag.clearForm')}</Button>
         </div>
         {mode === 'form' ? (
           <div className="rd-form">
@@ -155,13 +171,13 @@ function Builder({ def, onExecuted }: { def: RcsApiDef; onExecuted: () => void }
               <summary>{t('rcsDiag.commonFields')}</summary>
               <div className="form-grid">
                 {commonFields.map((f) => (
-                  <FieldEditor key={f.name} field={f} value={body[f.name]} path={f.name} errors={errors} warnings={warnings} secret={f.name === 'tokenCode'} onChange={(v) => set(f.name, v)} />
+                  <FieldEditor key={f.name} field={f} value={body[f.name]} path={f.name} errors={errors} warnings={warnings} secret={f.name === 'tokenCode'} info={{ api: def.name, params }} onChange={(v) => set(f.name, v)} />
                 ))}
               </div>
               <p className="muted small">{t('rcsDiag.commonHint')}</p>
             </details>
             <div className="form-grid">
-              {ownFields.map((f) => <FieldEditor key={f.name} field={f} value={body[f.name]} path={f.name} errors={errors} warnings={warnings} onChange={(v) => set(f.name, v)} />)}
+              {ownFields.map((f) => <FieldEditor key={f.name} field={f} value={body[f.name]} path={f.name} errors={errors} warnings={warnings} info={{ api: def.name, params }} onChange={(v) => set(f.name, v)} />)}
             </div>
             {errors.filter((e) => !knownRoot(e.path) || e.path.includes('|')).map((e) => (
               <div key={e.path + e.code} className="notice notice-bad" role="alert"><span className="mono">{e.path}</span>: {e.message}</div>

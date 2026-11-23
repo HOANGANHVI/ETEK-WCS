@@ -20,6 +20,8 @@ public sealed class RcsDiagnosticsOptions
     public int MaxResponseBytes { get; set; } = 64 * 1024;
     /// <summary>Newest history rows kept (older ones are removed in small steps).</summary>
     public int HistoryKeep { get; set; } = 5000;
+    /// <summary>The MAP ID of this installation (confirmed: "TT"). The central default of the map alias parameter; the Admin can override it in the diagnostics parameters. Change it here (Rcs:Diagnostics:MapId) when deploying another system.</summary>
+    public string MapId { get; set; } = "TT";
 }
 
 // ---- the saved RCS connection as the diagnostics module sees it (no secret in it)
@@ -51,6 +53,10 @@ public interface IRcsDiagnosticsRepository
     Task<int> CountAsync(RcsHistoryQuery q, CancellationToken ct = default);
     Task<RcsApiTest?> GetAsync(Guid id, CancellationToken ct = default);
     Task TrimAsync(int keep, CancellationToken ct = default);
+    Task<IReadOnlyList<RcsDiagParam>> ListParamsAsync(CancellationToken ct = default);
+    Task<RcsDiagParam?> GetParamForUpdateAsync(string key, CancellationToken ct = default);
+    void AddParam(RcsDiagParam p);
+    void RemoveParam(RcsDiagParam p);
     Task<IReadOnlyList<RcsCallbackLogEntry>> ListCallbacksAsync(string? callback, int skip, int take, CancellationToken ct = default);
 }
 
@@ -80,6 +86,9 @@ public sealed record RcsPreview(string Api, string Method, string? Endpoint, IRe
 public sealed record RcsExecution(Guid Id, DateTimeOffset ExecutedAt, string Api, string Group, string User, string RequestId, string Method, string? Endpoint, IReadOnlyDictionary<string, string> RequestHeaders, string? RequestBody,
     int? HttpStatus, IReadOnlyDictionary<string, string> ResponseHeaders, string? ResponseBody, bool ResponseTruncated, string? RcsCode, string? RcsMessage, long DurationMs, string Outcome, bool Success, string? ErrorMessage,
     IReadOnlyList<RcsValidationIssue> Warnings);
+
+public sealed record RcsParameterView(string Key, string Status, IReadOnlyList<string> Fields, int MaxLength, string? ConfiguredDefault, string? SavedValue, string? EffectiveValue, string Source, string? UpdatedBy, DateTimeOffset? UpdatedAt);
+public sealed record RcsParametersView(IReadOnlyList<RcsParameterView> Items, IReadOnlyList<string> Undetermined);
 
 public sealed record RcsHistoryPage(int Total, IReadOnlyList<RcsHistoryItem> Items);
 public sealed record RcsHistoryItem(Guid Id, DateTimeOffset ExecutedAt, string User, string Role, string Api, string Group, string RequestId, string? Endpoint, string? RequestBody, string? ResponseBody, bool ResponseTruncated,
@@ -185,6 +194,41 @@ public sealed class RcsDiagnosticsService(IRcsDiagnosticsTransport transport, IR
 
     /// <summary>API connectivity: ONE read-only <c>queryAgvStatus</c>. Recorded in the history like any other execution.</summary>
     public Task<RcsExecution> ApiCheckAsync(ActorInfo actor, CancellationToken ct = default) => ExecuteAsync(actor, "queryAgvStatus", JsonDocument.Parse("{}").RootElement, ct);
+
+    // ------------------------------------------------------------------ parameters (pre-fill values for the Request Builder)
+    public async Task<RcsParametersView> ParametersAsync(ActorInfo actor, CancellationToken ct = default)
+    {
+        RequireAdmin(actor);
+        var saved = (await repo.ListParamsAsync(ct)).ToDictionary(p => p.Key);
+        var items = RcsParameterCatalog.All.Select(d =>
+        {
+            var configured = RcsParameterCatalog.ConfiguredDefault(d, options.Value);
+            saved.TryGetValue(d.Key, out var s);
+            var effective = s?.Value ?? configured;
+            return new RcsParameterView(d.Key, d.Status, d.Fields, d.MaxLength, configured, s?.Value, effective, s is not null ? "Saved" : configured is not null ? "Config" : "None", s?.UpdatedBy, s?.UpdatedAt);
+        }).ToList();
+        return new RcsParametersView(items, RcsParameterCatalog.UndeterminedFields);
+    }
+
+    /// <summary>Saves (or, with an empty value, removes) the Admin's value of one parameter. Only known parameters can be saved; the value is a plain identifier, never a secret.</summary>
+    public async Task<RcsParameterView> SaveParameterAsync(ActorInfo actor, string key, string? value, CancellationToken ct = default)
+    {
+        RequireAdmin(actor);
+        var def = RcsParameterCatalog.Find(key) ?? throw AppException.Validation("RCS_DIAG_PARAM_UNKNOWN", "That parameter is not one of the RCS diagnostics parameters.");
+        var v = value?.Trim() ?? "";
+        if (v.Length > def.MaxLength || v.Any(char.IsControl)) throw AppException.Validation("RCS_DIAG_PARAM_INVALID", $"The value must be plain text of at most {def.MaxLength} characters.");
+        var now = clock.UtcNow;
+        await uow.ExecuteAsync(async t =>
+        {
+            var row = await repo.GetParamForUpdateAsync(def.Key, t);
+            if (v.Length == 0) { if (row is not null) repo.RemoveParam(row); }
+            else if (row is null) repo.AddParam(new RcsDiagParam(def.Key, v, actor.Username, now));
+            else row.Set(v, actor.Username, now);
+            return 0;
+        }, ct);
+        await audit.WriteAsync(new AuditRecord("RCS_DIAG_PARAM_SAVE", actor.Username, actor.Role.ToString(), "RcsParameter", def.Key, AuditResult.Success, v.Length == 0 ? "cleared" : $"value={v}", IpAddress: actor.IpAddress), ct);
+        return (await ParametersAsync(actor, ct)).Items.Single(i => i.Key == def.Key);
+    }
 
     // ------------------------------------------------------------------ history
     public async Task<RcsHistoryPage> HistoryAsync(ActorInfo actor, RcsHistoryQuery q, CancellationToken ct = default)

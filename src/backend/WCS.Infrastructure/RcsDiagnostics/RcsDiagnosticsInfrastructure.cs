@@ -82,6 +82,10 @@ internal sealed class RcsDiagnosticsTransport(IConnectionSettingRepository setti
 internal sealed class RcsDiagnosticsRepository(WcsDbContext db) : IRcsDiagnosticsRepository
 {
     public void Add(RcsApiTest test) => db.RcsApiTests.Add(test);
+    public async Task<IReadOnlyList<RcsDiagParam>> ListParamsAsync(CancellationToken ct = default) => await db.RcsDiagParams.AsNoTracking().OrderBy(p => p.Key).ToListAsync(ct);
+    public Task<RcsDiagParam?> GetParamForUpdateAsync(string key, CancellationToken ct = default) => db.RcsDiagParams.FirstOrDefaultAsync(p => p.Key == key, ct);
+    public void AddParam(RcsDiagParam p) => db.RcsDiagParams.Add(p);
+    public void RemoveParam(RcsDiagParam p) => db.RcsDiagParams.Remove(p);
 
     private IQueryable<RcsApiTest> Filter(RcsHistoryQuery q)
     {

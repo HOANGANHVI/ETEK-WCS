@@ -1232,6 +1232,30 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.ToTable("rcs_callback_log", (string)null);
                 });
 
+            modelBuilder.Entity("WCS.Domain.RcsDiagnostics.RcsDiagParam", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("rcs_diag_params", (string)null);
+                });
+
             modelBuilder.Entity("WCS.Domain.Routing.BusinessProcess", b =>
                 {
                     b.Property<Guid>("Id")

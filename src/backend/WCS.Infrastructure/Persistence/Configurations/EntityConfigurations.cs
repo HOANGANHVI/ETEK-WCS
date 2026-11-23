@@ -346,3 +346,13 @@ internal sealed class RcsCallbackLogConfiguration : IEntityTypeConfiguration<WCS
         b.HasIndex(x => x.ReceivedAt);
     }
 }
+
+internal sealed class RcsDiagParamConfiguration : IEntityTypeConfiguration<WCS.Domain.RcsDiagnostics.RcsDiagParam>
+{
+    public void Configure(EntityTypeBuilder<WCS.Domain.RcsDiagnostics.RcsDiagParam> b)
+    {
+        b.ToTable("rcs_diag_params");   // CR-032: Admin-saved defaults of the RCS diagnostics parameters (map alias, client code ...); pre-fill only
+        b.HasKey(x => x.Key);
+        b.Property(x => x.Key).HasMaxLength(40); b.Property(x => x.Value).HasMaxLength(64); b.Property(x => x.UpdatedBy).HasMaxLength(100);
+    }
+}

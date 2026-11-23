@@ -513,6 +513,74 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
     }
 
     // ============================================================================ callback monitor
+    // ============================================================================ configuration parameters (MAP ID "TT", values the project has not given)
+    [Fact]
+    public async Task MAP_ID_defaults_to_TT_from_central_configuration_and_applies_only_to_the_mapShortName_request_field()
+    {
+        Assert.Equal("TT", new RcsDiagnosticsOptions().MapId);
+        await using var rig = await ArrangeAsync();
+        var p = Data((await rig.Admin.SendJsonAsync(HttpMethod.Get, "/api/rcs-diagnostics/parameters")).Root);
+        var map = p.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("key").GetString() == "mapId");
+        Assert.Equal("TT", map.GetProperty("effectiveValue").GetString()); Assert.Equal("Config", map.GetProperty("source").GetString()); Assert.Equal("Confirmed", map.GetProperty("status").GetString());
+        Assert.Equal(["mapShortName"], map.GetProperty("fields").EnumerateArray().Select(f => f.GetString()).ToArray());   // never mapCode or any other identifier
+        // every other parameter is user input (no value invented) and no catalog request field is named mapCode
+        foreach (var i in p.GetProperty("items").EnumerateArray().Where(i => i.GetProperty("key").GetString() != "mapId")) { Assert.Equal("UserInput", i.GetProperty("status").GetString()); Assert.Equal("None", i.GetProperty("source").GetString()); Assert.Equal(JsonValueKind.Null, i.GetProperty("effectiveValue").ValueKind); }
+        Assert.DoesNotContain(RcsApiCatalog.All.SelectMany(a => RcsApiCatalog.RequestFields(a)), f => f.Name == "mapCode");
+        // every parameter field name exists as a request field of the document, and the documented samples carry TT only where the map alias is asked
+        Assert.All(RcsParameterCatalog.All.SelectMany(d => d.Fields), n => Assert.Contains(RcsApiCatalog.All, a => RcsApiCatalog.RequestFields(a).Any(f => f.Name == n)));
+        Assert.Contains("\"TT\"", RcsApiCatalog.Find("syncMapDatas")!.Sample);
+        Assert.Equal(0, rig.Rcs.Count);   // reading the parameters sends nothing
+    }
+
+    [Fact]
+    public async Task The_central_MAP_ID_can_be_changed_by_configuration_and_the_Admin_can_save_override_and_clear_a_value()
+    {
+        await using var rig = await ArrangeAsync(new() { ["Rcs:Diagnostics:MapId"] = "ZZ" });
+        JsonElement Item(JsonElement root, string key) => Data(root).GetProperty("items").EnumerateArray().Single(i => i.GetProperty("key").GetString() == key);
+        Assert.Equal("ZZ", Item((await rig.Admin.SendJsonAsync(HttpMethod.Get, "/api/rcs-diagnostics/parameters")).Root, "mapId").GetProperty("effectiveValue").GetString());
+
+        var save = await rig.Admin.SendJsonAsync(HttpMethod.Put, "/api/rcs-diagnostics/parameters/mapId", new { value = " TT " });
+        Assert.Equal(200, save.Status); Assert.Equal("TT", Data(save.Root).GetProperty("effectiveValue").GetString()); Assert.Equal("Saved", Data(save.Root).GetProperty("source").GetString());
+        var client = await rig.Admin.SendJsonAsync(HttpMethod.Put, "/api/rcs-diagnostics/parameters/clientCode", new { value = "PDA1" });
+        Assert.Equal("UserInput", Data(client.Root).GetProperty("status").GetString());
+
+        var again = await rig.Admin.SendJsonAsync(HttpMethod.Get, "/api/rcs-diagnostics/parameters");   // reopened: the saved values are loaded again
+        Assert.Equal("TT", Item(again.Root, "mapId").GetProperty("effectiveValue").GetString()); Assert.Equal("PDA1", Item(again.Root, "clientCode").GetProperty("savedValue").GetString());
+        Assert.Equal("admin1", Item(again.Root, "clientCode").GetProperty("updatedBy").GetString());
+
+        var clear = await rig.Admin.SendJsonAsync(HttpMethod.Put, "/api/rcs-diagnostics/parameters/mapId", new { value = "" });
+        Assert.Equal("ZZ", Data(clear.Root).GetProperty("effectiveValue").GetString()); Assert.Equal("Config", Data(clear.Root).GetProperty("source").GetString());   // falls back to the central configuration
+        await rig.H.Db(async db =>
+        {
+            Assert.Equal(1, await db.RcsDiagParams.CountAsync());
+            Assert.Equal(3, await db.AuditLog.CountAsync(a => a.Action == "RCS_DIAG_PARAM_SAVE" && a.Actor == "admin1"));
+            return 0;
+        });
+        Assert.Equal(0, rig.Rcs.Count);
+    }
+
+    [Fact]
+    public async Task Unknown_or_invalid_parameters_are_refused_and_only_an_Admin_can_read_or_save()
+    {
+        await using var rig = await ArrangeAsync();
+        var unknown = await rig.Admin.SendJsonAsync(HttpMethod.Put, "/api/rcs-diagnostics/parameters/mapCode", new { value = "x" });
+        Assert.Equal(400, unknown.Status); Assert.Equal("RCS_DIAG_PARAM_UNKNOWN", unknown.Root.ErrorCode());
+        Assert.Equal("RCS_DIAG_PARAM_INVALID", (await rig.Admin.SendJsonAsync(HttpMethod.Put, "/api/rcs-diagnostics/parameters/clientCode", new { value = new string('x', 17) })).Root.ErrorCode());
+        Assert.Equal("RCS_DIAG_PARAM_INVALID", (await rig.Admin.SendJsonAsync(HttpMethod.Put, "/api/rcs-diagnostics/parameters/clientCode", new { value = "a\nb" })).Root.ErrorCode());
+        Assert.Equal(403, (await rig.Operator.SendJsonAsync(HttpMethod.Get, "/api/rcs-diagnostics/parameters")).Status);
+        Assert.Equal(403, (await rig.Operator.SendJsonAsync(HttpMethod.Put, "/api/rcs-diagnostics/parameters/mapId", new { value = "X" })).Status);
+        Assert.Equal(401, (await rig.Anonymous.SendJsonAsync(HttpMethod.Get, "/api/rcs-diagnostics/parameters")).Status);
+        await rig.H.Db(async db => { Assert.Equal(0, await db.RcsDiagParams.CountAsync()); return 0; });
+    }
+
+    [Fact]
+    public async Task A_required_field_without_a_value_still_blocks_sending_and_nothing_is_filled_in_by_the_server()
+    {
+        await using var rig = await ArrangeAsync();
+        var r = await Exec(rig.Admin, "syncMapDatas", new { });   // mapShortName is required: the server never fills the saved / default MAP ID in for the Admin
+        Assert.Equal(400, r.Status); Assert.Equal("RCS_DIAG_VALIDATION_FAILED", r.Root.ErrorCode()); Assert.Equal(0, rig.Rcs.Count);
+    }
+
     [Fact]
     public async Task Callback_monitor_says_honestly_that_no_receiver_exists_and_shows_nothing_invented()
     {

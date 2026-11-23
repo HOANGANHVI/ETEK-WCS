@@ -49,3 +49,10 @@ export interface RcsHistoryFilter { from?: string; to?: string; api?: string; us
 
 export interface RcsCallbackEntry { id: string; receivedAt: string; callback: string; path: string | null; sourceAddress: string | null; requestJson: string | null; responseJson: string | null; httpStatus: number | null; processed: boolean; errorMessage: string | null }
 export interface RcsCallbacks { endpoints: RcsCallbackDef[]; received: RcsCallbackEntry[] }
+
+export type RcsParamStatus = 'Confirmed' | 'UserInput'
+export interface RcsParameter {
+  key: string; status: RcsParamStatus; fields: string[]; maxLength: number
+  configuredDefault: string | null; savedValue: string | null; effectiveValue: string | null; source: 'Saved' | 'Config' | 'None'; updatedBy: string | null; updatedAt: string | null
+}
+export interface RcsParameters { items: RcsParameter[]; undetermined: string[] }

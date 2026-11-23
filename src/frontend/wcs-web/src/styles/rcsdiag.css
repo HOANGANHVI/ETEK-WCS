@@ -51,3 +51,14 @@
 .rd-impact { margin: 10px 0; }
 .rd-impact-extra { margin-top: 4px; font-weight: 600; }
 .rd-impact-Critical { background: var(--bad-bg); }
+
+.rd-badge { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: var(--fs-xs); font-weight: 700; border: 1px solid var(--line-strong); }
+.rd-badge-Confirmed { color: var(--ok); border-color: var(--ok); }
+.rd-badge-UserInput { color: var(--navy-500); border-color: var(--navy-500); }
+.rd-badge-Undetermined { color: var(--amber, #b7791f); border-color: var(--amber, #b7791f); }
+.rd-link { background: none; border: 0; padding: 0; color: var(--navy-500); text-decoration: underline; cursor: pointer; font: inherit; }
+.rd-param { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 340px); gap: 8px 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.rd-param-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.rd-param-edit input { height: 34px; flex: 1; min-width: 120px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--field-bg); padding: 0 8px; }
+@media (max-width: 720px) { .rd-param { grid-template-columns: 1fr; } }
+.rd-undet { margin: 0; padding-left: 20px; columns: 2; font-size: var(--fs-sm); }

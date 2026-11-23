@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.25 – CR-032 addendum: MAP ID TT and RCS diagnostics parameters (2026-11-23)
+
+- `Rcs:Diagnostics:MapId` (default `TT`) is the central MAP ID, applied only to the request field `mapShortName`; Admin-editable saved parameters (`rcs_diag_params`, migration `AddRcsDiagParams`) for `clientCode`, `agvTyp`, `wbCode`, `ctnrTyp`, `roadWayCode`, area codes; fields grouped Confirmed / User input needed / Not determined; saved values reload in the Request Builder. No change to CR-031 fleet monitoring, Real Dispatch, PLC, Inventory or Legacy dispatch. See `CR-032_RCS_DIAGNOSTICS.md` section 10.
+
 ## v3.24 – CR-032 RCS Diagnostics & Manual API Tester (2026-11-23) – feature branch, mock verified, not merged
 
 - New Admin-only module (menu System, route `/rcs-diagnostics`, API `/api/rcs-diagnostics`): catalog of the 23 outbound RCS-2000 V3.3 APIs, document-driven request builder with server validation and preview, immediate execute (no approval), request / response inspector with outcome classes (TCP, timeout, HTTP, RCS code ≠ 0, JSON), masked execution history with filters / export, TCP check kept apart from API check, honest Callback Monitor (no WCS receiver on this build). Additive migration `AddRcsDiagnostics` (`rcs_api_tests`, `rcs_callback_log`). No change to Real Dispatch, fleet monitoring, PLC, inventory or Legacy dispatch. See `CR-032_RCS_DIAGNOSTICS.md`.
