@@ -103,7 +103,7 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
         {
             var storeOk = !wasOk || now - _lastStoredSuccess >= StoreEvery; if (storeOk) _lastStoredSuccess = now; _lastFailureCode = null;
             using (Scope(storeOk))
-                logger.LogInformation("RCS fleet poll succeeded: endpoint {Endpoint}, HTTP {HttpStatus}, {DurationMs} ms, {TotalAmr} AMR(s) [{RobotCodes}], request {RequestCode}, last successful poll {LastSuccessfulPollAt:O}. {EventCode}",
+                logger.LogInformation("RCS fleet poll succeeded: endpoint {Endpoint:l}, HTTP {HttpStatus}, {DurationMs} ms, {TotalAmr} AMR(s) [{RobotCodes:l}], request {RequestCode:l}, last successful poll {LastSuccessfulPollAt:O}. {EventCode}",
                     result.Endpoint, result.HttpStatus, durationMs, count, string.Join(",", result.Amrs.Select(a => a.RobotCode)), result.RequestCode, now, "RCS_FLEET_POLL_SUCCESS");
             using (Scope(false))
                 logger.LogInformation("RCS fleet snapshot updated: {TotalAmr} AMR(s) in the response, {NewAmr} new, {MissingAmr} not in this response. {EventCode}", count, newAmrs, missingAmrs, "RCS_FLEET_SNAPSHOT_UPDATED");
@@ -113,7 +113,7 @@ public sealed class FleetService(IRcsFleetQuery query, IRcsFleetRepository repo,
             var storeFail = failures <= 1 || result.ErrorCode != _lastFailureCode || now - _lastStoredFailure >= StoreEvery;
             if (storeFail) { _lastStoredFailure = now; } _lastFailureCode = result.ErrorCode;
             using (Scope(storeFail))
-                logger.LogWarning("RCS fleet poll failed: {ErrorCode} ({ErrorMessage}), endpoint {Endpoint}, HTTP {HttpStatus}, RCS code {RcsCode}, RCS message {RcsMessage}, {DurationMs} ms, request {RequestCode}, consecutive failures {ConsecutiveFailures}. {EventCode}",
+                logger.LogWarning("RCS fleet poll failed: {ErrorCode:l} ({ErrorMessage:l}), endpoint {Endpoint:l}, HTTP {HttpStatus}, RCS code {RcsCode:l}, RCS message {RcsMessage:l}, {DurationMs} ms, request {RequestCode:l}, consecutive failures {ConsecutiveFailures}. {EventCode}",
                     result.ErrorCode, Sanitize(result.ErrorMessage), result.Endpoint, result.HttpStatus, result.RcsCode, result.RcsMessage, durationMs, result.RequestCode, failures, "RCS_FLEET_POLL_FAILED");
         }
         if (!result.Success && wasOk)

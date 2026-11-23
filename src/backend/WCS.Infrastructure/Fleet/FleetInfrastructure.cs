@@ -62,11 +62,14 @@ internal sealed class HikFleetQueryClient(IConnectionSettingRepository settings,
         // no tokenCode: the RCS defines no authentication for this API; polling never depends on a token, a username or a password
 
         var sw = Stopwatch.StartNew();
+        // the client times out slightly BEFORE the caller does, so a timeout is reported with its endpoint and request id (the caller's own timeout stays as the safety net)
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromMilliseconds(Math.Max(500, options.Value.TimeoutSeconds * 1000 - 250)));
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, new MediaTypeHeaderValue("application/json")) };
-            using var res = await Http.SendAsync(req, ct);
-            var text = await res.Content.ReadAsStringAsync(ct);
+            using var res = await Http.SendAsync(req, cts.Token);
+            var text = await res.Content.ReadAsStringAsync(cts.Token);
             if (!res.IsSuccessStatusCode) return Ctx(RcsFleetResult.Fail($"{FleetErrorCodes.Http}:{(int)res.StatusCode}", $"HTTP {(int)res.StatusCode}", sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode });
             return Ctx(HikQueryAgvStatusParser.Parse(text, sw.ElapsedMilliseconds) with { HttpStatus = (int)res.StatusCode });
         }

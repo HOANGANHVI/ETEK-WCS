@@ -117,13 +117,13 @@ public class Cr031PollOutcomeTests(DatabaseFixture fixture)
     public async Task A_refused_connection_is_RCS_CONNECTION_FAILED_and_logged()
     {
         var rcs = await FakeRcs.StartAsync();
-        var (h, log) = await SetupAsync(rcs); await using var _h = h;
+        var (h, log) = await SetupAsync(rcs, timeoutSeconds: 8); await using var _h = h;   // a refused loopback connection takes about 2 s on Windows
         await rcs.DisposeAsync();                                                                     // nothing listens on the port any more
         await Poll(h, advance: false);
         var v = await View(h);
         Assert.Equal("RCS_CONNECTION_FAILED", v.LastErrorCode); Assert.Equal(FleetStates.Disconnected, v.Connection);
         var line = Assert.Single(Lines(log, "RCS_FLEET_POLL_FAILED"));
-        Assert.Contains("RCS_CONNECTION_FAILED", line); Assert.Contains("HTTP ,", line);              // no HTTP status: the connection was never made
+        Assert.Contains("RCS_CONNECTION_FAILED", line); Assert.Contains("HTTP null", line);             // no HTTP status: the connection was never made
     }
 
     [Theory]

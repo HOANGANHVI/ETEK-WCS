@@ -5,6 +5,10 @@
 - `deployment/docker-compose.yml` and `.env.example` pass `Rcs:Fleet:Source` (`RCS_FLEET_SOURCE`, default `Simulator`), `Rcs:Fleet:IntervalSeconds` (`RCS_FLEET_INTERVAL_SECONDS`, default 5) and `Rcs:Dispatch:Mode` (`RCS_DISPATCH_MODE`, default `Legacy`) to the backend. Defaults keep the previous behaviour; `Integration__Mode` stays `Simulator` (no real create-task adapter exists). No PLC/RCS address or credential is stored in the repository.
 - `docs/reviews/REAL_DEVICE_COMMISSIONING_PLAN_2026-11-21.md`: what the code supports in Real mode, environment limits found, deployment steps for the Deploy machine, commissioning levels, missing integration.
 
+## v3.23 – CR-031 fix: every RCS fleet poll is logged (2026-11-23) – feature branch, not merged
+
+- A non-success RCS answer (HTTP 200, business code ≠ 0) is logged as `RCS_FLEET_POLL_FAILED` with endpoint, HTTP status, RCS code and message, duration, request id and consecutive failures; new class `RCS_CONNECTION_FAILED`; the console line bypasses the 60-second log throttle; the `system_log` copy is rate-limited; "Chưa nhận được dữ liệu AMR từ RCS" when no poll ever succeeded. Cause: the loop logged only success → failure transitions and the pipeline throttled identical warnings. Details: CR-031 section 7.
+
 ## v3.22 – CR-031 Real RCS fleet monitoring (2026-11-21) – feature branch, mock verified, not merged
 
 - `Rcs:Fleet:Source=Real`: WCS calls `queryAgvStatus` every 5 s (single-flight, timeout, early-tick tolerance); the AMR count is `data[]`; the port is the saved RCS connection port (no assumed 8182); NO authentication: the request carries no tokenCode/username/password (the RCS provides none for this API) and polling never depends on a token.
