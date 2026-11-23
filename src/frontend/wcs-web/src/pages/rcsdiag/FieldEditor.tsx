@@ -110,8 +110,12 @@ export function FieldEditor({ field, value, onChange, path, errors, warnings, se
           {field.enum.map((v) => <option key={v} value={v}>{v}</option>)}
         </select>
       ) : (
-        <input type={secret ? 'password' : 'text'} autoComplete="off" spellCheck={false} value={toText(value)} onChange={(e) => onChange(fromText(field.type, e.target.value))}
-          placeholder={field.name === 'reqCode' || field.name === 'reqTime' ? t('rcsDiag.autoFilled') : undefined} />
+        <>
+          <input type={secret ? 'password' : 'text'} autoComplete="off" spellCheck={false} value={toText(value)} onChange={(e) => onChange(fromText(field.type, e.target.value))}
+            list={field.suggestions?.length ? `rd-sg-${field.name}` : undefined}
+            placeholder={field.name === 'reqCode' || field.name === 'reqTime' ? t('rcsDiag.autoFilled') : field.suggestions?.length ? t('rcsDiag.typeOrPick') : undefined} />
+          {field.suggestions?.length ? <datalist id={`rd-sg-${field.name}`}>{field.suggestions.map((v) => <option key={v} value={v} />)}</datalist> : null}
+        </>
       )}
       {meta}
     </label>

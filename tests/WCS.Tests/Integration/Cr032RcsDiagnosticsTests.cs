@@ -186,7 +186,9 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
         Assert.False(Bad("cancelTask", """{"reqCode":"1","agvCode":"7"}""", "taskCode"));
         Assert.True(Bad("queryTaskStatus", """{"reqCode":"1"}""", "taskCodes"));
         Assert.True(Bad("genAgvSchedulingTask", """{"reqCode":"1","taskTyp":"F01"}""", "wbCode"));
-        Assert.True(Bad("genAgvSchedulingTask", """{"reqCode":"1","taskTyp":"F99","wbCode":"W"}""", "taskTyp"));
+        Assert.False(Bad("genAgvSchedulingTask", """{"reqCode":"1","taskTyp":"F99","wbCode":"W"}""", "taskTyp"));                 // CR-035: taskTyp is a free string (a custom type configured in the RCS), not an enumeration
+        Assert.True(Bad("genAgvSchedulingTask", """{"reqCode":"1","taskTyp":"12345678901234567","wbCode":"W"}""", "taskTyp"));      // but its length is limited to 16
+        Assert.True(Bad("genAgvSchedulingTask", """{"reqCode":"1","wbCode":"W"}""", "taskTyp"));                                    // and it is required
         Assert.True(Bad("continueTask", """{"reqCode":"1","taskCode":"1","wbCode":"W"}""", "wbCode"));    // exactly one
         Assert.True(Bad("stopRobot", """{"reqCode":"1","robotCount":"-1"}""", "mapShortName"));
         Assert.False(Bad("stopRobot", """{"reqCode":"1","robotCount":"-1","mapShortName":"M"}""", "mapShortName"));
@@ -577,6 +579,46 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
         foreach (var p in typed.EnumerateObject()) Assert.Equal(p.Value.GetString(), sent.GetProperty(p.Name).GetString());   // exact values as typed
         Assert.Equal(sent.GetProperty("reqCode").GetString(), Data(r.Root).GetProperty("requestId").GetString());
         Assert.DoesNotContain(Environment.NewLine, seen.Body);   // compact JSON, no pretty-print
+    }
+
+    // ============================================================================ CR-035: taskTyp is a free string (the real RCS accepted "QTESTmove")
+    [Fact]
+    public void taskTyp_is_a_required_free_string_of_16_characters_with_the_built_in_types_only_as_suggestions_and_the_catalog_has_no_taskType_field()
+    {
+        var f = RcsApiCatalog.Find("genAgvSchedulingTask")!.Fields.Single(x => x.Name == "taskTyp");
+        Assert.True(f.Required); Assert.Equal("string", f.Type); Assert.Equal(16, f.MaxLength);
+        Assert.Null(f.Enum);                                                                                    // no drop-down restriction: the valid values are the types configured in the RCS
+        Assert.Contains("F01", f.Suggestions!); Assert.Contains("F20", f.Suggestions!); Assert.DoesNotContain("QTESTmove", f.Suggestions!);   // suggestions are the documented built-in types, nothing is added
+        // the key is spelled exactly "taskTyp" everywhere; "taskType" is not a field of any API
+        Assert.DoesNotContain(RcsApiCatalog.All.SelectMany(RcsApiCatalog.RequestFields), x => x.Name == "taskType");
+        Assert.DoesNotContain("taskType", RcsApiCatalog.All.Select(a => a.Sample));
+        Assert.Contains("taskTyp", RcsApiCatalog.Find("genAgvSchedulingTask")!.Sample);
+        // another value is valid; the other enumerations are untouched
+        var api = RcsApiCatalog.Find("genAgvSchedulingTask")!;
+        Assert.True(RcsRequestValidator.Validate(api, JsonDocument.Parse("""{"reqCode":"1","taskTyp":"QTESTmove","positionCodePath":[{"positionCode":"129200TT137488","type":"00"}]}""").RootElement).IsValid);
+        Assert.Contains(RcsRequestValidator.Validate(api, JsonDocument.Parse("""{"reqCode":"1","taskTyp":"F01","taskMode":"9","wbCode":"W"}""").RootElement).Errors, e => e.Path == "taskMode" && e.Code == "ENUM");
+    }
+
+    [Fact]
+    public async Task The_raw_HTTP_body_of_genAgvSchedulingTask_carries_the_key_taskTyp_as_a_string_exactly_as_typed_and_never_taskType()
+    {
+        await using var rig = await ArrangeAsync();   // the RCS is a local MOCK that records what it receives: no real task is created
+        var typed = JsonDocument.Parse("""{"reqCode":"1234561515","taskTyp":"QTESTmove","positionCodePath":[{"positionCode":"129200TT137488","type":"00"}]}""").RootElement;
+        var preview = await rig.Admin.SendJsonAsync(HttpMethod.Post, "/api/rcs-diagnostics/preview", new { api = "genAgvSchedulingTask", body = typed });
+        Assert.Equal(200, preview.Status); Assert.Equal(0, rig.Rcs.Count);
+        var previewBody = JsonDocument.Parse(Data(preview.Root).GetProperty("body").GetString()!).RootElement;
+        Assert.Equal("QTESTmove", previewBody.GetProperty("taskTyp").GetString()); Assert.False(previewBody.TryGetProperty("taskType", out _));
+
+        var r = await Exec(rig.Admin, "genAgvSchedulingTask", typed);
+        Assert.Equal(200, r.Status); Assert.Equal(1, rig.Rcs.Count);
+        var seen = rig.Rcs.Requests[0];
+        Assert.EndsWith("/genAgvSchedulingTask", seen.Path);
+        var sent = JsonDocument.Parse(seen.Body).RootElement;
+        Assert.Equal(["reqCode", "reqTime", "taskTyp", "positionCodePath"], sent.EnumerateObject().Select(x => x.Name).ToArray());   // exact keys, no extra field, no taskType
+        Assert.Equal(JsonValueKind.String, sent.GetProperty("taskTyp").ValueKind);
+        Assert.Equal("QTESTmove", sent.GetProperty("taskTyp").GetString());                                         // not changed, not upper-cased, not mapped
+        Assert.DoesNotContain("taskType", seen.Body);
+        Assert.Equal("129200TT137488", sent.GetProperty("positionCodePath")[0].GetProperty("positionCode").GetString());
     }
 
     [Fact]

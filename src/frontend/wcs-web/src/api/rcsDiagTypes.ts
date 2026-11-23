@@ -6,7 +6,7 @@ export type RcsGroup = (typeof RCS_GROUPS)[number]
 
 export interface RcsField {
   name: string; type: 'string' | 'number' | 'string[]' | 'object' | 'object[]'; required: boolean; maxLength: number | null; description: string
-  enum: string[] | null; children: RcsField[] | null; maxItems: number | null; min: number | null; max: number | null
+  enum: string[] | null; suggestions: string[] | null; children: RcsField[] | null; maxItems: number | null; min: number | null; max: number | null
 }
 export interface RcsRule { kind: 'AtLeastOne' | 'ExactlyOne' | 'RequiredWhen'; fields: string[]; message: string; whenField: string | null; whenValue: string | null }
 

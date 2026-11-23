@@ -2,7 +2,9 @@ namespace WCS.Application.RcsDiagnostics;
 
 /// <summary>One field of an RCS-2000 request, exactly as the API Developer Guide V3.3 (UD35865B, 2023-12-04) defines it. Nothing here is guessed: what the document does not state is left open and listed in <see cref="RcsApiDef.Gaps"/>.</summary>
 public sealed record RcsField(string Name, string Type, bool Required, int? MaxLength, string Description,
-    IReadOnlyList<string>? Enum = null, IReadOnlyList<RcsField>? Children = null, int? MaxItems = null, int? Min = null, int? Max = null);
+    IReadOnlyList<string>? Enum = null, IReadOnlyList<RcsField>? Children = null, int? MaxItems = null, int? Min = null, int? Max = null,
+    IReadOnlyList<string>? Suggestions = null);
+// Enum = the document lists the ONLY valid values (the form is a drop-down and the validator rejects anything else). Suggestions = values the document names as built in, offered as hints: any other value is accepted.
 
 /// <summary>A cross-field rule from the document: AtLeastOne / ExactlyOne of <c>Fields</c>, or <c>Field</c> required when <c>WhenField</c> = <c>WhenValue</c>.</summary>
 public sealed record RcsRule(string Kind, IReadOnlyList<string> Fields, string Message, string? WhenField = null, string? WhenValue = null);
@@ -32,7 +34,7 @@ public static class RcsApiCatalog
     public static readonly string[] Groups = ["Query", "Task", "AmrControl", "LocationMapArea", "BindingMaterialRack", "Ctu"];
 
     // ---- field helpers
-    private static RcsField Str(string n, bool req, int? max, string d, string[]? en = null, int? min = null, int? maxV = null) => new(n, "string", req, max, d, en, null, null, min, maxV);
+    private static RcsField Str(string n, bool req, int? max, string d, string[]? en = null, int? min = null, int? maxV = null, string[]? hints = null) => new(n, "string", req, max, d, en, null, null, min, maxV, hints);
     private static RcsField Num(string n, bool req, string d, string[]? en = null) => new(n, "number", req, null, d, en);
     private static RcsField StrArr(string n, bool req, int? itemMax, string d) => new(n, "string[]", req, itemMax, d);
     private static RcsField Objs(string n, bool req, string d, RcsField[] children, int? maxItems = null) => new(n, "object[]", req, null, d, null, children, maxItems);
@@ -62,6 +64,7 @@ public static class RcsApiCatalog
 
     public const string ReadOnly = "ReadOnly", Unverified = "Unverified", Mutating = "Mutating", Critical = "Critical";
 
+    /// <summary>The BUILT-IN task types the document names for taskTyp (5.2.1). taskTyp is "the same as the major task type configured in RCS-2000" (String, max 16, required): the list is a hint, not an enumeration.</summary>
     private static readonly string[] TaskTypes = ["F01", "F02", "F03", "F04", "F05", "F06", "F11", "F12", "F13", "F14", "F15", "F16", "F17", "F18", "F20"];
 
     public static readonly IReadOnlyList<RcsApiDef> All =
@@ -91,7 +94,7 @@ public static class RcsApiCatalog
 
         // ============================================================================ Task
         D("genAgvSchedulingTask", "Task", "5.2.1", RpcBase, "The third-party platform creates a task and RCS-2000 applies the task to an AMR.", Critical,
-            [Str("taskTyp", true, 16, "Task type, the same as the major task type configured in RCS-2000.", TaskTypes),
+            [Str("taskTyp", true, 16, "Task type, the same as the major task type configured in RCS-2000 (free text, for example a custom type such as QTESTmove). The built-in types of the document are offered as suggestions.", hints: TaskTypes),
              Str("ctnrTyp", false, 16, "Container type (FMR / CTU tasks; required for FMR tasks)."), Str("ctnrCode", false, 32, "Container ID (FMR / CTU tasks)."), Str("ctnrNum", false, 2, "Number of containers (FMR tasks)."),
              Str("taskMode", false, 1, "Task mode: 0 normal move, 1 outbound move, 2 inbound move, 3 transfer move.", ["0", "1", "2", "3"]),
              Str("wbCode", false, 32, "Workstation ID (letters and digits, as configured in RCS-2000). One of wbCode and positionCodePath must be configured."),
@@ -109,7 +112,8 @@ public static class RcsApiCatalog
              Str("data", false, 2000, "Custom content in JSON format.")],
             [new("AtLeastOne", ["wbCode", "positionCodePath"], "One of wbCode and positionCodePath must be configured.")],
             """{ "taskTyp": "F01", "positionCodePath": [ { "positionCode": "p01", "type": "00" }, { "positionCode": "x02", "type": "02" } ], "podCode": "100001", "podDir": "0", "priority": "1" }""",
-            ["The document's sample request writes the key \"positionSelStrategy \" with a trailing space.",
+            ["taskTyp is a string of up to 16 characters naming a task type CONFIGURED in RCS-2000. The document lists the built-in types (F01-F06, F11-F18, F20) but a site can define others (a real RCS accepted a custom type); the list is only a suggestion and any value up to 16 characters is sent as typed.",
+             "The document's sample request writes the key \"positionSelStrategy \" with a trailing space.",
              "The maximum length and the Required/Optional flag of positionCode and type inside positionCodePath are not legible in the PDF text; both are treated as optional with no length limit.",
              "The \"podDir\" description (180/0/90/-90) differs from bindPodAndBerth's podDir (0 horizontal / 1 vertical).",
              "Effect: creates a REAL task; an AMR may move."]),
