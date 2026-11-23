@@ -68,10 +68,9 @@ public static class RcsApiCatalog
     [
         // ============================================================================ Query
         D("queryAgvStatus", "Query", "5.2.14", DpsBase, "Search for AMR status, including the AMR battery.", ReadOnly,
-            [Str("mapShortName", false, 32, "Alias of the map where the AMR locates."),
-             Str("mapCode", false, 32, "Map ID (UNVERIFIED for this request): it is not in the document's parameter table but the document's own sample request uses it, and the real RCS answers that the map code is mandatory. Send it alone, or together with mapShortName; nothing is renamed or copied between the two.")], null, "{ }",
+            [Str("mapCode", false, 32, "Map ID where the AMR locates (the MAP ID of the installation, default TT). Project decision: for this API the map is sent as mapCode; mapShortName is not a field of this request.")], null, "{ }",
             ["The path is /rcms-dps/rest/queryAgvStatus (not hikRpcService) and the document's table fixes the port to :8182 while the text says the default port is 8182; WCS uses the saved RCS port.",
-             "The document's sample request uses \"mapCode\" but its parameter table names the field \"mapShortName\" (the table lists mapShortName only; the response has mapCode = \"ID of map\"). A real RCS answered mapShortName = TT with code 1 \"the map number is mandatory when querying all robots\": which field it reads is to be confirmed by Hikrobot. Both fields are offered here as independent inputs; the Admin chooses which to send.",
+             "The document's sample request uses \"mapCode\" but its parameter table names the field \"mapShortName\" (the table lists mapShortName only; the response has mapCode = \"ID of map\"). A real RCS answered mapShortName = TT with code 1 \"the map number is mandatory when querying all robots\": which field it reads is to be confirmed by Hikrobot. Project decision: this API sends mapCode (pre-filled with the MAP ID) and does not offer mapShortName; the field the RCS really reads remains to be confirmed by Hikrobot.",
              "Document: call at most every 5 s (< 100 AMRs). Manual calls here are not part of the 5 s monitoring poll.",
              "No tokenCode is sent by project decision (CR-031): the RCS provides no authentication for this API."],
             [Str("code", true, 6, "Status code."), Str("message", true, 64, "Status description."), Str("reqCode", true, 64, "Request ID."),

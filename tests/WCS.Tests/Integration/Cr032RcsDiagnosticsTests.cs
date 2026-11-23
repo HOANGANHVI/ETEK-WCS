@@ -236,7 +236,7 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
     {
         await using var rig = await ArrangeAsync();
         rig.Rcs.Respond = _ => (200, """{"code":"0","message":"successful","reqCode":"x","data":[{"robotCode":"1001","battery":"80"}]}""", 0);
-        var r = await Exec(rig.Admin, "queryAgvStatus", new { mapShortName = "AA" });
+        var r = await Exec(rig.Admin, "queryAgvStatus", new { mapCode = "AA" });
         Assert.Equal(200, r.Status);
         var d = Data(r.Root);
         Assert.True(d.GetProperty("success").GetBoolean()); Assert.Equal("API_SUCCESS", d.GetProperty("outcome").GetString());
@@ -252,7 +252,7 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
         var body = JsonDocument.Parse(seen.Body).RootElement;
         Assert.Equal(d.GetProperty("requestId").GetString(), body.GetProperty("reqCode").GetString());
         Assert.Matches(@"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", body.GetProperty("reqTime").GetString()!);
-        Assert.Equal("AA", body.GetProperty("mapShortName").GetString()); Assert.False(body.TryGetProperty("tokenCode", out _));
+        Assert.Equal("AA", body.GetProperty("mapCode").GetString()); Assert.False(body.TryGetProperty("tokenCode", out _));
     }
 
     [Theory, MemberData(nameof(AllApis))]
@@ -515,19 +515,20 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
     // ============================================================================ callback monitor
     // ============================================================================ configuration parameters (MAP ID "TT", values the project has not given)
     [Fact]
-    public async Task MAP_ID_defaults_to_TT_from_central_configuration_and_applies_only_to_the_mapShortName_request_field()
+    public async Task MAP_ID_defaults_to_TT_from_central_configuration_and_applies_only_to_the_map_request_fields_mapShortName_and_mapCode()
     {
         Assert.Equal("TT", new RcsDiagnosticsOptions().MapId);
         await using var rig = await ArrangeAsync();
         var p = Data((await rig.Admin.SendJsonAsync(HttpMethod.Get, "/api/rcs-diagnostics/parameters")).Root);
         var map = p.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("key").GetString() == "mapId");
         Assert.Equal("TT", map.GetProperty("effectiveValue").GetString()); Assert.Equal("Config", map.GetProperty("source").GetString()); Assert.Equal("Confirmed", map.GetProperty("status").GetString());
-        Assert.Equal(["mapShortName"], map.GetProperty("fields").EnumerateArray().Select(f => f.GetString()).ToArray());   // never mapCode or any other identifier
+        Assert.Equal(["mapShortName", "mapCode"], map.GetProperty("fields").EnumerateArray().Select(f => f.GetString()).ToArray());   // the map alias, and mapCode (queryAgvStatus only); never another identifier
         // every other parameter is user input (no value invented) and no catalog request field is named mapCode
         foreach (var i in p.GetProperty("items").EnumerateArray().Where(i => i.GetProperty("key").GetString() != "mapId")) { Assert.Equal("UserInput", i.GetProperty("status").GetString()); Assert.Equal("None", i.GetProperty("source").GetString()); Assert.Equal(JsonValueKind.Null, i.GetProperty("effectiveValue").ValueKind); }
-        // mapCode is a request field of queryAgvStatus ONLY (to verify the Map ID problem on the deployment), and the MAP ID parameter never fills it
+        // mapCode is a request field of queryAgvStatus ONLY, and there the MAP ID parameter fills mapCode (queryAgvStatus has no mapShortName any more)
         Assert.Equal(["queryAgvStatus"], RcsApiCatalog.All.Where(x => x.Fields.Any(f => f.Name == "mapCode")).Select(x => x.Name).ToArray());
-        Assert.DoesNotContain("mapCode", RcsParameterCatalog.All.SelectMany(d => d.Fields));
+        Assert.DoesNotContain("queryAgvStatus.mapCode", RcsParameterCatalog.UndeterminedFields);
+        Assert.DoesNotContain(RcsApiCatalog.Find("queryAgvStatus")!.Fields, f => f.Name == "mapShortName");
         // every parameter field name exists as a request field of the document, and the documented samples carry TT only where the map alias is asked
         Assert.All(RcsParameterCatalog.All.SelectMany(d => d.Fields), n => Assert.Contains(RcsApiCatalog.All, a => RcsApiCatalog.RequestFields(a).Any(f => f.Name == n)));
         Assert.Contains("\"TT\"", RcsApiCatalog.Find("syncMapDatas")!.Sample);
@@ -536,29 +537,30 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
 
     // ============================================================================ queryAgvStatus: mapShortName and mapCode are independent inputs (Map ID verification on the deployment)
     [Fact]
-    public void queryAgvStatus_offers_mapShortName_and_mapCode_as_optional_inputs_and_the_validator_accepts_each_alone_or_both()
+    public void queryAgvStatus_has_only_mapCode_as_its_optional_map_field_and_the_other_APIs_keep_mapShortName()
     {
         var api = RcsApiCatalog.Find("queryAgvStatus")!;
-        Assert.Equal(["mapShortName", "mapCode"], api.Fields.Select(f => f.Name).ToArray());
+        Assert.Equal(["mapCode"], api.Fields.Select(f => f.Name).ToArray());
         Assert.All(api.Fields, f => { Assert.False(f.Required); Assert.Equal("string", f.Type); Assert.Equal(32, f.MaxLength); });
-        Assert.Contains("queryAgvStatus.mapCode", RcsParameterCatalog.UndeterminedFields);
         JsonElement J(string s) => JsonDocument.Parse(s).RootElement;
-        foreach (var body in new[] { """{"reqCode":"1","mapShortName":"TT"}""", """{"reqCode":"1","mapCode":"TT"}""", """{"reqCode":"1","mapShortName":"TT","mapCode":"TT"}""", """{"reqCode":"1"}""" })
+        foreach (var body in new[] { """{"reqCode":"1","mapCode":"TT"}""", """{"reqCode":"1"}""" })
         {
             var v = RcsRequestValidator.Validate(api, J(body));
-            Assert.True(v.IsValid, body); Assert.Empty(v.Warnings);   // no "unknown field" warning for either name
+            Assert.True(v.IsValid, body); Assert.Empty(v.Warnings);
         }
+        Assert.Contains(RcsRequestValidator.Validate(api, J("""{"reqCode":"1","mapShortName":"TT"}""")).Warnings, w => w.Path == "mapShortName" && w.Code == "UNKNOWN_FIELD");
+        // the other APIs that name mapShortName still have it
+        foreach (var n in new[] { "queryPodBerthAndMat", "stopRobot", "resumeRobot", "syncMapDatas" }) Assert.Contains(RcsApiCatalog.Find(n)!.Fields, f => f.Name == "mapShortName");
         Assert.Contains(RcsRequestValidator.Validate(api, J("""{"reqCode":"1","mapCode":"123456789012345678901234567890123"}""")).Errors, e => e.Path == "mapCode" && e.Code == "MAX_LENGTH");
         // the other APIs are unchanged: no mapCode request field elsewhere (stopRobot / syncMapDatas keep mapShortName only)
         Assert.Contains(RcsRequestValidator.Validate(RcsApiCatalog.Find("syncMapDatas")!, J("""{"reqCode":"1","mapShortName":"TT","mapCode":"TT"}""")).Warnings, w => w.Path == "mapCode" && w.Code == "UNKNOWN_FIELD");
     }
 
     [Theory]
-    [InlineData("""{"mapShortName":"TT"}""", new[] { "reqCode", "reqTime", "mapShortName" })]
     [InlineData("""{"mapCode":"TT"}""", new[] { "reqCode", "reqTime", "mapCode" })]
-    [InlineData("""{"mapShortName":"TT","mapCode":"TT"}""", new[] { "reqCode", "reqTime", "mapShortName", "mapCode" })]
-    [InlineData("""{"mapShortName":"A","mapCode":"B"}""", new[] { "reqCode", "reqTime", "mapShortName", "mapCode" })]
-    public async Task The_raw_HTTP_body_of_queryAgvStatus_carries_exactly_the_map_fields_the_Admin_chose_and_nothing_is_renamed_or_copied(string json, string[] keys)
+    [InlineData("""{"mapCode":"A"}""", new[] { "reqCode", "reqTime", "mapCode" })]
+    [InlineData("""{}""", new[] { "reqCode", "reqTime" })]
+    public async Task The_raw_HTTP_body_of_queryAgvStatus_carries_mapCode_exactly_as_typed_and_never_a_mapShortName(string json, string[] keys)
     {
         await using var rig = await ArrangeAsync();
         var typed = JsonDocument.Parse(json).RootElement;
