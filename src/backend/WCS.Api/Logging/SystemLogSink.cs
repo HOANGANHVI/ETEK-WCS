@@ -41,12 +41,19 @@ public static class LogClassifier
     public static string Classify(LogEvent e, string source, string? eventCode, string message)
     {
         if (Prop(e, "Category") is { } c && LogCategories.IsValid(c)) return c;
+        // CR-033: the event code states what the event is about, so it decides before the logger name does. The RCS integration events (RCS_FLEET_*, RCS_CODE_NOT_SUCCESS, RCS_TIMEOUT, RCS_NOT_CONNECTED ...)
+        // and the AMR status loop (AGV_STATUS*) belong to RCS / AGV whichever class writes them (FleetService has no "Rcs" in its name and used to fall into SYSTEM).
+        // Actions of a person (RCS Diagnostics, RCS connection settings) are audit rows in audit_log, not logger events, and stay in SECURITY_AUDIT.
+        if (IsRcsAgvEventCode(eventCode)) return LogCategories.RcsAgv;
         if (eventCode?.StartsWith("DB_", StringComparison.Ordinal) == true || source.Contains("DbHealth", StringComparison.Ordinal) || IsDatabaseException(e.Exception)) return LogCategories.Database;
-        if (source.Contains("AgvStatus", StringComparison.Ordinal) || source.Contains("Rcs", StringComparison.OrdinalIgnoreCase)
+        if (source.Contains("AgvStatus", StringComparison.Ordinal) || source.Contains("Rcs", StringComparison.OrdinalIgnoreCase) || source.Contains("FleetService", StringComparison.Ordinal)
             || source.Contains("TaskOrchestrator", StringComparison.Ordinal) && message.Contains("RCS", StringComparison.Ordinal)) return LogCategories.RcsAgv;
         if (source.Contains("Auth", StringComparison.Ordinal) || source.Contains("Audit", StringComparison.Ordinal) || source.Contains("Bootstrap", StringComparison.Ordinal)) return LogCategories.SecurityAudit;
         return LogCategories.System;
     }
+
+    /// <summary>RCS_* (RCS integration) and AGV_STATUS* (AMR status loop). Deliberately by event code, not by the word "RCS" in a message or a module name.</summary>
+    public static bool IsRcsAgvEventCode(string? code) => code is not null && (code.StartsWith("RCS_", StringComparison.Ordinal) || code.StartsWith("AGV_STATUS", StringComparison.Ordinal));
 
     private static bool IsDatabaseException(Exception? ex)
     {

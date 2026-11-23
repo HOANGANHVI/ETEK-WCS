@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.26 – CR-033 RCS integration log category fix (2026-11-23)
+
+- `LogClassifier` now classifies RCS integration events (`RCS_*`, `AGV_STATUS*`) as RCS / AGV by event code, whichever class writes them; `FleetService` events (`RCS_FLEET_POLL_SUCCESS`, `RCS_FLEET_QUERY_RECOVERED`, …) used to fall into SYSTEM, so the RCS / AGV KPI read 0. Audit rows (RCS Diagnostics, RCS settings) stay in SECURITY_AUDIT. No migration; historical rows unchanged (optional reviewed backfill documented in `CR-033_RCS_LOG_CATEGORY.md`). Query, KPI, paging and export unchanged (they read the stored category).
+
 ## v3.25 – CR-032 addendum: MAP ID TT and RCS diagnostics parameters (2026-11-23)
 
 - `Rcs:Diagnostics:MapId` (default `TT`) is the central MAP ID, applied only to the request field `mapShortName`; Admin-editable saved parameters (`rcs_diag_params`, migration `AddRcsDiagParams`) for `clientCode`, `agvTyp`, `wbCode`, `ctnrTyp`, `roadWayCode`, area codes; fields grouped Confirmed / User input needed / Not determined; saved values reload in the Request Builder. No change to CR-031 fleet monitoring, Real Dispatch, PLC, Inventory or Legacy dispatch. See `CR-032_RCS_DIAGNOSTICS.md` section 10.
