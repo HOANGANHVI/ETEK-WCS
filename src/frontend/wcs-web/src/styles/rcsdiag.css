@@ -47,3 +47,7 @@
 
 .rd-pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; padding: 10px 14px; }
 .rd-trunc { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.rd-impact { margin: 10px 0; }
+.rd-impact-extra { margin-top: 4px; font-weight: 600; }
+.rd-impact-Critical { background: var(--bad-bg); }

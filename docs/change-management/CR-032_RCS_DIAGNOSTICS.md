@@ -37,33 +37,33 @@ Plus a **Callback Monitor** (see 4).
 
 ## 3. The 23 outbound APIs (document V3.3, chapter 5.2)
 
-Every one has a documented schema and an adapter (`Executable = true`). "Effect": **R** = read-only, **D** = writes RCS data / configuration, **A** = creates, changes or stops AMR work.
+Every one has a documented schema and an adapter (`Executable = true`). Risk class (pre-merge review, 2026-11-23): **R** = Read-only (the document shows a pure query), **U** = Unverified / potentially mutating (the document does not say; NOT treated as safe), **M** = Mutating (writes RCS data / configuration), **C** = Critical (creates, changes, stops or releases AMR work, or deletes RCS data). The class is shown before the Execute button; it adds no approval step.
 
 | Group | API | § | Endpoint (POST) | Effect |
 |---|---|---|---|---|
 | Query | queryAgvStatus | 5.2.14 | `/rcms-dps/rest/queryAgvStatus` | R |
 | Query | queryTaskStatus | 5.2.15 | `/rcms/services/rest/hikRpcService/queryTaskStatus` | R |
 | Query | queryPodBerthAndMat | 5.2.16 | `…/hikRpcService/queryPodBerthAndMat` | R |
-| Task | genAgvSchedulingTask | 5.2.1 | `…/hikRpcService/genAgvSchedulingTask` | A |
-| Task | continueTask | 5.2.2 | `…/hikRpcService/continueTask` | A |
-| Task | cancelTask | 5.2.3 | `…/hikRpcService/cancelTask` | A |
-| Task | setTaskPriority | 5.2.4 | `…/hikRpcService/setTaskPriority` | A |
-| Task | genPreScheduleTask | 5.2.7 | `…/hikRpcService/genPreScheduleTask` | A |
-| Task | genCtuGroupTaskBatch | 5.2.21 | `…/hikRpcService/genCtuGroupTaskBatch` | A |
-| AMR control | stopRobot | 5.2.10 | `…/hikRpcService/stopRobot` | A |
-| AMR control | resumeRobot | 5.2.13 | `…/hikRpcService/resumeRobot` | A |
-| Location / map / area | lockPosition | 5.2.9 | `…/hikRpcService/lockPosition` | D |
-| Location / map / area | syncMapDatas | 5.2.11 | `…/hikRpcService/syncMapDatas` | R |
-| Location / map / area | blockArea | 5.2.12 | `…/hikRpcService/blockArea` | A |
-| Location / map / area | clearRoadWay | 5.2.8 | `…/hikRpcService/clearRoadWay` | D |
-| Location / map / area | blockStgBin | 5.2.18 | `…/hikRpcService/blockStgBin` | D |
-| Binding / material / rack | bindPodAndBerth | 5.2.5 | `…/hikRpcService/bindPodAndBerth` | D |
-| Binding / material / rack | bindCtnrAndBin | 5.2.6 | `…/hikRpcService/bindCtnrAndBin` | D |
-| Binding / material / rack | bindPodAndMat | 5.2.17 | `…/hikRpcService/bindPodAndMat` | D |
-| Binding / material / rack | bindMaterialTypCodeAndBerth | 5.2.23 | `…/hikRpcService/bindMaterialTypCodeAndBerth` | D |
-| CTU | getOutPod | 5.2.19 | `/rcms/services/rest/hikTpsService/getOutPod` | A |
-| CTU | returnPod | 5.2.20 | `…/hikTpsService/returnPod` | A |
-| CTU | boxApplyPass | 5.2.22 | `…/hikRpcService/boxApplyPass` | A |
+| Task | genAgvSchedulingTask | 5.2.1 | `…/hikRpcService/genAgvSchedulingTask` | C |
+| Task | continueTask | 5.2.2 | `…/hikRpcService/continueTask` | C |
+| Task | cancelTask | 5.2.3 | `…/hikRpcService/cancelTask` | C |
+| Task | setTaskPriority | 5.2.4 | `…/hikRpcService/setTaskPriority` | M |
+| Task | genPreScheduleTask | 5.2.7 | `…/hikRpcService/genPreScheduleTask` | C |
+| Task | genCtuGroupTaskBatch | 5.2.21 | `…/hikRpcService/genCtuGroupTaskBatch` | C |
+| AMR control | stopRobot | 5.2.10 | `…/hikRpcService/stopRobot` | C |
+| AMR control | resumeRobot | 5.2.13 | `…/hikRpcService/resumeRobot` | C |
+| Location / map / area | lockPosition | 5.2.9 | `…/hikRpcService/lockPosition` | M |
+| Location / map / area | syncMapDatas | 5.2.11 | `…/hikRpcService/syncMapDatas` | U |
+| Location / map / area | blockArea | 5.2.12 | `…/hikRpcService/blockArea` | C |
+| Location / map / area | clearRoadWay | 5.2.8 | `…/hikRpcService/clearRoadWay` | C |
+| Location / map / area | blockStgBin | 5.2.18 | `…/hikRpcService/blockStgBin` | M |
+| Binding / material / rack | bindPodAndBerth | 5.2.5 | `…/hikRpcService/bindPodAndBerth` | M |
+| Binding / material / rack | bindCtnrAndBin | 5.2.6 | `…/hikRpcService/bindCtnrAndBin` | M |
+| Binding / material / rack | bindPodAndMat | 5.2.17 | `…/hikRpcService/bindPodAndMat` | M |
+| Binding / material / rack | bindMaterialTypCodeAndBerth | 5.2.23 | `…/hikRpcService/bindMaterialTypCodeAndBerth` | M |
+| CTU | getOutPod | 5.2.19 | `/rcms/services/rest/hikTpsService/getOutPod` | C |
+| CTU | returnPod | 5.2.20 | `…/hikTpsService/returnPod` | C |
+| CTU | boxApplyPass | 5.2.22 | `…/hikRpcService/boxApplyPass` | C |
 
 (`…` = `/rcms/services/rest`.)
 
@@ -95,3 +95,9 @@ Configuration (all optional): `Rcs:Diagnostics:MaxConcurrent` (2), `DefaultTimeo
 - The browser UI was verified by type-check, lint, i18n check and build, **not** by a visual run against a real backend.
 - Unclear points of the V3.3 document are listed per API in the catalog (`gaps`) and summarised in the completion report (e.g. `queryAgvStatus` sample uses `mapCode` while the table says `mapShortName`; `blockStgBin` sample key `stgBunCode`; `blockArea` sample omits the required `noticeThird`; Required / Optional flags of `returnPod` read from column order; `getOutPod` / `returnPod` use `hikTpsService`).
 - A history row stores the masked request and response but not the HTTP response headers (they are shown only for the live result).
+
+## 9. Pre-merge verification (2026-11-23)
+
+- **Classification:** `syncMapDatas` moved from read-only to **Unverified / potentially mutating** (the document only says "Synchronize map information with that in RCS-2000"); it is not in the safe query group until Hikrobot confirms. Only `queryAgvStatus`, `queryTaskStatus`, `queryPodBerthAndMat` are Read-only. The old two classes became Mutating (7: lockPosition, blockStgBin, bindPodAndBerth, bindCtnrAndBin, bindPodAndMat, bindMaterialTypCodeAndBerth, setTaskPriority) and Critical (12: genAgvSchedulingTask, continueTask, cancelTask, genPreScheduleTask, genCtuGroupTaskBatch, stopRobot, resumeRobot, blockArea, clearRoadWay, getOutPod, returnPod, boxApplyPass).
+- **Warnings:** the risk class and a per-API consequence line are shown in the API header **and directly above the Execute button**; `stopRobot` / `resumeRobot` with `robotCount = -1` add an "ALL AMRs on the map" line. No second step was added: Execute still sends at once.
+- **Browser walkthrough** (real Chrome, real backend on a throw-away database, mock RCS, 43 checks): see `docs/reviews/CR-032_UI_WALKTHROUGH_2026-11-23.md`.

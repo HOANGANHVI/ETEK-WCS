@@ -109,6 +109,21 @@ public class Cr032RcsDiagnosticsTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public void Risk_classes_are_ReadOnly_only_when_the_document_shows_a_pure_query_and_syncMapDatas_is_unverified()
+    {
+        string E(string n) => RcsApiCatalog.Find(n)!.Effect;
+        Assert.Equal(["queryAgvStatus", "queryPodBerthAndMat", "queryTaskStatus"], RcsApiCatalog.All.Where(a => a.Effect == "ReadOnly").Select(a => a.Name).Order(StringComparer.Ordinal));
+        Assert.Equal("Unverified", E("syncMapDatas"));
+        Assert.Contains("UNVERIFIED", string.Join(" ", RcsApiCatalog.Find("syncMapDatas")!.Gaps));
+        string[] critical = ["stopRobot", "resumeRobot", "cancelTask", "blockArea", "clearRoadWay", "genAgvSchedulingTask", "continueTask", "genPreScheduleTask", "genCtuGroupTaskBatch", "getOutPod", "returnPod", "boxApplyPass"];
+        Assert.All(critical, n => Assert.Equal("Critical", E(n)));
+        string[] mutating = ["lockPosition", "blockStgBin", "bindPodAndBerth", "bindCtnrAndBin", "bindPodAndMat", "bindMaterialTypCodeAndBerth", "setTaskPriority"];
+        Assert.All(mutating, n => Assert.Equal("Mutating", E(n)));
+        Assert.Equal(23, critical.Length + mutating.Length + 4);
+        Assert.All(RcsApiCatalog.All, a => Assert.Contains(a.Effect, new[] { "ReadOnly", "Unverified", "Mutating", "Critical" }));
+    }
+
+    [Fact]
     public async Task Catalog_endpoint_lists_the_23_with_group_method_path_permission_and_the_callbacks_as_not_provided()
     {
         await using var rig = await ArrangeAsync();

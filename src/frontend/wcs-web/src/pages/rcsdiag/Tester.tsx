@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import { RCS_GROUPS, type RcsApiDef, type RcsCatalog, type RcsExecution, type RcsPreview } from '../../api/rcsDiagTypes'
 import { Button, EmptyState, Panel, Pill } from '../../components/ui'
-import { useT, type MsgKey } from '../../i18n'
+import { hasMessage, useT, type MsgKey } from '../../i18n'
 import { describeError } from '../../i18n/vi'
 import { FieldEditor } from './FieldEditor'
 import { Inspector } from './Inspector'
@@ -131,9 +131,7 @@ function Builder({ def, onExecuted }: { def: RcsApiDef; onExecuted: () => void }
       <Panel title={def.name} subtitle={`${t('rcsDiag.docSection', { s: def.section })} · ${def.method} ${def.path}`}
         actions={<Pill tone={EFFECT_TONE[def.effect]}>{t(`rcsDiag.effectShort_${def.effect}` as MsgKey)}</Pill>}>
         <p>{def.function}</p>
-        <div className={`notice ${def.effect === 'ReadOnly' ? 'notice-info' : def.effect === 'ControlsAmr' ? 'notice-bad' : 'notice-warn'}`} role="note">
-          <strong>{t('rcsDiag.impactTitle')}</strong> {t(`rcsDiag.effect_${def.effect}` as MsgKey)}
-        </div>
+        <ImpactNotice def={def} body={body} />
         {def.gaps.length > 0 && (
           <details className="rd-gaps">
             <summary>{t('rcsDiag.gapsTitle', { n: def.gaps.length })}</summary>
@@ -192,6 +190,7 @@ function Builder({ def, onExecuted }: { def: RcsApiDef; onExecuted: () => void }
             </p>
           </>
         ) : <p className="muted pad">{t('rcsDiag.previewWait')}</p>}
+        <ImpactNotice def={def} body={body} />
         <div className="rd-run">
           <Button variant={def.effect === 'ReadOnly' ? 'primary' : 'danger'} disabled={!canRun} onClick={() => void run()}>
             {running ? t('rcsDiag.running') : t('rcsDiag.execute')}
@@ -203,5 +202,21 @@ function Builder({ def, onExecuted }: { def: RcsApiDef; onExecuted: () => void }
 
       {result && <Panel title={t('rcsDiag.resultTitle')}><Inspector exec={result} /></Panel>}
     </>
+  )
+}
+
+const NOTICE_CLASS: Record<RcsApiDef['effect'], string> = { ReadOnly: 'notice-info', Unverified: 'notice-warn', Mutating: 'notice-warn', Critical: 'notice-bad' }
+
+/** The risk class of the API, shown BEFORE the Execute button (the button still sends at once: this is information, not a second step). */
+function ImpactNotice({ def, body }: { def: RcsApiDef; body: JsonObject }) {
+  const t = useT()
+  const extra = `rcsDiag.apiWarn_${def.name}` as MsgKey
+  const allAmr = (def.name === 'stopRobot' || def.name === 'resumeRobot') && String(body.robotCount ?? '') === '-1'
+  return (
+    <div className={`notice ${NOTICE_CLASS[def.effect]} rd-impact rd-impact-${def.effect}`} role="note" data-effect={def.effect}>
+      <strong>{t(`rcsDiag.effectShort_${def.effect}` as MsgKey)}.</strong> {t(`rcsDiag.effect_${def.effect}` as MsgKey)}
+      {hasMessage(extra) && <div className="rd-impact-extra">{t(extra)}</div>}
+      {allAmr && <div className="rd-impact-extra rd-impact-all"><strong>{t('rcsDiag.allAmrWarn')}</strong></div>}
+    </div>
   )
 }

@@ -8,7 +8,7 @@ public sealed record RcsField(string Name, string Type, bool Required, int? MaxL
 public sealed record RcsRule(string Kind, IReadOnlyList<string> Fields, string Message, string? WhenField = null, string? WhenValue = null);
 
 /// <summary>
-/// One outbound RCS-2000 API (WCS calls the RCS). <c>Effect</c>: ReadOnly (answers a question), ChangesRcsData (writes RCS data / configuration), ControlsAmr (creates, changes or stops robot work).
+/// One outbound RCS-2000 API (WCS calls the RCS). <c>Effect</c>: ReadOnly (the document shows it only answers a question), Unverified (the document does not say whether it changes RCS state: NOT treated as safe), Mutating (writes RCS data / configuration), Critical (creates, changes, stops or releases AMR work, or destroys RCS data).
 /// </summary>
 public sealed record RcsApiDef(string Name, string Group, string Section, string Path, string Function, string Effect, IReadOnlyList<RcsField> Fields,
     IReadOnlyList<RcsRule> Rules, IReadOnlyList<RcsField> Response, string Sample, IReadOnlyList<string> Gaps, bool Executable = true)
@@ -60,7 +60,7 @@ public static class RcsApiCatalog
     private static RcsApiDef D(string name, string group, string section, string path, string function, string effect, RcsField[] fields, RcsRule[]? rules, string sample, string[]? gaps = null, RcsField[]? response = null) =>
         new(name, group, section, path + name, function, effect, fields, rules ?? [], response ?? StdResponse, sample, gaps ?? []);
 
-    public const string ReadOnly = "ReadOnly", ChangesRcsData = "ChangesRcsData", ControlsAmr = "ControlsAmr";
+    public const string ReadOnly = "ReadOnly", Unverified = "Unverified", Mutating = "Mutating", Critical = "Critical";
 
     private static readonly string[] TaskTypes = ["F01", "F02", "F03", "F04", "F05", "F06", "F11", "F12", "F13", "F14", "F15", "F16", "F17", "F18", "F20"];
 
@@ -90,7 +90,7 @@ public static class RcsApiCatalog
             [Str("code", true, 6, "Status code."), Str("message", true, 64, "Status description."), Str("reqCode", true, 64, "Request ID."), Objs("data", false, "areaCode, materialLot, podCode, mapDataCode, positionCode.", [])]),
 
         // ============================================================================ Task
-        D("genAgvSchedulingTask", "Task", "5.2.1", RpcBase, "The third-party platform creates a task and RCS-2000 applies the task to an AMR.", ControlsAmr,
+        D("genAgvSchedulingTask", "Task", "5.2.1", RpcBase, "The third-party platform creates a task and RCS-2000 applies the task to an AMR.", Critical,
             [Str("taskTyp", true, 16, "Task type, the same as the major task type configured in RCS-2000.", TaskTypes),
              Str("ctnrTyp", false, 16, "Container type (FMR / CTU tasks; required for FMR tasks)."), Str("ctnrCode", false, 32, "Container ID (FMR / CTU tasks)."), Str("ctnrNum", false, 2, "Number of containers (FMR tasks)."),
              Str("taskMode", false, 1, "Task mode: 0 normal move, 1 outbound move, 2 inbound move, 3 transfer move.", ["0", "1", "2", "3"]),
@@ -114,7 +114,7 @@ public static class RcsApiCatalog
              "The \"podDir\" description (180/0/90/-90) differs from bindPodAndBerth's podDir (0 horizontal / 1 vertical).",
              "Effect: creates a REAL task; an AMR may move."]),
 
-        D("continueTask", "Task", "5.2.2", RpcBase, "Continue executing the next sub task.", ControlsAmr,
+        D("continueTask", "Task", "5.2.2", RpcBase, "Continue executing the next sub task.", Critical,
             [Str("wbCode", false, 32, "Workstation ID."), Str("podCode", false, 16, "Rack ID."), Str("agvCode", false, 5, "AMR ID."), Str("taskCode", false, 64, "Task ID (UUID). Recommended."),
              Str("taskSeq", false, 32, "Sub task No. to continue; not set = the next sub task."),
              Obj("nextPositionCode", false, "Location of the sub task (required when the task type is externally configured).",
@@ -124,19 +124,19 @@ public static class RcsApiCatalog
             ["\"Only one of wbCode, agvCode, taskCode and podCode\" is applied as exactly one; the document does not say what RCS-2000 answers when none (or several) is sent.",
              "nextPositionCode lengths are not legible (the field is shown as 40 characters)."]),
 
-        D("cancelTask", "Task", "5.2.3", RpcBase, "Cancel the task that is executing or is generated but waiting for being executed.", ControlsAmr,
+        D("cancelTask", "Task", "5.2.3", RpcBase, "Cancel the task that is executing or is generated but waiting for being executed.", Critical,
             [Str("forceCancel", false, 16, "Task cancel mode: 0 (default) AMR puts down the rack and turns idle; 1 AMR carries the rack back (LMR and CTU only).", Bind),
              Str("matterArea", false, 16, "Inbound area No., valid only when forceCancel is 1."), Str("agvCode", false, 5, "AMR ID whose executing task will be canceled."), Str("taskCode", false, 64, "ID (UUID) of the task to be canceled.")],
             [new("AtLeastOne", ["taskCode", "agvCode"], "One of taskCode and agvCode must be configured. If both are configured only agvCode takes effect.")],
             """{ "forceCancel": "0", "taskCode": "123456" }""",
             ["Effect: cancels a REAL task; the AMR may put the rack down where it is."]),
 
-        D("setTaskPriority", "Task", "5.2.4", RpcBase, "Set the task priority from 1 to 127 (the larger the value, the higher the priority).", ControlsAmr,
+        D("setTaskPriority", "Task", "5.2.4", RpcBase, "Set the task priority from 1 to 127 (the larger the value, the higher the priority).", Mutating,
             [Objs("priorities", true, "Task list.", [Str("taskCode", true, 64, "Task ID (UUID)."), Str("priority", true, 3, "Task priority, range [1,127].", null, 1, 127)])],
             null, """{ "priorities": [ { "priority": "1", "taskCode": "1232" } ] }""",
             ["The maximum lengths of taskCode and priority inside the list are only partly legible in the PDF text.", "Only tasks not yet assigned to an AMR can be changed (document remark)."]),
 
-        D("genPreScheduleTask", "Task", "5.2.7", RpcBase, "Apply a pre-schedule task: notify RCS of the actual task in advance so a free AMR can wait at the target position.", ControlsAmr,
+        D("genPreScheduleTask", "Task", "5.2.7", RpcBase, "Apply a pre-schedule task: notify RCS of the actual task in advance so a free AMR can wait at the target position.", Critical,
             [Str("positionCode", true, 32, "Task position."), Str("nextTask", true, 32, "Pre-schedule time period: seconds before the actual task is generated; \"-1\" clears the pre-schedule tasks of a position."),
              Str("agvTyp", true, 256, "AMR type used for the actual task."), Str("waitTime", false, 32, "Waiting time."),
              Str("priority", false, 3, "Task priority [1,127].", null, 1, 127),
@@ -145,7 +145,7 @@ public static class RcsApiCatalog
             null, """{ "positionCode": "pos1", "nextTask": "300", "agvTyp": "1", "useableLayers": "1", "cacheCount": "1", "update": 0 }""",
             ["Maximum length of useableLayers / cacheCount and the exact data type of update / preTaskQty are not stated (PDF: \"String /\", \"Number\").", "The sample shows \"update\" as a quoted string while the table says Number; WCS accepts a number or a numeric string and sends it as given."]),
 
-        D("genCtuGroupTaskBatch", "Task", "5.2.21", RpcBase, "CTU outbound tasks applied and performed in order (groups).", ControlsAmr,
+        D("genCtuGroupTaskBatch", "Task", "5.2.21", RpcBase, "CTU outbound tasks applied and performed in order (groups).", Critical,
             [Str("taskTyp", true, 16, "Task type (default: B10)."), Num("seqTyp", true, "Outbound order type: 1 ordered between and within groups, 2 ordered between groups / unordered within, 3 unordered between groups / ordered within.", ["1", "2", "3"]),
              Objs("taskGroups", true, "Task information list.",
                  [Str("taskCode", true, 64, "Task ID."), Str("ctnrCode", true, 32, "Container ID."), Str("ctnrTyp", true, 16, "Container type."), Str("wbCode", true, 32, "Workstation ID."),
@@ -154,30 +154,30 @@ public static class RcsApiCatalog
             ["The response is documented with code, message and reqCode only (no data).", "Max length of the number fields is shown as 3 / 2 in the PDF text for seqTyp / wbTyp; not enforced."]),
 
         // ============================================================================ AMR control
-        D("stopRobot", "AmrControl", "5.2.10", RpcBase, "Stop the specified AMR or all AMRs.", ControlsAmr,
+        D("stopRobot", "AmrControl", "5.2.10", RpcBase, "Stop the specified AMR or all AMRs.", Critical,
             [Str("robotCount", false, 64, "The number of AMRs to be stopped: \"-1\" = all AMRs."), Str("mapShortName", false, 32, "Alias of the map where the AMR locates. Required when robotCount is \"-1\"."), StrArr("robots", false, 16, "List of AMR IDs.")],
             [new("AtLeastOne", ["robotCount", "robots"], "One of robotCount and robots is required."), new("RequiredWhen", ["mapShortName"], "mapShortName is required when robotCount is \"-1\".", "robotCount", "-1")],
             """{ "robotCount": "2", "robots": ["1001", "1002"] }""",
             ["Effect: STOPS real AMRs (robotCount -1 stops all AMRs on a map).", "The document does not define what robotCount other than \"-1\" means when robots is also given."]),
 
-        D("resumeRobot", "AmrControl", "5.2.13", RpcBase, "Resume the AMR; the resumed AMR continues executing the uncompleted task.", ControlsAmr,
+        D("resumeRobot", "AmrControl", "5.2.13", RpcBase, "Resume the AMR; the resumed AMR continues executing the uncompleted task.", Critical,
             [Str("robotCount", false, 64, "The number of AMRs to be resumed: \"-1\" = all AMRs."), Str("mapShortName", false, 32, "Alias of the map where the AMR locates. Required when robotCount is \"-1\"."), StrArr("robots", false, 16, "List of AMR IDs.")],
             [new("AtLeastOne", ["robotCount", "robots"], "One of robotCount and robots is required."), new("RequiredWhen", ["mapShortName"], "mapShortName is required when robotCount is \"-1\".", "robotCount", "-1")],
             """{ "robotCount": "2", "robots": ["1001", "1002"] }""",
             ["Effect: RESUMES real AMRs."]),
 
         // ============================================================================ Location / map / area
-        D("lockPosition", "LocationMapArea", "5.2.9", RpcBase, "Enable or disable the position (a disabled location cannot be found in the area).", ChangesRcsData,
+        D("lockPosition", "LocationMapArea", "5.2.9", RpcBase, "Enable or disable the position (a disabled location cannot be found in the area).", Mutating,
             [Str("positionCode", true, 32, "Position ID, predefined on the map."), Str("indBind", true, 1, "Enable or disable: 1 enable, 0 disable.", Bind)],
             null, """{ "positionCode": "p02", "indBind": "1" }""", ["The field is called indBind although it means enable/disable (as in the document)."]),
 
-        D("syncMapDatas", "LocationMapArea", "5.2.11", RpcBase, "Synchronize map information with that in RCS-2000 (returns the map's location data).", ReadOnly,
+        D("syncMapDatas", "LocationMapArea", "5.2.11", RpcBase, "Synchronize map information with that in RCS-2000.", Unverified,
             [Str("mapDataCode", false, 32, "Unique location code on the map."), Str("mapShortName", true, 32, "Alias of the map that needs to be synchronized."), Str("dataTyp", false, 6, "Map element type; not set = all location codes of the map.")],
             null, """{ "mapShortName": "AA" }""",
-            ["The document does not say whether the call changes anything in RCS-2000; it is treated as a read of the map data.", "The dataTyp values in the REQUEST are not listed (the response lists 1, 10, 11, 20, 55)."],
+            ["UNVERIFIED: the document does not say whether the call only reads or also changes RCS-2000 (\"Synchronize map information with that in RCS-2000\"); it is NOT classed as read-only until Hikrobot confirms.", "The dataTyp values in the REQUEST are not listed (the response lists 1, 10, 11, 20, 55)."],
             [Str("code", true, 6, "Status code."), Str("message", true, 64, "Status description."), Str("reqCode", true, 64, "Request ID."), Objs("data", false, "cooX, cooY, dataTyp, direction, mapCode, mapDataCode, positionCode, berthType.", [])]),
 
-        D("blockArea", "LocationMapArea", "5.2.12", RpcBase, "Empty or unblock the specified area (emptying removes all AMRs from the area and blocks it).", ControlsAmr,
+        D("blockArea", "LocationMapArea", "5.2.12", RpcBase, "Empty or unblock the specified area (emptying removes all AMRs from the area and blocks it).", Critical,
             [Str("matterArea", true, 16, "ID of the area to be emptied or unblocked."), Str("indBind", true, 1, "Empty or unblock: 1 empty, 0 unblock.", Bind),
              Str("pause", true, 1, "Whether to stop all AMRs on the map when the area is already emptied: 0 no (default), 1 yes.", Bind),
              Str("controlMod", true, 2, "Scheduling mode: 0 move out (default), 1 interim park area, 2 specified area, -1 blocking mode.", ["0", "1", "2", "-1"]),
@@ -186,55 +186,55 @@ public static class RcsApiCatalog
             """{ "matterArea": "2", "indBind": "1", "pause": "0", "controlMod": "2", "targetArea": "HF002", "noticeThird": "0" }""",
             ["The sample request omits noticeThird although the table marks it Required.", "The description of \"pause\" is inconsistent in the PDF (\"pause emptying\" vs \"stop all AMRs on the map\").", "Effect: AMRs in the area stop or move away."]),
 
-        D("clearRoadWay", "LocationMapArea", "5.2.8", RpcBase, "Clear all the data of roadways, containers or racks and notify RCS of updating the information.", ChangesRcsData,
+        D("clearRoadWay", "LocationMapArea", "5.2.8", RpcBase, "Clear all the data of roadways, containers or racks and notify RCS of updating the information.", Critical,
             [Str("roadWayCode", true, 16, "Roadway ID.")], null, """{ "roadWayCode": "RW1" }""",
             ["Effect: DELETES RCS roadway / container / rack data (the document: it cannot be cleared when the outbound lock capacity is not 0). The sample request shows an empty roadWayCode."]),
 
-        D("blockStgBin", "LocationMapArea", "5.2.18", RpcBase, "Batch enable/disable bins (the batch succeeds or fails as a whole).", ChangesRcsData,
+        D("blockStgBin", "LocationMapArea", "5.2.18", RpcBase, "Batch enable/disable bins (the batch succeeds or fails as a whole).", Mutating,
             [Objs("data", true, "Item list.", [Str("stgBinCode", true, 32, "Bin ID."), Str("action", true, 2, "Operation type: 0 enable bin, 1 disable bin.", Bind)])],
             null, """{ "data": [ { "stgBinCode": "BIN1", "action": "1" } ] }""",
             ["The document's sample spells the key \"stgBunCode\" (typo) while the table says \"stgBinCode\"; WCS uses stgBinCode.", "reqTime is described as an \"Expiry date\" here (yyyy-MM-dd HH:mm:ss) but as a request timestamp in other APIs."]),
 
         // ============================================================================ Binding / material / rack
-        D("bindPodAndBerth", "BindingMaterialRack", "5.2.5", RpcBase, "Bind or unbind the rack and the location.", ChangesRcsData,
+        D("bindPodAndBerth", "BindingMaterialRack", "5.2.5", RpcBase, "Bind or unbind the rack and the location.", Mutating,
             [Str("podCode", true, 16, "Rack ID."), Str("positionCode", true, 32, "Position ID, predefined on the map."), Str("podDir", false, 6, "Rack direction: 0 horizontal (default), 1 vertical.", Bind),
              Str("characterValue", false, 64, "Trait value (racks on a roadway only): material type or batch."), Str("indBind", true, 1, "Bind or unbind: 1 bind, 0 unbind.", Bind)],
             null, """{ "podCode": "100001", "positionCode": "p05", "podDir": "0", "indBind": "1" }""",
             ["When unbinding, both podCode and positionCode are required for verification (document remark)."]),
 
-        D("bindCtnrAndBin", "BindingMaterialRack", "5.2.6", RpcBase, "Bind or unbind the container and the bin.", ChangesRcsData,
+        D("bindCtnrAndBin", "BindingMaterialRack", "5.2.6", RpcBase, "Bind or unbind the container and the bin.", Mutating,
             [Str("ctnrCode", true, 30, "Container ID."), Str("ctnrTyp", true, 16, "Container type."), Str("stgBinCode", false, 32, "Bin ID."), Str("binName", false, 32, "Custom bin ID, verified by RCS-2000."),
              Str("characterValue", false, 64, "Trait value (FMR roadway only)."), Str("positionCode", false, 32, "Position ID (for virtual racks' bins)."), Str("indBind", true, 1, "Bind or unbind: 1 bind, 0 unbind.", Bind)],
             [new("AtLeastOne", ["stgBinCode", "positionCode"], "One of stgBinCode and positionCode is required.")],
             """{ "ctnrCode": "C100", "ctnrTyp": "C1", "stgBinCode": "p05", "indBind": "1" }""",
             ["The sample request uses the key \"ctnrTyp\" for the container type, as in the table."]),
 
-        D("bindPodAndMat", "BindingMaterialRack", "5.2.17", RpcBase, "Bind or unbind the material batch and the rack.", ChangesRcsData,
+        D("bindPodAndMat", "BindingMaterialRack", "5.2.17", RpcBase, "Bind or unbind the material batch and the rack.", Mutating,
             [Str("podCode", true, 16, "Rack ID."), Str("materialLot", true, 32, "Material batch ID."), Str("indBind", true, 1, "Bind or unbind: 1 bind, 0 unbind.", Bind)],
             null, """{ "podCode": "100001", "materialLot": "123", "indBind": "1" }""", ["When unbinding both podCode and materialLot are required (document remark)."]),
 
-        D("bindMaterialTypCodeAndBerth", "BindingMaterialRack", "5.2.23", RpcBase, "Bind or unbind the material type and the location (CMR).", ChangesRcsData,
+        D("bindMaterialTypCodeAndBerth", "BindingMaterialRack", "5.2.23", RpcBase, "Bind or unbind the material type and the location (CMR).", Mutating,
             [Str("materialType", true, 32, "Material type No. (required for binding)."), Str("positionCode", true, 32, "Position ID, predefined on the map."), Str("ctnrCode", false, 6, "Container ID (required for binding the container)."),
              Str("indBind", true, 1, "Bind or unbind: 1 bind, 0 unbind.", Bind)],
             null, """{ "materialType": "1", "positionCode": "p05", "ctnrCode": "111101", "indBind": "1" }""",
             ["The maximum length of ctnrCode is shown as 6 in the PDF although the sample value \"111101\" has 6 characters and other APIs allow 30 / 32 for a container ID."]),
 
         // ============================================================================ CTU
-        D("getOutPod", "Ctu", "5.2.19", TpsBase, "Container outbound, used for the buffer rack picking station (CTU / TPS).", ControlsAmr,
+        D("getOutPod", "Ctu", "5.2.19", TpsBase, "Container outbound, used for the buffer rack picking station (CTU / TPS).", Critical,
             [Str("taskTyp", true, 2, "Task type: 0 TPS tasks, 1 CTU tasks.", Bind),
              Objs("data", true, "Up to 1000 items.", [Str("taskCode", true, 64, "Task ID."), Str("ctnrCode", true, 32, "Container ID."), Str("binCode", false, 32, "Bin ID."), Str("wbCode", true, 32, "Workstation ID."),
                  Str("agvTyp", false, 16, "Device type."), Str("priority", false, 3, "Task priority [1,127].", null, 1, 127)], 1000)],
             null, """{ "taskTyp": "1", "data": [ { "taskCode": "T1", "ctnrCode": "C1", "wbCode": "WB1" } ] }""",
             ["The path is hikTpsService, not hikRpcService (as printed in the document).", "Document: clientCode / tokenCode are \"provided to the third-party platform by TPS\"."]),
 
-        D("returnPod", "Ctu", "5.2.20", TpsBase, "Container inbound, the returning route of the outbound task (CTU / TPS).", ControlsAmr,
+        D("returnPod", "Ctu", "5.2.20", TpsBase, "Container inbound, the returning route of the outbound task (CTU / TPS).", Critical,
             [Str("taskCode", true, 64, "Task ID of the current workstation."), Str("agvTyp", false, 16, "Device type."), Str("returnPodStrategy", false, 32, "Inbound strategy ID (big area@small area)."),
              Str("taskTyp", true, 2, "Task type: 5 (container inbound).", ["5"]), Str("ctnrCode", true, 32, "Container ID."), Str("binCode", true, 32, "ID of the target bin the container is carried back to."),
              Str("srcBinCode", true, 32, "ID of the bin the container is carried from."), Str("wbCode", false, 32, "Workstation ID (required for initializing inbound).")],
             null, """{ "taskTyp": "5", "taskCode": "T1", "ctnrCode": "C1", "binCode": "B1", "srcBinCode": "B2" }""",
             ["The Required/Optional flags of binCode, srcBinCode and wbCode were read from the PDF's column order (the table is not legible as a grid).", "The path is hikTpsService."]),
 
-        D("boxApplyPass", "Ctu", "5.2.22", RpcBase, "Container picking-up / placing callback: notify CMS that a picking / placing request is approved.", ControlsAmr,
+        D("boxApplyPass", "Ctu", "5.2.22", RpcBase, "Container picking-up / placing callback: notify CMS that a picking / placing request is approved.", Critical,
             [Str("taskCode", true, 64, "Task ID."), Str("type", true, 2, "Task type: 1 picking request approved, 2 placing request approved.", ["1", "2"])],
             null, """{ "taskCode": "T1", "type": "1" }""",
             ["The function is the reply to an RCS application sent to the platform (callback applyReturnForValid / applyReturnForBin); calling it by hand answers a request the RCS may not have made."]),

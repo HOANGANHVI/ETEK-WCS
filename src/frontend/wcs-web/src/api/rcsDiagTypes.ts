@@ -1,6 +1,6 @@
 /** CR-032 – RCS Diagnostics & Manual API Tester (Admin only). Shapes of the /api/rcs-diagnostics endpoints. */
 
-export type RcsEffect = 'ReadOnly' | 'ChangesRcsData' | 'ControlsAmr'
+export type RcsEffect = 'ReadOnly' | 'Unverified' | 'Mutating' | 'Critical'
 export const RCS_GROUPS = ['Query', 'Task', 'AmrControl', 'LocationMapArea', 'BindingMaterialRack', 'Ctu'] as const
 export type RcsGroup = (typeof RCS_GROUPS)[number]
 
