@@ -17,6 +17,7 @@ import { LoginPage } from './pages/LoginPage'
 import { ConfigTransferPage } from './pages/ConfigTransferPage'
 import { DiagnosticsPage } from './pages/DiagnosticsPage'
 import { RcsDiagnosticsPage } from './pages/RcsDiagnosticsPage'
+import { LegacyHubRedirect, LogsHubIndex, LogsHubPage } from './pages/LogsHubPage'
 import { PlcConnectionsPage } from './pages/PlcConnectionsPage'
 import { PlcIoMappingPage } from './pages/PlcIoMappingPage'
 import { PlcPage } from './pages/PlcPage'
@@ -56,16 +57,24 @@ function App() {
         <Route path="processes" element={<RequireRole roles={['Admin']}><ProcessesPage /></RequireRole>} />
         <Route path="plc" element={<PlcPage />} />
         <Route path="plc/connections" element={<RequireRole roles={['Admin']}><PlcConnectionsPage /></RequireRole>} />
-        <Route path="diagnostics" element={<RequireRole roles={['Admin']}><DiagnosticsPage /></RequireRole>} />
         <Route path="plc/io-mapping" element={<RequireRole roles={['Admin']}><PlcIoMappingPage /></RequireRole>} />
         <Route path="account" element={<AccountPage />} />
         <Route path="account/password" element={<Navigate to="/account" replace />} />
         <Route path="config" element={<RequireRole roles={['Admin']}><ConfigPage /></RequireRole>} />
         <Route path="config-transfer" element={<RequireRole roles={['Admin']}><ConfigTransferPage /></RequireRole>} />
         <Route path="users" element={<RequireRole roles={['Admin']}><UsersPage /></RequireRole>} />
-        <Route path="audit" element={<RequireRole roles={['Admin']}><AuditPage /></RequireRole>} />
-        <Route path="rcs-diagnostics" element={<RequireRole roles={['Admin']}><RcsDiagnosticsPage /></RequireRole>} />
-        <Route path="logs" element={<RequireRole roles={['Admin']}><LogsPage /></RequireRole>} />
+        {/* Logs & Diagnostics: one menu entry, four tabs (each tab is the existing page). The old routes redirect to their tab. */}
+        <Route path="logs-diagnostics" element={<LogsHubPage />}>
+          <Route index element={<LogsHubIndex />} />
+          <Route path="audit" element={<RequireRole roles={['Admin']}><AuditPage /></RequireRole>} />
+          <Route path="system" element={<RequireRole roles={['Admin']}><LogsPage /></RequireRole>} />
+          <Route path="plc" element={<RequireRole roles={['Admin']}><DiagnosticsPage /></RequireRole>} />
+          <Route path="rcs" element={<RequireRole roles={['Admin']}><RcsDiagnosticsPage /></RequireRole>} />
+        </Route>
+        <Route path="audit" element={<LegacyHubRedirect tab="audit" />} />
+        <Route path="logs" element={<LegacyHubRedirect tab="system" />} />
+        <Route path="diagnostics" element={<LegacyHubRedirect tab="plc" />} />
+        <Route path="rcs-diagnostics" element={<LegacyHubRedirect tab="rcs" />} />
         <Route path="*" element={<EmptyState title={t('common.notFound')} />} />
       </Route>
     </Routes>

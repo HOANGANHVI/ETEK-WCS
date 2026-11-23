@@ -46,10 +46,7 @@ const NAV_SYSTEM: NavItem[] = [
   { to: '/config', label: 'nav.config', icon: <IconSettings /> },
   { to: '/config-transfer', label: 'nav.configTransfer', icon: <IconSettings /> },   // CR-026
   { to: '/users', label: 'nav.users', icon: <IconUsers /> },
-  { to: '/audit', label: 'nav.audit', icon: <IconLog /> },
-  { to: '/logs', label: 'nav.logs', icon: <IconLog /> },
-  ...(DEMO_MODE ? [] : [{ to: '/rcs-diagnostics', label: 'nav.rcsDiagnostics' as MsgKey, icon: <IconPlc /> }]),   // CR-032 RCS diagnostics (Admin)
-  ...(DEMO_MODE ? [] : [{ to: '/diagnostics', label: 'nav.diagnostics' as MsgKey, icon: <IconPlc /> }]),   // PLC diagnostic export (Admin)
+  { to: '/logs-diagnostics', label: 'nav.logsDiagnostics', icon: <IconLog /> },   // Operation logs, System logs, PLC diagnostics, RCS diagnostics: tabs of one page (Admin)
 ]
 
 interface NavItem { to: string; label: MsgKey; end?: boolean; icon: ReactNode }
