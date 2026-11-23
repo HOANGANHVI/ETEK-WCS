@@ -45,6 +45,7 @@ const NAV_SYSTEM: NavItem[] = [
   { to: '/users', label: 'nav.users', icon: <IconUsers /> },
   { to: '/audit', label: 'nav.audit', icon: <IconLog /> },
   { to: '/logs', label: 'nav.logs', icon: <IconLog /> },
+  ...(DEMO_MODE ? [] : [{ to: '/rcs-diagnostics', label: 'nav.rcsDiagnostics' as MsgKey, icon: <IconPlc /> }]),   // CR-032 RCS diagnostics (Admin)
   ...(DEMO_MODE ? [] : [{ to: '/diagnostics', label: 'nav.diagnostics' as MsgKey, icon: <IconPlc /> }]),   // PLC diagnostic export (Admin)
 ]
 

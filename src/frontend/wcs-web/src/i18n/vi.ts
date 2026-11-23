@@ -309,11 +309,21 @@ const ERROR_VI = localizedMap({
   LOG_NOT_FOUND: 'Không tìm thấy bản ghi nhật ký.',
   NOT_FOUND: 'Không tìm thấy đối tượng.',
   STOPPED: 'Kết nối PLC đã dừng.',
+  RCS_DIAG_ADMIN_ONLY: 'Chẩn đoán RCS chỉ dành cho Quản trị viên.',
+  RCS_DIAG_VALIDATION_FAILED: 'Yêu cầu không khớp tài liệu API RCS nên KHÔNG được gửi. Xem chi tiết lỗi từng trường.',
+  RCS_DIAG_API_NOT_IN_CATALOG: 'API này không có trong danh mục API RCS; chỉ gọi được các API trong danh mục.',
+  RCS_DIAG_BUSY: 'Đang có yêu cầu RCS thủ công khác chạy (đã đạt giới hạn đồng thời). Thử lại sau khi nó kết thúc.',
+  RCS_DIAG_NOT_FOUND: 'Không tìm thấy lần gọi này trong lịch sử.',
   CANCELLED: 'Thao tác đã bị hủy.',
   DISABLED: 'Kết nối PLC đang tắt.',
   WRITE_REFUSED: 'Lệnh ghi bị từ chối.',
   ADDRESS_NOT_APPROVED: 'Địa chỉ của tín hiệu chưa được kỹ sư PLC xác nhận.',
 }, {
+  RCS_DIAG_ADMIN_ONLY: 'RCS Diagnostics is for Administrators only.',
+  RCS_DIAG_VALIDATION_FAILED: 'The request does not match the RCS API document, so it was NOT sent. See the error of each field.',
+  RCS_DIAG_API_NOT_IN_CATALOG: 'This API is not in the RCS API catalog; only catalogued APIs can be called.',
+  RCS_DIAG_BUSY: 'Another manual RCS request is running (concurrency limit reached). Try again when it has finished.',
+  RCS_DIAG_NOT_FOUND: 'This execution was not found in the history.',
   VALIDATION_FAILED: 'The submitted data is not valid.',
   HOLD_RELEASE_CONFIRMATION_REQUIRED: 'Both confirmations are required: rack/location reconciled AND AGV physically checked.',
   AGV_NOT_ON_HOLD: 'This AGV is not on dispatch hold.',
@@ -448,9 +458,11 @@ export const AUDIT_RESULT_TONE: Record<string, Tone> = { Success: 'ok', Denied: 
 export const AUDIT_TARGET_VI = localizedMap({
   User: 'Tài khoản', Task: 'Nhiệm vụ', Agv: 'AGV', Location: 'Vị trí', ConnectionSetting: 'Cấu hình kết nối', PlcConnection: 'Kết nối PLC',
   StationIoPoint: 'Tín hiệu IO', PlcStation: 'Trạm PLC', System: 'Hệ thống', ConfigPackage: 'Gói cấu hình', ConfigImport: 'Nhập cấu hình', BusinessProcess: 'Quy trình nghiệp vụ',
+  RcsApi: 'API RCS', RcsApiTest: 'Lịch sử gọi API RCS', RcsConnection: 'Kết nối RCS',
 }, {
   User: 'Account', Task: 'Task', Agv: 'AGV', Location: 'Location', ConnectionSetting: 'Connection settings', PlcConnection: 'PLC connection',
   StationIoPoint: 'IO signal', PlcStation: 'PLC station', System: 'System', ConfigPackage: 'Configuration package', ConfigImport: 'Configuration import', BusinessProcess: 'Business Process',
+  RcsApi: 'RCS API', RcsApiTest: 'RCS API call history', RcsConnection: 'RCS connection',
 })
 
 export const AUDIT_ACTION_VI = localizedMap({
@@ -474,6 +486,9 @@ export const AUDIT_ACTION_VI = localizedMap({
   CONFIG_AGV_UPDATE: 'Sửa cấu hình AGV',
   CONFIG_LOCATION_CREATE: 'Thêm vị trí',
   CONFIG_LOCATION_UPDATE: 'Sửa vị trí',
+  RCS_DIAG_EXECUTE: 'Gọi API RCS thủ công (chẩn đoán)',
+  RCS_DIAG_TCP_CHECK: 'Kiểm tra kết nối TCP tới RCS',
+  RCS_DIAG_EXPORT: 'Xuất lịch sử chẩn đoán RCS',
   SYSTEM_MAINTENANCE_ON: 'Bật chế độ bảo trì',
   SYSTEM_MAINTENANCE_OFF: 'Tắt chế độ bảo trì',
   CONFIG_EXPORT: 'Xuất gói cấu hình',
@@ -552,6 +567,9 @@ export const AUDIT_ACTION_VI = localizedMap({
   CONFIG_AGV_UPDATE: 'Edit AGV configuration',
   CONFIG_LOCATION_CREATE: 'Add location',
   CONFIG_LOCATION_UPDATE: 'Edit location',
+  RCS_DIAG_EXECUTE: 'Manual RCS API call (diagnostics)',
+  RCS_DIAG_TCP_CHECK: 'RCS TCP connection check',
+  RCS_DIAG_EXPORT: 'RCS diagnostics history export',
   SYSTEM_MAINTENANCE_ON: 'Maintenance on',
   SYSTEM_MAINTENANCE_OFF: 'Maintenance off',
   CONFIG_EXPORT: 'Export configuration package',

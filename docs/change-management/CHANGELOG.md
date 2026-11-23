@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.24 – CR-032 RCS Diagnostics & Manual API Tester (2026-11-23) – feature branch, mock verified, not merged
+
+- New Admin-only module (menu System, route `/rcs-diagnostics`, API `/api/rcs-diagnostics`): catalog of the 23 outbound RCS-2000 V3.3 APIs, document-driven request builder with server validation and preview, immediate execute (no approval), request / response inspector with outcome classes (TCP, timeout, HTTP, RCS code ≠ 0, JSON), masked execution history with filters / export, TCP check kept apart from API check, honest Callback Monitor (no WCS receiver on this build). Additive migration `AddRcsDiagnostics` (`rcs_api_tests`, `rcs_callback_log`). No change to Real Dispatch, fleet monitoring, PLC, inventory or Legacy dispatch. See `CR-032_RCS_DIAGNOSTICS.md`.
+
 ## v3.20 – Deployment configuration for the real RCS fleet source (2026-11-21)
 
 - `deployment/docker-compose.yml` and `.env.example` pass `Rcs:Fleet:Source` (`RCS_FLEET_SOURCE`, default `Simulator`), `Rcs:Fleet:IntervalSeconds` (`RCS_FLEET_INTERVAL_SECONDS`, default 5) and `Rcs:Dispatch:Mode` (`RCS_DISPATCH_MODE`, default `Legacy`) to the backend. Defaults keep the previous behaviour; `Integration__Mode` stays `Simulator` (no real create-task adapter exists). No PLC/RCS address or credential is stored in the repository.
