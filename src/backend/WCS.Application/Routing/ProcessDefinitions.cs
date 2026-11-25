@@ -19,7 +19,10 @@ public sealed record ProcessHeader(string Code, string Name, string? Description
 
 /// <summary>CR-039: a published process as the request forms see it.</summary>
 public sealed record StartableProcessDto(string Code, string Name, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes, string Readiness,
-    bool AcceptsRequests, string? BlockedCode, string? BlockedDetail);
+    bool AcceptsRequests, string? BlockedCode, string? BlockedDetail, bool Queued = false, string? QueueScope = null);
+
+/// <summary>CR-040: the result of declaring a queue ordering scope.</summary>
+public sealed record QueueScopeDto(Guid ProcessId, string Code, string? QueueScope, bool RequiresReadiness, IReadOnlyList<string> SharedLocationsWithOtherScopes);
 
 public sealed record ReferenceProcess(string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes,
     bool ReviewBlocked, string? ReviewReason, string? SourceReference, VersionDefinition Definition,
@@ -29,10 +32,11 @@ public sealed record ReferenceProcess(string Code, string Name, string? Descript
     bool DefaultPublish = true, string? DraftReason = null);
 
 public sealed record VersionSummaryDto(Guid Id, int Number, string State, DateTimeOffset CreatedAt, string? CreatedBy, DateTimeOffset? ValidatedAt, DateTimeOffset? PublishedAt, string? PublishedBy,
-    DateTimeOffset? DisabledAt, string? Note, int StepCount);
+    DateTimeOffset? DisabledAt, string? Note, int StepCount, string? Readiness = null);
 
 public sealed record ProcessDto(Guid Id, string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes,
-    bool Enabled, bool ReviewBlocked, string? ReviewReason, string? SourceReference, int? PublishedVersion, int LatestVersion, IReadOnlyList<VersionSummaryDto> Versions, Guid? ProductModelId = null);
+    bool Enabled, bool ReviewBlocked, string? ReviewReason, string? SourceReference, int? PublishedVersion, int LatestVersion, IReadOnlyList<VersionSummaryDto> Versions, Guid? ProductModelId = null,
+    bool RequiresReadiness = false, string? QueueScope = null);
 
 /// <summary>CR-035: the two independent axes of a process version.</summary>
 public sealed record ReadinessDto(Guid VersionId, string PublicationState, string Readiness, string? Reason, string? ChangedBy, DateTimeOffset? ChangedAt);

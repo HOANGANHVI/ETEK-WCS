@@ -7,13 +7,6 @@ using WCS.Domain.Routing;
 
 namespace WCS.Application.Routing;
 
-/// <summary>CR-035: configuration of the Admin manual PLC simulation. <see cref="Allowed"/> is a deployment switch (default false): without it the feature cannot even be activated.</summary>
-public sealed class PlcSimulationOptions
-{
-    public const string SectionName = "PlcSimulation";
-    public bool Allowed { get; set; }
-}
-
 /// <summary>Process-wide state of the simulation (in memory on purpose: a WCS restart always leaves the simulation OFF).</summary>
 public sealed class PlcSimulationState
 {
@@ -24,8 +17,8 @@ public sealed class PlcSimulationState
     public void Set(bool active, string? by, DateTimeOffset now) { lock (_gate) { Active = active; ActivatedBy = active ? by : null; ActivatedAt = active ? now : null; } }
 }
 
-public sealed record SimulationStatusDto(bool Allowed, bool Active, string? ActivatedBy, DateTimeOffset? ActivatedAt, bool RealRcsDispatchEnabled, bool EnforceReadiness, string Banner,
-    string MappingSource, IReadOnlyList<string> Blockers);
+public sealed record SimulationStatusDto(bool Active, string? ActivatedBy, DateTimeOffset? ActivatedAt, string ExecutionMode, bool RealRcsDispatchEnabled, bool EnforceReadiness, string Banner,
+    string MappingSource, IReadOnlyList<string> Notes);
 
 public sealed record SimulationFlowDto(string Code, string Name, string RequestType, string RackKind, string PublicationState, string? Readiness, int? PublishedVersion,
     IReadOnlyList<SimulationTriggerDto> Triggers, bool StartableNow, string? NotStartableReason);
@@ -35,40 +28,103 @@ public sealed record SimulationTriggerDto(string LocationCode, string? PortId, s
 public sealed record SimulationStartResult(string Outcome, string Code, string Message, OrderDto? Order, StationTransactionDto? Transaction, string RequestId);
 
 /// <summary>
-/// CR-035. Admin-only manual PLC simulation. It replaces ONLY the physical PLC as the source of a request: the logical request goes through the SAME <see cref="IPlcRequestService"/> a PLC
-/// runtime would call (same validation, Station Transaction, Process Engine, queue rules). It never simulates the RCS or an AMR, never writes a PLC address and never touches inventory itself.
-/// Refused unless the REAL RCS dispatch is enabled; refused for a port whose PLC is online (no mixing a real PLC and the simulation on the same resources).
+/// CR-035 / CR-040. Admin-only manual PLC simulation, opened by an explicit confirmation. It replaces ONLY the physical PLC as the source of PLC → WCS signals: the request goes through the
+/// SAME <see cref="IPlcRequestService"/> a PLC runtime calls (same validation, Station Transaction, Process Engine, queue). It never answers for the RCS or an AMR, never writes a PLC address
+/// and never touches inventory itself. It grants nothing on the RCS side: where an order is sent is decided by the operating mode and its own conditions (CR-038). Refused for a port whose
+/// PLC is online (no mixing of a physical PLC and the simulation on the same resources).
 /// </summary>
 public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository routing, IPlcRequestService plcRequests, IRouteEngine engine, ILegDispatcher dispatcher,
-    PlcSimulationState state, IOptions<PlcSimulationOptions> simOptions, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IClock clock, IPlcLinkStatus? link = null)
+    PlcSimulationState state, PlcSimulatedInputs inputs, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock, IPlcLinkStatus? link = null)
 {
-    public const string Banner = "PLC SIMULATION / REAL RCS";
+    public const string Banner = "PLC SIMULATION";
     public const string MappingSource = "TEST CONFIGURATION: logical signals of IO Map v2 (Pickup_Request / Delivery_Request / Request_ID / Rack_Full / Rack_Empty, PlcLocationCodes 1-4). Not the 20/11/2026 mapping (CR-029 PENDING_APPROVAL); no PLC address is read or written.";
 
     public SimulationStatusDto Status()
     {
-        var blockers = new List<string>();
-        if (!simOptions.Value.Allowed) blockers.Add("PlcSimulation:Allowed is false (deployment switch).");
-        if (!realRcs.Value.Enabled) blockers.Add("Rcs:RealDispatch:Enabled is false: the REAL RCS is required; no RCS simulator is used.");
-        else if (realRcs.Value.LegTemplate is null || string.IsNullOrWhiteSpace(realRcs.Value.LegTemplate.TaskTyp))
-            blockers.Add("Rcs:RealDispatch:LegTemplate is not configured: legs of configurable processes cannot be sent to the real RCS (Q1PICK template, Pick/Drop triggers and continueTask handling still to be supplied).");
-        return new(simOptions.Value.Allowed, state.Active, state.ActivatedBy, state.ActivatedAt, realRcs.Value.Enabled, routeOptions.Value.EnforceReadiness, Banner, MappingSource, blockers);
+        var current = mode.Current.Mode;
+        var notes = new List<string>
+        {
+            current == WCS.Domain.Rcs.ExecutionMode.Real
+                ? "Operating mode REAL: a request accepted from this simulation can be sent to the REAL RCS and a real AMR may move."
+                : "Operating mode Simulator: requests accepted from this simulation are not sent to a real RCS.",
+            "Only PLC to WCS signals are simulated. Nothing answers for the RCS or an AMR, and nothing is written to a PLC.",
+        };
+        return new(state.Active, state.ActivatedBy, state.ActivatedAt, current.ToString(), realRcs.Value.Enabled, routeOptions.Value.EnforceReadiness, Banner, MappingSource, notes);
     }
 
-    public SimulationStatusDto Activate(string user)
+    public SimulationStatusDto Activate(string user, bool confirmed)
     {
-        if (!simOptions.Value.Allowed) throw AppException.Rejected("SIMULATION_NOT_ALLOWED", "PLC simulation is not allowed in this deployment (PlcSimulation:Allowed).");
-        if (!realRcs.Value.Enabled) throw AppException.Rejected("RCS_REAL_DISPATCH_REQUIRED", "The REAL RCS dispatch must be enabled; the simulation never runs with a simulated RCS.");
+        if (!confirmed) throw AppException.Validation("SIMULATION_CONFIRMATION_REQUIRED", "The Admin must confirm before the PLC simulation is switched on.");
         state.Set(true, user, clock.UtcNow);
         return Status();
     }
 
-    public SimulationStatusDto Deactivate() { state.Set(false, null, clock.UtcNow); return Status(); }
+    public SimulationStatusDto Deactivate() { state.Set(false, null, clock.UtcNow); inputs.Clear(); return Status(); }
 
     private void EnsureActive()
     {
         if (!state.Active) throw AppException.Rejected("SIMULATION_NOT_ACTIVE", "PLC simulation is not active.");
-        if (!realRcs.Value.Enabled) { state.Set(false, null, clock.UtcNow); throw AppException.Rejected("RCS_REAL_DISPATCH_REQUIRED", "The REAL RCS dispatch is not enabled; the simulation was switched off."); }
+    }
+
+    // ------------------------------------------------------------------ CR-040: one signal at a time
+    public Task<IReadOnlyList<SimStationDto>> ListStationsAsync(CancellationToken ct = default) => uow.ExecuteAsync<IReadOnlyList<SimStationDto>>(async t =>
+    {
+        var list = new List<SimStationDto>();
+        foreach (var port in await routing.ListLinkedPortsAsync(t))
+        {
+            var signals = (await routing.ListPlcInputPointsAsync(port.Id, t)).Select(p =>
+            {
+                var v = inputs.Get(port.Id, p.SignalName);
+                return new SimSignalDto(p.SignalName, p.DataType.ToString(), p.Description, v?.Value, v?.At, PlcRequestAssembler.IntakeSignals.Contains(p.SignalName));
+            }).ToList();
+            var active = await routing.GetActiveTransactionForPortAsync(port.Id, t);
+            list.Add(new(port.Id, port.PlcId, port.LocationCode!, link?.IsOnline(port.PlcId), await routing.IsPortMappingApprovedAsync(port.Id, t), active?.ToDto(), signals));
+        }
+        return list;
+    }, ct);
+
+    /// <summary>Sets one simulated PLC → WCS value. Only signals of the station that the IO map declares as PLC → WCS exist; setting one starts nothing.</summary>
+    public async Task<SimStationDto> SetSignalAsync(string stationId, string signal, string? value, CancellationToken ct = default)
+    {
+        EnsureActive();
+        await uow.ExecuteAsync(async t =>
+        {
+            var port = await SimulatablePortAsync(stationId, t);
+            var point = (await routing.ListPlcInputPointsAsync(port.Id, t)).FirstOrDefault(p => p.SignalName == signal)
+                        ?? throw AppException.Rejected("SIGNAL_NOT_A_PLC_INPUT", $"{signal} is not a PLC to WCS signal of station {port.Id}; only those can be simulated.");
+            inputs.Set(port.Id, point.SignalName, Normalize(point.DataType, value), clock.UtcNow);
+            return 0;
+        }, ct);
+        return (await ListStationsAsync(ct)).First(s => s.StationId == stationId);
+    }
+
+    /// <summary>Hands the current input signals of one station to the request intake, exactly as one read of a PLC would.</summary>
+    public async Task<SimulationStartResult> EvaluateStationAsync(string stationId, bool safetyAcknowledged, CancellationToken ct = default)
+    {
+        EnsureActive();
+        if (!safetyAcknowledged) throw AppException.Validation("SAFETY_ACK_REQUIRED", "The operator must confirm that the test area is safe: with the real mode an AMR may move.");
+        var port = await uow.ExecuteAsync(t => SimulatablePortAsync(stationId, t), ct);
+        var snapshot = PlcRequestAssembler.FromSignals(port.PlcId, port.Id, inputs.Of(port.Id));
+        var r = await plcRequests.HandleRequestAsync(snapshot, ct);
+        return new(r.Outcome.ToString(), r.Code, r.Message, r.Order, r.Transaction, snapshot.RequestId);
+    }
+
+    private async Task<WCS.Domain.Plc.PlcStation> SimulatablePortAsync(string stationId, CancellationToken ct)
+    {
+        var port = await routing.GetPortAsync(stationId, ct) ?? throw AppException.NotFound("PORT_NOT_FOUND", $"Station {stationId} not found.");
+        if (port.LocationCode is null || !port.Enabled) throw AppException.Rejected("PORT_NOT_LINKED", $"Station {port.Id} is disabled or not linked to a location.");
+        if (link?.IsOnline(port.PlcId) == true) throw AppException.Conflict("SIMULATION_PLC_ONLINE", $"PLC {port.PlcId} is online: the simulation never shares a PLC/port with a real PLC.");
+        return port;
+    }
+
+    private static string Normalize(WCS.Domain.Plc.PlcDataType type, string? value)
+    {
+        var v = (value ?? "").Trim();
+        if (type == WCS.Domain.Plc.PlcDataType.Bool)
+            return v.ToLowerInvariant() switch { "true" or "on" or "1" => "true", "false" or "off" or "0" => "false", _ => throw AppException.Validation("SIGNAL_VALUE_INVALID", "A bit signal is ON or OFF.") };
+        if (type == WCS.Domain.Plc.PlcDataType.String)
+            return v.Length <= 100 ? v : throw AppException.Validation("SIGNAL_VALUE_INVALID", "The text is too long (max 100).");
+        return int.TryParse(v, out var n) ? n.ToString(System.Globalization.CultureInfo.InvariantCulture) : throw AppException.Validation("SIGNAL_VALUE_INVALID", "A number is required.");
     }
 
     public Task<IReadOnlyList<SimulationFlowDto>> ListFlowsAsync(CancellationToken ct = default) => uow.ExecuteAsync<IReadOnlyList<SimulationFlowDto>>(async t =>

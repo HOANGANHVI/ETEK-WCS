@@ -5,11 +5,11 @@ import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
-import type { SimFlow, SimStartResult, SimStatus } from './simTypes'
+import type { SimFlow, SimStartResult, SimStation, SimStatus } from './simTypes'
 import type { ExecMode, ExecutionModeView, LegacyAdoptionResult, ModeReadiness, ModeTransitionBody, ModeTransitionResult, ModeTransitionView, RcsMessageDetail, RcsMessageSummary } from './modeTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
-import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
+import type { AddPlcBody, StartableProcess, QueueScopeResult, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
@@ -246,6 +246,17 @@ const realApi = {
   processValidate: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/validate`, { method: 'POST' }),
   processPublish: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/publish`, { method: 'POST' }),
   processDisable: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/disable`, { method: 'POST' }),
+  // CR-040: Operational Readiness of a version and the queue ordering scope of a process (Admin)
+  processReadiness: (versionId: string, readiness: 'Ready' | 'Suspended' | 'NotReady', reason: string) =>
+    request<unknown>(`/api/process-versions/${versionId}/readiness`, { method: 'PUT', body: JSON.stringify({ readiness, reason }) }),
+  processQueueScope: (processId: string, scope: string | null, reason: string) =>
+    request<QueueScopeResult>(`/api/processes/${processId}/queue-scope`, { method: 'PUT', body: JSON.stringify({ scope, reason }) }),
+  // CR-040: one rack record (Admin)
+  rackCreate: (b: { locationCode: string; rackKind: 'Full' | 'Empty'; externalRackId: string | null; reason: string }) =>
+    request<Rack>('/api/inventory/racks', { method: 'POST', body: JSON.stringify(b) }),
+  rackUpdate: (id: string, b: { locationCode?: string; rackKind?: 'Full' | 'Empty'; externalRackId?: string; reason: string }) =>
+    request<Rack>(`/api/inventory/racks/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  rackDelete: (id: string, reason: string) => request<{ id: string }>(`/api/inventory/racks/${id}${qs({ reason })}`, { method: 'DELETE' }),
   plcAdd: (b: AddPlcBody) => request<PlcConnection>('/api/plc/connections', { method: 'POST', body: JSON.stringify(b) }),
   plcStations: () => request<PortView[]>('/api/plc/stations'),
   plcLinkPort: (stationId: string, locationCode: string | null, enabled: boolean) =>
@@ -292,7 +303,12 @@ const realApi = {
   transferPreview: (id: string, selection: Selection) => request<ImportPlan>(`/api/config-transfer/imports/${id}/preview`, { method: 'POST', body: JSON.stringify(selection) }),
   // CR-035 Admin manual PLC simulation (PLC only; RCS is real). The server enforces Admin and the safety acknowledgement.
   simStatus: () => request<SimStatus>('/api/plc-simulation/status'),
-  simActivate: () => request<SimStatus>('/api/plc-simulation/activate', { method: 'POST' }),
+  simActivate: (confirmed: boolean) => request<SimStatus>('/api/plc-simulation/activate', { method: 'POST', body: JSON.stringify({ confirmed }) }),
+  simStations: () => request<SimStation[]>('/api/plc-simulation/stations'),
+  simSetSignal: (stationId: string, signal: string, value: string) =>
+    request<SimStation>(`/api/plc-simulation/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}`, { method: 'PUT', body: JSON.stringify({ value }) }),
+  simEvaluate: (stationId: string, safetyAcknowledged: boolean) =>
+    request<SimStartResult>(`/api/plc-simulation/stations/${encodeURIComponent(stationId)}/evaluate`, { method: 'POST', body: JSON.stringify({ safetyAcknowledged }) }),
   simDeactivate: () => request<SimStatus>('/api/plc-simulation/deactivate', { method: 'POST' }),
   simFlows: () => request<SimFlow[]>('/api/plc-simulation/flows'),
   simStart: (flowCode: string, locationCode: string, safetyAcknowledged: boolean) =>

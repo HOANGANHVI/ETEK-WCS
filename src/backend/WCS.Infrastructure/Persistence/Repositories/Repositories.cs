@@ -40,6 +40,7 @@ internal sealed class RackRepository(WcsDbContext db) : IRackRepository
     public Task<Rack?> GetAsync(Guid id, CancellationToken ct) => db.Racks.FirstOrDefaultAsync(x => x.Id == id, ct);
     public void Add(Rack rack) => db.Racks.Add(rack);
     public void Remove(Rack rack) => db.Racks.Remove(rack);
+    public Task<Rack?> FindByExternalIdAsync(string externalRackId, CancellationToken ct) => db.Racks.FirstOrDefaultAsync(x => x.ExternalRackId == externalRackId, ct);
 
     public async Task<IReadOnlyList<Rack>> ListAsync(Guid? locationId, RackStatus? status, int take, CancellationToken ct)
     {

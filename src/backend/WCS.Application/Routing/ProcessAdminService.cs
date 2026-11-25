@@ -103,7 +103,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
             await routing.FlushAsync(t);   // the old Published row must reach the database first (one Published version per process)
         }
         v.Publish(user, clock.UtcNow);
-        if (outcome.NeedsReadiness) p.RequireReadiness(clock.UtcNow);   // CR-039: published with an unmet device condition => no request until Ready
+        if (routeOptions.Value.NewPublicationsRequireReadiness || outcome.NeedsReadiness) p.RequireReadiness(clock.UtcNow);   // CR-040 (D-12)   // CR-039: published with an unmet device condition => no request until Ready
         return ToVersionDto(p, v);
     }, ct);
 
@@ -148,7 +148,8 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
             string? blocked = null; string? detail = null;
             if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.Readiness != OperationalReadiness.Ready) blocked = "PROCESS_NOT_READY";
             if (p.RequiresReadiness && await validator.DeviceConditionsAsync(p, v, t) is { Count: > 0 } unmet) { blocked = "PROCESS_NOT_READY"; detail = unmet[0].Message; }
-            list.Add(new StartableProcessDto(p.Code, p.Name, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, v.Readiness.ToString(), blocked is null, blocked, detail));
+            list.Add(new StartableProcessDto(p.Code, p.Name, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, v.Readiness.ToString(), blocked is null, blocked, detail,
+                p.RequiresReadiness, p.QueueScope));
         }
         return list;
     }, ct);
@@ -160,6 +161,33 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         p.RequireReadiness(clock.UtcNow);
         return true;
     }, ct);
+
+    /// <summary>
+    /// CR-040 (D-13): declares (or removes) the Queue Ordering Scope of a process. The scope is a decision of the Admin, never derived; the answer lists processes of ANOTHER scope that
+    /// use the same locations so that the Admin sees where the declaration may be incomplete. Requests that already carry a scope keep it.
+    /// </summary>
+    public Task<QueueScopeDto> SetQueueScopeAsync(Guid processId, string? scope, string? reason, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        if (string.IsNullOrWhiteSpace(reason)) throw AppException.Validation("REASON_REQUIRED", "A reason is required for a queue scope change.");
+        var p = await routing.GetProcessAsync(processId, t) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found.");
+        try { p.SetQueueScope(scope, clock.UtcNow); }
+        catch (DomainException e) { throw AppException.Rejected(e.Code, e.Message); }
+        var mine = await UsedLocationsAsync(p, t);
+        var shared = new List<string>();
+        foreach (var other in (await routing.ListProcessesAsync(t)).Where(x => x.Id != p.Id && x.QueueScope != p.QueueScope))
+        {
+            if (await routing.GetPublishedVersionAsync(other.Id, t) is null) continue;
+            var common = (await UsedLocationsAsync(other, t)).Intersect(mine, StringComparer.OrdinalIgnoreCase).Order().ToList();
+            if (common.Count > 0) shared.Add($"{other.Code} (scope {other.QueueScope ?? "not declared"}): {string.Join(", ", common)}");
+        }
+        return new QueueScopeDto(p.Id, p.Code, p.QueueScope, p.RequiresReadiness, shared);
+    }, ct);
+
+    private async Task<IReadOnlyList<string>> UsedLocationsAsync(BusinessProcess p, CancellationToken ct)
+    {
+        var published = await routing.GetPublishedVersionAsync(p.Id, ct);
+        return p.TriggerLocationCodes.Concat(published?.Steps.SelectMany(s => s.Candidates.Select(c => c.LocationCode)) ?? []).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     /// <summary>New Draft version copied from <paramref name="fromVersionId"/> (or the latest version). Published versions stay untouched.</summary>
     public Task<VersionDto> NewVersionAsync(Guid processId, Guid? fromVersionId, string? user, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
@@ -214,7 +242,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         return new ProcessDto(p.Id, p.Code, p.Name, p.Description, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, p.Enabled, p.ReviewBlocked, p.ReviewReason,
             p.SourceReference, versions.FirstOrDefault(v => v.State == ProcessConfigState.Published)?.Number, versions.Count == 0 ? 0 : versions.Max(v => v.Number),
             versions.OrderByDescending(v => v.Number).Select(v => new VersionSummaryDto(v.Id, v.Number, v.State.ToString(), v.CreatedAt, v.CreatedBy, v.ValidatedAt, v.PublishedAt,
-                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count)).ToList(), p.ProductModelId);
+                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count, v.Readiness.ToString())).ToList(), p.ProductModelId, p.RequiresReadiness, p.QueueScope);
     }
 
     private static VersionDto ToVersionDto(BusinessProcess p, BusinessProcessVersion v)

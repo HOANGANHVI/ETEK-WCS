@@ -141,6 +141,7 @@ function ProcessDetail({ id, onChanged }: { id: string; onChanged: () => void })
           {(p) => (
             <>
               <HeaderPanel p={p} onSaved={(msg) => { setMessage(msg); reload() }} onError={setError} />
+              <OperationPanel key={p.queueScope ?? ''} p={p} onSaved={(msg) => { setError(null); setMessage(msg); reload() }} onError={setError} />
               <section className="detail-sec">
                 <h3>{t('routing.procVersions')} <Button size="sm" onClick={() => newVersion(p)}>{t('routing.procVersionNew')}</Button></h3>
                 <div className="table-wrap">
@@ -167,6 +168,41 @@ function ProcessDetail({ id, onChanged }: { id: string; onChanged: () => void })
         </Async>
       )}
     </Panel>
+  )
+}
+
+/** CR-040: what a published process needs before its requests run - Operational Readiness of the published version (D-12) and the queue ordering scope (D-13). The server decides. */
+function OperationPanel({ p, onSaved, onError }: { p: Process; onSaved: (msg: string) => void; onError: (m: string) => void }) {
+  const t = useT()
+  const published = p.versions.find((v) => v.state === 'Published')
+  const [scope, setScope] = useState(p.queueScope ?? '')
+  const [reason, setReason] = useState('')
+  const [shared, setShared] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true)
+    try { await fn(); setReason(''); onSaved(t('linked.opSaved')) } catch (e) { onError(describeError(e)) } finally { setBusy(false) }
+  }
+  const ready = reason.trim() !== '' && !busy
+  return (
+    <section className="detail-sec">
+      <h3>{t('linked.opTitle')}</h3>
+      <p className="muted small">{t(p.requiresReadiness ? 'linked.opQueued' : 'linked.opNotQueued')}</p>
+      <dl className="kv2">
+        <dt>{t('linked.opReadiness')}</dt><dd>{published ? `${t('routing.versionShort', { n: published.number })} · ${t(`linked.readiness_${published.readiness ?? 'NotReady'}` as never)}` : t('routing.procNotPublished')}</dd>
+        <dt>{t('linked.opScope')}</dt><dd className="mono">{p.queueScope ?? t('linked.scopeNone')}</dd>
+      </dl>
+      <div className="form-grid">
+        <Field label={t('linked.opScopeField')} hint={t('linked.opScopeHint')}><input value={scope} maxLength={60} onChange={(e) => setScope(e.target.value)} /></Field>
+        <Field label={t('linked.reason')}><input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} /></Field>
+      </div>
+      <div className="btn-row">
+        <Button disabled={!ready || scope.trim().toUpperCase() === (p.queueScope ?? '')} onClick={() => void run(async () => setShared((await api.processQueueScope(p.id, scope.trim() || null, reason)).sharedLocationsWithOtherScopes))}>{t('linked.opSaveScope')}</Button>
+        <Button variant="primary" disabled={!ready || !published || published.readiness === 'Ready'} onClick={() => void run(() => api.processReadiness(published!.id, 'Ready', reason))}>{t('linked.opSetReady')}</Button>
+        <Button disabled={!ready || !published || published.readiness !== 'Ready'} onClick={() => void run(() => api.processReadiness(published!.id, 'Suspended', reason))}>{t('linked.opSuspend')}</Button>
+      </div>
+      {shared.length > 0 && <div className="notice notice-warn" role="status"><p>{t('linked.opShared')}</p><ul>{shared.map((s) => <li key={s}>{s}</li>)}</ul></div>}
+    </section>
   )
 }
 

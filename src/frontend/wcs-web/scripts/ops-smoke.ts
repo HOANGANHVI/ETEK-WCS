@@ -16,6 +16,9 @@ import {
   applyCreate, checkOrderOutcome, checkOutcome, sendProcessCreate, classifyCreateError, createStep, dispatchGate, filterTasks, NO_TASK_FILTER, sendCreate, taskStages,
   type CreateApi, type CreateHolder, type CreateState,
 } from '../src/lib/opsConsole.ts'
+import { readFileSync } from 'node:fs'
+import { requestRows } from '../src/lib/requestRows.ts'
+import { RequestTable } from '../src/components/RequestTable.tsx'
 import { ConnectionStrip } from '../src/pages/ops/ConnectionStrip.tsx'
 import { CreateRequest } from '../src/pages/ops/CreateRequest.tsx'
 import { OpsTaskDetail } from '../src/pages/ops/OpsTaskDetail.tsx'
@@ -224,6 +227,16 @@ for (const lang of ['vi'] as const) {
   check('a double click starts exactly one order with the request key', sent.length === 1 && sent[0] === 'PH2-07/X1/OPS-p' && [a, b].filter((r) => r.order).length === 1)
   check('an order is found again by its request key without creating anything', (await checkOrderOutcome(h, orders))?.id === 'o1' && sent.length === 1)
 }
+for (const lang of ['vi'] as const) {   // server-side rendering uses the default language
+  i18n.setLang(lang)
+  const order = { id: 'o-1', requestKey: 'OPS-ORDER-1', processCode: 'PH2-07', state: 'Waiting', createdAt: '2026-11-25T09:00:00Z', legs: [{ robotCode: 'AMR-9' }], queueSequence: 12, queueScope: 'AREA-A', queueStatus: 'Held' } as never
+  const rows = requestRows([task({ id: 't-1', requestKey: 'OPS-TASK-1', createdAt: '2026-11-25T08:00:00Z', robotCode: 'AMR-1' })], [order])
+  check(`${lang}: tasks and transport orders are one list identified by request key, newest first`, rows.map((x) => x.requestKey).join() === 'OPS-ORDER-1,OPS-TASK-1')
+  check(`${lang}: each request links to the page that owns its detail`, rows[0].link === '/routing?order=o-1' && rows[1].link === '/tasks?id=t-1')
+  const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(RequestTable, { rows })))
+  check(`${lang}: the list shows queue state, position, scope and the AMR`, html.includes(T('linked.queue_Held')) && html.includes('AREA-A') && html.includes('12') && html.includes('AMR-9') && html.includes('data-request="OPS-TASK-1"'))
+}
+check('task management, RCS operations and multi-leg dispatch show the same request list', ['TasksPage', 'OperationsConsolePage', 'RoutingPage'].every((f) => readFileSync(`src/pages/${f}.tsx`, 'utf8').includes('<RequestOverview />')))
 i18n.setLang('vi')
 for (const r of results) console.log(r)
 const failed = results.filter((r) => r.startsWith('FAIL')).length

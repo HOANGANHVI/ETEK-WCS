@@ -67,7 +67,12 @@ public class Cr039DefaultProcessCatalogTests(DatabaseFixture fixture)
         var kit = await NewDeploymentAsync();
         await SeedAsync(kit);
         await CommissionAsync(kit);
-        foreach (var c in Published) await ReadyAsync(kit, await VersionOfAsync(kit, c));
+        foreach (var c in Published)
+        {   // CR-040: every default is queued; a TEST scope of its own (the real scopes are OQ-54, nothing declares them by default)
+            var id = await kit.H.Db(d => d.BusinessProcesses.AsNoTracking().Where(x => x.Code == c).Select(x => x.Id).SingleAsync());
+            await kit.With(sp => sp.GetRequiredService<ProcessAdminService>().SetQueueScopeAsync(id, "TEST-" + c, "test"));
+            await ReadyAsync(kit, await VersionOfAsync(kit, c));
+        }
         return kit;
     }
 

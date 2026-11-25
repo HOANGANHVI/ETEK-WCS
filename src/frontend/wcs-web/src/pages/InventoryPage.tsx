@@ -4,6 +4,8 @@ import { api } from '../api/client'
 import type { Location, Rack } from '../api/types'
 import { Async, EmptyState, OccupancyPill, PageHeader, Panel, RackPill } from '../components/ui'
 import { StackedSummary, type SummaryItem } from '../components/charts'
+import { hasRole, useAuth } from '../auth/AuthContext'
+import { RackDialog, type RackDialogState } from './RackDialog'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
 import { t, useT } from '../i18n'
@@ -40,6 +42,9 @@ function SlotStrip({ loc, racks }: { loc: Location; racks: Rack[] }) {
 export function InventoryPage() {
   const t = useT()
   const [selected, setSelected] = useState<string | null>(null)
+  const { user } = useAuth()
+  const isAdmin = hasRole(user, 'Admin')
+  const [rackDialog, setRackDialog] = useState<RackDialogState | null>(null)
   const locations = useApi(useCallback(() => api.locations(), []), [...EVENTS])
   const racks = useApi(useCallback(() => api.racks(), []), [...EVENTS])
   const tx = useApi(useCallback(() => api.transactions(selected ?? undefined), [selected]), [...EVENTS])
@@ -149,12 +154,15 @@ export function InventoryPage() {
       </div>
 
       <Panel title={t('inventory.stockTable')} subtitle={current ? t('inventory.filteredBy', { code: current.code }) : t('inventory.allRacks')} flush
-        actions={current ? <button type="button" className="btn btn-sm btn-secondary" onClick={() => setSelected(null)}>{t('inventory.clearFilter')}</button> : undefined}>
+        actions={<>
+          {current ? <button type="button" className="btn btn-sm btn-secondary" onClick={() => setSelected(null)}>{t('inventory.clearFilter')}</button> : null}
+          {isAdmin && <button type="button" className="btn btn-sm btn-primary" onClick={() => setRackDialog({ kind: 'create' })}>{t('linked.rackAdd')}</button>}
+        </>}>
         <Async state={racks} isEmpty={() => tableRacks.length === 0} empty={{ title: t('inventory.noRacks'), hint: selected ? t('inventory.noRacksHintSelected') : t('inventory.noRacksHintAll') }}>
           {() => (
             <div className="table-wrap capped">
               <table className="grid">
-                <thead><tr><th>{t('inventory.colRackId')}</th><th>{t('inventory.colRackKind')}</th><th>{t('inventory.colCurrentLocation')}</th><th>{t('inventory.colStatus')}</th><th>{t('inventory.colRelatedTask')}</th><th>{t('inventory.colConfirmedAt')}</th></tr></thead>
+                <thead><tr><th>{t('inventory.colRackId')}</th><th>{t('inventory.colRackKind')}</th><th>{t('inventory.colCurrentLocation')}</th><th>{t('inventory.colStatus')}</th><th>{t('inventory.colRelatedTask')}</th><th>{t('inventory.colConfirmedAt')}</th>{isAdmin && <th />}</tr></thead>
                 <tbody>
                   {tableRacks.map((r) => (
                     <tr key={r.id}>
@@ -164,6 +172,12 @@ export function InventoryPage() {
                       <td><RackPill value={r.status} /></td>
                       <td>{r.currentTaskId ? <Link to={`/tasks?id=${r.currentTaskId}`} className="mono">{taskCode(r.currentTaskId)}</Link> : '—'}</td>
                       <td className="nowrap">{formatDateTime(r.lastConfirmedAt)}</td>
+                      {isAdmin && (
+                        <td className="nowrap">
+                          <button type="button" className="btn btn-sm btn-secondary" onClick={() => setRackDialog({ kind: 'edit', rack: r })}>{t('linked.rackEdit')}</button>{' '}
+                          <button type="button" className="btn btn-sm btn-secondary" onClick={() => setRackDialog({ kind: 'delete', rack: r })}>{t('linked.rackDelete')}</button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -172,6 +186,9 @@ export function InventoryPage() {
           )}
         </Async>
       </Panel>
+
+      {rackDialog && <RackDialog state={rackDialog} locations={locations.data ?? []} defaultLocation={current?.code ?? ''} codeOf={codes.loc}
+        onClose={() => setRackDialog(null)} onDone={() => { setRackDialog(null); racks.reload(); locations.reload(); tx.reload() }} />}
 
       <Panel title={t('inventory.txPanel')} subtitle={current ? t('inventory.locationTitle', { code: current.code }) : t('inventory.txLatest')} flush className="mt">
         <Async state={tx} isEmpty={(d) => d.length === 0} empty={{ title: t('inventory.noTx') }}>

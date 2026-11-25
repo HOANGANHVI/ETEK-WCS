@@ -1,14 +1,22 @@
 // CR-035 – Admin manual PLC simulation (PLC only; the RCS is always the real one).
 export interface SimStatus {
-  allowed: boolean
   active: boolean
   activatedBy: string | null
   activatedAt: string | null
+  executionMode: 'Simulator' | 'Real'
   realRcsDispatchEnabled: boolean
   enforceReadiness: boolean
   banner: string
   mappingSource: string
-  blockers: string[]
+  notes: string[]
+}
+
+/** CR-040: one station with its PLC → WCS signals and their simulated values */
+export interface SimSignal { signal: string; dataType: string; description: string; value: string | null; changedAt: string | null; readByIntake: boolean }
+export interface SimStation {
+  stationId: string; plcId: string; locationCode: string; plcOnline: boolean | null; portMappingApproved: boolean
+  activeTransaction: { id: string; state: string; handshakeStep: number; requestId: string | null; operation: string } | null
+  signals: SimSignal[]
 }
 
 export interface SimTrigger {

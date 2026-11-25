@@ -9,6 +9,7 @@ import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { describeError } from '../i18n/vi'
 import { dispatchGate, type CreateApi, type ProcessCreateApi } from '../lib/opsConsole'
+import { RequestOverview } from '../components/RequestOverview'
 import { ConnectionStrip } from './ops/ConnectionStrip'
 import { CreateRequest } from './ops/CreateRequest'
 import { OpsTaskDetail } from './ops/OpsTaskDetail'
@@ -83,7 +84,7 @@ export function OperationsConsolePage() {
       <Async state={tasks} empty={{ title: t('ops.monNone') }}>
         {(page) => <TaskMonitor tasks={page.items} locations={locations.data ?? []} selectedId={selected} onSelect={select} />}
       </Async>
-      <p className="muted small">{t('ops.ordersNote')}</p>
+      <RequestOverview />
       {isAdmin && <UnlinkedMessages />}
       {selected ? <SelectedTask id={selected} isAdmin={isAdmin} locations={locations.data ?? []} /> : <p className="muted">{t('ops.detPick')}</p>}
     </>

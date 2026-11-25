@@ -1,8 +1,10 @@
+import type { RcsMessageSummary } from './modeTypes'
+
 // CR-010 DTOs (camelCase JSON, enums as strings). Mirrors WCS.Application.Routing.
 
 export type OrderState = 'Created' | 'Accepted' | 'InProgress' | 'Waiting' | 'Completed' | 'Failed' | 'Cancelled' | 'ReconciliationRequired'
 export type LegState = 'Pending' | 'Ready' | 'InProgress' | 'Waiting' | 'Completed' | 'Failed' | 'Cancelled'
-export type WaitKind = 'None' | 'DestinationUnavailable_AgvHoldingRack' | 'AtBuffer' | 'SourceUnavailable' | 'AgvBusy' | 'ConditionNotMet' | 'DispatchBlocked' | 'DestinationUnavailable'
+export type WaitKind = 'None' | 'DestinationUnavailable_AgvHoldingRack' | 'AtBuffer' | 'SourceUnavailable' | 'AgvBusy' | 'ConditionNotMet' | 'DispatchBlocked' | 'DestinationUnavailable' | 'QueueScopeUndetermined' | 'QueueBehind' | 'QueueHeld'
 export type TransactionState =
   | 'Created' | 'Requested' | 'Accepted' | 'AgvAssigned' | 'AgvApproaching' | 'AtStation' | 'Handling'
   | 'HandoverCompleted' | 'AgvExited' | 'Completed' | 'Failed' | 'ReconciliationRequired'
@@ -12,6 +14,7 @@ export const ORDER_STATES: OrderState[] = ['Created', 'Accepted', 'InProgress', 
 export interface Leg {
   id: string
   sequence: number
+  agvRequestCode?: string
   stepKey: string
   stepType: string
   sourceLocationCode: string | null
@@ -71,10 +74,16 @@ export interface Order {
   createdAt: string
   updatedAt: string
   finishedAt: string | null
+  /** CR-040: position in the official queue (null = not a queued request), the declared ordering scope and the queue state */
+  queueSequence?: number | null
+  queueScope?: string | null
+  queueStatus?: string | null
+  requestedBy?: string | null
+  executionMode?: 'Simulator' | 'Real' | null
 }
 
 export interface RoutingEvent { id: string; legId: string | null; transactionId: string | null; kind: string; detail: string | null; source: string; occurredAt: string }
-export interface OrderDetail { order: Order; events: RoutingEvent[] }
+export interface OrderDetail { order: Order; events: RoutingEvent[]; commands?: RcsMessageSummary[] }
 export interface OrderPage { total: number; items: Order[] }
 
 // ---- process configuration
@@ -102,12 +111,15 @@ export interface ProcessIssue { severity: 'Warning' | 'Error'; code: string; mes
 export interface VersionSummary {
   id: string; number: number; state: 'Draft' | 'Validated' | 'Published' | 'Disabled'; createdAt: string; createdBy: string | null
   validatedAt: string | null; publishedAt: string | null; publishedBy: string | null; disabledAt: string | null; note: string | null; stepCount: number
+  readiness?: string | null
 }
 export interface Process {
   id: string; code: string; name: string; description: string | null; requestType: string; rackKind: string; triggerLocationCodes: string[]
   enabled: boolean; reviewBlocked: boolean; reviewReason: string | null; sourceReference: string | null
   publishedVersion: number | null; latestVersion: number; versions: VersionSummary[]
+  requiresReadiness?: boolean; queueScope?: string | null
 }
+export interface QueueScopeResult { processId: string; code: string; queueScope: string | null; requiresReadiness: boolean; sharedLocationsWithOtherScopes: string[] }
 export interface ProcessVersion {
   id: string; processId: string; processCode: string; number: number; state: VersionSummary['state']; editable: boolean; note: string | null
   definition: VersionDefinition; issues: ProcessIssue[]; validatedAt: string | null
@@ -120,4 +132,5 @@ export interface PortView { stationId: string; plcId: string; order: number; loc
 export interface StartableProcess {
   code: string; name: string; requestType: string; rackKind: string; triggerLocationCodes: string[]
   readiness: string; acceptsRequests: boolean; blockedCode: string | null; blockedDetail: string | null
+  queued?: boolean; queueScope?: string | null
 }

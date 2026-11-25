@@ -67,6 +67,17 @@ public class BusinessProcess
 
     public void RequireReadiness(DateTimeOffset now) { if (!RequiresReadiness) { RequiresReadiness = true; UpdatedAt = now; } }
 
+    /// <summary>CR-040 (D-13): the approved Queue Ordering Scope of the process (processes with the same value are ordered strictly FIFO together). Declared by an Admin, never derived. NULL = not declared.</summary>
+    public string? QueueScope { get; private set; }
+
+    public void SetQueueScope(string? scope, DateTimeOffset now)
+    {
+        var s = string.IsNullOrWhiteSpace(scope) ? null : scope.Trim().ToUpperInvariant();
+        if (s is { Length: > 60 }) throw new DomainException("QUEUE_SCOPE_TOO_LONG", "A queue scope has at most 60 characters.");
+        QueueScope = s; UpdatedAt = now;
+        if (s is not null) RequireReadiness(now);
+    }
+
     public IReadOnlyList<string> TriggerLocationCodes => TriggerLocationCodesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public void Update(string name, string? description, RequestType requestType, RackKind rackKind, IEnumerable<string> triggers, bool enabled, DateTimeOffset now)

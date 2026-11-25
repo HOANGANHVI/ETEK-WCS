@@ -22,6 +22,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("transport_queue_seq");
+
             modelBuilder.Entity("WCS.Domain.Agvs.Agv", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1523,6 +1525,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ProductModelId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("QueueScope")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
                     b.Property<string>("RackKind")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -2081,6 +2087,16 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<int>("ProcessVersionNumber")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("QueueHeld")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("QueueScope")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<long?>("QueueSequence")
+                        .HasColumnType("bigint");
+
                     b.Property<Guid?>("RackId")
                         .HasColumnType("uuid");
 
@@ -2141,10 +2157,15 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("ProcessVersionId");
 
+                    b.HasIndex("QueueSequence")
+                        .IsUnique();
+
                     b.HasIndex("RequestKey")
                         .IsUnique();
 
                     b.HasIndex("State");
+
+                    b.HasIndex("QueueScope", "QueueSequence");
 
                     b.ToTable("transport_orders", (string)null);
                 });

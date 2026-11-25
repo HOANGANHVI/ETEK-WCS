@@ -129,6 +129,8 @@ public sealed class Harness : IAsyncDisposable
         var config = new ConfigurationBuilder()
             .AddConfiguration(db.Configuration)
             .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:WcsDatabase"] = db.ConnectionString })
+            // CR-040: the tests of earlier changes publish and start at once; a test of the queue sets this key to true (production default)
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["RouteEngine:NewPublicationsRequireReadiness"] = "false" })
             .AddInMemoryCollection(_extra ?? new Dictionary<string, string?>())   // CR-027: a test may add configuration keys (for example Rcs:Fleet:Source)
             .Build();
         var services = new ServiceCollection();

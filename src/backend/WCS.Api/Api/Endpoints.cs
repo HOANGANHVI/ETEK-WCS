@@ -167,6 +167,16 @@ public static class Endpoints
             return ApiResults.Ok(c, new { quantity = qty });
         });
 
+        // ---- CR-040: one rack record (Admin). Corrections of what WCS believes; guarded against reserved / moving racks; history is kept.
+        inv.MapPost("racks", async (HttpContext c, RackCreateRequest r, WCS.Application.Services.RackAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "RACK_CREATE", "Rack", r.LocationCode, null,
+                () => s.CreateAsync(new(r.LocationCode, r.RackKind, r.ExternalRackId, r.ProductModelId, r.Reason), c.Actor().Username, ct), x => new { x.Id, x.ExternalRackId, x.Status }, r.Reason), StatusCodes.Status201Created)).RequireAuthorization(admin);
+        inv.MapPut("racks/{id:guid}", async (HttpContext c, Guid id, RackUpdateRequest r, WCS.Application.Services.RackAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "RACK_UPDATE", "Rack", id.ToString(), null,
+                () => s.UpdateAsync(id, new(r.LocationCode, r.RackKind, r.ExternalRackId, r.Reason), c.Actor().Username, ct), x => new { x.ExternalRackId, x.Status, x.CurrentLocationId }, r.Reason))).RequireAuthorization(admin);
+        inv.MapDelete("racks/{id:guid}", async (HttpContext c, Guid id, string? reason, WCS.Application.Services.RackAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, new { id = await Audited.RunAsync(c, "RACK_DELETE", "Rack", id.ToString(), null, () => s.DeleteAsync(id, reason ?? "", c.Actor().Username, ct), x => new { id = x }, reason) })).RequireAuthorization(admin);
+
         // ---- CR-036: product models and the audited assignment of a model to an existing rack (Admin only). Nothing here infers a model from a location.
         var models = api.MapGroup("/product-models").WithTags("ProductModels").RequireAuthorization(admin);
         models.MapGet("", async (HttpContext c, ProductModelService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListAsync(ct)));

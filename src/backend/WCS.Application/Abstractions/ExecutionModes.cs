@@ -78,6 +78,8 @@ public interface IRcsMessageQuery
     Task<IReadOnlyList<RcsMessageSummary>> UnlinkedAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<RcsMessageSummary>?> ForTaskAsync(Guid taskId, CancellationToken ct = default);   // null = no such task
     Task<RcsMessageDetail?> GetAsync(Guid id, CancellationToken ct = default);
+    /// <summary>CR-040: the messages recorded for these WCS request codes (the legs of a transport order), in arrival order.</summary>
+    Task<IReadOnlyList<RcsMessageSummary>> ByRequestCodesAsync(IReadOnlyList<string> requestCodes, CancellationToken ct = default);
 }
 
 public static class ExecutionModeCodes

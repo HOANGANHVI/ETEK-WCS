@@ -19,6 +19,12 @@ public sealed class RouteEngineOptions
 
     /// <summary>CR-035 (D-11/D-12): when true a request is only accepted for a Published process version that is also Ready. Default false = behaviour unchanged (feature flag; existing deployments keep working).</summary>
     public bool EnforceReadiness { get; set; }
+
+    /// <summary>
+    /// CR-040 (D-12): every version published from now on accepts a request only when Ready, and its requests go through the queue. Default true. Versions published before keep
+    /// their behaviour (the flag is stored per process at publication).
+    /// </summary>
+    public bool NewPublicationsRequireReadiness { get; set; } = true;
 }
 
 /// <summary>Persistence of the routing aggregates. Implemented in Infrastructure; every method takes part in the current unit of work.</summary>
@@ -50,6 +56,14 @@ public interface IRoutingRepository
     /// <summary>CR-028: legs of RcsManaged dispatch that were sent to the RCS (task code set, no AgvId) and are not finished: their AMR is asked from the RCS.</summary>
     Task<IReadOnlyList<Guid>> ListManagedLegIdsToSyncAsync(int take, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListOpenOrderIdsAsync(int take, CancellationToken ct = default);
+    /// <summary>CR-040: serializes queue decisions of one key until the surrounding transaction ends.</summary>
+    Task LockQueueAsync(string key, CancellationToken ct = default);
+    /// <summary>CR-040: the next value of the database queue sequence.</summary>
+    Task<long> NextQueueSequenceAsync(CancellationToken ct = default);
+    /// <summary>CR-040: the oldest open request of the scope, older than <paramref name="sequence"/>, that still has to be given a resource (not dispatched yet, between two legs, or a leg without destination).</summary>
+    Task<TransportOrder?> FindOlderWaitingInScopeAsync(string scope, long sequence, CancellationToken ct = default);
+    /// <summary>CR-040: true when an older request of the scope still has a leg that was not sent to the AGV system.</summary>
+    Task<bool> HasOlderUnsentLegInScopeAsync(string scope, long sequence, CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> ListReadyLegIdsAsync(int take, CancellationToken ct = default);
     Task<(IReadOnlyList<TransportOrder> Items, int Total)> QueryOrdersAsync(OrderState? state, int skip, int take, CancellationToken ct = default);
     void Add(RoutingEvent e);
@@ -70,6 +84,12 @@ public interface IRoutingRepository
     /// <summary>True when the port has IO points and every one of them is Approved by the PLC engineer. Physical operations are refused otherwise.</summary>
     Task<bool> IsPortMappingApprovedAsync(string portId, CancellationToken ct = default);
     Task<bool> IsPlcEnabledAsync(string plcId, CancellationToken ct = default);
+    /// <summary>CR-040: enabled ports that are linked to a location.</summary>
+    Task<IReadOnlyList<PlcStation>> ListLinkedPortsAsync(CancellationToken ct = default);
+    /// <summary>CR-040: the PLC → WCS points of a station, as the IO configuration declares them (read only).</summary>
+    Task<IReadOnlyList<StationIoPoint>> ListPlcInputPointsAsync(string stationId, CancellationToken ct = default);
+    /// <summary>CR-040: the request key of an open transport order that uses the rack (null = none).</summary>
+    Task<string?> FindOpenOrderUsingRackAsync(Guid rackId, CancellationToken ct = default);
 }
 
 /// <summary>Whether the link to a PLC is currently up (read from the PLC runtime). Null = unknown.</summary>

@@ -56,6 +56,27 @@ public class TransportOrder
     public string? CorrelationId { get; private set; }
     public void SetCorrelation(string? correlationId) { if (CorrelationId is null && !string.IsNullOrWhiteSpace(correlationId)) CorrelationId = correlationId.Trim().Length > 100 ? correlationId.Trim()[..100] : correlationId.Trim(); }
     public Guid? RackId { get; private set; }
+    /// <summary>CR-040: position in the official queue, given ONCE at admission and never changed. NULL = not a queued request (a process without the readiness requirement).</summary>
+    public long? QueueSequence { get; private set; }
+    /// <summary>CR-040 (D-13): the Queue Ordering Scope, pinned the first time it is known. NULL = not determined yet (OQ-54).</summary>
+    public string? QueueScope { get; private set; }
+    /// <summary>CR-040 (D-12): true while the request is Held. Only a request that has not been dispatched can be Held.</summary>
+    public bool QueueHeld { get; private set; }
+
+    public void Enqueue(long sequence, string? scope, DateTimeOffset now)
+    {
+        if (QueueSequence is not null) throw new DomainException("QUEUE_SEQUENCE_FIXED", "The queue position of a request never changes.");
+        QueueSequence = sequence; QueueScope = string.IsNullOrWhiteSpace(scope) ? null : scope.Trim(); UpdatedAt = now;
+    }
+
+    public void PinQueueScope(string scope, DateTimeOffset now) { if (QueueScope is null) { QueueScope = scope.Trim(); UpdatedAt = now; } }
+
+    public void SetQueueHeld(bool held, DateTimeOffset now)
+    {
+        if (held && LegCount > 0) throw new DomainException("QUEUE_HOLD_NOT_ALLOWED", "A dispatched request is never put on hold.");
+        if (QueueHeld != held) { QueueHeld = held; UpdatedAt = now; }
+    }
+
     public OrderState State { get; private set; }
     public WaitKind WaitKind { get; private set; }
     public string? StateReason { get; private set; }

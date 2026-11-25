@@ -147,6 +147,10 @@ internal sealed class RcsMessageQuery(WcsDbContext db) : IRcsMessageQuery
         return rows;
     }
 
+    public async Task<IReadOnlyList<RcsMessageSummary>> ByRequestCodesAsync(IReadOnlyList<string> requestCodes, CancellationToken ct = default) =>
+        requestCodes.Count == 0 ? [] : await db.RcsMessages.AsNoTracking().Where(m => m.RequestCode != null && requestCodes.Contains(m.RequestCode)).OrderBy(m => m.Seq).Take(500)
+            .Select(m => new RcsMessageSummary(m.Seq, m.Id, m.CreatedAt, m.Mode, m.Direction, m.MessageType, m.Protocol, m.Result, m.HttpStatusCode, m.ErrorCode, m.RequestCode)).ToListAsync(ct);
+
     public async Task<IReadOnlyList<RcsMessageSummary>> UnlinkedAsync(int take, CancellationToken ct = default) =>
         await db.RcsMessages.AsNoTracking().Where(m => m.TaskId == null).OrderByDescending(m => m.Seq).Take(Math.Clamp(take, 1, 200))
             .Select(m => new RcsMessageSummary(m.Seq, m.Id, m.CreatedAt, m.Mode, m.Direction, m.MessageType, m.Protocol, m.Result, m.HttpStatusCode, m.ErrorCode, m.RequestCode)).ToListAsync(ct);
