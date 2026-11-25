@@ -8,6 +8,8 @@
 export interface Bilingual { vi: string; en: string }
 
 export const SYSTEM_LOG_TEMPLATES: Record<string, Bilingual> = {
+  'Reconciliation of task {TaskId}: {Code} at {Location} (ModelIsolation {Mode}). {EventCode}': { vi: 'Đối soát nhiệm vụ {TaskId}: {Code} tại {Location} (chế độ cách ly mô hình {Mode})', en: 'Reconciliation of task {TaskId}: {Code} at {Location} (ModelIsolation {Mode})' },
+  'Stock of model {Model} entered at {Location}, which belongs to another model (ModelIsolation Warn). {EventCode}': { vi: 'Nhập tồn kho mô hình {Model} tại {Location}, vị trí thuộc mô hình khác (cách ly mô hình: cảnh báo)', en: 'Stock of model {Model} entered at {Location}, which belongs to another model (ModelIsolation Warn)' },
   'Leg dispatch failed for {LegId}': { vi: 'Gửi chặng {LegId} tới hệ thống AGV thất bại', en: 'Leg dispatch failed for {LegId}' },
   'Continue of leg {Code} failed; it is retried by the next pass': { vi: 'Yêu cầu tiếp tục chặng {Code} thất bại; lượt xử lý sau sẽ thử lại', en: 'Continue of leg {Code} failed; it is retried by the next pass' },
   'PLC {Plc} is not connected: {Count} Station Transaction(s) kept and marked suspended': { vi: 'PLC {Plc} chưa kết nối: giữ nguyên {Count} Station Transaction và đánh dấu tạm dừng', en: 'PLC {Plc} is not connected: {Count} Station Transaction(s) kept and marked suspended' },

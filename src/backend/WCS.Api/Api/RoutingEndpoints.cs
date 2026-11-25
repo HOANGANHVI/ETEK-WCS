@@ -19,7 +19,9 @@ public sealed record TransactionResolveRequest(string? ResumeState);
 public sealed record PlcRequestInput([property: Required] string PlcId, string? PortId, [property: Required, StringLength(254)] string RequestId, bool PickupRequest, bool DeliveryRequest,
     int? RackFull, int? RackEmpty, int? DestinationAvailable, int? RackType);
 public sealed record ProcessHeaderRequest([property: Required, StringLength(60)] string Code, [property: Required, StringLength(200)] string Name, string? Description,
-    [property: Required] string RequestType, [property: Required] string RackKind, string[]? TriggerLocationCodes, bool? Enabled);
+    [property: Required] string RequestType, [property: Required] string RackKind, string[]? TriggerLocationCodes, bool? Enabled, Guid? ProductModelId = null);
+public sealed record SimStartRequest([property: Required, StringLength(60)] string FlowCode, [property: Required, StringLength(50)] string LocationCode, bool SafetyAcknowledged);
+public sealed record SetReadinessRequest([property: Required] string Readiness, [property: Required, StringLength(500)] string Reason);
 public sealed record NewVersionRequest(Guid? FromVersionId);
 public sealed record AddPlcRequest([property: Required, StringLength(20)] string PlcId, [property: Required, StringLength(100)] string Name, [property: Required, StringLength(64)] string IpAddress,
     AddPlcStationCommand[]? Stations);
@@ -101,6 +103,22 @@ public static class RoutingEndpoints
                 () => s.HandleRequestAsync(new PlcRequestSnapshot(r.PlcId, r.PortId, r.RequestId, r.PickupRequest, r.DeliveryRequest, r.RackFull, r.RackEmpty, r.DestinationAvailable, r.RackType), ct),
                 x => new { x.Outcome, x.Code }))).RequireAuthorization(admin);
 
+        // ================================================================ CR-035 Admin manual PLC simulation (PLC only; the RCS is always the real one)
+        var sim = api.MapGroup("/plc-simulation").WithTags("PlcSimulation").RequireAuthorization(admin);
+        sim.MapGet("status", (HttpContext c, PlcSimulationService s) => ApiResults.Ok(c, s.Status()));
+        sim.MapPost("activate", async (HttpContext c, PlcSimulationService s) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_ACTIVATE", "PlcSimulation", null, null, () => Task.FromResult(s.Activate(c.Actor().Username)), x => new { x.Active })));
+        sim.MapPost("deactivate", async (HttpContext c, PlcSimulationService s) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_DEACTIVATE", "PlcSimulation", null, null, () => Task.FromResult(s.Deactivate()), x => new { x.Active })));
+        sim.MapGet("flows", async (HttpContext c, PlcSimulationService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListFlowsAsync(ct)));
+        sim.MapPost("requests", async (HttpContext c, SimStartRequest r, PlcSimulationService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_REQUEST", "PlcSimulation", $"{r.FlowCode}@{r.LocationCode}", null,
+                () => s.StartRequestAsync(r.FlowCode, r.LocationCode, r.SafetyAcknowledged, ct), x => new { x.Outcome, x.Code, x.RequestId })));
+        sim.MapPost("legs/{id:guid}/confirm-pick", async (HttpContext c, Guid id, PlcSimulationService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_CONFIRM_PICK", "TransportLeg", id.ToString(), null, () => s.ConfirmHandoverAsync(id, false, c.Actor().Username, null, ct), x => new { x.Outcome })));
+        sim.MapPost("legs/{id:guid}/confirm-drop", async (HttpContext c, Guid id, ConfirmDropRequest r, PlcSimulationService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_CONFIRM_DROP", "TransportLeg", id.ToString(), null, () => s.ConfirmHandoverAsync(id, true, c.Actor().Username, r.ExternalRackId, ct), x => new { x.Outcome })));
+
         // ================================================================ Business Process administration (Admin)
         var proc = api.MapGroup("/processes").WithTags("Processes").RequireAuthorization(admin);
         proc.MapGet("", async (HttpContext c, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListAsync(ct)));
@@ -140,6 +158,11 @@ public static class RoutingEndpoints
                 return ApiResults.Fail(c, 422, ex.Code, ex.Message, ex.Issues);
             }
         });
+        // CR-035 (D-11): Operational Readiness is a separate axis; it never changes the Publication state
+        ver.MapGet("{id:guid}/readiness", async (HttpContext c, Guid id, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetReadinessAsync(id, ct)));
+        ver.MapPut("{id:guid}/readiness", async (HttpContext c, Guid id, SetReadinessRequest r, ProcessAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_READINESS", "BusinessProcessVersion", id.ToString(), null,
+                () => s.SetReadinessAsync(id, r.Readiness, r.Reason, c.Actor().Username, ct), x => new { x.PublicationState, x.Readiness, x.Reason })));
         ver.MapPost("{id:guid}/disable", async (HttpContext c, Guid id, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_DISABLE", "BusinessProcessVersion", id.ToString(), null,
                 () => s.DisableAsync(id, ct), x => new { x.ProcessCode, x.Number, x.State })));
@@ -158,5 +181,5 @@ public static class RoutingEndpoints
                 () => s.SetPortLinkAsync(stationId, r.LocationCode, r.Enabled, ct), x => new { x.StationId, x.LocationCode, x.Enabled })));
     }
 
-    private static ProcessHeader Header(ProcessHeaderRequest r) => new(r.Code, r.Name, r.Description, r.RequestType, r.RackKind, r.TriggerLocationCodes ?? []);
+    private static ProcessHeader Header(ProcessHeaderRequest r) => new(r.Code, r.Name, r.Description, r.RequestType, r.RackKind, r.TriggerLocationCodes ?? [], r.ProductModelId);
 }

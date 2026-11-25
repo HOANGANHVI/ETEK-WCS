@@ -33,6 +33,24 @@ public class Rack
     public Guid? CurrentTaskId { get; private set; }
     public DateTimeOffset LastConfirmedAt { get; private set; }
     public uint Version { get; private set; }
+    /// <summary>CR-036: product model of the rack. NULL = unknown (every existing rack). NEVER inferred from the location; set at stock-in or by an audited Admin assignment.</summary>
+    public Guid? ProductModelId { get; private set; }
+    /// <summary>CR-036: <see cref="RackDisposition.Auto"/> (default) or <see cref="RackDisposition.ManualHandling"/>. No method here sets it back to Auto.</summary>
+    public RackDisposition Disposition { get; private set; } = RackDisposition.Auto;
+
+    /// <summary>Gives the rack its model once. A different model is refused (changing a model needs a separate approved procedure).</summary>
+    public void AssignModel(Guid modelId)
+    {
+        if (ProductModelId is { } m && m != modelId) throw new DomainException("RACK_MODEL_ALREADY_SET", "The rack already has a different product model.");
+        ProductModelId = modelId;
+    }
+
+    /// <summary>One way only: the rack leaves the automatic flow. There is deliberately no counterpart.</summary>
+    public bool MarkManualHandling()
+    {
+        if (Disposition == RackDisposition.ManualHandling) return false;
+        Disposition = RackDisposition.ManualHandling; return true;
+    }
 
     public void BeginTransit(Guid taskId, DateTimeOffset now)
     {

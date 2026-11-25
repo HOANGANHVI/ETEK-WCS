@@ -11,6 +11,7 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
 {
     public DbSet<Agv> Agvs => Set<Agv>();
     public DbSet<Location> Locations => Set<Location>();
+    public DbSet<ProductModel> ProductModels => Set<ProductModel>();   // CR-036
     public DbSet<Rack> Racks => Set<Rack>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();

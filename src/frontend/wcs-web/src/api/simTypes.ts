@@ -1,0 +1,41 @@
+// CR-035 – Admin manual PLC simulation (PLC only; the RCS is always the real one).
+export interface SimStatus {
+  allowed: boolean
+  active: boolean
+  activatedBy: string | null
+  activatedAt: string | null
+  realRcsDispatchEnabled: boolean
+  enforceReadiness: boolean
+  banner: string
+  mappingSource: string
+  blockers: string[]
+}
+
+export interface SimTrigger {
+  locationCode: string
+  portId: string | null
+  plcId: string | null
+  portMappingApproved: boolean
+  plcOnline: boolean | null
+  portBusy: boolean
+}
+
+export interface SimFlow {
+  code: string
+  name: string
+  requestType: string
+  rackKind: string
+  publicationState: string
+  readiness: string | null
+  publishedVersion: number | null
+  triggers: SimTrigger[]
+  startableNow: boolean
+  notStartableReason: string | null
+}
+
+export interface SimStartResult {
+  outcome: string
+  code: string
+  message: string
+  requestId: string
+}

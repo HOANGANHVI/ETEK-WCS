@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
+using WCS.Domain.Common;
 using WCS.Domain.Routing;
 
 namespace WCS.Application.Routing;
@@ -11,7 +12,7 @@ namespace WCS.Application.Routing;
 /// Publishing is refused unless <see cref="ProcessValidator"/> passes at that very moment. A Published version is never edited: a change is a new version,
 /// and running Transport Tasks keep their own snapshot.
 /// </summary>
-public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository routing, ProcessValidator validator, IClock clock)
+public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository routing, ProcessValidator validator, IClock clock, IProductModelRepository productModels)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -41,6 +42,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         if (code.Length is 0 or > 60) throw AppException.Validation("PROCESS_CODE_INVALID", "Process code is required (max 60 characters).");
         if (await routing.GetProcessByCodeAsync(code, t) is not null) throw AppException.Conflict("PROCESS_CODE_EXISTS", $"Process code {code} already exists.");
         var p = new BusinessProcess(code, h.Name, h.Description, DefinitionMapping.ParseRequestType(h.RequestType), DefinitionMapping.ParseRackKind(h.RackKind), h.TriggerLocationCodes ?? [], clock.UtcNow);
+        if (h.ProductModelId is { } pm0) { await EnsureModelAsync(pm0, t); p.SetProductModel(pm0, clock.UtcNow); }   // CR-036
         routing.Add(p);
         routing.Add(new BusinessProcessVersion(p.Id, 1, user, "Initial draft", clock.UtcNow));
         await routing.FlushAsync(t);   // the returned view reads the version list from the database
@@ -51,6 +53,12 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
     {
         var p = await routing.GetProcessAsync(id, t) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found.");
         p.Update(h.Name, h.Description, DefinitionMapping.ParseRequestType(h.RequestType), DefinitionMapping.ParseRackKind(h.RackKind), h.TriggerLocationCodes ?? [], enabled, clock.UtcNow);
+        if (h.ProductModelId is { } pm1 && pm1 != p.ProductModelId)
+        {   // CR-036: null = unchanged. A model is not changed under a Published version (its snapshot, validation and running orders were made for the old one).
+            await EnsureModelAsync(pm1, t);
+            if ((await routing.ListVersionsAsync(p.Id, t)).Any(v => v.State == ProcessConfigState.Published)) throw AppException.Conflict("PROCESS_MODEL_LOCKED", "The product model of a process with a Published version cannot be changed; create a new process.");
+            p.SetProductModel(pm1, clock.UtcNow);
+        }
         return await ToDtoAsync(p, t);
     }, ct);
 
@@ -104,6 +112,23 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         return ToVersionDto(await ProcessOf(v, t), v);
     }, ct);
 
+    /// <summary>CR-035 (D-11): sets Operational Readiness of a version. Independent of Publication: the version state is never touched. Reason is required (audit).</summary>
+    public Task<ReadinessDto> SetReadinessAsync(Guid versionId, string target, string? reason, string? user, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        if (!Enum.TryParse<OperationalReadiness>(target, true, out var r)) throw AppException.Validation("READINESS_INVALID", "Readiness must be NotReady, Ready or Suspended.");
+        if (string.IsNullOrWhiteSpace(reason)) throw AppException.Validation("REASON_REQUIRED", "A reason is required for a Readiness change.");
+        var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
+        try { v.SetReadiness(r, user, reason.Trim(), clock.UtcNow); }
+        catch (DomainException e) { throw AppException.Rejected(e.Code, e.Message); }
+        return new ReadinessDto(v.Id, v.State.ToString(), v.Readiness.ToString(), v.ReadinessReason, v.ReadinessChangedBy, v.ReadinessChangedAt);
+    }, ct);
+
+    public Task<ReadinessDto> GetReadinessAsync(Guid versionId, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
+        return new ReadinessDto(v.Id, v.State.ToString(), v.Readiness.ToString(), v.ReadinessReason, v.ReadinessChangedBy, v.ReadinessChangedAt);
+    }, ct);
+
     /// <summary>New Draft version copied from <paramref name="fromVersionId"/> (or the latest version). Published versions stay untouched.</summary>
     public Task<VersionDto> NewVersionAsync(Guid processId, Guid? fromVersionId, string? user, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
     {
@@ -145,13 +170,19 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
     private async Task<BusinessProcess> ProcessOf(BusinessProcessVersion v, CancellationToken ct) =>
         await routing.GetProcessAsync(v.ProcessId, ct) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found.");
 
+    private async Task EnsureModelAsync(Guid modelId, CancellationToken ct)
+    {
+        var m = await productModels.GetAsync(modelId, ct) ?? throw AppException.NotFound("MODEL_NOT_FOUND", "Product model not found.");
+        if (!m.Enabled) throw AppException.Rejected("MODEL_DISABLED", $"Product model {m.Code} is disabled.");
+    }
+
     private async Task<ProcessDto> ToDtoAsync(BusinessProcess p, CancellationToken ct)
     {
         var versions = await routing.ListVersionsAsync(p.Id, ct);
         return new ProcessDto(p.Id, p.Code, p.Name, p.Description, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, p.Enabled, p.ReviewBlocked, p.ReviewReason,
             p.SourceReference, versions.FirstOrDefault(v => v.State == ProcessConfigState.Published)?.Number, versions.Count == 0 ? 0 : versions.Max(v => v.Number),
             versions.OrderByDescending(v => v.Number).Select(v => new VersionSummaryDto(v.Id, v.Number, v.State.ToString(), v.CreatedAt, v.CreatedBy, v.ValidatedAt, v.PublishedAt,
-                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count)).ToList());
+                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count)).ToList(), p.ProductModelId);
     }
 
     private static VersionDto ToVersionDto(BusinessProcess p, BusinessProcessVersion v)

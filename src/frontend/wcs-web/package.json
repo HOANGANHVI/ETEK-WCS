@@ -17,6 +17,9 @@
     "plcwrite:test": "node scripts/run-i18n-smoke.mjs plc-write-smoke.ts",
     "plcmonitor:test": "node scripts/run-i18n-smoke.mjs plc-monitor-smoke.ts",
     "fleet:test": "node scripts/run-i18n-smoke.mjs fleet-smoke.ts",
+    "transfer:test": "node scripts/run-i18n-smoke.mjs transfer-smoke.ts",
+    "modeladmin:test": "node scripts/run-i18n-smoke.mjs model-admin-smoke.ts",
+    "ops:test": "node scripts/run-i18n-smoke.mjs ops-smoke.ts",
     "preview": "vite preview"
   },
   "dependencies": {

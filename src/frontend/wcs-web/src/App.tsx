@@ -21,9 +21,11 @@ import { LegacyHubRedirect, LogsHubIndex, LogsHubPage } from './pages/LogsHubPag
 import { PlcConnectionsPage } from './pages/PlcConnectionsPage'
 import { PlcIoMappingPage } from './pages/PlcIoMappingPage'
 import { PlcPage } from './pages/PlcPage'
+import { PlcSimulationPage } from './pages/PlcSimulationPage'
 import { ProcessesPage } from './pages/ProcessesPage'
 import { RoutingPage } from './pages/RoutingPage'
 import { TasksPage } from './pages/TasksPage'
+import { OperationsConsolePage } from './pages/OperationsConsolePage'
 import { UsersPage } from './pages/UsersPage'
 
 /**
@@ -52,10 +54,12 @@ function App() {
         <Route index element={<DashboardPage />} />
         <Route path="agvs" element={<AgvPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="operations" element={<OperationsConsolePage />} />
         <Route path="inventory" element={<InventoryPage />} />
         <Route path="routing" element={<RoutingPage />} />
         <Route path="processes" element={<RequireRole roles={['Admin']}><ProcessesPage /></RequireRole>} />
         <Route path="plc" element={<PlcPage />} />
+        <Route path="plc-simulation" element={<RequireRole roles={['Admin']}><PlcSimulationPage /></RequireRole>} />
         <Route path="plc/connections" element={<RequireRole roles={['Admin']}><PlcConnectionsPage /></RequireRole>} />
         <Route path="plc/io-mapping" element={<RequireRole roles={['Admin']}><PlcIoMappingPage /></RequireRole>} />
         <Route path="account" element={<AccountPage />} />

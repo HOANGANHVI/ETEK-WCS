@@ -34,7 +34,7 @@ public sealed class RouteEngine(
     IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IReservationRepository reservations,
     IInventoryTransactionRepository inventoryTx, IAgvRepository agvs, ITransportTaskRepository legacyTasks, RouteConditionEvaluator eval,
     StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IMaintenanceGate maintenance, IClock clock, IWcsNotifier notifier,
-    IOptions<DispatchOptions> dispatchOptions, RcsRobotMapper robotMapper, LegAssignmentThrottle legThrottle, ILogger<RouteEngine> logger) : IRouteEngine
+    IOptions<DispatchOptions> dispatchOptions, IOptions<RouteEngineOptions> routeOptions, ModelGuard modelGuard, ModelGuardThrottle guardThrottle, RackPlacement placement, RcsRobotMapper robotMapper, LegAssignmentThrottle legThrottle, ILogger<RouteEngine> logger) : IRouteEngine
 {
     private const string Wcs = "WCS";
     private const int MaxStepsPerAdvance = 50;
@@ -44,6 +44,15 @@ public sealed class RouteEngine(
 
     private void Event(TransportOrder o, TransportLeg? l, Guid? tx, string kind, string? detail, string source = Wcs) =>
         routing.Add(new RoutingEvent(o.Id, l?.Id, tx, kind, detail is { Length: > 1000 } ? detail[..1000] : detail, source, clock.UtcNow));
+
+    /// <summary>CR-036: writes what the model guards found during this evaluation as routing events (rate limited) and clears the findings.</summary>
+    private void FlushGuardEvents(TransportOrder order)
+    {
+        foreach (var f in modelGuard.Findings)
+            if (guardThrottle.ShouldEmit($"{order.Id}|{f.Code}|{f.Detail}", clock.UtcNow))
+                Event(order, null, null, "MODEL_GUARD", $"{modelGuard.Mode}: {f.Code} - {f.Detail}");
+        modelGuard.ClearFindings();
+    }
 
     // ================================================================================ start
 
@@ -87,12 +96,20 @@ public sealed class RouteEngine(
             if (!p.Enabled) throw AppException.Rejected("PROCESS_DISABLED", $"Process {p.Code} is disabled.");
             if (p.ReviewBlocked) throw AppException.Rejected("PROCESS_REVIEW_BLOCKED", $"Process {p.Code} is REVIEW and not approved for execution.");
             var v = await routing.GetPublishedVersionAsync(p.Id, ct) ?? throw AppException.Rejected("PROCESS_NOT_PUBLISHED", $"Process {p.Code} has no published version.");
+            if (routeOptions.Value.EnforceReadiness && v.Readiness != OperationalReadiness.Ready)
+                throw AppException.Rejected("PROCESS_NOT_READY", $"Process {p.Code} v{v.Number} is Published but its Operational Readiness is {v.Readiness}; the request is not accepted.");   // CR-035 D-12
             if (!p.TriggerLocationCodes.Contains(locationCode, StringComparer.OrdinalIgnoreCase))
                 throw AppException.Rejected("LOCATION_NOT_ALLOWED", $"Location {locationCode} cannot start process {p.Code}.");
             return (p, v);
         }
         var found = await routing.FindPublishedAsync(cmd.RequestType, cmd.RackKind, locationCode, ct);
         found = found.Where(x => !x.Process.ReviewBlocked).ToList();
+        if (routeOptions.Value.EnforceReadiness && found.Count > 0)
+        {   // CR-035 D-12: only Published + Ready may be matched; no other version is substituted
+            var ready = found.Where(x => x.Version.Readiness == OperationalReadiness.Ready).ToList();
+            if (ready.Count == 0) throw AppException.Rejected("PROCESS_NOT_READY", $"A process answers a {cmd.RequestType} request at {locationCode} but none is Ready; the request is not accepted.");
+            found = ready;
+        }
         return found.Count switch
         {
             0 => throw AppException.Rejected("PROCESS_NOT_FOUND", $"No published process answers a {cmd.RequestType} request at {locationCode}."),
@@ -223,6 +240,9 @@ public sealed class RouteEngine(
     {
         var now = clock.UtcNow;
         var kind = order.RackKind;
+        modelGuard.ClearFindings();
+        var mc = new ModelContext(order.Snapshot.ProductModelId);   // CR-036
+        var sel = modelGuard.SelectionFor(mc.ProcessModelId);        // null unless Mode = Enforce
 
         // ---- source
         string? sourceCode = null;
@@ -231,11 +251,11 @@ public sealed class RouteEngine(
         {
             case SourceMode.Request:
                 sourceCode = order.RequestLocationCode;
-                if (!await eval.SourceUsableAsync(sourceCode, kind, [], order.Id, ct)) { return await NoCandidateAsync(order, step, WaitKind.SourceUnavailable, "No usable rack at the request location", ct); }
+                if (!await eval.SourceUsableAsync(sourceCode, kind, [], order.Id, ct, mc)) { return await NoCandidateAsync(order, step, WaitKind.SourceUnavailable, "No usable rack at the request location", ct); }
                 break;
             case SourceMode.Candidates:
                 foreach (var c in step.Sources)
-                    if (await eval.SourceUsableAsync(c.LocationCode, kind, c.Conditions, order.Id, ct)) { sourceCode = c.LocationCode; break; }
+                    if (await eval.SourceUsableAsync(c.LocationCode, kind, c.Conditions, order.Id, ct, mc)) { sourceCode = c.LocationCode; break; }
                 if (sourceCode is null) return await NoCandidateAsync(order, step, WaitKind.SourceUnavailable, "No usable source candidate", ct);
                 break;
             case SourceMode.PreviousDestination:
@@ -245,10 +265,13 @@ public sealed class RouteEngine(
                 sourceCode = prev.DestinationLocationCode;
                 var storedRack = await racks.GetAsync(prev.RackId.Value, ct);
                 var prevLoc = await locations.GetByCodeAsync(sourceCode, ct);
-                if (storedRack is null || prevLoc is null || storedRack.CurrentLocationId != prevLoc.Id || storedRack.Status == RackStatus.Unknown)
+                var guardCode = storedRack is not null && modelGuard.On ? ModelGuard.RackViolation(storedRack, mc.ProcessModelId) : null;   // CR-036
+                if (guardCode is not null) modelGuard.Report(guardCode, $"rack {storedRack!.Id} at previous destination {sourceCode}");
+                if (storedRack is null || prevLoc is null || storedRack.CurrentLocationId != prevLoc.Id || storedRack.Status == RackStatus.Unknown || (modelGuard.Enforcing && guardCode is not null))
                 {
-                    // the rack is not where WCS stored it: never choose another position - reconcile
-                    order.TransitionTo(OrderState.ReconciliationRequired, "RACK_NOT_AT_PREVIOUS_DESTINATION", WaitKind.None, now);
+                    // the rack is not where WCS stored it (or it may not be used automatically): never choose another position - reconcile
+                    FlushGuardEvents(order);
+                    order.TransitionTo(OrderState.ReconciliationRequired, modelGuard.Enforcing && guardCode is not null ? guardCode : "RACK_NOT_AT_PREVIOUS_DESTINATION", WaitKind.None, now);
                     Event(order, null, null, "RECONCILIATION_REQUIRED", $"rack {prev.RackId} is not at {sourceCode}");
                     return LegCreation.Reconciliation;
                 }
@@ -258,8 +281,10 @@ public sealed class RouteEngine(
         }
 
         var srcLoc = (await locations.GetByCodeAsync(sourceCode!, ct))!;
-        rack ??= await racks.FindUnreservedAsync(srcLoc.Id, StatusOf(kind), ct);
+        rack ??= sel is null ? await racks.FindUnreservedAsync(srcLoc.Id, StatusOf(kind), ct) : await racks.FindUnreservedAsync(srcLoc.Id, StatusOf(kind), sel, ct);   // CR-036: filtered only when enforcing
         if (rack is null) return await NoCandidateAsync(order, step, WaitKind.SourceUnavailable, $"No unreserved {kind} rack at {sourceCode}", ct);
+
+        if (modelGuard.Mode == ModelIsolationMode.Warn && ModelGuard.RackViolation(rack, mc.ProcessModelId) is { } warnCode) modelGuard.Report(warnCode, $"rack {rack.Id} at {sourceCode}");
 
         // ---- destination (BeforePick) or deferred (AfterPick)
         string? destCode = null; bool noBind = false;
@@ -276,6 +301,7 @@ public sealed class RouteEngine(
         reservations.Add(Reservation.ForSourceRack(leg.Id, rack.Id, srcLoc.Id, now));
         srcLoc.Touch(now);
         if (destCode is not null) await ReserveDestinationAsync(leg, destCode, ct);
+        FlushGuardEvents(order);   // CR-036 (Warn findings of a leg that was created)
         leg.TransitionTo(LegState.Ready, "Leg ready for dispatch", WaitKind.None, now);
         order.TransitionTo(OrderState.InProgress, $"Leg {leg.Sequence} created", WaitKind.None, now);
         Event(order, leg, null, "LEG_CREATED", $"{leg.SourceLocationCode} -> {leg.DestinationLocationCode ?? "(after pick)"}");
@@ -285,9 +311,9 @@ public sealed class RouteEngine(
     private async Task<(string? Code, bool NoBind)> ChooseDestinationAsync(TransportOrder order, StepSnapshot step, RackKind kind, CancellationToken ct)
     {
         if (step.DestinationMode == DestinationMode.Request)
-            return await eval.DestinationUsableAsync(order.RequestLocationCode, kind, [], order.Id, ct) ? (order.RequestLocationCode, false) : (null, false);
+            return await eval.DestinationUsableAsync(order.RequestLocationCode, kind, [], order.Id, ct, new ModelContext(order.Snapshot.ProductModelId)) ? (order.RequestLocationCode, false) : (null, false);
         foreach (var c in step.Destinations)   // already ordered by priority then order; ONLY declared candidates are ever considered
-            if (await eval.DestinationUsableAsync(c.LocationCode, kind, c.Conditions, order.Id, ct)) return (c.LocationCode, c.NoBind);
+            if (await eval.DestinationUsableAsync(c.LocationCode, kind, c.Conditions, order.Id, ct, new ModelContext(order.Snapshot.ProductModelId))) return (c.LocationCode, c.NoBind);
         return (null, false);
     }
 
@@ -302,6 +328,7 @@ public sealed class RouteEngine(
     private Task<LegCreation> NoCandidateAsync(TransportOrder order, StepSnapshot step, WaitKind wait, string detail, CancellationToken ct)
     {
         var now = clock.UtcNow;
+        FlushGuardEvents(order);   // CR-036: why candidates were excluded (model / manual QC)
         switch (step.WaitBehavior)
         {
             case WaitBehavior.Fail:
@@ -629,7 +656,15 @@ public sealed class RouteEngine(
             var dest = await locations.GetByCodeAsync(leg.DestinationLocationCode, t);
             if (rack is null || dest is null) return new EventResult(EventOutcome.Rejected, "Rack or destination not found.", null);
             var before = rack.Status;
+            // CR-036: a physical drop is recorded as it happened. A model mismatch is NOT a reason to refuse it: the destination is flagged for reconciliation and an event is written.
+            var handover = modelGuard.On ? ModelGuard.HandoverViolation(rack, dest, order.Snapshot.ProductModelId) : null;
             rack.PlaceAt(dest.Id, StatusOf(leg.RackKind), now);   // the rack now stands at the destination (a buffer is a real storage location)
+            if (placement.OnPlaced(rack, dest, leg.Id, source, user, now) is { } dispositionTx) inventoryTx.Add(dispositionTx);   // CR-036: manual QC station -> ManualHandling (one way)
+            if (handover is not null)
+            {
+                if (modelGuard.Enforcing) dest.SetReconciliationRequired(true, now);
+                Event(order, leg, null, handover, $"{modelGuard.Mode}: rack model {rack.ProductModelId?.ToString() ?? "unknown"}, destination {dest.Code} model {dest.ProductModelId?.ToString() ?? "none"}, process model {order.Snapshot.ProductModelId?.ToString() ?? "none"}");
+            }
             var bind = BindOutcome.NotRequested;
             if (leg.DestinationNoBind) bind = BindOutcome.NotBoundByProcess;                        // "no bind rack" in the process: never bound here
             else if (!string.IsNullOrWhiteSpace(externalRackId)) { rack.Bind(externalRackId!); bind = BindOutcome.Bound; }

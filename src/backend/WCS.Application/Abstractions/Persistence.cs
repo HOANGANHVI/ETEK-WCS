@@ -67,6 +67,26 @@ public interface IRackRepository
     /// <summary>First rack at the location with the given status that has no ACTIVE reservation (deterministic order).</summary>
     Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, CancellationToken ct = default);
     Task<IReadOnlyList<Rack>> ListUnreservedAsync(Guid locationId, RackStatus status, int take, CancellationToken ct = default);
+    /// <summary>
+    /// CR-036: the same query with a rack filter (product model / manual handling). A NEW overload on purpose: the overload above (used by the legacy flows) is unchanged.
+    /// </summary>
+    Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, RackSelection selection, CancellationToken ct = default);
+}
+
+/// <summary>
+/// CR-036: filter of an automatic source search. <see cref="ProductModelId"/> set = only racks of exactly that model (a rack without a model is NOT selected);
+/// <see cref="RequireNoModel"/> = only racks without a model (a process without a model never takes a modelled rack);
+/// <see cref="AutoOnly"/> = racks in manual handling are never selected.
+/// </summary>
+public sealed record RackSelection(Guid? ProductModelId, bool RequireNoModel, bool AutoOnly);
+
+/// <summary>CR-036: product models.</summary>
+public interface IProductModelRepository
+{
+    Task<ProductModel?> GetAsync(Guid id, CancellationToken ct = default);
+    Task<ProductModel?> GetByCodeAsync(string code, CancellationToken ct = default);
+    Task<IReadOnlyList<ProductModel>> ListAsync(CancellationToken ct = default);
+    void Add(ProductModel model);
 }
 
 public interface IReservationRepository
@@ -76,6 +96,8 @@ public interface IReservationRepository
     Task RemoveAllForTaskAsync(Guid taskId, CancellationToken ct = default);
     Task<IReadOnlyList<Reservation>> ListActiveByTaskAsync(Guid taskId, CancellationToken ct = default);
     Task<int> CountActiveDestinationAsync(Guid locationId, CancellationToken ct = default);
+    /// <summary>CR-036: true when an ACTIVE reservation holds the rack.</summary>
+    Task<bool> HasActiveForRackAsync(Guid rackId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountActiveDestinationByLocationAsync(CancellationToken ct = default);
 }
 

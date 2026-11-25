@@ -1,6 +1,9 @@
 /** CR-026 – configuration export / import (Admin). Shapes mirror the API; records are identified by their natural key (never a database id). */
 
-export type TransferGroupId = 'Location' | 'Agv' | 'PlcStation' | 'BusinessProcess'
+export type TransferGroupId = 'ProductModel' | 'Location' | 'Agv' | 'PlcStation' | 'BusinessProcess'
+
+/** CR-036 (A.2): GET /api/product-models (Admin). */
+export interface ProductModelInfo { id: string; code: string; name: string; enabled: boolean }
 
 export interface MaintenanceView { enabled: boolean; reason: string | null; changedBy: string | null; updatedAt: string | null }
 

@@ -33,14 +33,16 @@ public sealed record InitialStockRequest(
     [property: Required, StringLength(50)] string LocationCode,
     RackKind RackKind,
     [property: Range(1, 1000)] int Quantity,
-    [property: Required, StringLength(100)] string User);
+    [property: Required, StringLength(100)] string User,
+    Guid? ProductModelId = null);
 
 public sealed record StockAdjustmentRequest(
     [property: Required, StringLength(50)] string LocationCode,
     RackKind RackKind,
     [property: Range(0, 1000)] int TargetQuantity,
     [property: Required, StringLength(100)] string User,
-    [property: StringLength(1000)] string? Note);
+    [property: StringLength(1000)] string? Note,
+    Guid? ProductModelId = null);
 
 public sealed record SimulatedStationRequest(
     [property: Required, StringLength(50)] string StationCode,
@@ -54,10 +56,14 @@ public sealed record PlcSettingsRequest(bool Enabled, string? DeviceName, string
 public sealed record RcsSettingsRequest(bool Enabled, string? SystemName, string? Host, int? Port, string? BaseUrl, string? AuthMode,
     string? Username, int? TimeoutMs, string? Password, bool ClearPassword, string? Token, bool ClearToken, string? UpdatedBy);
 
+public sealed record ProductModelRequest([property: Required, StringLength(40)] string Code, [property: Required, StringLength(200)] string Name);
+public sealed record ProductModelUpdateRequest([property: Required, StringLength(200)] string Name, bool Enabled);
+public sealed record AssignRackModelRequest([property: Required] Guid ProductModelId, [property: Required, StringLength(500)] string Reason);
+
 public sealed record AgvConfigRequest(string? RcsRobotCode, bool Enabled);
 
 public sealed record LocationConfigRequest(string Code, string Name, LocationType Type, int RackCapacity, AllowedRackKind AllowedRackKind,
-    bool Enabled, bool RequiresPlcPermission);
+    bool Enabled, bool RequiresPlcPermission, Guid? ProductModelId = null, StationRole? StationRole = null);
 
 // ---- authentication / accounts (passwords appear in requests only; they are never returned or logged) ----
 public sealed record LoginRequest(

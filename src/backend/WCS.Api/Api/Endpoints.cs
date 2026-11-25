@@ -154,17 +154,28 @@ public static class Endpoints
         inv.MapPost("initial-stock", async (HttpContext c, InitialStockRequest r, IInventoryService svc, CancellationToken ct) =>
         {
             var ids = await Audited.RunAsync(c, "INVENTORY_INITIAL_STOCK", "Location", r.LocationCode, null,
-                () => svc.DeclareInitialStockAsync(r.LocationCode, r.RackKind, r.Quantity, c.Actor().Username, ct),
+                () => svc.DeclareInitialStockAsync(r.LocationCode, r.RackKind, r.Quantity, c.Actor().Username, ct, r.ProductModelId),
                 res => new { r.LocationCode, rackKind = r.RackKind.ToString(), created = res.Count });
             return ApiResults.Ok(c, new { created = ids.Count, rackIds = ids }, StatusCodes.Status201Created);
         });
         inv.MapPost("adjustments", async (HttpContext c, StockAdjustmentRequest r, IInventoryService svc, CancellationToken ct) =>
         {
             var qty = await Audited.RunAsync(c, "INVENTORY_ADJUST", "Location", r.LocationCode, null,
-                () => svc.AdjustStockAsync(r.LocationCode, r.RackKind, r.TargetQuantity, c.Actor().Username, r.Note, ct),
+                () => svc.AdjustStockAsync(r.LocationCode, r.RackKind, r.TargetQuantity, c.Actor().Username, r.Note, ct, r.ProductModelId),
                 res => new { r.LocationCode, rackKind = r.RackKind.ToString(), target = r.TargetQuantity, quantity = res }, r.Note);
             return ApiResults.Ok(c, new { quantity = qty });
         });
+
+        // ---- CR-036: product models and the audited assignment of a model to an existing rack (Admin only). Nothing here infers a model from a location.
+        var models = api.MapGroup("/product-models").WithTags("ProductModels").RequireAuthorization(admin);
+        models.MapGet("", async (HttpContext c, ProductModelService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListAsync(ct)));
+        models.MapPost("", async (HttpContext c, ProductModelRequest r, ProductModelService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PRODUCT_MODEL_CREATE", "ProductModel", r.Code, null, () => s.CreateAsync(r.Code, r.Name, ct), x => new { x.Code, x.Name }), StatusCodes.Status201Created));
+        models.MapPut("{id:guid}", async (HttpContext c, Guid id, ProductModelUpdateRequest r, ProductModelService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PRODUCT_MODEL_UPDATE", "ProductModel", id.ToString(), null, () => s.UpdateAsync(id, r.Name, r.Enabled, ct), x => new { x.Code, x.Enabled })));
+        inv.MapPost("racks/{id:guid}/model", async (HttpContext c, Guid id, AssignRackModelRequest r, ProductModelService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "RACK_MODEL_ASSIGN", "Rack", id.ToString(), null,
+                () => s.AssignRackModelAsync(id, r.ProductModelId, c.Actor().Username, r.Reason, ct), x => new { x.ProductModelCode, x.Changed }, r.Reason))).RequireAuthorization(admin);
 
         // ---- PLC topology, IO catalog, monitoring (CR-002)
         api.MapPlcApi();
@@ -272,11 +283,11 @@ public static class Endpoints
                 () => s.UpdateAgvAsync(id, new UpdateAgvCommand(r.RcsRobotCode, r.Enabled), ct), res => res)));
         cfg.MapPost("locations", async (HttpContext c, LocationConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_LOCATION_CREATE", "Location", r.Code, null,
-                () => s.SaveLocationAsync(new SaveLocationCommand(r.Code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), true, ct),
+                () => s.SaveLocationAsync(new SaveLocationCommand(r.Code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission, r.ProductModelId, r.StationRole), true, ct),
                 res => res), StatusCodes.Status201Created));
         cfg.MapPut("locations/{code}", async (HttpContext c, string code, LocationConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_LOCATION_UPDATE", "Location", code, null,
-                () => s.SaveLocationAsync(new SaveLocationCommand(code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission), false, ct),
+                () => s.SaveLocationAsync(new SaveLocationCommand(code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission, r.ProductModelId, r.StationRole), false, ct),
                 res => res)));
 
         // ---- Account management and audit trail: Admin only

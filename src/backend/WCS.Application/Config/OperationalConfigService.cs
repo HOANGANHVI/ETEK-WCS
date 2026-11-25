@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
+using WCS.Application.Routing;
 using WCS.Application.Flows;
 using WCS.Application.Services;
 using WCS.Domain.Common;
@@ -20,7 +21,7 @@ public sealed record OperationsView(PolicyView Policy, SchedulerView Scheduler, 
 
 public sealed record UpdateAgvCommand(string? RcsRobotCode, bool Enabled);
 public sealed record SaveLocationCommand(string Code, string Name, LocationType Type, int RackCapacity, AllowedRackKind AllowedRackKind,
-    bool Enabled, bool RequiresPlcPermission);
+    bool Enabled, bool RequiresPlcPermission, Guid? ProductModelId = null, StationRole? StationRole = null);
 
 /// <summary>
 /// Operational parameters. Policy, scheduler and flow rules come from deployment configuration (appsettings) and are shown read-only –
@@ -37,6 +38,8 @@ public sealed partial class OperationalConfigService(
     ILocationRepository locations,
     IRackRepository racks,
     IReservationRepository reservations,
+    IProductModelRepository productModels,
+    IRoutingRepository routingRepo,
     ITransportTaskRepository tasks,
     IWcsNotifier notifier,
     IClock clock,
@@ -82,6 +85,13 @@ public sealed partial class OperationalConfigService(
         return await queries.GetAgvAsync(id, ct);
     }
 
+    private async Task EnsureModelExistsAsync(Guid? modelId, CancellationToken ct)
+    {
+        if (modelId is null) return;
+        var m = await productModels.GetAsync(modelId.Value, ct) ?? throw AppException.NotFound("MODEL_NOT_FOUND", "Product model not found.");
+        if (!m.Enabled) throw AppException.Rejected("MODEL_DISABLED", $"Product model {m.Code} is disabled.");
+    }
+
     public async Task<LocationDto> SaveLocationAsync(SaveLocationCommand cmd, bool create, CancellationToken ct = default)
     {
         var code = ConnectionValidator.Clean(cmd.Code) ?? "";
@@ -101,7 +111,13 @@ public sealed partial class OperationalConfigService(
             if (create)
             {
                 if (existing is not null) throw new ValidationFailedException([new("code", "Mã vị trí đã tồn tại.", "LOCATION_EXISTS")]);
-                locations.Add(new Location(code, name!, cmd.Type, cmd.RackCapacity, cmd.AllowedRackKind, cmd.RequiresPlcPermission, clock.UtcNow));
+                var created = new Location(code, name!, cmd.Type, cmd.RackCapacity, cmd.AllowedRackKind, cmd.RequiresPlcPermission, clock.UtcNow);
+                if (cmd.ProductModelId is not null || cmd.StationRole is not null)
+                {
+                    await EnsureModelExistsAsync(cmd.ProductModelId, t);
+                    created.SetModelAndRole(cmd.ProductModelId, cmd.StationRole, clock.UtcNow);
+                }
+                locations.Add(created);
                 return true;
             }
             if (existing is null) throw AppException.NotFound("LOCATION_NOT_FOUND", "Không tìm thấy vị trí.");
@@ -113,6 +129,16 @@ public sealed partial class OperationalConfigService(
             if (!cmd.Enabled && existing.Enabled && reserved > 0)
                 throw AppException.Conflict("LOCATION_HAS_RESERVATION", "Vị trí đang được giữ chỗ cho nhiệm vụ nên chưa thể tắt.");
             existing.Configure(name!, cmd.RackCapacity, cmd.AllowedRackKind, cmd.Enabled, cmd.RequiresPlcPermission, clock.UtcNow);
+            // CR-036: NULL in the command = "not given": the stored model / role stay as they are (an old package or client never clears them). A change needs an empty location.
+            var newModel = cmd.ProductModelId ?? existing.ProductModelId;
+            var newRole = cmd.StationRole ?? existing.StationRole;
+            if (newModel != existing.ProductModelId || newRole != existing.StationRole)
+            {
+                await EnsureModelExistsAsync(cmd.ProductModelId, t);
+                if (occupied > 0) throw AppException.Conflict("LOCATION_HAS_RACKS", "The product model / station role of a location that holds racks cannot be changed.");
+                if (await routingRepo.IsLocationReferencedByPublishedAsync(existing.Code, t)) throw AppException.Conflict("LOCATION_REFERENCED_BY_PUBLISHED", "The product model / station role of a location used by a Published process version cannot be changed.");
+                existing.SetModelAndRole(newModel, newRole, clock.UtcNow);
+            }
             return true;
         }, ct);
         logger.LogInformation("Location {Code} {Action}", code, create ? "created" : "updated");

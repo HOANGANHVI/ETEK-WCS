@@ -41,6 +41,22 @@ internal sealed class LocationConfiguration : IEntityTypeConfiguration<Location>
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.Version).IsRowVersion();
         b.HasIndex(x => x.Code).IsUnique();
+        // CR-036 (additive, nullable): model and role of a location. NULL for every existing location.
+        b.HasOne<ProductModel>().WithMany().HasForeignKey(x => x.ProductModelId).OnDelete(DeleteBehavior.Restrict);
+        b.HasIndex(x => x.ProductModelId);
+    }
+}
+
+internal sealed class ProductModelConfiguration : IEntityTypeConfiguration<ProductModel>
+{
+    public void Configure(EntityTypeBuilder<ProductModel> b)
+    {
+        b.ToTable("product_models");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.Code).HasMaxLength(40).IsRequired();
+        b.Property(x => x.Name).HasMaxLength(200).IsRequired();
+        b.HasIndex(x => x.Code).IsUnique();
     }
 }
 
@@ -58,6 +74,10 @@ internal sealed class RackConfiguration : IEntityTypeConfiguration<Rack>
         b.Property(x => x.Version).IsRowVersion();
         b.HasOne<Location>().WithMany().HasForeignKey(x => x.CurrentLocationId).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(x => x.CurrentLocationId);
+        // CR-036 (additive): the model is NULL for every existing rack (never inferred); the disposition of every existing rack is 'Auto'.
+        b.HasOne<ProductModel>().WithMany().HasForeignKey(x => x.ProductModelId).OnDelete(DeleteBehavior.Restrict);
+        b.Property(x => x.Disposition).HasDefaultValue(RackDisposition.Auto);
+        b.HasIndex(x => new { x.CurrentLocationId, x.Disposition });
         // A rack id, when known, identifies exactly one rack (NEEDS_CONFIRMATION: rack id model).
         b.HasIndex(x => x.ExternalRackId).IsUnique().HasFilter("\"ExternalRackId\" IS NOT NULL");
     }

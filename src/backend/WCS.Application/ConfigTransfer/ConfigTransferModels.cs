@@ -10,6 +10,8 @@ public static class ConfigGroupIds
     public const string Agv = "Agv";
     public const string PlcStation = "PlcStation";
     public const string BusinessProcess = "BusinessProcess";
+    /// <summary>CR-036 (A.1): product models. Records are keyed by CODE (never by Guid).</summary>
+    public const string ProductModel = "ProductModel";
 }
 
 /// <summary>One configuration record in its canonical form: natural key + configuration fields only (no Guid, no row version, no operational / approval / secret field).</summary>

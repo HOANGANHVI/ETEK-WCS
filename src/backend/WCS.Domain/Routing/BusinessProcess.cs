@@ -54,6 +54,10 @@ public class BusinessProcess
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public uint Version { get; private set; }
+    /// <summary>CR-036: product model of the process. NULL = legacy / no model constraint (every existing process).</summary>
+    public Guid? ProductModelId { get; private set; }
+
+    public void SetProductModel(Guid? modelId, DateTimeOffset now) { ProductModelId = modelId; UpdatedAt = now; }
 
     public IReadOnlyList<string> TriggerLocationCodes => TriggerLocationCodesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -98,6 +102,12 @@ public class BusinessProcessVersion
     public uint Version { get; private set; }
 
     public string FirstStepKey { get; private set; } = "";
+    /// <summary>CR-035 (D-11): Operational Readiness, a second axis independent of <see cref="State"/>. A new version starts NotReady; changing it never changes State.</summary>
+    public OperationalReadiness Readiness { get; private set; } = OperationalReadiness.NotReady;
+    public string? ReadinessReason { get; private set; }
+    public string? ReadinessChangedBy { get; private set; }
+    public DateTimeOffset? ReadinessChangedAt { get; private set; }
+
     public ICollection<RouteStep> Steps { get; private set; } = new List<RouteStep>();
 
     public bool IsEditable => State is ProcessConfigState.Draft or ProcessConfigState.Validated;
@@ -128,6 +138,15 @@ public class BusinessProcessVersion
     {
         if (State != ProcessConfigState.Validated) throw new DomainException("VERSION_NOT_VALIDATED", "Only a validated version can be published.");
         State = ProcessConfigState.Published; PublishedBy = by; PublishedAt = now; UpdatedAt = now;
+    }
+
+    /// <summary>CR-035 (D-11/OQ-51): only NotReady->Ready, Ready->Suspended and Suspended->Ready are decided. Other moves are refused until OQ-51 is answered. Never changes State.</summary>
+    public void SetReadiness(OperationalReadiness target, string? by, string? reason, DateTimeOffset now)
+    {
+        if (target == Readiness) return;
+        var allowed = (Readiness, target) is (OperationalReadiness.NotReady, OperationalReadiness.Ready) or (OperationalReadiness.Ready, OperationalReadiness.Suspended) or (OperationalReadiness.Suspended, OperationalReadiness.Ready);
+        if (!allowed) throw new DomainException("READINESS_TRANSITION_NOT_DECIDED", $"{Readiness} -> {target} is not a decided transition (open question OQ-51).");
+        Readiness = target; ReadinessReason = reason; ReadinessChangedBy = by; ReadinessChangedAt = now; UpdatedAt = now;
     }
 
     public void Disable(DateTimeOffset now)

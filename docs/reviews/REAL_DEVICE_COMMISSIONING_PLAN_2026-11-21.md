@@ -15,10 +15,10 @@
 | **PLC – Heartbeat** | **Không** (không có bộ ghi heartbeat chu kỳ; `Heartbeat_SW` chỉ là một tín hiệu trong mẫu) | – | – |
 | **PLC – Handshake** | **Không**: khung `HandshakeCoordinator` chỉ quan sát, không có luật ghi được duyệt; **không** có handshake theo giao diện 10/11 lẫn 20/11 (CR-029 chỉ là tài liệu) | – | – |
 | **RCS – giám sát đội AMR (`queryAgvStatus`)** | **Có** (CR-027: `HikFleetQueryClient`, POST `/rcms-dps/rest/queryAgvStatus` cổng 8182; polling; trạng thái Fresh/Stale/Missing; `GET /api/agvs/fleet`; màn hình AGV Monitoring) | `RCS_FLEET_SOURCE=Real` (đã thêm vào compose/.env.example, mặc định Simulator) + RCS được Admin lưu và bật trong *Kết nối RCS* (host, token) | **Chưa** (chỉ với máy chủ thử cục bộ trả lời theo tài liệu) |
-| **RCS – tạo task (`genAgvSchedulingTask`)** | **Không**. `Integration:Mode` khác `Simulator` làm backend **từ chối khởi động**; chỉ có `RcsSimulator` | – | – |
-| **RCS – `queryTaskStatus`, `continueTask`, `cancelTask` thật** | **Không** (chỉ trong simulator) | – | – |
-| **RCS – `agvCallback` (RCS → WCS)** | **Không** (không có endpoint; cách xác thực chưa biết) | – | – |
-| **Ánh xạ Location → `positionCode`; BP01–BP06 → `taskTyp`** | **Không có** trong tài liệu hay cấu hình | – | – |
+| **RCS – tạo task (`genAgvSchedulingTask`)** | **Có từ CR-030 (nhánh `feature/cr-030-real-rcs-dispatch`, chưa merge)**: `HikRcsClient`, mặc định **tắt** (`Rcs:RealDispatch:Enabled`), mapping rỗng, fail closed. (`Integration:Mode` khác `Simulator` vẫn làm backend từ chối khởi động; công tắc mới là `Rcs:RealDispatch:Enabled`.) | `Rcs:RealDispatch:Enabled=true` + kết nối RCS trong UI + mapping Location/`taskTyp` đã xác nhận | **Chưa** (chỉ với RCS giả) |
+| **RCS – `queryTaskStatus`, `continueTask`, `cancelTask` thật** | **Có từ CR-030** (như trên) | như trên | **Chưa** (chỉ với RCS giả) |
+| **RCS – `agvCallback` (RCS → WCS)** | **Có từ CR-030**: endpoint chỉ được map khi bật; **tài liệu V3.3 không định nghĩa xác thực** nên WCS từ chối mọi callback nếu chưa cấu hình secret/nguồn cho phép | `Rcs:RealDispatch:Callback:*` | **Chưa** (chỉ với RCS giả) |
+| **Ánh xạ Location → `positionCode`; BP01–BP06 → `taskTyp`** | **Cơ chế cấu hình đã có (CR-030) nhưng dữ liệu ở trạng thái RỖNG**: chưa có giá trị nào được xác nhận; WCS không tự sinh | `Rcs:RealDispatch:Locations/Processes` (file JSON ngoài Git) | – |
 | **Đồng bộ `RobotCode` vào Task/Leg** | Có (CR-028) **nhưng chỉ với simulator**, vì phụ thuộc `queryTaskStatus` | – | – |
 | **Rack/Inventory ↔ PLC** | WCS sở hữu tồn kho; xác nhận pick/drop hiện đến từ simulator/Admin; **không có nguồn quan sát PLC thật** (`IPlcObservationSource` không có dữ liệu) | – | – |
 
@@ -83,3 +83,7 @@ Không tự phát lệnh di chuyển AMR hoặc ghi PLC ngoài kịch bản đã
 | Thời gian | Cấp | Hành động | Người xác nhận | Kết quả | Tệp bằng chứng (log/ảnh/xuất chẩn đoán) |
 |---|---|---|---|---|---|
 | | | | | | |
+
+## 9. Cập nhật CR-030 (2026-11-21)
+
+Real Dispatch Adapter đã được viết trên nhánh `feature/cr-030-real-rcs-dispatch` và kiểm thử với **RCS giả** (xem `docs/change-management/CR-030_REAL_RCS_DISPATCH.md`). **Chưa merge, chưa bật, chưa thử với RCS thật.** Phần "6. Phần tích hợp còn thiếu" nay còn lại: dữ liệu mapping từ nhà cung cấp (câu hỏi 16–21), xác thực callback, dispatcher cho chặng (Q-MLEG-1), handshake PLC/heartbeat, nguồn dữ liệu rack. Cấp commissioning 4 (đồng bộ RobotCode) và 5–6 chỉ khả thi sau khi các điều kiện ở CR-030 mục 10 đạt.

@@ -16,6 +16,9 @@ public sealed class RouteEngineOptions
 
     /// <summary>PLC register value -> location code for Rack_Full / Rack_Empty (D1510 / D1512). Confirmed values only: 1..4 = A1..A4. Never extended automatically.</summary>
     public Dictionary<string, string> PlcLocationCodes { get; set; } = new();
+
+    /// <summary>CR-035 (D-11/D-12): when true a request is only accepted for a Published process version that is also Ready. Default false = behaviour unchanged (feature flag; existing deployments keep working).</summary>
+    public bool EnforceReadiness { get; set; }
 }
 
 /// <summary>Persistence of the routing aggregates. Implemented in Infrastructure; every method takes part in the current unit of work.</summary>
@@ -32,6 +35,8 @@ public interface IRoutingRepository
     /// <summary>Enabled processes with a Published version whose request type / rack kind / trigger location match. Used to select the process of a request.</summary>
     Task<IReadOnlyList<(BusinessProcess Process, BusinessProcessVersion Version)>> FindPublishedAsync(RequestType type, RackKind? kind, string locationCode, CancellationToken ct = default);
     void Add(BusinessProcessVersion version);
+    /// <summary>CR-036 (A.1): true when a Published version uses the location as trigger, candidate, waiting position or in a condition (the condition test is a conservative text match).</summary>
+    Task<bool> IsLocationReferencedByPublishedAsync(string locationCode, CancellationToken ct = default);
 
     // ---- orders and legs
     Task<TransportOrder?> GetOrderAsync(Guid id, CancellationToken ct = default);   // includes legs

@@ -59,6 +59,7 @@ export default defineMessages({
   d_CANCEL_RACE_RCS_INTERRUPTED: 'RCS báo gián đoạn trước khi hủy kịp: cần đối soát vị trí rack',
   d_RCS_NOTFOUND_AFTER_ACCEPT: 'RCS không còn bản ghi của nhiệm vụ đã tiếp nhận: cần đối soát',
   d_RCS_ENDED_WITHOUT_DROP: 'RCS báo kết thúc nhưng WCS chưa nhận xác nhận thả rack',
+  d_MODEL_GUARD: 'Kiểm tra mô hình sản phẩm: {code} tại {location}',
 }, {
   d_QUEUED_FLEET_LIMIT: 'The fleet limit of tasks in flight is reached; the request was queued',
   d_DISPATCHING_RCS_MANAGED: 'Sent to the RCS; the RCS chooses the AMR',
@@ -113,4 +114,5 @@ export default defineMessages({
   d_CANCEL_RACE_RCS_INTERRUPTED: 'RCS reported an interruption before the cancel took effect: rack position needs reconciliation',
   d_RCS_NOTFOUND_AFTER_ACCEPT: 'RCS no longer has a record of the accepted task: reconciliation required',
   d_RCS_ENDED_WITHOUT_DROP: 'RCS reported the end of the task but WCS has not received the drop confirmation',
+  d_MODEL_GUARD: 'Product model check: {code} at {location}',
 })

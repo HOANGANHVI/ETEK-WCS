@@ -18,6 +18,9 @@ Log.Logger = new LoggerConfiguration().MinimumLevel.Information().WriteTo.Consol
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+    // CR-030: the location / process mapping of the REAL RCS dispatch is DATA, not code. It can come from any configuration source; for a deployment it is convenient in a JSON file that is NOT in Git
+    // (Rcs:RealDispatch:ConfigFile = its path; the file must then exist). Empty = no extra file.
+    if (builder.Configuration["Rcs:RealDispatch:ConfigFile"] is { Length: > 0 } rcsDispatchFile) builder.Configuration.AddJsonFile(rcsDispatchFile, optional: false, reloadOnChange: false);
 
     // Structured logging (Serilog). Never log secrets: connection strings are built in code and not logged; LogSanitizer masks secret-like text again before storage.
     builder.Host.UseSerilog((ctx, services, cfg) => LogSetup.Configure(ctx.Configuration, services, cfg));
@@ -64,6 +67,15 @@ try
     else if (app.Environment.IsProduction())
         app.Logger.LogWarning("Rcs:AllowSimulatorInProduction=true: tasks are dispatched to the RCS SIMULATOR (supervised test only; no AGV moves). {EventCode}", "CONFIG_RCS_SIMULATOR_IN_PRODUCTION");
 
+    // CR-030: the real dispatch adapter is OFF by default; when it is switched on, say what is still missing (never a secret) - a missing item makes every call fail closed.
+    var realDispatch = app.Configuration.GetSection(WCS.Application.RealDispatch.RealDispatchOptions.SectionName).Get<WCS.Application.RealDispatch.RealDispatchOptions>();
+    if (realDispatch?.Enabled == true)
+    {
+        var missing = WCS.Application.RealDispatch.RealDispatchReadiness.Report(realDispatch);
+        if (missing.Count == 0) app.Logger.LogWarning("Rcs:RealDispatch is ENABLED: tasks are sent to the REAL RCS. {EventCode}", "CONFIG_RCS_REAL_DISPATCH");
+        else app.Logger.LogWarning("Rcs:RealDispatch is ENABLED but incomplete; calls that need the missing items are refused (nothing is sent): {Missing} {EventCode}", string.Join(" | ", missing), "CONFIG_RCS_REAL_DISPATCH_INCOMPLETE");
+    }
+
     if (app.Environment.IsProduction() && string.Equals(app.Configuration["Auth:CookieSecure"], "SameAsRequest", StringComparison.OrdinalIgnoreCase))
         app.Logger.LogWarning("Auth:CookieSecure=SameAsRequest in Production: session cookies are sent over plain HTTP. Acceptable only on a trusted test LAN; use HTTPS with Auth:CookieSecure=Always for operation. {EventCode}", "CONFIG_COOKIE_INSECURE");
 
@@ -90,7 +102,9 @@ try
     app.MapWcsApi();
     app.MapLogApi();   // CR-007 (Admin only)
     app.MapRcsDiagnosticsApi();   // CR-032 RCS Diagnostics & Manual API Tester (Admin only)
-    if (app.Configuration["Integration:Mode"] is null or "Simulator" && app.Configuration.GetValue("Simulator:ExposeApi", app.Environment.IsDevelopment()))
+    app.MapRcsCallback();   // CR-030: only when the real RCS dispatch AND its callback are enabled; authenticated by WCS-side checks, otherwise refused
+    // CR-030: with the REAL RCS dispatch the simulator API (it can inject RCS/PLC events into tasks) is never exposed
+    if (!app.Configuration.GetValue<bool>("Rcs:RealDispatch:Enabled") && app.Configuration["Integration:Mode"] is null or "Simulator" && app.Configuration.GetValue("Simulator:ExposeApi", app.Environment.IsDevelopment()))
         app.MapSimulatorApi();
     app.MapHub<WcsHub>("/hubs/wcs");
 

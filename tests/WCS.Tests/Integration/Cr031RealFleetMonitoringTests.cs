@@ -175,6 +175,32 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
         Assert.DoesNotContain((await View(h)).Amrs, a => a.RobotCode.StartsWith("SIM-"));              // no fallback to the simulator
     }
 
+    /// <summary>
+    /// The link is Disconnected only when the last success is OLDER than StaleAfterSeconds (strict). Exactly at the limit it is still Degraded. The stored timestamp has microsecond precision
+    /// (PostgreSQL), so a test that stops exactly at the limit gets either answer depending on the sub-microsecond ticks of the starting clock reading: this test pins both sides of the boundary
+    /// deterministically (it is the cause of the intermittent failure of the test below, which used to stop exactly at 15 s).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]    // the starting reading is a whole number of microseconds: exactly 15 s later is exactly at the limit
+    [InlineData(false)]   // the starting reading has sub-microsecond ticks: the stored value is truncated, so 15 s later is a hair beyond the limit
+    public async Task The_staleness_limit_is_strict_and_the_boundary_does_not_depend_on_the_test_clock_reading(bool wholeMicroseconds)
+    {
+        await using var rcs = await FakeRcs.StartAsync();
+        rcs.Respond = () => (200, Fleet(Amr("1001")), 0);
+        var (h, _) = await SetupAsync(rcs); await using var _h = h;
+        var sub = h.Clock.UtcNow.Ticks % 10;                                                       // 100-ns ticks beyond a whole microsecond
+        h.Clock.Advance(TimeSpan.FromTicks(wholeMicroseconds ? -sub : (sub == 0 ? 3 : 0)));
+        Assert.Equal(wholeMicroseconds, h.Clock.UtcNow.Ticks % 10 == 0);
+        await Refresh(h);
+        rcs.Respond = () => (503, "down", 0);
+        for (var i = 0; i < 3; i++) { h.Clock.Advance(TimeSpan.FromSeconds(5)); await Refresh(h); }
+        var v = await View(h);
+        Assert.Equal(15, v.StaleAfterSeconds);
+        Assert.Equal(wholeMicroseconds ? FleetStates.Degraded : FleetStates.Disconnected, v.Connection);
+        h.Clock.Advance(TimeSpan.FromSeconds(1));                                                  // clearly beyond the limit: always Disconnected
+        Assert.Equal(FleetStates.Disconnected, (await View(h)).Connection);
+    }
+
     [Fact]
     public async Task The_RCS_is_lost_and_comes_back_polling_continues_and_the_failures_are_reset()
     {
@@ -184,6 +210,7 @@ public class Cr031RealFleetMonitoringTests(DatabaseFixture fixture)
         await Refresh(h);
         rcs.Respond = () => (503, "down", 0);
         for (var i = 0; i < 3; i++) { h.Clock.Advance(TimeSpan.FromSeconds(5)); await Refresh(h); }
+        h.Clock.Advance(TimeSpan.FromSeconds(1));   // clearly beyond StaleAfterSeconds (15 s): stopping exactly AT the limit gave a different answer depending on the clock reading (see the boundary test above)
         var down = await View(h);
         Assert.Equal(FleetStates.Disconnected, down.Connection); Assert.Equal(3, down.ConsecutiveFailures);
         Assert.StartsWith(FleetErrorCodes.Http, down.LastErrorCode);

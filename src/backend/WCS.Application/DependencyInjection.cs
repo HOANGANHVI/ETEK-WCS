@@ -36,6 +36,9 @@ public static class DependencyInjection
             throw new NotSupportedException($"Rcs:Dispatch:Mode '{dispatchMode}' is not valid. Use '{Fleet.DispatchOptions.Legacy}' or '{Fleet.DispatchOptions.RcsManagedMode}'.");
         services.Configure<Fleet.DispatchOptions>(configuration.GetSection(Fleet.DispatchOptions.SectionName));
         services.AddScoped<Fleet.RcsRobotMapper>();
+        // CR-030: the REAL RCS dispatch adapter. OFF and EMPTY by default (Rcs:RealDispatch:Enabled=false, no mapping, no callback secret); the callback service is inert until enabled and authenticated.
+        services.Configure<RealDispatch.RealDispatchOptions>(configuration.GetSection(RealDispatch.RealDispatchOptions.SectionName));
+        services.AddScoped<RealDispatch.RcsCallbackService>();
         services.AddScoped<Fleet.DispatchModeGuard>();
         services.AddSingleton<Routing.LegAssignmentThrottle>();   // CR-028
         services.AddSingleton<Fleet.DispatchModeState>();   // CR-028: effective mode vs the mode configured now
@@ -44,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.AgvConfigGroup>();
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.PlcStationConfigGroup>();
         services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.BusinessProcessConfigGroup>();
+        services.AddScoped<ConfigTransfer.IConfigGroup, ConfigTransfer.ProductModelConfigGroup>();   // CR-036 (A.1)
         services.AddScoped<ConfigTransfer.ConfigGroupCatalog>();
         services.AddScoped<ConfigTransfer.ActiveWorkGate>();
         services.AddScoped<ConfigTransfer.ConfigBackupService>();
@@ -61,6 +65,14 @@ public static class DependencyInjection
         services.AddScoped<Routing.StationTransactionService>();
         services.AddScoped<Routing.IRouteEngine, Routing.RouteEngine>();
         services.AddScoped<Routing.IPlcRequestService, Routing.PlcRequestService>();
+        services.Configure<Routing.ModelIsolationOptions>(configuration.GetSection(Routing.ModelIsolationOptions.SectionName));   // CR-036 (default Mode = Off)
+        services.AddSingleton<Routing.ModelGuardThrottle>();
+        services.AddScoped<Routing.ModelGuard>();
+        services.AddScoped<Routing.RackPlacement>();
+        services.AddScoped<Services.ProductModelService>();
+        services.Configure<Routing.PlcSimulationOptions>(configuration.GetSection(Routing.PlcSimulationOptions.SectionName));   // CR-035
+        services.AddSingleton<Routing.PlcSimulationState>();
+        services.AddScoped<Routing.PlcSimulationService>();
         services.AddScoped<ConnectionConfigService>();
         services.AddScoped<OperationalConfigService>();
 

@@ -9,7 +9,7 @@ namespace WCS.Domain.Routing;
 /// never the live configuration, so publishing or editing a process cannot change a task that already started (CR-010 3.4).
 /// </summary>
 public sealed record ProcessSnapshot(Guid ProcessId, string ProcessCode, int VersionNumber, Guid VersionId, RequestType RequestType, RackKind RackKind,
-    string FirstStepKey, IReadOnlyList<StepSnapshot> Steps)
+    string FirstStepKey, IReadOnlyList<StepSnapshot> Steps, Guid? ProductModelId = null)
 {
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -23,7 +23,7 @@ public sealed record ProcessSnapshot(Guid ProcessId, string ProcessCode, int Ver
         version.Steps.OrderBy(s => s.Order).Select(s => new StepSnapshot(s.StepKey, s.Order, s.Type, s.SourceMode, s.DestinationMode, s.Resolution, s.NextStepKey,
             s.AlternativeNextStepKey, s.WaitBehavior, s.ErrorBehavior, s.Conditions, s.WaitingPositionCode,
             s.Candidates.OrderBy(c => c.Priority).ThenBy(c => c.Order)
-                .Select(c => new CandidateSnapshot(c.Role, c.Priority, c.Order, c.LocationCode, c.Conditions, c.NoBind)).ToList())).ToList());
+                .Select(c => new CandidateSnapshot(c.Role, c.Priority, c.Order, c.LocationCode, c.Conditions, c.NoBind)).ToList())).ToList(), process.ProductModelId);
 }
 
 public sealed record StepSnapshot(string StepKey, int Order, RouteStepType Type, SourceMode SourceMode, DestinationMode DestinationMode, DestinationResolution Resolution,
