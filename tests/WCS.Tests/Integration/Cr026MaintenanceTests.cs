@@ -164,6 +164,7 @@ public class Cr026MaintenanceTests(DatabaseFixture fixture)
         var id = await h.Db(async db =>
         {
             var t = TransportTask.Create("d", ProcessFlow.Bp05, RackKind.Full, agv.Id, f5.Id, "t", h.Clock.UtcNow);
+            t.PinExecutionMode(WCS.Domain.Rcs.ExecutionMode.Simulator);   // CR-038: a task row built by hand must carry the mode a real creation would pin (an unpinned row is sent nowhere)
             t.TransitionTo(TaskState.Validating, "v", "t", h.Clock.UtcNow); t.TransitionTo(TaskState.Dispatching, "d", "t", h.Clock.UtcNow);
             db.Tasks.Add(t); await db.SaveChangesAsync(); return t.Id;
         });

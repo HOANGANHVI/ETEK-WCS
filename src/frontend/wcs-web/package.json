@@ -20,6 +20,7 @@
     "transfer:test": "node scripts/run-i18n-smoke.mjs transfer-smoke.ts",
     "modeladmin:test": "node scripts/run-i18n-smoke.mjs model-admin-smoke.ts",
     "ops:test": "node scripts/run-i18n-smoke.mjs ops-smoke.ts",
+    "mode:test": "node scripts/run-i18n-smoke.mjs mode-smoke.ts",
     "preview": "vite preview"
   },
   "dependencies": {

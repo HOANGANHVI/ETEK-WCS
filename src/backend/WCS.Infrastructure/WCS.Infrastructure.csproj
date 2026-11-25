@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Plc/Catalog/plc-io-catalog.json" />
+    <EmbeddedResource Include="Seeding/default-locations.json" />
   </ItemGroup>
 
   <ItemGroup>

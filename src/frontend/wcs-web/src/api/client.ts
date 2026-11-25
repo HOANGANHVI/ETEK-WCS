@@ -6,6 +6,7 @@ import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
 import type { SimFlow, SimStartResult, SimStatus } from './simTypes'
+import type { ExecMode, ExecutionModeView, LegacyAdoptionResult, ModeReadiness, ModeTransitionBody, ModeTransitionResult, ModeTransitionView, RcsMessageDetail, RcsMessageSummary } from './modeTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
 import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
@@ -124,6 +125,16 @@ const qs = (params: Record<string, string | number | undefined>) => {
 
 const realApi = {
   health: () => request<SystemHealth>('/api/system/health'),
+  // CR-038: operating mode (Simulator / Real AGV) and the RCS message log. The server decides; the page only asks.
+  executionMode: () => request<ExecutionModeView>('/api/execution-mode'),
+  executionModeReadiness: (target: ExecMode) => request<ModeReadiness>(`/api/execution-mode/readiness${qs({ target })}`),
+  executionModeHistory: (take = 20) => request<ModeTransitionView[]>(`/api/execution-mode/history${qs({ take })}`),
+  executionModeTransition: (body: ModeTransitionBody) => request<ModeTransitionResult>('/api/execution-mode/transition', { method: 'POST', body: JSON.stringify(body) }),
+  executionModeAcknowledge: (requestId: string, reason: string) => request<ModeTransitionResult>('/api/execution-mode/recovery/acknowledge', { method: 'POST', body: JSON.stringify({ requestId, reason }) }),
+  executionModeAdoptLegacy: (reason: string) => request<LegacyAdoptionResult>('/api/execution-mode/legacy/adopt-simulator', { method: 'POST', body: JSON.stringify({ reason }) }),
+  unlinkedRcsMessages: () => request<RcsMessageSummary[]>('/api/execution-mode/unlinked-messages?take=50'),
+  taskRcsMessages: (taskId: string) => request<RcsMessageSummary[]>(`/api/tasks/${taskId}/rcs-messages`),
+  rcsMessage: (id: string) => request<RcsMessageDetail>(`/api/rcs-messages/${id}`),
   /** Server resources, container and host kept apart (Admin only). */
   resources: (signal?: AbortSignal) => request<ResourceSnapshot>('/api/system/resources', { signal }),
   agvs: () => request<Agv[]>('/api/agvs'),

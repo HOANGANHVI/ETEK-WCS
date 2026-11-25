@@ -11,6 +11,14 @@ public class TransportOrder
 {
     private TransportOrder() { }
 
+    /// <summary>CR-038: Simulator or Real, fixed when the order is created (null only for rows created before CR-038). It never moves to the other dispatcher.</summary>
+    public WCS.Domain.Rcs.ExecutionMode? ExecutionMode { get; private set; }
+    public void PinExecutionMode(WCS.Domain.Rcs.ExecutionMode mode)
+    {
+        if (ExecutionMode is { } current && current != mode) throw new DomainException("EXECUTION_MODE_FIXED", "The execution mode cannot be changed after creation.");
+        ExecutionMode = mode;
+    }
+
     public static TransportOrder Create(string requestKey, ProcessSnapshot snapshot, string requestLocationCode, string? requestedBy, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(requestKey)) throw new DomainException("REQUEST_KEY_REQUIRED", "RequestKey is required for idempotency.");

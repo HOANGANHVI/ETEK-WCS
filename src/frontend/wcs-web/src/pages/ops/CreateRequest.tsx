@@ -68,9 +68,23 @@ export function CreateRequest({ flows, gate, api, onCreated }: Props) {
         <Modal title={t('ops.createConfirmTitle')} onClose={() => apply('cancelAsk')}
           footer={<><Button onClick={() => apply('cancelAsk')}>{t('ops.createCancel')}</Button><Button variant="danger" disabled={!gate.allowed} onClick={() => void send()}>{t('ops.createSend')}</Button></>}>
           <p><strong>{t('ops.createConfirmBody', { flow: `${info.code} · ${info.label}`, station })}</strong></p>
-          <p>{t('ops.createConfirmSource', { source: gate.fleetSource === 'Real' ? t('ops.sourceReal') : t('ops.sourceSimulator'), mode: gate.integrationMode ?? t('ops.noValue') })}</p>
-          <div className="notice notice-warn" role="note">{t('ops.createConfirmLimit')}</div>
-          <div className="notice notice-bad" role="note">{t('ops.createConfirmSafe')}</div>
+          {gate.executionMode === 'Simulator' ? (
+            <>
+              <p data-exec-mode="Simulator"><strong>{t('ops.createModeTag', { mode: t('ops.modeTagSimulated') })}</strong></p>
+              <div className="notice notice-info" role="note">{t('ops.createConfirmSim')}</div>
+            </>
+          ) : gate.executionMode === 'Real' ? (
+            <>
+              <p data-exec-mode="Real"><strong>{t('ops.createModeTag', { mode: t('ops.modeTagReal') })}</strong></p>
+              <div className="notice notice-bad" role="note">{t('ops.createConfirmRealWarn')} {t('ops.createConfirmSafe')}</div>
+            </>
+          ) : (
+            <>
+              <p>{t('ops.createConfirmSource', { source: gate.fleetSource === 'Real' ? t('ops.sourceReal') : t('ops.sourceSimulator'), mode: gate.integrationMode ?? t('ops.noValue') })}</p>
+              <div className="notice notice-warn" role="note">{t('ops.createConfirmLimit')}</div>
+              <div className="notice notice-bad" role="note">{t('ops.createConfirmSafe')}</div>
+            </>
+          )}
         </Modal>
       )}
       {phase === 'sending' && <div className="notice notice-info" role="status">{t('ops.createSending')}</div>}

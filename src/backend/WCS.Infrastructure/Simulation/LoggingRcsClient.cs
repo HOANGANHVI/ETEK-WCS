@@ -12,7 +12,7 @@ namespace WCS.Infrastructure.Simulation;
 public sealed class LoggingRcsClient(IRcsClient inner, ILogger<LoggingRcsClient> logger) : IRcsClient, IRcsClientDecorator
 {
     public IRcsClient Inner => inner;
-    private string Adapter => IRcsClientDecorator.Unwrap(inner).GetType().Name;
+    private string AdapterFor(string requestCode) => IRcsClientDecorator.Unwrap(inner) is WCS.Infrastructure.ModeControl.RoutedRcsClient r ? r.AdapterFor(requestCode) : IRcsClientDecorator.Unwrap(inner).GetType().Name;   // CR-038: the adapter that really took the call (simulator or real), not the router
 
     public Task<RcsCallResult> CreateTaskAsync(RcsCreateTaskRequest request, CancellationToken ct = default) => Call("CREATE", request.RequestCode, null, () => inner.CreateTaskAsync(request, ct));
 
@@ -27,12 +27,12 @@ public sealed class LoggingRcsClient(IRcsClient inner, ILogger<LoggingRcsClient>
         try
         {
             var r = await inner.QueryTaskStatusAsync(requestCode, ct);
-            logger.LogInformation("RCS QUERY {RequestCode} -> {RcsStatus} (RCS task {RcsTaskCode}) in {DurationMs} ms, adapter {Adapter}. {EventCode}", requestCode, r.Status, r.RcsTaskCode, sw.ElapsedMilliseconds, Adapter, "RCS_CALL");
+            logger.LogInformation("RCS QUERY {RequestCode} -> {RcsStatus} (RCS task {RcsTaskCode}) in {DurationMs} ms, adapter {Adapter}. {EventCode}", requestCode, r.Status, r.RcsTaskCode, sw.ElapsedMilliseconds, AdapterFor(requestCode), "RCS_CALL");
             return r;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "RCS QUERY {RequestCode} threw after {DurationMs} ms, adapter {Adapter}. {EventCode}", requestCode, sw.ElapsedMilliseconds, Adapter, "RCS_CALL_EXCEPTION");
+            logger.LogError(ex, "RCS QUERY {RequestCode} threw after {DurationMs} ms, adapter {Adapter}. {EventCode}", requestCode, sw.ElapsedMilliseconds, AdapterFor(requestCode), "RCS_CALL_EXCEPTION");
             throw;
         }
     }
@@ -50,14 +50,14 @@ public sealed class LoggingRcsClient(IRcsClient inner, ILogger<LoggingRcsClient>
         {
             var r = await call();
             if (r.Outcome == RcsCallOutcome.Accepted)
-                logger.LogInformation("RCS {Operation} {RequestCode} accepted (RCS task {RcsTaskCode}) in {DurationMs} ms, adapter {Adapter}. {EventCode}", operation, requestCode, r.RcsTaskCode ?? rcsTaskCode, sw.ElapsedMilliseconds, Adapter, "RCS_CALL");
+                logger.LogInformation("RCS {Operation} {RequestCode} accepted (RCS task {RcsTaskCode}) in {DurationMs} ms, adapter {Adapter}. {EventCode}", operation, requestCode, r.RcsTaskCode ?? rcsTaskCode, sw.ElapsedMilliseconds, AdapterFor(requestCode), "RCS_CALL");
             else
-                logger.LogWarning("RCS {Operation} {RequestCode} {Outcome} in {DurationMs} ms, adapter {Adapter}: {Detail}. {EventCode}", operation, requestCode, r.Outcome, sw.ElapsedMilliseconds, Adapter, r.Message ?? "no detail", "RCS_CALL_FAILED");
+                logger.LogWarning("RCS {Operation} {RequestCode} {Outcome} in {DurationMs} ms, adapter {Adapter}: {Detail}. {EventCode}", operation, requestCode, r.Outcome, sw.ElapsedMilliseconds, AdapterFor(requestCode), r.Message ?? "no detail", "RCS_CALL_FAILED");
             return r;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "RCS {Operation} {RequestCode} threw after {DurationMs} ms, adapter {Adapter}. {EventCode}", operation, requestCode, sw.ElapsedMilliseconds, Adapter, "RCS_CALL_EXCEPTION");
+            logger.LogError(ex, "RCS {Operation} {RequestCode} threw after {DurationMs} ms, adapter {Adapter}. {EventCode}", operation, requestCode, sw.ElapsedMilliseconds, AdapterFor(requestCode), "RCS_CALL_EXCEPTION");
             throw;
         }
     }

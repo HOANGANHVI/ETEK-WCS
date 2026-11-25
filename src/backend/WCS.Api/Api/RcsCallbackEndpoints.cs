@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
+using WCS.Application.Abstractions;
 using WCS.Application.RealDispatch;
+using WCS.Domain.Rcs;
 
 namespace WCS.Api.Api;
 
@@ -40,7 +42,9 @@ internal static class RcsCallbackEndpoints
                 if (ms.Length + n > svc.MaxBodyBytes) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
                 ms.Write(buf, 0, n);
             }
-            var r = await svc.HandleAsync(Encoding.UTF8.GetString(ms.ToArray()), ct);
+            var body = Encoding.UTF8.GetString(ms.ToArray());
+            var r = await svc.HandleAsync(body, ct);
+            // CR-038: the service records the authenticated callback (linked to its task, secrets masked)
             return Results.Json(new { code = r.Code, message = r.Message, reqCode = r.ReqCode ?? "" }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         }).AllowAnonymous().WithTags("RcsCallback");
     }

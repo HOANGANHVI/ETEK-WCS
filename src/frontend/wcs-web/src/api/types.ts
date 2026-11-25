@@ -92,6 +92,8 @@ export interface TransportTask {
   /** CR-028: NotSent | Sending | Accepted | AwaitingAssignment | Assigned | SyncError; null for Legacy dispatch and for older tasks. */
   rcsDispatchState?: string | null
   assignedAt?: string | null
+  /** CR-038: Simulator | Real, fixed when the task was created; null for a task created before CR-038 (nothing is sent for it) */
+  executionMode?: 'Simulator' | 'Real' | null
   requestLocationId: string
   sourceLocationId: string | null
   destinationLocationId: string | null

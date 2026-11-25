@@ -12,6 +12,9 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     public DbSet<Agv> Agvs => Set<Agv>();
     public DbSet<Location> Locations => Set<Location>();
     public DbSet<ProductModel> ProductModels => Set<ProductModel>();   // CR-036
+    public DbSet<WCS.Domain.Rcs.ExecutionModeState> ExecutionModeStates => Set<WCS.Domain.Rcs.ExecutionModeState>();   // CR-038
+    public DbSet<WCS.Domain.Rcs.ExecutionModeTransition> ExecutionModeTransitions => Set<WCS.Domain.Rcs.ExecutionModeTransition>();
+    public DbSet<WCS.Domain.Rcs.RcsMessage> RcsMessages => Set<WCS.Domain.Rcs.RcsMessage>();
     public DbSet<Rack> Racks => Set<Rack>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
     public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();

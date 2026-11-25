@@ -87,7 +87,7 @@ public class DiagnosticLoggingTests(DatabaseFixture fixture)
         var (h, _) = await ReadyAsync(s => s.AddSingleton<IHostEnvironment>(new FakeProdEnv()));
         await using var _h = h;
         Assert.IsType<LoggingRcsClient>(h.Services.GetRequiredService<IRcsClient>());
-        Assert.IsType<RcsSimulator>(IRcsClientDecorator.Unwrap(h.Services.GetRequiredService<IRcsClient>()));
+        Assert.IsType<WCS.Infrastructure.ModeControl.RoutedRcsClient>(IRcsClientDecorator.Unwrap(h.Services.GetRequiredService<IRcsClient>()));   // CR-038: routed client, Simulator mode
         var guard = h.Services.GetRequiredService<IRcsDispatchGuard>().Check();
         Assert.False(guard.Allowed); Assert.Equal("RCS_NOT_CONNECTED", guard.Code);
         var ex = await Assert.ThrowsAsync<WCS.Application.Common.AppException>(() => h.CreateTaskAsync("BP01", "A1"));
