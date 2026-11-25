@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.31 – CR-040 Transport queue, linked operations, PLC simulation, rack records (2026-11-25)
+
+- Queue: Published + Ready admission, fixed queue position, strict FIFO per declared scope, Held; no scope declared by default (OQ-54). New publications require Ready. PLC simulation needs only Admin + confirmation and simulates single PLC → WCS signals through the one request intake. Guarded rack create / edit / delete (Admin). One request list on the three operation pages, RCS commands per leg, readiness and scope controls. Migration `AddTransportQueue` (not run on a deployment). Not deployed; not verified with real devices. See CR-040.
+
 ## v3.30 – CR-039 Default transport process catalog (2026-11-25)
 
 - Default processes PH2-01..04, 06..12 published once per database and NotReady (PH2-05 Draft); PH2-07..12 added to the reference data; PH2-03 overflows to M5; PH2-04 review flag removed (D-09; BP-04 stays REVIEW). Location catalog v2 (X1-X4, Y1/Y2, Z1/Z2, P1-P4, M5, M6). Device conditions moved from Publication to Readiness for flagged processes (migration `AddProcessRequiresReadiness`, not run on a deployment). Both request forms list every published process. A3/A4-D1/D2 unchanged. Not deployed; not verified with real devices. See CR-039.

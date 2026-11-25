@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext'
 import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
 import { CreateTaskDialog, DeleteTaskDialog, EditTaskDialog } from './TaskDialogs'
 import { ReconciliationPanel } from './ReconciliationPanel'
+import { RequestOverview } from '../components/RequestOverview'
 import { USER_EDITABLE } from './taskRules'
 import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
 import { StackedSummary, type SummaryItem } from '../components/charts'
@@ -134,6 +135,8 @@ export function TasksPage() {
             onCancelDone={() => setCancelFor(null)} onEdit={(t) => setDialog({ kind: 'edit', task: t })} onDelete={(t) => setDialog({ kind: 'delete', task: t })} />
         )}
       </div>
+
+      <RequestOverview />
 
       {dialog?.kind === 'create' && <CreateTaskDialog onClose={() => setDialog(null)} onCreated={(t) => { setDialog(null); setParams({ id: t.id }); tasks.reload() }} onOrderCreated={() => { setDialog(null); void navigate('/routing') }} />}
       {dialog?.kind === 'edit' && <EditTaskDialog task={dialog.task} stationCode={codes.loc(dialog.task.requestLocationId)} onClose={() => setDialog(null)} onChanged={() => tasks.reload()} />}

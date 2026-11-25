@@ -74,6 +74,9 @@ public class Rack
 
     public void MarkUnknown(DateTimeOffset now) { Status = RackStatus.Unknown; LastConfirmedAt = now; }
 
+    /// <summary>CR-040: an audited correction of the identifier (NULL = the rack has none).</summary>
+    public void CorrectExternalId(string? externalRackId) => ExternalRackId = string.IsNullOrWhiteSpace(externalRackId) ? null : externalRackId.Trim();
+
     public void Bind(string externalRackId)
     {
         if (string.IsNullOrWhiteSpace(externalRackId)) throw new DomainException("RACK_ID_REQUIRED", "External rack id is required to bind.");

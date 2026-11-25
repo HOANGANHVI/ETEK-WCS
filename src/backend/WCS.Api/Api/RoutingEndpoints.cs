@@ -21,11 +21,15 @@ public sealed record PlcRequestInput([property: Required] string PlcId, string? 
 public sealed record ProcessHeaderRequest([property: Required, StringLength(60)] string Code, [property: Required, StringLength(200)] string Name, string? Description,
     [property: Required] string RequestType, [property: Required] string RackKind, string[]? TriggerLocationCodes, bool? Enabled, Guid? ProductModelId = null);
 public sealed record SimStartRequest([property: Required, StringLength(60)] string FlowCode, [property: Required, StringLength(50)] string LocationCode, bool SafetyAcknowledged);
+public sealed record SimActivateRequest(bool Confirmed);
+public sealed record SimSignalRequest([property: StringLength(100)] string? Value);
+public sealed record SimEvaluateRequest(bool SafetyAcknowledged);
 public sealed record SetReadinessRequest([property: Required] string Readiness, [property: Required, StringLength(500)] string Reason);
 public sealed record NewVersionRequest(Guid? FromVersionId);
 public sealed record AddPlcRequest([property: Required, StringLength(20)] string PlcId, [property: Required, StringLength(100)] string Name, [property: Required, StringLength(64)] string IpAddress,
     AddPlcStationCommand[]? Stations);
 public sealed record AddPortRequest([property: Required, StringLength(20)] string StationId, string? LocationCode);
+public sealed record QueueScopeRequest([property: StringLength(60)] string? Scope, [property: Required, StringLength(500)] string Reason);
 public sealed record PortLinkRequest(string? LocationCode, bool Enabled);
 
 /// <summary>
@@ -46,11 +50,16 @@ public static class RoutingEndpoints
             var (items, total) = await uow.ExecuteAsync(t => repo.QueryOrdersAsync(st, skip ?? 0, Math.Clamp(take ?? 50, 1, 200), t), ct);
             return ApiResults.Ok(c, new { total, items = items.Select(o => o.ToDto()).ToList() });
         });
-        orders.MapGet("orders/{id:guid}", async (HttpContext c, Guid id, WCS.Application.Abstractions.IUnitOfWork uow, IRoutingRepository repo, CancellationToken ct) =>
+        orders.MapGet("orders/{id:guid}", async (HttpContext c, Guid id, WCS.Application.Abstractions.IUnitOfWork uow, IRoutingRepository repo, WCS.Application.Abstractions.IRcsMessageQuery messages, CancellationToken ct) =>
             ApiResults.Ok(c, await uow.ExecuteAsync(async t =>
             {
                 var o = await repo.GetOrderAsync(id, t) ?? throw AppException.NotFound("ORDER_NOT_FOUND", "Transport Task not found.");
-                return new { order = o.ToDto(await repo.ListTransactionsAsync(false, null, id, 100, t)), events = (await repo.ListEventsAsync(id, 500, t)).Select(e => e.ToDto()).ToList() };
+                return new
+                {
+                    order = o.ToDto(await repo.ListTransactionsAsync(false, null, id, 100, t)), events = (await repo.ListEventsAsync(id, 500, t)).Select(e => e.ToDto()).ToList(),
+                    // CR-040: request -> legs -> RCS commands and their results (the messages recorded for the request codes of these legs; no payload here)
+                    commands = await messages.ByRequestCodesAsync(o.Legs.Select(l => l.AgvRequestCode).ToList(), t),
+                };
             }, ct)));
         // every published, enabled, not review-blocked process, with whether it accepts a request now (no configuration detail)
         orders.MapGet("startable-processes", async (HttpContext c, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.StartableAsync(ct)));
@@ -101,11 +110,16 @@ public static class RoutingEndpoints
                 () => s.HandleRequestAsync(new PlcRequestSnapshot(r.PlcId, r.PortId, r.RequestId, r.PickupRequest, r.DeliveryRequest, r.RackFull, r.RackEmpty, r.DestinationAvailable, r.RackType), ct),
                 x => new { x.Outcome, x.Code }))).RequireAuthorization(admin);
 
-        // ================================================================ CR-035 Admin manual PLC simulation (PLC only; the RCS is always the real one)
+        // ================================================================ CR-035 / CR-040 Admin manual PLC simulation (PLC → WCS signals only; it never answers for the RCS)
         var sim = api.MapGroup("/plc-simulation").WithTags("PlcSimulation").RequireAuthorization(admin);
         sim.MapGet("status", (HttpContext c, PlcSimulationService s) => ApiResults.Ok(c, s.Status()));
-        sim.MapPost("activate", async (HttpContext c, PlcSimulationService s) =>
-            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_ACTIVATE", "PlcSimulation", null, null, () => Task.FromResult(s.Activate(c.Actor().Username)), x => new { x.Active })));
+        sim.MapPost("activate", async (HttpContext c, SimActivateRequest r, PlcSimulationService s) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_ACTIVATE", "PlcSimulation", null, null, () => Task.FromResult(s.Activate(c.Actor().Username, r.Confirmed)), x => new { x.Active })));
+        sim.MapGet("stations", async (HttpContext c, PlcSimulationService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListStationsAsync(ct)));
+        sim.MapPut("stations/{stationId}/signals/{signal}", async (HttpContext c, string stationId, string signal, SimSignalRequest r, PlcSimulationService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_SIGNAL", "PlcSimulation", $"{stationId}.{signal}", null, () => s.SetSignalAsync(stationId, signal, r.Value, ct), x => new { r.Value })));
+        sim.MapPost("stations/{stationId}/evaluate", async (HttpContext c, string stationId, SimEvaluateRequest r, PlcSimulationService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_EVALUATE", "PlcSimulation", stationId, null, () => s.EvaluateStationAsync(stationId, r.SafetyAcknowledged, ct), x => new { x.Outcome, x.Code, x.RequestId })));
         sim.MapPost("deactivate", async (HttpContext c, PlcSimulationService s) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_SIM_DEACTIVATE", "PlcSimulation", null, null, () => Task.FromResult(s.Deactivate()), x => new { x.Active })));
         sim.MapGet("flows", async (HttpContext c, PlcSimulationService s, CancellationToken ct) => ApiResults.Ok(c, await s.ListFlowsAsync(ct)));
@@ -129,6 +143,9 @@ public static class RoutingEndpoints
         proc.MapPut("{id:guid}", async (HttpContext c, Guid id, ProcessHeaderRequest r, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_UPDATE", "BusinessProcess", id.ToString(), null,
                 () => s.UpdateAsync(id, Header(r), r.Enabled ?? true, ct), x => new { x.Code, x.Enabled })));
+        proc.MapPut("{id:guid}/queue-scope", async (HttpContext c, Guid id, QueueScopeRequest r, ProcessAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_QUEUE_SCOPE", "BusinessProcess", id.ToString(), null,
+                () => s.SetQueueScopeAsync(id, r.Scope, r.Reason, ct), x => new { x.Code, x.QueueScope }, r.Reason)));
         proc.MapPost("{id:guid}/versions", async (HttpContext c, Guid id, NewVersionRequest r, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_NEW_VERSION", "BusinessProcess", id.ToString(), null,
                 () => s.NewVersionAsync(id, r.FromVersionId, c.Actor().Username, ct), x => new { x.Number }), StatusCodes.Status201Created));

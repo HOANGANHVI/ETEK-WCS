@@ -78,6 +78,12 @@ public enum WaitKind
     DispatchBlocked = 6,
     /// <summary>No usable destination yet and no rack has been picked: nothing is on an AMR.</summary>
     DestinationUnavailable = 7,
+    /// <summary>CR-040: no approved Queue Ordering Scope is configured for the process (OQ-54): the request waits and is never dispatched on a guess.</summary>
+    QueueScopeUndetermined = 8,
+    /// <summary>CR-040 (D-13): an older request of the same Queue Ordering Scope is still waiting for resources; this one does not overtake it.</summary>
+    QueueBehind = 9,
+    /// <summary>CR-040 (D-12): held because the pinned process version is not Ready (Suspended); the queue position is kept.</summary>
+    QueueHeld = 10,
 }
 
 public enum StationOperation { Pickup = 1, Delivery = 2 }

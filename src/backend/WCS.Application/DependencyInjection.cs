@@ -70,8 +70,9 @@ public static class DependencyInjection
         services.AddScoped<Routing.ModelGuard>();
         services.AddScoped<Routing.RackPlacement>();
         services.AddScoped<Services.ProductModelService>();
-        services.Configure<Routing.PlcSimulationOptions>(configuration.GetSection(Routing.PlcSimulationOptions.SectionName));   // CR-035
         services.AddSingleton<Routing.PlcSimulationState>();
+        services.AddSingleton<Routing.PlcSimulatedInputs>();   // CR-040
+        services.AddScoped<Services.RackAdminService>();   // CR-040
         services.AddScoped<Routing.PlcSimulationService>();
         services.AddScoped<ConnectionConfigService>();
         services.AddScoped<OperationalConfigService>();

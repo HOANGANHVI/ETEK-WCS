@@ -74,6 +74,28 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
             .Where(o => o.State == OrderState.Created || o.State == OrderState.Accepted || o.State == OrderState.InProgress || o.State == OrderState.Waiting)
             .OrderBy(o => o.CreatedAt).Select(o => o.Id).Take(take).ToListAsync(ct);
 
+    public async Task LockQueueAsync(string key, CancellationToken ct) =>
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtext({"wcs-queue:" + key}))", ct);
+
+    public async Task<long> NextQueueSequenceAsync(CancellationToken ct) =>
+        (await db.Database.SqlQueryRaw<long>("SELECT nextval('transport_queue_seq') AS \"Value\"").ToListAsync(ct))[0];
+
+    /// <summary>Open orders of a scope that are older than the sequence. An order not yet pinned counts by the scope its process declares now.</summary>
+    private IQueryable<TransportOrder> OlderInScope(string scope, long sequence) =>
+        db.TransportOrders.Where(o => o.QueueSequence != null && o.QueueSequence < sequence
+            && o.State != OrderState.Completed && o.State != OrderState.Failed && o.State != OrderState.Cancelled && o.State != OrderState.ReconciliationRequired
+            && (o.QueueScope == scope || (o.QueueScope == null && db.BusinessProcesses.Any(p => p.Id == o.ProcessId && p.QueueScope == scope))));
+
+    public Task<TransportOrder?> FindOlderWaitingInScopeAsync(string scope, long sequence, CancellationToken ct) =>
+        OlderInScope(scope, sequence)
+            .Where(o => o.LegCount == 0
+                || !o.Legs.Any(l => l.State != LegState.Completed && l.State != LegState.Failed && l.State != LegState.Cancelled)
+                || o.Legs.Any(l => l.DestinationLocationCode == null && l.State != LegState.Completed && l.State != LegState.Failed && l.State != LegState.Cancelled))
+            .OrderBy(o => o.QueueSequence).AsNoTracking().FirstOrDefaultAsync(ct);
+
+    public Task<bool> HasOlderUnsentLegInScopeAsync(string scope, long sequence, CancellationToken ct) =>
+        OlderInScope(scope, sequence).AnyAsync(o => o.Legs.Any(l => l.AgvTaskCode == null && (l.State == LegState.Ready || l.State == LegState.InProgress) && l.PickConfirmedAt == null), ct);
+
     public async Task<IReadOnlyList<Guid>> ListReadyLegIdsAsync(int take, CancellationToken ct) =>
         await db.TransportLegs.AsNoTracking()
             .Where(l => l.State == LegState.Ready || (l.State == LegState.InProgress && l.AgvTaskCode == null))
@@ -124,6 +146,18 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
         var statuses = await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == portId).Select(p => p.Status).ToListAsync(ct);
         return statuses.Count > 0 && statuses.All(s => s == IoConfigStatus.Approved);
     }
+
+    public async Task<IReadOnlyList<PlcStation>> ListLinkedPortsAsync(CancellationToken ct) =>
+        await db.PlcStations.AsNoTracking().Where(s => s.Enabled && s.LocationCode != null).OrderBy(s => s.PlcId).ThenBy(s => s.Order).ToListAsync(ct);
+
+    public async Task<IReadOnlyList<StationIoPoint>> ListPlcInputPointsAsync(string stationId, CancellationToken ct) =>
+        await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == stationId && p.Direction == PlcSignalDirection.PlcToSoftware).OrderBy(p => p.Seq).ToListAsync(ct);
+
+    public Task<string?> FindOpenOrderUsingRackAsync(Guid rackId, CancellationToken ct) =>
+        db.TransportOrders.AsNoTracking()
+            .Where(o => o.State != OrderState.Completed && o.State != OrderState.Failed && o.State != OrderState.Cancelled
+                        && (o.RackId == rackId || o.Legs.Any(l => l.RackId == rackId && l.State != LegState.Completed && l.State != LegState.Failed && l.State != LegState.Cancelled)))
+            .Select(o => (string?)o.RequestKey).FirstOrDefaultAsync(ct);
 
     public Task<bool> IsPlcEnabledAsync(string plcId, CancellationToken ct) => db.PlcConnections.AsNoTracking().Where(c => c.Id == plcId).Select(c => c.Enabled).FirstOrDefaultAsync(ct);
 }

@@ -85,19 +85,17 @@ public class Cr035ReadinessAndSimulationTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task Simulation_cannot_be_activated_unless_allowed_and_never_with_a_simulated_RCS()
+    public async Task Simulation_is_switched_on_only_by_an_explicit_confirmation_and_grants_nothing_on_the_RCS_side()
     {
-        await using var kit = await RoutingKit.CreateAsync(fixture);   // PlcSimulation:Allowed = false, Rcs:RealDispatch:Enabled = false
+        // CR-040 (project owner decision): no deployment switch and no real RCS are needed to open the PLC simulation; it never turns real dispatch on
+        await using var kit = await RoutingKit.CreateAsync(fixture);
         var svc = await kit.With(sp => Task.FromResult(sp.GetRequiredService<PlcSimulationService>()));
-        var ex = Assert.Throws<AppException>(() => svc.Activate("admin"));
-        Assert.Equal("SIMULATION_NOT_ALLOWED", ex.Code);
-        Assert.Contains(svc.Status().Blockers, b => b.Contains("REAL RCS"));
-
-        await using var kit2 = await RoutingKit.CreateAsync(fixture, extraConfig: new Dictionary<string, string?> { ["PlcSimulation:Allowed"] = "true" });
-        var svc2 = await kit2.With(sp => Task.FromResult(sp.GetRequiredService<PlcSimulationService>()));
-        var ex2 = Assert.Throws<AppException>(() => svc2.Activate("admin"));
-        Assert.Equal("RCS_REAL_DISPATCH_REQUIRED", ex2.Code);   // no RCS simulator is ever accepted
-        Assert.False(svc2.Status().Active);
+        var ex = Assert.Throws<AppException>(() => svc.Activate("admin", false));
+        Assert.Equal("SIMULATION_CONFIRMATION_REQUIRED", ex.Code);
+        var on = svc.Activate("admin", true);
+        Assert.True(on.Active); Assert.False(on.RealRcsDispatchEnabled); Assert.Equal("Simulator", on.ExecutionMode);
+        svc.Deactivate();
+        Assert.False(svc.Status().Active);
     }
 
     [Fact]

@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { RequestOverview } from '../components/RequestOverview'
 import { Field } from './config/FormKit'
 import { api } from '../api/client'
 import type { Leg, OrderState, StationTransaction, WaitKind } from '../api/routingTypes'
@@ -23,6 +25,9 @@ const WAIT_KEY: Record<WaitKind, MsgKey> = {
   ConditionNotMet: 'routing.waitCondition',
   DispatchBlocked: 'routing.waitDispatch',
   DestinationUnavailable: 'routing.waitDestination',
+  QueueScopeUndetermined: 'linked.waitScope',
+  QueueBehind: 'linked.waitBehind',
+  QueueHeld: 'linked.waitHeld',
 }
 
 export const OrderStatePill = ({ state }: { state: string }) => <Pill tone={ORDER_STATE_TONE[state] ?? 'muted'}>{ORDER_STATE_LABEL[state] ?? state}</Pill>
@@ -43,7 +48,7 @@ export function RoutingPage() {
         <button role="tab" aria-selected={tab === 'tasks'} className={tab === 'tasks' ? 'tab active' : 'tab'} onClick={() => setTab('tasks')}>{t('routing.tabTasks')}</button>
         <button role="tab" aria-selected={tab === 'tx'} className={tab === 'tx' ? 'tab active' : 'tab'} onClick={() => setTab('tx')}>{t('routing.tabTransactions')}</button>
       </div>
-      {tab === 'tasks' ? <OrdersTab key={String(starting)} /> : <TransactionsTab />}
+      {tab === 'tasks' ? <><OrdersTab key={String(starting)} /><RequestOverview /></> : <TransactionsTab />}
       {starting && <StartOrderDialog onClose={() => setStarting(false)} />}
     </>
   )
@@ -53,7 +58,9 @@ export function RoutingPage() {
 function OrdersTab() {
   const t = useT()
   const [state, setState] = useState<OrderState | ''>('')
-  const [selected, setSelected] = useState<string | null>(null)
+  const [params, setParams] = useSearchParams()   // CR-040: /routing?order=<id> opens that request (links from the other pages)
+  const selected = params.get('order')
+  const setSelected = (id: string) => setParams({ order: id })
   const list = useApi(useCallback(() => api.routingOrders(state || undefined), [state]), [...EVENTS])
   return (
     <div className="split">
@@ -109,7 +116,7 @@ function OrderDetailPanel({ id }: { id: string }) {
   return (
     <Panel title={t('routing.detailTitle')}>
       <Async state={detail} empty={{ title: t('routing.none') }}>
-        {({ order, events }) => (
+        {({ order, events, commands }) => (
           <>
             {order.state === 'ReconciliationRequired' && <div className="notice notice-warn" role="alert">{t('routing.reconNotice')}</div>}
             {error && <div className="notice notice-error" role="alert">{error}</div>}
@@ -124,6 +131,9 @@ function OrderDetailPanel({ id }: { id: string }) {
                 <dt>{t('routing.colRequest')}</dt><dd className="mono">{order.requestLocationCode}</dd>
                 <dt>{t('routing.rowRequestKey')}</dt><dd className="mono">{order.requestKey}</dd>
                 <dt>{t('routing.colCreated')}</dt><dd>{formatDateTime(order.createdAt)}</dd>
+                <dt>{t('linked.rowRequestedBy')}</dt><dd>{order.requestedBy ?? '—'}</dd>
+                <dt>{t('linked.colQueue')}</dt><dd>{order.queueSequence != null ? t('linked.queueCell', { status: t(`linked.queue_${order.queueStatus}` as MsgKey), position: order.queueSequence, scope: order.queueScope ?? t('linked.scopeNone') }) : '—'}</dd>
+                {order.stateReason && <><dt>{t('linked.rowReason')}</dt><dd>{order.stateReason}</dd></>}
               </dl>
             </section>
 
@@ -163,6 +173,28 @@ function OrderDetailPanel({ id }: { id: string }) {
             <section className="detail-sec">
               <h3>{t('routing.secTransactions')}</h3>
               <TransactionTable rows={order.transactions} onChanged={detail.reload} compact />
+            </section>
+
+            <section className="detail-sec">
+              <h3>{t('linked.secCommands')}</h3>
+              {!commands || commands.length === 0 ? <p className="muted">{t('linked.commandsNone')}</p> : (
+                <div className="table-wrap">
+                  <table className="grid">
+                    <thead><tr><th>{t('linked.colCreated')}</th><th>{t('linked.cmdLeg')}</th><th>{t('linked.cmdMessage')}</th><th>{t('linked.cmdMode')}</th><th>{t('linked.cmdResult')}</th></tr></thead>
+                    <tbody>
+                      {commands.map((c) => (
+                        <tr key={c.id}>
+                          <td className="nowrap num">{formatTime(c.at)}</td>
+                          <td className="num">{order.legs.find((l) => c.requestCode && l.agvRequestCode === c.requestCode)?.sequence ?? '—'}</td>
+                          <td>{c.direction} · {c.messageType}</td>
+                          <td>{c.mode}</td>
+                          <td>{c.result ?? '—'}{c.errorCode ? ` (${c.errorCode})` : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
 
             <section className="detail-sec">

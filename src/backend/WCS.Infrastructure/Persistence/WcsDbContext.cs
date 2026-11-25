@@ -59,6 +59,7 @@ public class WcsDbContext(DbContextOptions<WcsDbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(WcsDbContext).Assembly);
+        modelBuilder.HasSequence<long>("transport_queue_seq");   // CR-040: queue positions
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

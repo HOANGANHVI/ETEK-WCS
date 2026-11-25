@@ -377,6 +377,7 @@ public sealed partial class BusinessProcessConfigGroup(IUnitOfWork uow, IRouting
             };
             if (p.ProductModelId is { } pmid && codeOf.TryGetValue(pmid, out var pcode)) rec["productModelCode"] = pcode;   // by code, only when set
             if (p.RequiresReadiness) rec["requiresReadiness"] = true;   // CR-039: only when set
+            if (p.QueueScope is { } queueScope) rec["queueScope"] = queueScope;   // CR-040: only when declared
             list.Add(new ConfigRecord(p.Code, rec));
         }
         return list;
@@ -392,6 +393,11 @@ public sealed partial class BusinessProcessConfigGroup(IUnitOfWork uow, IRouting
         }
         if (GroupKit.Bool(package, "requiresReadiness") == true && !(target.Fields.ContainsKey("requiresReadiness") && GroupKit.Bool(target, "requiresReadiness") == true))
             list.Add(new FieldChange("requiresReadiness", "false", "true"));   // CR-039: one way, an import never removes the requirement
+        if (package.Fields.ContainsKey("queueScope"))   // CR-040: an old package never clears a declared scope
+        {
+            var pa = ConfigPackage.Render(package.Fields["queueScope"]); var pb = ConfigPackage.Render(target.Fields.TryGetPropertyValue("queueScope", out var qv) ? qv : null);
+            if (pa != pb) list.Add(new FieldChange("queueScope", pb, pa));
+        }
         var a = Def(package); var b = Def(target);
         if (a is not null && (b is null || Canon(a) != Canon(b)))
             list.Add(new FieldChange("definition", b is null ? "(none)" : $"{b.Steps.Count} steps, first '{b.FirstStepKey}'", $"{a.Steps.Count} steps, first '{a.FirstStepKey}' (new Draft version)"));
@@ -452,6 +458,7 @@ public sealed partial class BusinessProcessConfigGroup(IUnitOfWork uow, IRouting
                 var created = await admin.CreateAsync(new ProcessHeader(pkg.Key, GroupKit.Str(pkg, "name")!, GroupKit.Str(pkg, "description"), GroupKit.Str(pkg, "requestType")!, GroupKit.Str(pkg, "rackKind")!, triggers, modelId), ctx.Actor.Username, ct);
                 await admin.SaveDefinitionAsync(created.Versions[0].Id, def, ct);   // a Draft: never validated or published here
                 if (pkg.Fields.ContainsKey("requiresReadiness") && GroupKit.Bool(pkg, "requiresReadiness") == true) await admin.RequireReadinessAsync(created.Id, ct);
+                if (pkg.Fields.ContainsKey("queueScope")) await admin.SetQueueScopeAsync(created.Id, GroupKit.Str(pkg, "queueScope"), $"Configuration import {ctx.ImportId:D}", ct);
                 GroupKit.Audit(audit, ctx, "CONFIG_PROCESS_IMPORT_CREATE", "BusinessProcess", pkg.Key, null, new { pkg.Key, draftVersion = 1 });
                 continue;
             }
@@ -464,6 +471,7 @@ public sealed partial class BusinessProcessConfigGroup(IUnitOfWork uow, IRouting
                 GroupKit.Audit(audit, ctx, "CONFIG_PROCESS_IMPORT_HEADER", "BusinessProcess", pkg.Key, target!.Fields.ToJsonString(), new { name = pkg.Fields["name"]?.ToString(), triggers });
             }
             if (item.Changes.Any(c => c.Field == "requiresReadiness")) await admin.RequireReadinessAsync(id, ct);
+            if (item.Changes.Any(c => c.Field == "queueScope")) await admin.SetQueueScopeAsync(id, GroupKit.Str(pkg, "queueScope"), $"Configuration import {ctx.ImportId:D}", ct);
             if (item.Changes.Any(c => c.Field == "definition"))
             {
                 var nv = await admin.NewVersionAsync(id, null, ctx.Actor.Username, ct);   // a new Draft; Published / Disabled versions are never edited

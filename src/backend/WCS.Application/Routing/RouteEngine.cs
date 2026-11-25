@@ -80,12 +80,19 @@ public sealed class RouteEngine(
                 if (problems.Count > 0) throw AppException.Rejected("REAL_LEG_MAPPING_INCOMPLETE", "This process cannot be sent to the real RCS yet; nothing was created or sent. " + string.Join(" ", problems.Take(3)));
             }
             var order = TransportOrder.Create(cmd.RequestKey, snapshot, location.Code, cmd.RequestedBy, clock.UtcNow);
+            if (process.RequiresReadiness)
+            {   // CR-040 (D-12): admission to the official queue = Published + Ready (checked above), version pinned, position given - in this one transaction.
+                // One admission at a time, so a later position is never visible before an earlier one.
+                await routing.LockQueueAsync("admission", t);
+                order.Enqueue(await routing.NextQueueSequenceAsync(t), process.QueueScope, clock.UtcNow);
+            }
             order.PinExecutionMode(mode);   // CR-038: the order (and its legs) keep this dispatcher for their whole life
             order.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021
             CorrelationCache.Remember(order.Id, order.CorrelationId);
             routing.Add(order);
             if (cmd.TransactionId is { } txId) await stations.LinkToOrderAsync(txId, order.Id, t);
             Event(order, null, null, "ORDER_CREATED", $"process={process.Code} v{version.Number}");
+            if (order.QueueSequence is { } position) Event(order, null, null, "QUEUE_ADMITTED", $"sequence {position}, scope {order.QueueScope ?? "not determined"}");
             return order.Id;
         }, ct);
 
@@ -181,6 +188,7 @@ public sealed class RouteEngine(
         var snap = order.Snapshot;
         if (order.State == OrderState.ReconciliationRequired) return;       // only an Admin decision leaves this state
         if (order.State == OrderState.Created) order.TransitionTo(OrderState.Accepted, "Accepted", WaitKind.None, now);
+        if (order.QueueSequence is not null && order.LegCount == 0 && !await QueueReadinessAsync(order, ct)) return;
 
         for (var guardCount = 0; guardCount < MaxStepsPerAdvance; guardCount++)
         {
@@ -243,6 +251,56 @@ public sealed class RouteEngine(
         FailOrder(order, "ROUTE_STEP_LIMIT");   // defence in depth: validation already refuses loops
     }
 
+    /// <summary>
+    /// CR-040 (D-12): a request that was not dispatched yet is Held while its PINNED version is not Ready (or the process can no longer be used), and returns to its own position once
+    /// it is Ready again (never dispatched in the same pass). Device conditions are re-checked too. Nothing is cancelled and no inventory changes.
+    /// </summary>
+    private async Task<bool> QueueReadinessAsync(TransportOrder order, CancellationToken ct)
+    {
+        var now = clock.UtcNow;
+        var p = await routing.GetProcessAsync(order.ProcessId, ct);
+        var v = await routing.GetVersionAsync(order.ProcessVersionId, ct);
+        string? why = null;
+        if (p is null || v is null) why = "The pinned process version no longer exists.";
+        else if (!p.Enabled) why = "The process is disabled (OQ-45).";
+        else if (v.Readiness != OperationalReadiness.Ready) why = $"Operational Readiness of version {v.Number} is {v.Readiness}.";
+        else if (v.State != ProcessConfigState.Published && await routing.GetPublishedVersionAsync(p.Id, ct) is null) why = "The process version was disabled and no version replaces it (OQ-45).";
+        else if ((await validator.DeviceConditionsAsync(p, v, ct)).FirstOrDefault() is { } unmet) why = unmet.Message;
+
+        if (why is not null)
+        {
+            if (!order.QueueHeld) Event(order, null, null, "QUEUE_HELD", $"{why} Position {order.QueueSequence} is kept.");
+            order.SetQueueHeld(true, now);
+            order.TransitionTo(OrderState.Waiting, why, WaitKind.QueueHeld, now);
+            return false;
+        }
+        if (!order.QueueHeld) return true;
+        order.SetQueueHeld(false, now);
+        order.TransitionTo(OrderState.Waiting, "Released from hold; waiting for its turn", WaitKind.QueueBehind, now);
+        Event(order, null, null, "QUEUE_RESUMED", $"position {order.QueueSequence}");
+        return false;   // checked again by the next pass
+    }
+
+    /// <summary>
+    /// CR-040 (D-13): strict FIFO inside a Queue Ordering Scope. Null = this request may be given resources now. A queued request without a declared scope waits (OQ-54: no scope is
+    /// guessed); a request behind an older one of the same scope that still needs resources waits too - also when that older one is blocked or Held (OQ-58: no bypass until decided).
+    /// Requests of other scopes are not looked at. The scope stays locked until the transaction that allocates ends.
+    /// </summary>
+    private async Task<(WaitKind Kind, string Detail)?> QueueBlockAsync(TransportOrder order, CancellationToken ct)
+    {
+        if (order.QueueSequence is not { } position) return null;
+        if (order.QueueScope is null)
+        {
+            if ((await routing.GetProcessAsync(order.ProcessId, ct))?.QueueScope is not { } declared)
+                return (WaitKind.QueueScopeUndetermined, "SCOPE_UNDETERMINED: no queue ordering scope is declared for the process; nothing is dispatched until an Admin declares it.");
+            order.PinQueueScope(declared, clock.UtcNow);
+        }
+        await routing.LockQueueAsync(order.QueueScope!, ct);
+        if (await routing.FindOlderWaitingInScopeAsync(order.QueueScope!, position, ct) is { } older)
+            return (WaitKind.QueueBehind, $"Waiting behind request {older.RequestKey} (position {older.QueueSequence}) of queue scope {order.QueueScope}.");
+        return null;
+    }
+
     private async Task<bool> EvaluateStepConditionsAsync(StepSnapshot step, RackKind kind, CancellationToken ct)
     {
         foreach (var c in step.Conditions)
@@ -267,6 +325,13 @@ public sealed class RouteEngine(
         modelGuard.ClearFindings();
         var mc = new ModelContext(order.Snapshot.ProductModelId);   // CR-036
         var sel = modelGuard.SelectionFor(mc.ProcessModelId);        // null unless Mode = Enforce
+
+        if (await QueueBlockAsync(order, ct) is { } queued)
+        {   // CR-040 (D-13): no resource is looked at, so none can be taken ahead of an older request
+            if (order.State != OrderState.Waiting || order.WaitKind != queued.Kind) Event(order, null, null, queued.Kind == WaitKind.QueueBehind ? "QUEUE_BEHIND_OLDER" : "QUEUE_SCOPE_UNDETERMINED", queued.Detail);
+            order.TransitionTo(OrderState.Waiting, queued.Detail, queued.Kind, now);
+            return LegCreation.Waiting;
+        }
 
         // ---- source
         string? sourceCode = null;
@@ -371,13 +436,15 @@ public sealed class RouteEngine(
 
     // -------------------------------------------------------------------------------- existing leg
 
-    private async Task ProgressExistingLegAsync(TransportOrder order, TransportLeg leg, StepSnapshot step, List<(string, string?, string)> continues, CancellationToken ct)
+    /// <returns>True when the destination was not looked for because an older request of the scope goes first (CR-040).</returns>
+    private async Task<bool> ProgressExistingLegAsync(TransportOrder order, TransportLeg leg, StepSnapshot step, List<(string, string?, string)> continues, CancellationToken ct)
     {
         // A leg whose rack is on the AMR and that still has no destination re-evaluates its candidates (WAITING_FOR_DESTINATION semantics).
         if (leg.PickConfirmedAt is not null && leg.DestinationLocationCode is null)
         {
+            if (await QueueBlockAsync(order, ct) is { } queued) { HoldWithRack(order, leg, step, queued.Detail); return true; }
             var (code, noBind) = await ChooseDestinationAsync(order, step, leg.RackKind, ct);
-            if (code is null) { HoldWithRack(order, leg, step); return; }
+            if (code is null) { HoldWithRack(order, leg, step); return false; }
             leg.SetDestination(code, noBind, clock.UtcNow);
             await ReserveDestinationAsync(leg, code, ct);
             await stations.OpenForLegAsync(order, leg, code, StationOperation.Delivery, ct);
@@ -386,13 +453,15 @@ public sealed class RouteEngine(
             Event(order, leg, null, "DESTINATION_ASSIGNED", code);
             continues.Add((leg.AgvRequestCode, leg.AgvTaskCode, code));
         }
+        return false;
     }
 
     /// <summary>The AMR holds the rack and no destination is usable: nothing is stored anywhere, the AGV stays committed, inventory keeps the rack IN_TRANSIT.</summary>
-    private void HoldWithRack(TransportOrder order, TransportLeg leg, StepSnapshot step)
+    private void HoldWithRack(TransportOrder order, TransportLeg leg, StepSnapshot step, string? queueDetail = null)
     {
         var now = clock.UtcNow;
         var detail = step.WaitingPositionCode is { } wp ? $"No destination; AMR waits at {wp} holding the rack" : "No destination; AMR holds the rack";
+        if (queueDetail is not null) detail = $"{detail}. {queueDetail}";
         if (leg.State != LegState.Waiting || leg.WaitKind != WaitKind.DestinationUnavailable_AgvHoldingRack) Event(order, leg, null, "WAITING_FOR_DESTINATION", detail);
         leg.TransitionTo(LegState.Waiting, detail, WaitKind.DestinationUnavailable_AgvHoldingRack, now);
         order.TransitionTo(OrderState.Waiting, detail, WaitKind.DestinationUnavailable_AgvHoldingRack, now);
@@ -513,6 +582,16 @@ public sealed class RouteEngine(
             var order = (await routing.GetOrderAsync(leg.OrderId, t))!;
             if (order.IsTerminal || order.State == OrderState.ReconciliationRequired) return null;
             if (leg.Sequence == 1 && await maintenance.HoldNewWorkAsync(t)) return null;   // CR-026: the first leg is not sent to the AGV during Maintenance; later legs of a running order are
+            if (order.QueueSequence is { } position && order.QueueScope is { } scope && leg.PickConfirmedAt is null)
+            {   // CR-040 (D-13): inside a scope the legs also leave for the AGV system in queue order
+                await routing.LockQueueAsync(scope, t);
+                if (await routing.HasOlderUnsentLegInScopeAsync(scope, position, t))
+                {
+                    if (leg.StateReason != "QUEUE_BEHIND") Event(order, leg, null, "LEG_QUEUED", "An older request of the same queue scope has not been sent yet");
+                    leg.TransitionTo(leg.State, "QUEUE_BEHIND", WaitKind.None, clock.UtcNow);
+                    return null;
+                }
+            }
 
             if (!link.Allowed)
             {   // CR-008A: never dispatch where no real AGV link exists; the leg waits, nothing is lost
@@ -645,8 +724,8 @@ public sealed class RouteEngine(
             if (leg.DestinationLocationCode is null)
             {   // AfterPick: choose now (still inside the same unit of work)
                 var step = order.Snapshot.Step(leg.StepKey)!;
-                await ProgressExistingLegAsync(order, leg, step, continues, t);
-                if (leg.DestinationLocationCode is null && step.WaitBehavior == WaitBehavior.Fail)
+                var behindOlder = await ProgressExistingLegAsync(order, leg, step, continues, t);
+                if (!behindOlder && leg.DestinationLocationCode is null && step.WaitBehavior == WaitBehavior.Fail)
                 {   // never drop the rack or fail silently while it is on the AMR
                     leg.TransitionTo(LegState.Waiting, "NO_DESTINATION_AND_FAIL_BEHAVIOR", WaitKind.DestinationUnavailable_AgvHoldingRack, now);
                     order.TransitionTo(OrderState.ReconciliationRequired, "RACK_ON_AGV_NO_DESTINATION", WaitKind.None, now);

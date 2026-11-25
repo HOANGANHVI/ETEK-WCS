@@ -61,6 +61,8 @@ public interface IRackRepository
     Task<Rack?> GetAsync(Guid id, CancellationToken ct = default);
     void Add(Rack rack);
     void Remove(Rack rack);
+    /// <summary>CR-040: the rack that carries this external id.</summary>
+    Task<Rack?> FindByExternalIdAsync(string externalRackId, CancellationToken ct = default);
     Task<IReadOnlyList<Rack>> ListAsync(Guid? locationId, RackStatus? status, int take, CancellationToken ct = default);
     Task<int> CountAtLocationAsync(Guid locationId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountByLocationAsync(CancellationToken ct = default);

@@ -21,6 +21,7 @@ internal sealed class BusinessProcessConfiguration : IEntityTypeConfiguration<Bu
         b.Property(x => x.SourceReference).HasMaxLength(300);
         b.Property(x => x.Version).IsRowVersion();
         b.Property(x => x.RequiresReadiness).HasDefaultValue(false);   // CR-039: existing processes keep their behaviour
+        b.Property(x => x.QueueScope).HasMaxLength(60);   // CR-040: declared by an Admin
         b.Ignore(x => x.TriggerLocationCodes);
         b.HasIndex(x => x.Code).IsUnique();
         b.HasOne<WCS.Domain.Inventory.ProductModel>().WithMany().HasForeignKey(x => x.ProductModelId).OnDelete(DeleteBehavior.Restrict);   // CR-036 (nullable)
@@ -110,6 +111,9 @@ internal sealed class TransportOrderConfiguration : IEntityTypeConfiguration<Tra
         b.HasMany(x => x.Legs).WithOne().HasForeignKey(l => l.OrderId).OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(x => x.RequestKey).IsUnique();   // request idempotency
         b.HasIndex(x => x.State);
+        b.Property(x => x.QueueScope).HasMaxLength(60);   // CR-040
+        b.HasIndex(x => new { x.QueueScope, x.QueueSequence });
+        b.HasIndex(x => x.QueueSequence).IsUnique();
     }
 }
 
