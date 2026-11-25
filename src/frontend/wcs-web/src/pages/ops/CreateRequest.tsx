@@ -1,21 +1,28 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import type { Order, StartableProcess } from '../../api/routingTypes'
 import type { FlowOption, TransportTask } from '../../api/types'
 import { Button } from '../../components/ui'
 import { Field } from '../config/FormKit'
 import { Modal } from '../../components/Modal'
 import { useT } from '../../i18n'
 import { describeError, flowInfo, RACK_KIND_VI, TASK_STATE_VI, taskCode } from '../../i18n/vi'
-import { applyCreate, checkOutcome, newRequestKey, sendCreate, type CreateApi, type CreateEvent, type CreateState, type Gate } from '../../lib/opsConsole'
+import { applyCreate, checkOrderOutcome, checkOutcome, newRequestKey, sendCreate, sendProcessCreate, type CreateApi, type CreateEvent, type CreateState, type Gate, type ProcessCreateApi } from '../../lib/opsConsole'
+import { processOf, processValue } from '../../lib/requestOptions'
 
 
-interface Props { flows: FlowOption[]; gate: Gate; api: CreateApi; onCreated: (t: TransportTask) => void }
+interface Props {
+  flows: FlowOption[]; gate: Gate; api: CreateApi; onCreated: (t: TransportTask) => void
+  /** CR-039: every published process, and the calls that start one. */
+  processes?: StartableProcess[]; processApi?: ProcessCreateApi
+}
 
 /**
  * Creates a request through the normal WCS path only (POST /api/tasks): the server picks pick-up and drop-off, reserves them and decides whether to dispatch.
+ * A published process is started through POST /api/routing/orders (a Transport Order) with the same one-send rule.
  * One send per RequestKey: the state machine (`createStep`) lets exactly one call out, a result is never retried, and an unknown outcome is checked by RequestKey, never resent.
  */
-export function CreateRequest({ flows, gate, api, onCreated }: Props) {
+export function CreateRequest({ flows, gate, api, onCreated, processes = [], processApi }: Props) {
   const t = useT()
   const [flow, setFlow] = useState('')
   const [station, setStation] = useState('')
@@ -24,20 +31,33 @@ export function CreateRequest({ flows, gate, api, onCreated }: Props) {
   const [task, setTask] = useState<TransportTask | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [found, setFound] = useState<TransportTask | null | 'none'>(null)
+  const [order, setOrder] = useState<Order | null>(null)
+  const [foundOrder, setFoundOrder] = useState<Order | null>(null)
 
   const holder = { get: () => ref.current, set: (s: CreateState) => { ref.current = s; setState(s) } }
   const apply = (e: CreateEvent): boolean => applyCreate(holder, e)
   const option = flows.find((f) => f.flow === flow)
-  const ready = gate.allowed && flow !== '' && station !== ''
+  const process = processApi ? processOf(flow, processes) : undefined
+  const stations = process ? process.triggerLocationCodes : option?.stations ?? []
+  const ready = gate.allowed && flow !== '' && station !== '' && (!process || process.acceptsRequests)
 
   const send = async () => {
+    if (process && processApi) {
+      const p = await sendProcessCreate(holder, processApi, process, station)
+      if (p.order) setOrder(p.order); else if (p.error) setError(describeError(p.error))
+      return
+    }
     const r = await sendCreate(holder, api, flow, station)
     if (r.task) { setTask(r.task); onCreated(r.task) } else if (r.error) setError(describeError(r.error))
   }
-  const check = async () => { setFound((await checkOutcome(holder, api)) ?? 'none') }
-  const again = () => { setTask(null); setError(null); setFound(null); apply('reset') }
+  const check = async () => {
+    if (process && processApi) { const o = await checkOrderOutcome(holder, processApi); setFoundOrder(o); setFound(o ? null : 'none'); return }
+    setFound((await checkOutcome(holder, api)) ?? 'none')
+  }
+  const again = () => { setTask(null); setOrder(null); setFoundOrder(null); setError(null); setFound(null); apply('reset') }
   const phase = state.phase
-  const info = flow ? flowInfo(flow) : null
+  const info = process ? { code: process.code, label: process.name } : flow ? flowInfo(flow) : null
+  const rackKind = process?.rackKind ?? option?.rackKind
 
   return (
     <section className="panel ops-create" aria-label={t('ops.createTitle')}>
@@ -47,17 +67,31 @@ export function CreateRequest({ flows, gate, api, onCreated }: Props) {
         <Field label={t('ops.createFlow')}>
           <select value={flow} disabled={phase !== 'idle'} onChange={(e) => { setFlow(e.target.value); setStation('') }}>
             <option value="">{t('ops.createChooseFlow')}</option>
-            {flows.map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
+            <optgroup label={t('ops.createGroupFlows')}>
+              {flows.map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
+            </optgroup>
+            {processApi && processes.length > 0 && (
+              <optgroup label={t('ops.createGroupProcesses')}>
+                {processes.map((p) => <option key={p.code} value={processValue(p.code)}>{p.code} · {p.name}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
+              </optgroup>
+            )}
           </select>
         </Field>
         <Field label={t('ops.createStation')}>
           <select value={station} disabled={!flow || phase !== 'idle'} onChange={(e) => setStation(e.target.value)}>
             <option value="">{t('ops.createChooseStation')}</option>
-            {(option?.stations ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
+            {stations.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
       </div>
-      {option && <p className="muted small">{t('ops.createRack', { kind: RACK_KIND_VI[option.rackKind] ?? option.rackKind })}</p>}
+      {rackKind && <p className="muted small">{t('ops.createRack', { kind: RACK_KIND_VI[rackKind] ?? rackKind })}</p>}
+      {process && !process.acceptsRequests && (
+        <div className="notice notice-warn" role="status" data-process-blocked={process.code}>
+          <p>{t('ops.createNotReady', { code: process.code, readiness: process.readiness })}</p>
+          {process.blockedDetail && <p className="muted small">{process.blockedDetail}</p>}
+        </div>
+      )}
+      {process && <p className="muted small">{t('ops.createIsOrder')}</p>}
       <p className="muted small">{t('ops.createRoute')}</p>
       <p className="muted small">{t('ops.createKey')}: <span className="mono">{state.requestKey}</span></p>
       <div className="btn-row">
@@ -96,6 +130,13 @@ export function CreateRequest({ flows, gate, api, onCreated }: Props) {
           <div className="btn-row"><Link to={`/operations?task=${task.id}`}>{t('ops.createdOpen')}</Link><Button onClick={again}>{t('ops.createAnother')}</Button></div>
         </div>
       )}
+      {phase === 'created' && order && (
+        <div className="notice notice-ok" role="status" data-create="created-order">
+          <strong>{t('ops.createdOrderTitle', { code: order.processCode })}</strong>
+          <p>{t('ops.createdOrderState', { state: order.state })}</p>
+          <div className="btn-row"><Link to="/routing">{t('ops.ordersLink')}</Link><Button onClick={again}>{t('ops.createAnother')}</Button></div>
+        </div>
+      )}
       {phase === 'refused' && (
         <div className="notice notice-bad" role="alert" data-create="refused">
           <strong>{t('ops.refusedTitle')}</strong>
@@ -110,6 +151,7 @@ export function CreateRequest({ flows, gate, api, onCreated }: Props) {
           {error && <p className="muted small">{error}</p>}
           <div className="btn-row"><Button onClick={() => void check()}>{t('ops.unknownCheck')}</Button></div>
           {found === 'none' && <p>{t('ops.unknownNotFound')}</p>}
+          {foundOrder && <p>{t('ops.createdOrderTitle', { code: foundOrder.processCode })} <Link to="/routing">{t('ops.ordersLink')}</Link></p>}
           {found && found !== 'none' && (
             <p>{t('ops.unknownFound', { code: taskCode(found.id), state: TASK_STATE_VI[found.state] })} <Link to={`/operations?task=${found.id}`}>{t('ops.createdOpen')}</Link></p>
           )}

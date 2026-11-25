@@ -20,6 +20,7 @@ internal sealed class BusinessProcessConfiguration : IEntityTypeConfiguration<Bu
         b.Property(x => x.ReviewReason).HasMaxLength(500);
         b.Property(x => x.SourceReference).HasMaxLength(300);
         b.Property(x => x.Version).IsRowVersion();
+        b.Property(x => x.RequiresReadiness).HasDefaultValue(false);   // CR-039: existing processes keep their behaviour
         b.Ignore(x => x.TriggerLocationCodes);
         b.HasIndex(x => x.Code).IsUnique();
         b.HasOne<WCS.Domain.Inventory.ProductModel>().WithMany().HasForeignKey(x => x.ProductModelId).OnDelete(DeleteBehavior.Restrict);   // CR-036 (nullable)

@@ -1,5 +1,6 @@
 // CR-036 (A.4) – Operations Console rules that need no DOM: when a request may be created, how a task is staged WITHOUT inventing progress, how a task list is filtered, how a create call
 // is protected against a second send, and how its outcome is classified. Everything is derived from data the server already provides; nothing is guessed. Tested by `npm run ops:test`.
+import type { Order, StartableProcess } from '../api/routingTypes'
 import type { FleetView } from '../api/fleetTypes'
 import { ApiRequestError } from '../api/errors'
 import type { ExecMode, ExecutionModeView } from '../api/modeTypes'
@@ -145,6 +146,12 @@ export const findByRequestKey = (tasks: readonly TransportTask[], key: string): 
 
 export const newRequestKey = (): string => `OPS-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 
+/** The server calls for a published process: start one Transport Order, or look it up. */
+export interface ProcessCreateApi {
+  start: (process: StartableProcess, station: string, requestKey: string) => Promise<Order>
+  list: () => Promise<Order[]>
+}
+
 /** The server calls the create form makes; the page passes the real client, the tests pass a fake. */
 export interface CreateApi {
   create: (flow: string, station: string, requestKey: string) => Promise<TransportTask>
@@ -174,6 +181,24 @@ export async function sendCreate(h: CreateHolder, api: CreateApi, flow: string, 
     applyCreate(h, classifyCreateError(error))
     return { task: null, error }
   }
+}
+
+/** The same single send for a published process (a Transport Order): same state machine, same classification, never retried. */
+export async function sendProcessCreate(h: CreateHolder, api: ProcessCreateApi, process: StartableProcess, station: string): Promise<{ order: Order | null; error: unknown }> {
+  if (!applyCreate(h, 'send')) return { order: null, error: null }
+  try {
+    const order = await api.start(process, station, h.get().requestKey)
+    applyCreate(h, 'created')
+    return { order, error: null }
+  } catch (error) {
+    applyCreate(h, classifyCreateError(error))
+    return { order: null, error }
+  }
+}
+
+/** After an unknown outcome of a process request: look the RequestKey up among the orders. Never creates anything. */
+export async function checkOrderOutcome(h: CreateHolder, api: ProcessCreateApi): Promise<Order | null> {
+  try { return (await api.list()).find((o) => o.requestKey === h.get().requestKey) ?? null } catch { return null }
 }
 
 /** After an unknown outcome: look the RequestKey up in the list. The call never creates anything. */

@@ -131,6 +131,7 @@ public sealed class DatabaseSeedHostedService(IServiceScopeFactory scopes, ILogg
             await scope.ServiceProvider.GetRequiredService<WcsDataSeeder>().SeedAsync(cancellationToken);
             await scope.ServiceProvider.GetRequiredService<WCS.Application.Abstractions.IExecutionModeService>().InitializeAsync(cancellationToken);   // CR-038: load (or create) the mode; unresolved Real dispatches -> RECOVERY_REQUIRED
             await scope.ServiceProvider.GetRequiredService<WCS.Infrastructure.Plc.PlcCatalogSeeder>().SeedAsync(cancellationToken);
+            await scope.ServiceProvider.GetRequiredService<DefaultProcessSeeder>().SeedAsync(cancellationToken);   // CR-039: after the locations and the PLC ports
             await scope.ServiceProvider.GetRequiredService<WCS.Infrastructure.Auth.AdminBootstrapper>().RunAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

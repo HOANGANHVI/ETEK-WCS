@@ -59,6 +59,14 @@ public class BusinessProcess
 
     public void SetProductModel(Guid? modelId, DateTimeOffset now) { ProductModelId = modelId; UpdatedAt = now; }
 
+    /// <summary>
+    /// CR-039 (D-11): a request is accepted only while the Published version is Operational Readiness = Ready, whatever `RouteEngine:EnforceReadiness` says. Set for the default
+    /// catalog and for a process that was published although a device condition (PLC port / IO mapping) was not met. ONE WAY: nothing clears it.
+    /// </summary>
+    public bool RequiresReadiness { get; private set; }
+
+    public void RequireReadiness(DateTimeOffset now) { if (!RequiresReadiness) { RequiresReadiness = true; UpdatedAt = now; } }
+
     public IReadOnlyList<string> TriggerLocationCodes => TriggerLocationCodesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     public void Update(string name, string? description, RequestType requestType, RackKind rackKind, IEnumerable<string> triggers, bool enabled, DateTimeOffset now)

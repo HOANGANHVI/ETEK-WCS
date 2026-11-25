@@ -25,12 +25,17 @@ public class Cr037DefaultLocationSeedTests(DatabaseFixture fixture)
     private static WcsDataSeeder Seeder(WcsDbContext db, Harness h, bool defaults = true) =>
         new(db, h.Clock, Options.Create(new SeedOptions { DefaultLocations = defaults }), NullLogger<WcsDataSeeder>.Instance);
 
-    private static Task<int> Seed(Harness h, bool defaults = true) => h.Db(db => Seeder(db, h, defaults).SeedDefaultLocationsAsync());
+    /// <summary>Catalog version 1 only: these tests describe the Phase 1 locations and the once-per-version mechanism. Version 2 (CR-039) is tested in Cr039DefaultProcessCatalogTests.</summary>
+    private static DefaultLocationCatalog Phase1()
+    {
+        var c = DefaultLocationCatalog.Load(); c.Version = 1; c.Locations.RemoveAll(x => x.SinceVersion != 1); return c;
+    }
+    private static Task<int> Seed(Harness h, bool defaults = true) => h.Db(db => Seeder(db, h, defaults).SeedDefaultLocationsAsync(Phase1()));
     private static Task<int> SeedWith(Harness h, DefaultLocationCatalog catalog) => h.Db(db => Seeder(db, h).SeedDefaultLocationsAsync(catalog));
     private static DefaultLocationRow Row(string code, int since) => new() { Code = code, Name = code, Type = "Buffer", Capacity = 2, AllowedRackKind = "Any", SinceVersion = since, Source = "test" };
     private static DefaultLocationCatalog Catalog(int version, params DefaultLocationRow[] extra)
     {
-        var c = DefaultLocationCatalog.Load(); c.Version = version; c.Locations.AddRange(extra); return c;
+        var c = Phase1(); c.Version = version; c.Locations.AddRange(extra); return c;
     }
     private static Task<List<string?>> Markers(Harness h) => h.Db(db => db.AuditLog.AsNoTracking().Where(a => a.Action == WcsDataSeeder.CatalogAppliedAction).OrderBy(a => a.TargetId).Select(a => a.TargetId).ToListAsync());
 

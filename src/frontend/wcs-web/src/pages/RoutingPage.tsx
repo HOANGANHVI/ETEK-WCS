@@ -295,14 +295,20 @@ function StartOrderDialog({ onClose }: { onClose: () => void }) {
   }
   return (
     <Modal title={t('routing.startTitle')} onClose={onClose}
-      footer={<><Button onClick={onClose}>{t('routing.closeDialog')}</Button><Button variant="primary" disabled={busy || !chosen || !loc} onClick={submit}>{t('routing.startConfirm')}</Button></>}>
+      footer={<><Button onClick={onClose}>{t('routing.closeDialog')}</Button><Button variant="primary" disabled={busy || !chosen || !loc || !chosen.acceptsRequests} onClick={submit}>{t('routing.startConfirm')}</Button></>}>
       {error && <div className="notice notice-error" role="alert">{error}</div>}
+      {chosen && !chosen.acceptsRequests && (
+        <div className="notice notice-warn" role="status">
+          <p>{t('ops.createNotReady', { code: chosen.code, readiness: chosen.readiness })}</p>
+          {chosen.blockedDetail && <p className="muted small">{chosen.blockedDetail}</p>}
+        </div>
+      )}
       <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: t('routing.startNoProcess'), hint: t('routing.startNoProcessHint') }}>
         {() => (
           <div className="form-grid">
             <Field label={t('routing.startProcess')} wide>
               <select value={chosen?.code ?? ''} onChange={(e) => setCode(e.target.value)}>
-                {processes.map((p) => <option key={p.code} value={p.code}>{p.code} – {p.name}</option>)}
+                {processes.map((p) => <option key={p.code} value={p.code}>{p.code} – {p.name}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
               </select>
             </Field>
             <Field label={t('routing.startLocation')}>

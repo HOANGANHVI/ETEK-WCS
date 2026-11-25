@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
 using WCS.Domain.Common;
@@ -12,7 +13,7 @@ namespace WCS.Application.Routing;
 /// Publishing is refused unless <see cref="ProcessValidator"/> passes at that very moment. A Published version is never edited: a change is a new version,
 /// and running Transport Tasks keep their own snapshot.
 /// </summary>
-public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository routing, ProcessValidator validator, IClock clock, IProductModelRepository productModels)
+public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository routing, ProcessValidator validator, IClock clock, IProductModelRepository productModels, IOptions<RouteEngineOptions> routeOptions)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -102,6 +103,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
             await routing.FlushAsync(t);   // the old Published row must reach the database first (one Published version per process)
         }
         v.Publish(user, clock.UtcNow);
+        if (outcome.NeedsReadiness) p.RequireReadiness(clock.UtcNow);   // CR-039: published with an unmet device condition => no request until Ready
         return ToVersionDto(p, v);
     }, ct);
 
@@ -118,6 +120,9 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         if (!Enum.TryParse<OperationalReadiness>(target, true, out var r)) throw AppException.Validation("READINESS_INVALID", "Readiness must be NotReady, Ready or Suspended.");
         if (string.IsNullOrWhiteSpace(reason)) throw AppException.Validation("REASON_REQUIRED", "A reason is required for a Readiness change.");
         var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
+        var p = await ProcessOf(v, t);
+        if (r == OperationalReadiness.Ready && p.RequiresReadiness && await validator.DeviceConditionsAsync(p, v, t) is { Count: > 0 } unmet)
+            throw AppException.Rejected("READINESS_CONDITIONS_UNMET", "The version cannot be set Ready: " + string.Join(" ", unmet.Select(i => i.Message).Take(5)) + (unmet.Count > 5 ? $" (+{unmet.Count - 5} more)" : ""));
         try { v.SetReadiness(r, user, reason.Trim(), clock.UtcNow); }
         catch (DomainException e) { throw AppException.Rejected(e.Code, e.Message); }
         return new ReadinessDto(v.Id, v.State.ToString(), v.Readiness.ToString(), v.ReadinessReason, v.ReadinessChangedBy, v.ReadinessChangedAt);
@@ -127,6 +132,33 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
     {
         var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
         return new ReadinessDto(v.Id, v.State.ToString(), v.Readiness.ToString(), v.ReadinessReason, v.ReadinessChangedBy, v.ReadinessChangedAt);
+    }, ct);
+
+    /// <summary>
+    /// CR-039: EVERY process with a Published version (enabled, not review-blocked) with what a request would be told now. Nothing is filtered by location, process code or
+    /// product group: a process an Admin creates appears here as soon as it is published. A process that accepts no request is listed with the reason, never hidden.
+    /// </summary>
+    public Task<IReadOnlyList<StartableProcessDto>> StartableAsync(CancellationToken ct = default) => uow.ExecuteAsync<IReadOnlyList<StartableProcessDto>>(async t =>
+    {
+        var list = new List<StartableProcessDto>();
+        foreach (var p in (await routing.ListProcessesAsync(t)).Where(x => x.Enabled && !x.ReviewBlocked).OrderBy(x => x.Code, StringComparer.Ordinal))
+        {
+            if (await routing.GetPublishedVersionAsync(p.Id, t) is not { } published) continue;
+            var v = await routing.GetVersionAsync(published.Id, t) ?? published;
+            string? blocked = null; string? detail = null;
+            if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.Readiness != OperationalReadiness.Ready) blocked = "PROCESS_NOT_READY";
+            if (p.RequiresReadiness && await validator.DeviceConditionsAsync(p, v, t) is { Count: > 0 } unmet) { blocked = "PROCESS_NOT_READY"; detail = unmet[0].Message; }
+            list.Add(new StartableProcessDto(p.Code, p.Name, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, v.Readiness.ToString(), blocked is null, blocked, detail));
+        }
+        return list;
+    }, ct);
+
+    /// <summary>CR-039: marks a process as accepting requests only when Ready (one way). Used by the configuration import.</summary>
+    public Task<bool> RequireReadinessAsync(Guid processId, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        var p = await routing.GetProcessAsync(processId, t) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found.");
+        p.RequireReadiness(clock.UtcNow);
+        return true;
     }, ct);
 
     /// <summary>New Draft version copied from <paramref name="fromVersionId"/> (or the latest version). Published versions stay untouched.</summary>
@@ -146,7 +178,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
 
     /// <summary>
     /// Loads the reference processes derived from the working matrix (Process in detail, Phase 2) as DRAFT versions. Idempotent by process code; never publishes.
-    /// REVIEW flows (BP-04 and its Phase 2 counterpart) are marked review-blocked so they can never be published.
+    /// A REVIEW flow (BP-04) is marked review-blocked so it can never be published (PH2-04 was approved by D-09).
     /// </summary>
     public Task<ImportResult> ImportReferenceAsync(IReadOnlyList<ReferenceProcess> items, string? user, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
     {

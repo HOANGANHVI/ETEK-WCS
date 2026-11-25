@@ -116,4 +116,8 @@ export interface ProcessHeaderBody { code: string; name: string; description: st
 export interface ImportResult { imported: number; skipped: number; importedCodes: string[] }
 export interface AddPlcBody { plcId: string; name: string; ipAddress: string; stations: { stationId: string; locationCode: string | null }[] }
 export interface PortView { stationId: string; plcId: string; order: number; locationCode: string | null; enabled: boolean; role: string; pointCount: number; configuredPoints: number; approvedPoints: number }
-export interface StartableProcess { code: string; name: string; requestType: string; rackKind: string; triggerLocationCodes: string[] }
+/** A published process as the request forms see it (CR-039). `acceptsRequests` is the server's answer; the form only shows it. */
+export interface StartableProcess {
+  code: string; name: string; requestType: string; rackKind: string; triggerLocationCodes: string[]
+  readiness: string; acceptsRequests: boolean; blockedCode: string | null; blockedDetail: string | null
+}

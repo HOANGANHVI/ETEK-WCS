@@ -53,9 +53,20 @@ public class Cr010ApiTests(DatabaseFixture fixture)
         await using var _h = h; await using var _f = f;
         var admin = await As(f, "admin1");
 
+        // CR-039: what the host start-up does (this test host runs no start-up seed)
+        await h.Scoped(sp => sp.GetRequiredService<WCS.Infrastructure.Seeding.WcsDataSeeder>().SeedDefaultLocationsAsync());
+        await h.Scoped(sp => sp.GetRequiredService<WCS.Infrastructure.Seeding.DefaultProcessSeeder>().SeedAsync());
+
         var imp = await admin.SendJsonAsync(HttpMethod.Post, "/api/processes/import-reference");
         Assert.Equal(200, imp.Status);
-        Assert.Equal(12, imp.Root.GetProperty("data").GetProperty("imported").GetInt32());
+        // the 12 Phase 2 defaults exist, so the import adds only the six Phase 1 reference drafts
+        Assert.Equal((6, 12), (imp.Root.GetProperty("data").GetProperty("imported").GetInt32(), imp.Root.GetProperty("data").GetProperty("skipped").GetInt32()));
+
+        var startable = (await admin.SendJsonAsync(HttpMethod.Get, "/api/routing/startable-processes")).Root.GetProperty("data").EnumerateArray().ToList();
+        Assert.Equal(["PH2-01", "PH2-02", "PH2-03", "PH2-04", "PH2-06", "PH2-07", "PH2-08", "PH2-09", "PH2-10", "PH2-11", "PH2-12"], startable.Select(p => p.GetProperty("code").GetString()).ToArray());
+        Assert.All(startable, p => { Assert.False(p.GetProperty("acceptsRequests").GetBoolean()); Assert.Equal("PROCESS_NOT_READY", p.GetProperty("blockedCode").GetString()); });
+        var refused = await admin.SendJsonAsync(HttpMethod.Post, "/api/routing/orders", new { requestKey = "api-ph2", locationCode = "X1", requestType = "PickupRequest", rackKind = "Full", processCode = "PH2-07" });
+        Assert.Equal("PROCESS_NOT_READY", refused.Root.GetProperty("error").GetProperty("code").GetString());
 
         var list = await admin.SendJsonAsync(HttpMethod.Get, "/api/processes");
         var bp4 = list.Root.GetProperty("data").EnumerateArray().Single(p => p.GetProperty("code").GetString() == "BP-04");

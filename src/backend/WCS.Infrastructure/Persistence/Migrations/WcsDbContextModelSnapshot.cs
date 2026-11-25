@@ -1533,6 +1533,11 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<bool>("RequiresReadiness")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("ReviewBlocked")
                         .HasColumnType("boolean");
 

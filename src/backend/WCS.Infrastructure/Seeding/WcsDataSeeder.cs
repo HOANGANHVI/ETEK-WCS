@@ -18,6 +18,8 @@ public sealed class SeedOptions
     public bool Enabled { get; set; }
     /// <summary>Insert-only seed of the approved default Phase 1 locations (<c>default-locations.json</c>). On by default so a new deployment is usable; never updates or deletes a row. Set false to switch it off.</summary>
     public bool DefaultLocations { get; set; } = true;
+    /// <summary>CR-039: publish the default transport processes once per database (they accept no request until Ready). Insert-only; an existing process code is never touched.</summary>
+    public bool DefaultProcesses { get; set; } = true;
     /// <summary>Optional RCS robot code per AGV code (data, never hard-coded). NEEDS_CONFIRMATION.</summary>
     public Dictionary<string, string> AgvRobotCodes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<SeedLocation> Locations { get; set; } = [];
@@ -88,7 +90,9 @@ public sealed class WcsDataSeeder(WcsDbContext db, IClock clock, IOptions<SeedOp
             foreach (var l in catalog.Locations.Where(x => x.SinceVersion == v))
             {
                 if (existing.Contains(l.Code.Trim().ToUpperInvariant())) continue;
-                db.Locations.Add(new Location(l.Code, l.Name, Enum.Parse<LocationType>(l.Type, true), l.Capacity, Enum.Parse<AllowedRackKind>(l.AllowedRackKind, true), l.RequiresPlcPermission, clock.UtcNow));
+                var location = new Location(l.Code, l.Name, Enum.Parse<LocationType>(l.Type, true), l.Capacity, Enum.Parse<AllowedRackKind>(l.AllowedRackKind, true), l.RequiresPlcPermission, clock.UtcNow);
+                if (l.StationRole is { } role) location.SetModelAndRole(null, Enum.Parse<StationRole>(role, true), clock.UtcNow);   // CR-039: manual QC stations only; never a product model
+                db.Locations.Add(location);
                 db.AuditLog.Add(new AuditEntry(clock.UtcNow, "SEED", "System", "SEED_LOCATION_CREATE", "Location", l.Code, AuditResult.Success,
                     $"Default location {l.Code} ({l.Type}, capacity {l.Capacity}, {l.AllowedRackKind}) created by default location catalog v{v}", null, null, null));
                 logger.LogInformation("Default location seeded: {Code} ({Type}, capacity {Capacity}, {Kind}) catalog v{Version}", l.Code, l.Type, l.Capacity, l.AllowedRackKind, v);
@@ -127,6 +131,8 @@ public sealed class DefaultLocationRow
     public int Capacity { get; set; }
     public string AllowedRackKind { get; set; } = "Any";
     public bool RequiresPlcPermission { get; set; }
+    /// <summary>CR-039: optional station role (only <c>ManualQcStation</c> is used by the catalog).</summary>
+    public string? StationRole { get; set; }
     /// <summary>The catalog version that introduced this row.</summary>
     public int SinceVersion { get; set; } = 1;
     public string Source { get; set; } = "";

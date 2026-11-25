@@ -10,8 +10,24 @@ public enum IssueSeverity { Warning = 1, Error = 2 }
 
 public sealed record ProcessIssue(IssueSeverity Severity, string Code, string Message, string? StepKey = null);
 
+/// <summary>
+/// CR-039 (D-11, two gates): device conditions belong to Operational Readiness, not to Publication. At publication they are reported as warnings and make the process
+/// require Readiness; before a request is accepted (and before a version is set Ready) they are checked again and block.
+/// </summary>
+public static class ReadinessCodes
+{
+    public const string PortDisabled = "PORT_DISABLED";
+    public const string PlcDisabled = "PLC_DISABLED";
+    public const string PortMappingNotApproved = "PORT_MAPPING_NOT_APPROVED";
+    /// <summary>A location that needs PLC permission has no port at all: nothing could confirm the station. Only judged for processes that require Readiness.</summary>
+    public const string StationPortMissing = "STATION_PORT_MISSING";
+
+    public static bool IsDeviceCondition(string code) => code is PortDisabled or PlcDisabled or PortMappingNotApproved;
+}
+
 public sealed record ValidationOutcome(IReadOnlyList<ProcessIssue> Issues)
 {
+    public bool NeedsReadiness => Issues.Any(i => ReadinessCodes.IsDeviceCondition(i.Code));
     public bool IsValid => Issues.All(i => i.Severity != IssueSeverity.Error);
 }
 
@@ -67,12 +83,7 @@ public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepo
                 else if (loc.ProductModelId is not null) ModelIssue(ModelCodes.LegacyProcessModelLocation, $"{role} location '{code}' belongs to a product model, but process {process.Code} has none (a process without a model never uses a modelled location).", step);
             }
             if (!checkedPorts.Add(code)) return;
-            var port = await routing.FindPortByLocationAsync(code, ct);
-            if (port is null) return;
-            if (!port.Enabled) Err("PORT_DISABLED", $"Port {port.Id} of location '{code}' is disabled.", step);
-            else if (!await routing.IsPlcEnabledAsync(port.PlcId, ct)) Err("PLC_DISABLED", $"PLC {port.PlcId} serving location '{code}' is disabled.", step);
-            else if (!await routing.IsPortMappingApprovedAsync(port.Id, ct))
-                Err("PORT_MAPPING_NOT_APPROVED", $"The IO mapping of port {port.Id} (location '{code}') is not approved by the PLC engineer; no physical operation may use it.", step);
+            if (await DeviceIssueAsync(code, ct) is { } d) Warn(d.Code, d.Message + " Publication is allowed; the process accepts no request until this is solved and the version is Ready.", step);
         }
 
         foreach (var t in process.TriggerLocationCodes) await UseLocation(t, null, "Trigger");
@@ -218,6 +229,40 @@ public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepo
             if (others.Count > 0) Warn("AMBIGUOUS_TRIGGER", $"Process {others[0].Process.Code} is already published for the same request at {t}; a request without an explicit process code will be refused.");
         }
         return new ValidationOutcome(issues);
+    }
+
+    /// <summary>The device condition of one location (null = met, or the location has no port).</summary>
+    private async Task<(string Code, string Message)?> DeviceIssueAsync(string code, CancellationToken ct)
+    {
+        var port = await routing.FindPortByLocationAsync(code, ct);
+        if (port is null) return null;
+        if (!port.Enabled) return (ReadinessCodes.PortDisabled, $"Port {port.Id} of location '{code}' is disabled.");
+        if (!await routing.IsPlcEnabledAsync(port.PlcId, ct)) return (ReadinessCodes.PlcDisabled, $"PLC {port.PlcId} serving location '{code}' is disabled.");
+        if (!await routing.IsPortMappingApprovedAsync(port.Id, ct))
+            return (ReadinessCodes.PortMappingNotApproved, $"The IO mapping of port {port.Id} (location '{code}') is not approved by the PLC engineer; no physical operation may use it.");
+        return null;
+    }
+
+    /// <summary>
+    /// CR-039: the technical conditions of Operational Readiness for every location the version names (triggers, candidates, condition locations). Empty = met.
+    /// It does not judge commissioning, safety or RCS acceptance: those stay the Admin's evidence when setting Ready.
+    /// </summary>
+    public async Task<IReadOnlyList<ProcessIssue>> DeviceConditionsAsync(BusinessProcess process, BusinessProcessVersion version, CancellationToken ct = default)
+    {
+        var codes = process.TriggerLocationCodes.ToList();
+        foreach (var s in version.Steps)
+        {
+            codes.AddRange(s.Conditions.Select(x => x.LocationCode).OfType<string>());
+            foreach (var c in s.Candidates) { codes.Add(c.LocationCode); codes.AddRange(c.Conditions.Select(x => x.LocationCode).OfType<string>()); }
+        }
+        var issues = new List<ProcessIssue>();
+        foreach (var code in codes.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (await DeviceIssueAsync(code, ct) is { } d) { issues.Add(new ProcessIssue(IssueSeverity.Error, d.Code, d.Message)); continue; }
+            if (await locations.GetByCodeAsync(code, ct) is { RequiresPlcPermission: true } && await routing.FindPortByLocationAsync(code, ct) is null)
+                issues.Add(new ProcessIssue(IssueSeverity.Error, ReadinessCodes.StationPortMissing, $"Location '{code}' needs PLC permission but no PLC port serves it."));
+        }
+        return issues;
     }
 
     private static void CheckCondition(ConditionSpec c, string step, Action<string, string, string?> err)

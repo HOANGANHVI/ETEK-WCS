@@ -177,12 +177,12 @@ public class Cr010ProcessConfigTests(DatabaseFixture fixture)
         await using var kit = await RoutingKit.CreateAsync(fixture);
         var first = await kit.With(sp => sp.GetRequiredService<ProcessAdminService>().ImportReferenceAsync(ReferenceProcessCatalog.Load(), "admin"));
         var second = await kit.With(sp => sp.GetRequiredService<ProcessAdminService>().ImportReferenceAsync(ReferenceProcessCatalog.Load(), "admin"));
-        Assert.Equal(12, first.Imported);
-        Assert.Equal((0, 12), (second.Imported, second.Skipped));
+        Assert.Equal(18, first.Imported);   // CR-039: PH2-07..12 added to the reference data
+        Assert.Equal((0, 18), (second.Imported, second.Skipped));
         var list = await kit.With(sp => sp.GetRequiredService<ProcessAdminService>().ListAsync());
         Assert.All(list, p => Assert.Null(p.PublishedVersion));                                    // nothing is published by an import
         Assert.True(list.Single(p => p.Code == "BP-04").ReviewBlocked);
-        Assert.True(list.Single(p => p.Code == "PH2-04").ReviewBlocked);
+        Assert.False(list.Single(p => p.Code == "PH2-04").ReviewBlocked);                           // D-09 approved PH2-04 (applied by CR-039); BP-04 stays REVIEW
     }
 
     [Fact]
@@ -233,15 +233,19 @@ public class Cr010ProcessConfigTests(DatabaseFixture fixture)
 
     // ------------------------------------------------------------------ 17: unapproved mapping
     [Fact]
-    public async Task Test17_a_route_through_a_port_with_an_unapproved_IO_mapping_cannot_be_published()
+    public async Task Test17_a_route_through_a_port_with_an_unapproved_IO_mapping_can_be_published_but_accepts_no_request()
     {
         await using var kit = await RoutingKit.CreateAsync(fixture, approvePorts: false);
         var (_, v) = await kit.CreateProcessAsync("T-NA", RequestType.PickupRequest, RackKind.Full, A, To("B1"));
         var res = await kit.ValidateAsync(v);
-        Assert.Equal("Draft", res.State);
-        Has(res.Issues, "PORT_MAPPING_NOT_APPROVED");
+        Assert.Equal("Validated", res.State);                                                      // CR-039 (D-11): a device condition belongs to Readiness, not to Publication
+        Assert.Contains(res.Issues, i => i.Code == "PORT_MAPPING_NOT_APPROVED" && i.Severity == IssueSeverity.Warning);
+        await kit.PublishAsync(v);
         var ex = await Assert.ThrowsAsync<AppException>(() => kit.StartAsync("na", "A1", RequestType.PickupRequest, RackKind.Full, "T-NA"));
-        Assert.Equal("PROCESS_NOT_PUBLISHED", ex.Code);                                           // so no physical operation can start on it
+        Assert.Equal("PROCESS_NOT_READY", ex.Code);                                               // so no physical operation can start on it, even without RouteEngine:EnforceReadiness
+        var ready = await Assert.ThrowsAsync<AppException>(() => kit.With(sp => sp.GetRequiredService<ProcessAdminService>().SetReadinessAsync(v, "Ready", "try", "admin")));
+        Assert.Equal("READINESS_CONDITIONS_UNMET", ready.Code);
+        Assert.Equal(0, await kit.H.Db(d => d.TransportOrders.CountAsync()));
     }
 
     // ------------------------------------------------------------------ 15 / 16: PLC provisioning and independent mapping
