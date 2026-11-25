@@ -1,5 +1,13 @@
 # Change Log
 
+## v3.28 – CR-036 Product Model isolation and Manual QC protection, Batch 1 (2026-11-25)
+
+- Additive schema (product models, location model/role, rack model/disposition, process model); guards behind `ModelIsolation:Mode` (default Off); one-way `ManualHandling` disposition at manual QC stations; rollback guard. See CR-036. Not deployed; re-intake, UI, ConfigTransfer export and Queue not included.
+
+## v3.27 – CR-035 AGV Phase 2 first runnable increment (2026-11-24)
+
+- Operational Readiness axis (`NotReady`/`Ready`/`Suspended`) per process version + migration `AddProcessVersionReadiness`; intake gate behind `RouteEngine:EnforceReadiness` (default off). Real-RCS leg template (`Rcs:RealDispatch:LegTemplate`, empty = Blocked as before). Admin manual PLC simulation (`/api/plc-simulation/*`, real RCS only, `PlcSimulation:Allowed` default off). Queue Request/Held/Scope and Pick/Drop triggers not implemented (see CR-035). PLC mapping comparison document added; no workbook changed.
+
 ## v3.26 – CR-033 RCS integration log category fix (2026-11-23)
 
 - `LogClassifier` now classifies RCS integration events (`RCS_*`, `AGV_STATUS*`) as RCS / AGV by event code, whichever class writes them; `FleetService` events (`RCS_FLEET_POLL_SUCCESS`, `RCS_FLEET_QUERY_RECOVERED`, …) used to fall into SYSTEM, so the RCS / AGV KPI read 0. Audit rows (RCS Diagnostics, RCS settings) stay in SECURITY_AUDIT. No migration; historical rows unchanged (optional reviewed backfill documented in `CR-033_RCS_LOG_CATEGORY.md`). Query, KPI, paging and export unchanged (they read the stored category).
@@ -11,6 +19,11 @@
 ## v3.24 – CR-032 RCS Diagnostics & Manual API Tester (2026-11-23) – feature branch, mock verified, not merged
 
 - New Admin-only module (menu System, route `/rcs-diagnostics`, API `/api/rcs-diagnostics`): catalog of the 23 outbound RCS-2000 V3.3 APIs, document-driven request builder with server validation and preview, immediate execute (no approval), request / response inspector with outcome classes (TCP, timeout, HTTP, RCS code ≠ 0, JSON), masked execution history with filters / export, TCP check kept apart from API check, honest Callback Monitor (no WCS receiver on this build). Additive migration `AddRcsDiagnostics` (`rcs_api_tests`, `rcs_callback_log`). No change to Real Dispatch, fleet monitoring, PLC, inventory or Legacy dispatch. See `CR-032_RCS_DIAGNOSTICS.md`.
+## v3.21 – CR-030 Real RCS dispatch adapter (2026-11-21) – feature branch, MOCK verified, not merged
+
+- `HikRcsClient` (`IRcsClient`) for RCS-2000 API V3.3: `genAgvSchedulingTask`, `queryTaskStatus`, `continueTask`, `cancelTask`; RCS → WCS `agvCallback` endpoint (not mapped unless enabled; authenticated by WCS-side checks only; refused when none is configured; never completes a task or confirms a drop).
+- **OFF by default** (`Rcs:RealDispatch:Enabled=false`); location / process mapping is configuration and empty by default; missing mapping, RCS connection or port → fail closed (nothing sent, clear error, no token in logs). No `agvCode` in RcsManaged requests; `taskCode` = WCS request code; deterministic `reqCode` (≤ 32); code 6 accepted; 99 / timeouts / connection errors = unknown outcome.
+- Routing legs are blocked with the real RCS (no confirmed leg mapping); the simulator API is not exposed in real mode. Compose / `.env.example` / nginx (`/rcs/`) / `appsettings.example.json` carry the (default-off) keys. No database change. Verified with a mock RCS server only.
 
 ## v3.20 – Deployment configuration for the real RCS fleet source (2026-11-21)
 

@@ -66,6 +66,28 @@ internal sealed class RackRepository(WcsDbContext db) : IRackRepository
 
     public async Task<IReadOnlyList<Rack>> ListUnreservedAsync(Guid locationId, RackStatus status, int take, CancellationToken ct) =>
         await Unreserved(locationId, status).Take(take).ToListAsync(ct);
+
+    // CR-036: the filtered variant (same ordering: FIFO by LastConfirmedAt). The query above is NOT changed.
+    public Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, RackSelection selection, CancellationToken ct)
+    {
+        var q = Unreserved(locationId, status);
+        if (selection.AutoOnly) q = q.Where(r => r.Disposition == RackDisposition.Auto);
+        if (selection.ProductModelId is { } pm) q = q.Where(r => r.ProductModelId == pm);
+        else if (selection.RequireNoModel) q = q.Where(r => r.ProductModelId == null);
+        return q.OrderBy(r => r.LastConfirmedAt).ThenBy(r => r.Id).FirstOrDefaultAsync(ct);
+    }
+}
+
+internal sealed class ProductModelRepository(WcsDbContext db) : IProductModelRepository
+{
+    public Task<ProductModel?> GetAsync(Guid id, CancellationToken ct) => db.ProductModels.FirstOrDefaultAsync(x => x.Id == id, ct);
+    public Task<ProductModel?> GetByCodeAsync(string code, CancellationToken ct)
+    {
+        var c = (code ?? "").Trim().ToUpperInvariant();
+        return db.ProductModels.FirstOrDefaultAsync(x => x.Code == c, ct);
+    }
+    public async Task<IReadOnlyList<ProductModel>> ListAsync(CancellationToken ct) => await db.ProductModels.OrderBy(x => x.Code).ToListAsync(ct);
+    public void Add(ProductModel model) => db.ProductModels.Add(model);
 }
 
 internal sealed class ReservationRepository(WcsDbContext db) : IReservationRepository
@@ -89,6 +111,9 @@ internal sealed class ReservationRepository(WcsDbContext db) : IReservationRepos
             .Select(e => e.Entity).Where(e => saved.All(s => s.Id != e.Id));
         return saved.Concat(pending).ToList();
     }
+
+    public Task<bool> HasActiveForRackAsync(Guid rackId, CancellationToken ct) =>
+        db.Reservations.AnyAsync(x => x.RackId == rackId && x.Status == ReservationStatus.Active, ct);
 
     public async Task<int> CountActiveDestinationAsync(Guid locationId, CancellationToken ct)
     {

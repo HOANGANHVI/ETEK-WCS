@@ -15,7 +15,7 @@ public sealed record StepDefinition(string StepKey, int Order, string Type, stri
 
 public sealed record VersionDefinition(string FirstStepKey, IReadOnlyList<StepDefinition> Steps, string? Note = null);
 
-public sealed record ProcessHeader(string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes);
+public sealed record ProcessHeader(string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes, Guid? ProductModelId = null);
 
 public sealed record ReferenceProcess(string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes,
     bool ReviewBlocked, string? ReviewReason, string? SourceReference, VersionDefinition Definition);
@@ -24,7 +24,10 @@ public sealed record VersionSummaryDto(Guid Id, int Number, string State, DateTi
     DateTimeOffset? DisabledAt, string? Note, int StepCount);
 
 public sealed record ProcessDto(Guid Id, string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes,
-    bool Enabled, bool ReviewBlocked, string? ReviewReason, string? SourceReference, int? PublishedVersion, int LatestVersion, IReadOnlyList<VersionSummaryDto> Versions);
+    bool Enabled, bool ReviewBlocked, string? ReviewReason, string? SourceReference, int? PublishedVersion, int LatestVersion, IReadOnlyList<VersionSummaryDto> Versions, Guid? ProductModelId = null);
+
+/// <summary>CR-035: the two independent axes of a process version.</summary>
+public sealed record ReadinessDto(Guid VersionId, string PublicationState, string Readiness, string? Reason, string? ChangedBy, DateTimeOffset? ChangedAt);
 
 public sealed record VersionDto(Guid Id, Guid ProcessId, string ProcessCode, int Number, string State, bool Editable, string? Note, VersionDefinition Definition,
     IReadOnlyList<ProcessIssue> Issues, DateTimeOffset? ValidatedAt);

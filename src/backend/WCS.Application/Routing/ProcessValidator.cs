@@ -19,7 +19,7 @@ public sealed record ValidationOutcome(IReadOnlyList<ProcessIssue> Issues)
 /// Publish gate (CR-010 3.5). A process version is published only when every check passes; the Admin sees each failure with its step.
 /// The rules that protect approved behaviour (REVIEW flows, protected locations, approved PLC mapping) are NOT switchable.
 /// </summary>
-public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepository routing, IOptions<RouteEngineOptions> options)
+public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepository routing, IOptions<RouteEngineOptions> options, IOptions<ModelIsolationOptions> modelOptions)
 {
     private static readonly HashSet<string> InventoryStates = new(StringComparer.OrdinalIgnoreCase) { "Empty", "Occupied", "HasFreeSlot", "NotUnknown" };
     private static readonly HashSet<string> BindingStates = new(StringComparer.OrdinalIgnoreCase) { "Bound", "Unbound" };
@@ -29,6 +29,14 @@ public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepo
         var issues = new List<ProcessIssue>();
         void Err(string code, string msg, string? step = null) => issues.Add(new ProcessIssue(IssueSeverity.Error, code, msg, step));
         void Warn(string code, string msg, string? step = null) => issues.Add(new ProcessIssue(IssueSeverity.Warning, code, msg, step));
+
+        // CR-036 publication rules (INV-M1, INV-M4, INV-M6). Off = none; Warn = warnings; Enforce = errors. These are PUBLICATION errors: they are not Operational Readiness.
+        var modelMode = modelOptions.Value.Mode;
+        var modelChecked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void ModelIssue(string code, string msg, string? step)
+        {
+            if (modelMode == ModelIsolationMode.Enforce) Err(code, msg, step); else if (modelMode == ModelIsolationMode.Warn) Warn(code, msg, step);
+        }
 
         if (process.ReviewBlocked) Err("PROCESS_REVIEW_BLOCKED", $"Process {process.Code} is REVIEW and cannot be published. {process.ReviewReason}");
         if (process.TriggerLocationCodes.Count == 0) Err("NO_TRIGGER_LOCATION", "The process has no location that can start it.");
@@ -53,6 +61,11 @@ public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepo
             var loc = await Loc(code);
             if (loc is null) { Err("LOCATION_NOT_FOUND", $"{role} location '{code}' does not exist.", step); return; }
             if (!loc.Enabled) Err("LOCATION_DISABLED", $"{role} location '{code}' is disabled.", step);
+            if (modelMode != ModelIsolationMode.Off && modelChecked.Add(code))
+            {
+                if (process.ProductModelId is { } pm) { if (loc.ProductModelId != pm) ModelIssue(ModelCodes.ProcessModelMismatch, $"{role} location '{code}' does not belong to the product model of process {process.Code}.", step); }
+                else if (loc.ProductModelId is not null) ModelIssue(ModelCodes.LegacyProcessModelLocation, $"{role} location '{code}' belongs to a product model, but process {process.Code} has none (a process without a model never uses a modelled location).", step);
+            }
             if (!checkedPorts.Add(code)) return;
             var port = await routing.FindPortByLocationAsync(code, ct);
             if (port is null) return;
@@ -119,6 +132,9 @@ public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepo
                 Err("PREVIOUS_DESTINATION_ON_FIRST", "The first step has no previous destination.", s.StepKey);
             var sources = s.Candidates.Where(c => c.Role == CandidateRole.Source).ToList();
             var dests = s.Candidates.Where(c => c.Role == CandidateRole.Destination).ToList();
+            if (modelMode != ModelIsolationMode.Off && s.SourceMode == SourceMode.Request)
+                foreach (var tc in process.TriggerLocationCodes)
+                    if (await Loc(tc) is { StationRole: StationRole.ManualQcStation }) ModelIssue(ModelCodes.ManualQcNotSource, $"The request location '{tc}' is a manual QC station and is the source of this step: a manual QC station is never the source of an automatic process.", s.StepKey);
             if (s.SourceMode == SourceMode.Candidates && sources.Count == 0) Err("NO_SOURCE_CANDIDATE", "SourceMode=Candidates needs at least one source candidate.", s.StepKey);
             if (s.SourceMode != SourceMode.Candidates && sources.Count > 0) Warn("SOURCE_CANDIDATES_IGNORED", "Source candidates are ignored unless SourceMode=Candidates.", s.StepKey);
             if (s.DestinationMode == DestinationMode.Candidates && dests.Count == 0) Err("NO_DESTINATION_CANDIDATE", "DestinationMode=Candidates needs at least one destination candidate.", s.StepKey);
@@ -142,6 +158,13 @@ public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepo
                 }
                 var loc = await Loc(c.LocationCode);
                 if (loc is null) continue;
+                if (modelMode != ModelIsolationMode.Off && loc.StationRole == StationRole.ManualQcStation)
+                {
+                    if (s.Type is RouteStepType.BufferStorage or RouteStepType.BufferRetrieval)
+                        ModelIssue(ModelCodes.ManualQcNotBuffer, $"'{c.LocationCode}' is a manual QC station, not a buffer: it cannot be used by a {s.Type} step.", s.StepKey);
+                    if (c.Role == CandidateRole.Source)
+                        ModelIssue(ModelCodes.ManualQcNotSource, $"'{c.LocationCode}' is a manual QC station and cannot be the source of an automatic process.", s.StepKey);
+                }
                 if (c.Role == CandidateRole.Destination)
                 {
                     if (!RouteConditionEvaluator.CanStoreRack(loc.Type)) Err("DESTINATION_NOT_STORAGE", $"'{c.LocationCode}' ({loc.Type}) cannot store a rack and cannot be a destination.", s.StepKey);

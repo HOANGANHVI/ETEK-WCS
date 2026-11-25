@@ -1,33 +1,33 @@
 /* ETEK WCS design tokens – navy / white / light grey, with green-amber-red reserved for operational status. */
 :root {
   /* brand */
-  --navy-900: #091a30;
-  --navy-800: #0c2342;
-  --navy-700: #123560;
-  --navy-600: #1b4a85;
-  --navy-500: #2563a8;
-  --navy-100: #e3ecf7;
+  --navy-900: #10243e;
+  --navy-800: #153154;
+  --navy-700: #174e8c;
+  --navy-600: #1e5fa8;
+  --navy-500: #2876c7;
+  --navy-100: #e3edf8;
   --navy-50: #f1f6fc;
 
   /* neutrals */
-  --bg: #f2f5fa;
+  --bg: #f1f4f8;
   --surface: #ffffff;
-  --surface-2: #f6f8fa;
-  --line: #e3e8f0;
-  --line-strong: #bcc5d1;
-  --text: #17212e;
-  --text-2: #4a586a;
-  --text-3: #75839a;
+  --surface-2: #f7f9fc;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --text: #172b45;
+  --text-2: #475569;
+  --text-3: #64748b;
 
   /* operational status */
-  --ok: #17824f;       --ok-bg: #e2f4ea;     --ok-line: #9ed3b6;
+  --ok: #16845b;       --ok-bg: #e4f4ed;     --ok-line: #9ed3b6;
   --warn: #a86400;     --warn-bg: #fff1d3;   --warn-line: #f0c872;
-  --bad: #b3261e;      --bad-bg: #fbe5e3;    --bad-line: #eaa7a2;
-  --info: #1d5fa8;     --info-bg: #e3edf9;   --info-line: #a9c6e8;
+  --bad: #c93f3f;      --bad-bg: #fbe9e9;    --bad-line: #eaa7a2;
+  --info: #2876c7;     --info-bg: #e6f0fa;   --info-line: #a9c6e8;
   --muted: #5b6878;    --muted-bg: #e8ecf1;  --muted-line: #cbd3dd;
 
   /* type & space */
-  --font: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
   --fs-xs: 12.5px;
   --fs-sm: 14px;
   --fs-md: 15px;
@@ -36,19 +36,19 @@
   --fs-kpi: 32px;
   --gap-1: 6px; --gap-2: 10px; --gap-3: 14px; --gap-4: 20px;
   --radius: 8px;
-  --radius-lg: 12px;
+  --radius-lg: 10px;
   --header-h: 56px;
   --sidebar-w: 236px;
-  --shadow: 0 1px 2px rgba(9, 26, 48, .05), 0 4px 14px rgba(9, 26, 48, .045);
-  --shadow-lift: 0 2px 4px rgba(9, 26, 48, .06), 0 10px 26px rgba(9, 26, 48, .09);
+  --shadow: 0 1px 2px rgba(16, 36, 62, .05);
+  --shadow-lift: 0 2px 8px rgba(16, 36, 62, .08);
   --accent-blue: #2f7de1;
 
   /* theme-dependent helpers (overridden for the dark theme below) */
-  --heading: var(--navy-800);
+  --heading: #172b45;
   --accent-text: var(--navy-600);
   --accent-text-strong: var(--navy-700);
   --link: var(--navy-500);
-  --amber: #e0a21a;
+  --amber: #d99016;
   --muted-solid: #9aa6b6;
   --stripe-b: #f5cf7a; --stripe-c: #fbe6b0; --stripe-d: #fff6dd;
   --on-status: #fff;

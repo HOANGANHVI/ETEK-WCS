@@ -42,8 +42,8 @@ public interface IInventoryService
     Task MarkPhysicalUnprovenAsync(TransportTask task, CancellationToken ct = default);
 
     // API-level operations (own transaction)
-    Task<IReadOnlyList<Guid>> DeclareInitialStockAsync(string locationCode, RackKind kind, int quantity, string user, CancellationToken ct = default);
-    Task<int> AdjustStockAsync(string locationCode, RackKind kind, int targetQuantity, string user, string? note, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> DeclareInitialStockAsync(string locationCode, RackKind kind, int quantity, string user, CancellationToken ct = default, Guid? productModelId = null);
+    Task<int> AdjustStockAsync(string locationCode, RackKind kind, int targetQuantity, string user, string? note, CancellationToken ct = default, Guid? productModelId = null);
     /// <summary>Operator-confirmed physical outcome after an incident (4.8 steps 4-6).</summary>
     Task ReconcileTaskAsync(Guid taskId, string actualLocationCode, string user, string? note, CancellationToken ct = default);
 }

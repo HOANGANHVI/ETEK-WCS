@@ -29,7 +29,7 @@ public interface IPlcRequestService
 /// It does NOT write M9101 or any other PLC signal (timing of the acknowledgement is an open decision, Q-ORD-1) and never substitutes another position for an invalid one.
 /// </summary>
 public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IRouteEngine engine, IMaintenanceGate maintenance,
-    IClock clock, IOptions<RouteEngineOptions> options) : IPlcRequestService
+    IClock clock, IOptions<RouteEngineOptions> options, ModelGuard modelGuard) : IPlcRequestService
 {
     public async Task<PlcRequestResult> HandleRequestAsync(PlcRequestSnapshot s, CancellationToken ct = default)
     {
@@ -93,7 +93,9 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
             {
                 var loc = await locations.GetByCodeAsync(locationCode, t);
                 if (loc is null) return true;
-                return await racks.FindUnreservedAsync(loc.Id, kind == RackKind.Full ? RackStatus.Full : RackStatus.Empty, t) is null;
+                var wanted = kind == RackKind.Full ? RackStatus.Full : RackStatus.Empty;
+                // CR-036: with Enforce a rack in manual handling does not count as the rack the PLC reports (the request is reconciled, never served automatically)
+                return (modelGuard.Enforcing ? await racks.FindUnreservedAsync(loc.Id, wanted, new RackSelection(null, false, true), t) : await racks.FindUnreservedAsync(loc.Id, wanted, t)) is null;
             }, ct);
             if (mismatch)
             {

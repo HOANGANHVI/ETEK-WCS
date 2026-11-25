@@ -2,6 +2,9 @@ namespace WCS.Domain.Routing;
 
 // CR-010. Enums are stored as readable strings (see WcsDbContext conventions). New members may be appended; existing names never change.
 
+/// <summary>CR-035 (D-11): Operational Readiness of a process version, independent of its publication state. Only Ready (with the feature on) lets a request into the queue.</summary>
+public enum OperationalReadiness { NotReady = 0, Ready = 1, Suspended = 2 }
+
 /// <summary>Configuration state of one Business Process version. Only a <see cref="Published"/> version can start a Transport Task.</summary>
 public enum ProcessConfigState { Draft = 0, Validated = 1, Published = 2, Disabled = 3 }
 

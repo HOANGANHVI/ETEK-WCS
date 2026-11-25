@@ -26,6 +26,16 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
         db.BusinessProcessVersions.Include(v => v.Steps).ThenInclude(s => s.Candidates)
             .FirstOrDefaultAsync(v => v.ProcessId == processId && v.State == ProcessConfigState.Published, ct);
 
+    public async Task<bool> IsLocationReferencedByPublishedAsync(string locationCode, CancellationToken ct)
+    {
+        var published = db.BusinessProcessVersions.Where(v => v.State == ProcessConfigState.Published);
+        var triggers = await (from v in published join p in db.BusinessProcesses on v.ProcessId equals p.Id select p.TriggerLocationCodesCsv).ToListAsync(ct);
+        if (triggers.Any(csv => csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(locationCode, StringComparer.OrdinalIgnoreCase))) return true;
+        var steps = db.RouteSteps.Where(s => published.Any(v => v.Id == s.VersionId));
+        if (await steps.AnyAsync(s => s.WaitingPositionCode == locationCode || (s.ConditionsJson != null && s.ConditionsJson.Contains(locationCode)), ct)) return true;
+        return await db.RouteCandidates.AnyAsync(c => steps.Any(s => s.Id == c.StepId) && (c.LocationCode == locationCode || (c.ConditionsJson != null && c.ConditionsJson.Contains(locationCode))), ct);
+    }
+
     public async Task<IReadOnlyList<(BusinessProcess Process, BusinessProcessVersion Version)>> FindPublishedAsync(RequestType type, RackKind? kind, string locationCode, CancellationToken ct)
     {
         var q = db.BusinessProcesses.Where(p => p.Enabled && p.RequestType == type);

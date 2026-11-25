@@ -22,6 +22,16 @@ export function PageHeader({ title, description, actions }: { title: string; des
   )
 }
 
+/** A quiet group title above a set of cards (dashboard zones, form areas). Presentation only. */
+export function SectionHeader({ title, hint, className = '' }: { title: string; hint?: string; className?: string }) {
+  return (
+    <div className={`sec-head ${className}`}>
+      <h2>{title}</h2>
+      {hint && <span>{hint}</span>}
+    </div>
+  )
+}
+
 export function Panel({ title, subtitle, actions, children, flush, className = '' }: {
   title?: string; subtitle?: string; actions?: ReactNode; children: ReactNode; flush?: boolean; className?: string
 }) {

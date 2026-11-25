@@ -529,6 +529,38 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.ToTable("inventory_transactions", (string)null);
                 });
 
+            modelBuilder.Entity("WCS.Domain.Inventory.ProductModel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("product_models", (string)null);
+                });
+
             modelBuilder.Entity("WCS.Domain.Inventory.Rack", b =>
                 {
                     b.Property<Guid>("Id")
@@ -540,12 +572,22 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CurrentTaskId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Disposition")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("Auto");
+
                     b.Property<string>("ExternalRackId")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTimeOffset>("LastConfirmedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ProductModelId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("RackType")
                         .HasMaxLength(100)
@@ -569,6 +611,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("ExternalRackId")
                         .IsUnique()
                         .HasFilter("\"ExternalRackId\" IS NOT NULL");
+
+                    b.HasIndex("ProductModelId");
+
+                    b.HasIndex("CurrentLocationId", "Disposition");
 
                     b.ToTable("racks", null, t =>
                         {
@@ -645,6 +691,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid?>("ProductModelId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("RackCapacity")
                         .HasColumnType("integer");
 
@@ -653,6 +702,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("RequiresPlcPermission")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("StationRole")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -669,6 +722,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("ProductModelId");
 
                     b.ToTable("locations", null, t =>
                         {
@@ -1281,6 +1336,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid?>("ProductModelId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("RackKind")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -1321,6 +1379,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
+                    b.HasIndex("ProductModelId");
+
                     b.ToTable("business_processes", (string)null);
                 });
 
@@ -1360,6 +1420,22 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<string>("PublishedBy")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Readiness")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset?>("ReadinessChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReadinessChangedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ReadinessReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -2315,6 +2391,19 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("CurrentLocationId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("WCS.Domain.Inventory.ProductModel", null)
+                        .WithMany()
+                        .HasForeignKey("ProductModelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("WCS.Domain.Locations.Location", b =>
+                {
+                    b.HasOne("WCS.Domain.Inventory.ProductModel", null)
+                        .WithMany()
+                        .HasForeignKey("ProductModelId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("WCS.Domain.Plc.PlcStation", b =>
@@ -2339,6 +2428,14 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasForeignKey("StationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("WCS.Domain.Routing.BusinessProcess", b =>
+                {
+                    b.HasOne("WCS.Domain.Inventory.ProductModel", null)
+                        .WithMany()
+                        .HasForeignKey("ProductModelId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("WCS.Domain.Routing.BusinessProcessVersion", b =>

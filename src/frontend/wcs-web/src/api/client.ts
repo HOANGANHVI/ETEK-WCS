@@ -5,11 +5,12 @@ import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
+import type { SimFlow, SimStartResult, SimStatus } from './simTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
 import type { AddPlcBody, StartableProcess, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type {
-  ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
+  ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
 import type { FleetView } from './fleetTypes'
 import type { RcsParameter, RcsParameters, RcsCallbacks, RcsCatalog, RcsCheckState, RcsExecution, RcsHistoryFilter, RcsHistoryItem, RcsHistoryPage, RcsOverview, RcsPreview } from './rcsDiagTypes'
@@ -269,12 +270,24 @@ const realApi = {
   // CR-026: Maintenance flag (everyone reads, Admin switches) and configuration export / import (Admin)
   maintenance: () => request<MaintenanceView>('/api/system/maintenance'),
   setMaintenance: (enabled: boolean, reason: string | null) => request<MaintenanceView>('/api/system/maintenance', { method: 'PUT', body: JSON.stringify({ enabled, reason }) }),
+  productModels: () => request<ProductModelInfo[]>('/api/product-models'),   // CR-036 (A.2), Admin
+  productModelCreate: (code: string, name: string) => request<ProductModelInfo>('/api/product-models', { method: 'POST', body: JSON.stringify({ code, name }) }),   // A.3
+  productModelUpdate: (id: string, name: string, enabled: boolean) => request<ProductModelInfo>(`/api/product-models/${id}`, { method: 'PUT', body: JSON.stringify({ name, enabled }) }),   // A.3: code cannot change
   transferStatus: () => request<TransferStatus>('/api/config-transfer/status'),
   transferGroups: () => request<TransferGroup[]>('/api/config-transfer/groups'),
   transferExportCheck: (groups: TransferGroupId[]) => request<ExportDependencyReport>('/api/config-transfer/exports/check', { method: 'POST', body: JSON.stringify({ groups }) }),
   transferExport: (groups: TransferGroupId[]) => postForZip('/api/config-transfer/exports', { groups }, 'wcs-config.zip'),
   transferUpload: (file: File) => uploadPackage(file),
   transferPreview: (id: string, selection: Selection) => request<ImportPlan>(`/api/config-transfer/imports/${id}/preview`, { method: 'POST', body: JSON.stringify(selection) }),
+  // CR-035 Admin manual PLC simulation (PLC only; RCS is real). The server enforces Admin and the safety acknowledgement.
+  simStatus: () => request<SimStatus>('/api/plc-simulation/status'),
+  simActivate: () => request<SimStatus>('/api/plc-simulation/activate', { method: 'POST' }),
+  simDeactivate: () => request<SimStatus>('/api/plc-simulation/deactivate', { method: 'POST' }),
+  simFlows: () => request<SimFlow[]>('/api/plc-simulation/flows'),
+  simStart: (flowCode: string, locationCode: string, safetyAcknowledged: boolean) =>
+    request<SimStartResult>('/api/plc-simulation/requests', { method: 'POST', body: JSON.stringify({ flowCode, locationCode, safetyAcknowledged }) }),
+  simConfirm: (legId: string, drop: boolean) =>
+    request<unknown>(`/api/plc-simulation/legs/${legId}/confirm-${drop ? 'drop' : 'pick'}`, { method: 'POST', body: JSON.stringify({ externalRackId: null }) }),
   // CR-032 RCS Diagnostics (Admin only): reading never calls the RCS; only execute / tcp-check / api-check do, and only when the Admin presses the button
   rcsDiagOverview: () => request<RcsOverview>('/api/rcs-diagnostics/overview'),
   rcsDiagCatalog: () => request<RcsCatalog>('/api/rcs-diagnostics/catalog'),

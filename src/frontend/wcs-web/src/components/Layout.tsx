@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'nav.dashboard', end: true, icon: <IconOverview /> },
   { to: '/agvs', label: 'nav.agv', icon: <IconAgv /> },
   { to: '/tasks', label: 'nav.tasks', icon: <IconTasks /> },
+  ...(DEMO_MODE ? [] : [{ to: '/operations', label: 'ops.nav' as MsgKey, icon: <IconAgv /> }]),   // CR-036 (A.4) operations console for the real RCS
   { to: '/inventory', label: 'nav.inventory', icon: <IconWarehouse /> },
   ...(DEMO_MODE ? [] : [{ to: '/routing', label: 'routing.navRouting' as MsgKey, icon: <IconTasks /> }]),   // CR-010 (not part of the browser-only simulation)
   { to: '/plc', label: 'nav.plcMonitor', end: true, icon: <IconPlc /> },
@@ -45,6 +46,7 @@ const NAV_PERSONAL: NavItem[] = [
 const NAV_SYSTEM: NavItem[] = [
   { to: '/config', label: 'nav.config', icon: <IconSettings /> },
   { to: '/config-transfer', label: 'nav.configTransfer', icon: <IconSettings /> },   // CR-026
+  { to: '/plc-simulation', label: 'nav.plcSimulation', icon: <IconSettings /> },   // CR-035 (Admin): manual PLC simulation, real RCS
   { to: '/users', label: 'nav.users', icon: <IconUsers /> },
   { to: '/logs-diagnostics', label: 'nav.logsDiagnostics', icon: <IconLog /> },   // Operation logs, System logs, PLC diagnostics, RCS diagnostics: tabs of one page (Admin)
 ]

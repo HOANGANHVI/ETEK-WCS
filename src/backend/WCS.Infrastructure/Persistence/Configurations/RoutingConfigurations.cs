@@ -22,6 +22,7 @@ internal sealed class BusinessProcessConfiguration : IEntityTypeConfiguration<Bu
         b.Property(x => x.Version).IsRowVersion();
         b.Ignore(x => x.TriggerLocationCodes);
         b.HasIndex(x => x.Code).IsUnique();
+        b.HasOne<WCS.Domain.Inventory.ProductModel>().WithMany().HasForeignKey(x => x.ProductModelId).OnDelete(DeleteBehavior.Restrict);   // CR-036 (nullable)
     }
 }
 
@@ -37,6 +38,8 @@ internal sealed class BusinessProcessVersionConfiguration : IEntityTypeConfigura
         b.Property(x => x.PublishedBy).HasMaxLength(100);
         b.Property(x => x.FirstStepKey).HasMaxLength(60).IsRequired();
         b.Property(x => x.ValidationJson).HasColumnType("text");
+        b.Property(x => x.ReadinessReason).HasMaxLength(500);   // CR-035
+        b.Property(x => x.ReadinessChangedBy).HasMaxLength(100);
         b.Property(x => x.Version).IsRowVersion();
         b.Ignore(x => x.IsEditable);
         b.HasOne<BusinessProcess>().WithMany().HasForeignKey(x => x.ProcessId).OnDelete(DeleteBehavior.Restrict);

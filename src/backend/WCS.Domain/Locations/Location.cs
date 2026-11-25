@@ -37,6 +37,16 @@ public class Location
     /// <summary>Touched on every reservation/inventory change so concurrent allocations conflict on <see cref="Version"/>.</summary>
     public DateTimeOffset LastInventoryChangeAt { get; private set; }
     public uint Version { get; private set; }
+    /// <summary>CR-036: the product model this location belongs to. NULL = none (every existing location; never assigned automatically).</summary>
+    public Guid? ProductModelId { get; private set; }
+    /// <summary>CR-036: role in a model group (NULL for every existing location). <see cref="StationRole.ManualQcStation"/> is a manual QC station, NOT a buffer.</summary>
+    public StationRole? StationRole { get; private set; }
+
+    public void SetModelAndRole(Guid? modelId, StationRole? role, DateTimeOffset now)
+    {
+        if (role is { } r && !Enum.IsDefined(r)) throw new DomainException("STATION_ROLE_INVALID", "Unknown station role.");
+        ProductModelId = modelId; StationRole = role; LastInventoryChangeAt = now;
+    }
 
     public bool Accepts(RackKind kind) => AllowedRackKind switch
     {

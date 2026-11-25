@@ -39,7 +39,23 @@ public enum InventoryEventType
     ManualAdjustment = 3,
     InitialStockDeclared = 4,
     Reconciliation = 5,
+    /// <summary>CR-036 (Batch 1): the Product Model of a rack was assigned by an Admin or at stock-in.</summary>
+    ModelAssigned = 6,
+    /// <summary>CR-036: the rack was handed to manual handling (one way: nothing in WCS moves it back to Auto).</summary>
+    DispositionChanged = 7,
 }
+
+/// <summary>
+/// CR-036: the role of a location in a Product Model group. Additive to <see cref="LocationType"/> (which is NOT reinterpreted: F5 stays a Phase 1 ManualBuffer).
+/// NULL = no role (every existing location).
+/// </summary>
+public enum StationRole { CncStation = 1, AutoQcStation = 2, BufferPosition = 3, ManualQcStation = 4, Other = 5 }
+
+/// <summary>
+/// CR-036: who may dispatch a rack. <c>ManualHandling</c> = the rack left the automatic flow (it stands at a manual QC station). The change is ONE WAY inside WCS:
+/// no method, scheduler or process returns a rack to <c>Auto</c> (re-intake is a separate, not yet approved procedure).
+/// </summary>
+public enum RackDisposition { Auto = 0, ManualHandling = 1 }
 
 public enum ConfirmationSource { Plc = 1, Rcs = 2, Operator = 3, WcsReconciliation = 4, Simulator = 5 }
 

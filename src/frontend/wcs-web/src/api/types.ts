@@ -152,7 +152,7 @@ export interface SystemHealth {
   backend?: { startedAt: string; uptimeSeconds: number }
   database: { connected: boolean; latencyMs?: number | null }
   scheduler: { lastRunAt: string | null; lastError: string | null; stale: boolean }
-  integration: { mode: string; plc: string; plcRuntime?: { mode: string; running: boolean; connected: number; total: number } }
+  integration: { mode: string; plc: string; /** what the server says about dispatching to the RCS (undefined on older servers) */ rcs?: { dispatchAllowed: boolean; code: string }; plcRuntime?: { mode: string; running: boolean; connected: number; total: number } }
 }
 
 export interface SimulationStep {

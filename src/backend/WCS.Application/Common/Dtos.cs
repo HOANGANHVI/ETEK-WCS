@@ -11,10 +11,10 @@ public sealed record AgvDto(Guid Id, string Code, string Role, string? RcsRobotC
     bool DispatchHold = false, string? DispatchHoldReason = null, DateTimeOffset? DispatchHoldAt = null, Guid? DispatchHoldTaskId = null);
 
 public sealed record LocationDto(Guid Id, string Code, string Name, string Type, int RackCapacity, string AllowedRackKind,
-    bool Enabled, bool RequiresPlcPermission, int Occupied, int Reserved, string Occupancy);
+    bool Enabled, bool RequiresPlcPermission, int Occupied, int Reserved, string Occupancy, Guid? ProductModelId = null, string? StationRole = null);
 
 public sealed record RackDto(Guid Id, string? ExternalRackId, string? RackType, string Status, Guid? CurrentLocationId,
-    Guid? CurrentTaskId, DateTimeOffset LastConfirmedAt);
+    Guid? CurrentTaskId, DateTimeOffset LastConfirmedAt, Guid? ProductModelId = null, string Disposition = "Auto");
 
 public sealed record InventoryTransactionDto(Guid Id, string EventType, Guid? RackId, Guid? FromLocationId, Guid? ToLocationId,
     Guid? TaskId, string? StatusBefore, string? StatusAfter, string Source, string? UserName, string Bind, string? Note,
@@ -41,10 +41,10 @@ public static class DtoMapper
 
     public static LocationDto ToDto(this Location l, int occupied, int reserved) => new(l.Id, l.Code, l.Name, l.Type.ToString(),
         l.RackCapacity, l.AllowedRackKind.ToString(), l.Enabled, l.RequiresPlcPermission, occupied, reserved,
-        l.GetOccupancy(occupied, reserved).ToString());
+        l.GetOccupancy(occupied, reserved).ToString(), l.ProductModelId, l.StationRole?.ToString());
 
     public static RackDto ToDto(this Rack r) => new(r.Id, r.ExternalRackId, r.RackType, r.Status.ToString(), r.CurrentLocationId,
-        r.CurrentTaskId, r.LastConfirmedAt);
+        r.CurrentTaskId, r.LastConfirmedAt, r.ProductModelId, r.Disposition.ToString());
 
     public static InventoryTransactionDto ToDto(this InventoryTransaction t) => new(t.Id, t.EventType.ToString(), t.RackId,
         t.FromLocationId, t.ToLocationId, t.TaskId, t.StatusBefore?.ToString(), t.StatusAfter?.ToString(), t.Source.ToString(),

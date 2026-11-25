@@ -2,6 +2,10 @@ import { defineMessages } from '../core'
 
 export default defineMessages({
   titleAdmin: 'Tổng quan quản trị',
+  secFleet: 'Đội AGV',
+  secPerformance: 'Hiệu suất vận hành',
+  secAnalytics: 'Phân tích',
+  secHealth: 'Sức khỏe hệ thống và hoạt động gần nhất',
   titleOperator: 'Tổng quan vận hành',
   rangeLabel: 'Khoảng thời gian',
   rangeToday: 'Hôm nay',
@@ -76,6 +80,10 @@ export default defineMessages({
   activityInventory: 'Tồn kho · {event}: {from} → {to}',
 }, {
   titleAdmin: 'Administration overview',
+  secFleet: 'AGV fleet',
+  secPerformance: 'Operational performance',
+  secAnalytics: 'Analytics',
+  secHealth: 'System health and recent activity',
   titleOperator: 'Operations overview',
   rangeLabel: 'Time range',
   rangeToday: 'Today',

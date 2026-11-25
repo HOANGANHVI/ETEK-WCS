@@ -1,16 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import type { ApplyResult, Blocker, ExportDependencyReport, ImportPlan, MaintenanceView, PlanAction, PlanItem, TransferGroup, TransferGroupId, UploadResult } from '../api/configTransferTypes'
+import type { ApplyResult, Blocker, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, TransferGroup, TransferGroupId, UploadResult } from '../api/configTransferTypes'
 import { Modal } from '../components/Modal'
-import { Async, Button, EmptyState, PageHeader, Panel, Pill } from '../components/ui'
-import { useApi } from '../hooks/useApi'
+import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
+import { useApi, type ApiState } from '../hooks/useApi'
 import { hasMessage, useT, type MsgKey } from '../i18n'
 import { formatDateTime } from '../i18n/format'
 import { describeError } from '../i18n/vi'
-import type { Tone } from '../i18n/vi'
-
-const ACTION_TONE: Record<PlanAction, Tone> = { Create: 'ok', Update: 'info', Unchanged: 'muted', Skip: 'muted', Conflict: 'bad' }
-const refKey = (g: string, k: string) => `${g}/${k}`
+import { needsModelHint, refKey, sortGroups } from '../lib/transferView'
+import { GroupLabel, ModelExportHint } from './transfer/Groups'
+import { ModelsManager } from './transfer/ModelsManager'
+import { PlanView } from './transfer/PlanView'
 
 /** CR-026 – System → Configuration transfer (Admin). The page only drives the server: the server decides, validates and writes. */
 export function ConfigTransferPage() {
@@ -18,6 +18,7 @@ export function ConfigTransferPage() {
   const status = useApi(useCallback(() => api.transferStatus(), []))
   const groups = useApi(useCallback(() => api.transferGroups(), []))
   const maint = useApi(useCallback(() => api.maintenance(), []), ['MaintenanceChanged'])
+  const models = useApi(useCallback(() => api.productModels(), []))
   return (
     <>
       <PageHeader title={t('transfer.title')} description={t('transfer.description')} />
@@ -32,7 +33,7 @@ export function ConfigTransferPage() {
               </Panel>
             </div>
             <Async state={groups} empty={{ title: t('transfer.notEnabled') }} isEmpty={(g) => g.length === 0}>
-              {(gs) => (<><ExportPanel groups={gs} /><ImportPanel maint={maint.data} /></>)}
+              {(gs) => (<><ModelsPanel state={models} onChanged={() => { models.reload(); groups.reload() }} /><ExportPanel groups={sortGroups(gs)} /><ImportPanel maint={maint.data} /></>)}
             </Async>
           </div>
         )}
@@ -83,18 +84,19 @@ function MaintenancePanel({ maint, onChanged }: { maint: MaintenanceView | null;
   )
 }
 
-// ------------------------------------------------------------------------------------------------ export
-function GroupLabel({ g }: { g: TransferGroup }) {
+// ------------------------------------------------------------------------------------------------ product models (read only)
+const MODEL_API = { create: api.productModelCreate, update: api.productModelUpdate }
+
+function ModelsPanel({ state, onChanged }: { state: ApiState<ProductModelInfo[]>; onChanged: () => void }) {
   const t = useT()
   return (
-    <span className="transfer-group">
-      <strong>{t(`transfer.group_${g.id}` as MsgKey)}</strong>
-      <span className="muted small">{t(`transfer.groupDesc_${g.id}` as MsgKey)}</span>
-      <span className="muted small">{t('transfer.existing', { n: g.targetCount })}{g.dependsOn.length > 0 ? ' · ' + t('transfer.dependsOn', { groups: g.dependsOn.map((d) => t(`transfer.group_${d}` as MsgKey)).join(', ') }) : ''}</span>
-    </span>
+    <Panel title={t('transfer.modelsTitle')} subtitle={t('transfer.modelsHint')}>
+      <Async state={state} empty={{ title: t('transfer.modelsEmpty') }}>{(m) => <ModelsManager models={m} api={MODEL_API} onChanged={onChanged} />}</Async>
+    </Panel>
   )
 }
 
+// ------------------------------------------------------------------------------------------------ export
 function ExportPanel({ groups }: { groups: TransferGroup[] }) {
   const t = useT()
   const [sel, setSel] = useState<TransferGroupId[]>([])
@@ -127,6 +129,7 @@ function ExportPanel({ groups }: { groups: TransferGroup[] }) {
           <li key={g.id}><label className="check"><input type="checkbox" checked={sel.includes(g.id)} onChange={() => toggle(g.id)} /><GroupLabel g={g} /></label></li>
         ))}
       </ul>
+      {needsModelHint(sel, groups) && <ModelExportHint />}
       {deps && (
         <div className="notice notice-warn" role="alert">
           <strong>{t('transfer.exportDepsTitle')}</strong>
@@ -256,71 +259,6 @@ function ImportPanel({ maint }: { maint: MaintenanceView | null }) {
         </Modal>
       )}
     </Panel>
-  )
-}
-
-function fieldLabel(t: ReturnType<typeof useT>, f: string): string {
-  const k = `transfer.field_${f}` as MsgKey
-  return hasMessage(k) ? t(k) : f
-}
-
-function Changes({ item }: { item: PlanItem }) {
-  const t = useT()
-  if (item.action === 'Create') return <span className="muted small">{t('transfer.newRecord')}</span>
-  if (item.changes.length === 0) return null
-  return (
-    <ul className="transfer-changes">
-      {item.changes.map((c) => (
-        <li key={c.field}><span className="muted">{fieldLabel(t, c.field)}:</span> <code>{c.from ?? '∅'}</code> → <code>{c.to ?? '∅'}</code>{c.field === 'definition' ? '' : ''}</li>
-      ))}
-    </ul>
-  )
-}
-
-function PlanView({ plan, stale, excluded, onToggle, known }: { plan: ImportPlan; stale: boolean; excluded: string[]; onToggle: (g: string, k: string) => void; known: string[] }) {
-  const t = useT()
-  const [showSame, setShowSame] = useState(false)
-  const s = plan.summary
-  const warnings = plan.warnings.filter((w) => !known.includes(w))
-  if (plan.items.length === 0) return <EmptyState title={t('transfer.noRecords')} />
-  return (
-    <div className={stale ? 'transfer-plan stale' : 'transfer-plan'}>
-      <div className="btn-row transfer-summary">
-        <Pill tone="ok">{t('transfer.sumCreate')}: {s.create}</Pill>
-        <Pill tone="info">{t('transfer.sumUpdate')}: {s.update}</Pill>
-        <Pill tone="muted">{t('transfer.sumUnchanged')}: {s.unchanged}</Pill>
-        <Pill tone="muted">{t('transfer.sumSkip')}: {s.skip}</Pill>
-        <Pill tone={s.conflict > 0 ? 'bad' : 'muted'}>{t('transfer.sumConflict')}: {s.conflict}</Pill>
-      </div>
-      {warnings.length > 0 && <div className="notice notice-warn"><ul>{warnings.map((w) => <li key={w}>{w}</li>)}</ul></div>}
-      {s.unchanged > 0 && <label className="check"><input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /><span>{t('transfer.showUnchanged', { n: s.unchanged })}</span></label>}
-      <div className="table-wrap">
-        <table className="grid">
-          <thead><tr><th>{t('transfer.colGroup')}</th><th>{t('transfer.colKey')}</th><th>{t('transfer.colAction')}</th><th>{t('transfer.colChanges')}</th><th>{t('transfer.colInclude')}</th></tr></thead>
-          <tbody>
-            {plan.items.filter((i) => showSame || i.action !== 'Unchanged').map((i) => {
-              const off = excluded.includes(refKey(i.group, i.key))
-              const conflictKey = `transfer.conflict_${i.conflictCode}` as MsgKey
-              return (
-                <tr key={refKey(i.group, i.key)}>
-                  <td>{t(`transfer.group_${i.group}` as MsgKey)}</td>
-                  <td><code>{i.key}</code></td>
-                  <td><Pill tone={ACTION_TONE[i.action]}>{t(`transfer.action_${i.action}` as MsgKey)}</Pill>{i.headerChange && <> <Pill tone="warn" dot={false}>{t('transfer.headerBadge')}</Pill></>}</td>
-                  <td>
-                    <Changes item={i} />
-                    {i.conflictCode && <p className="small transfer-conflict">{hasMessage(conflictKey) ? t(conflictKey) : i.conflictCode}<br /><span className="muted">{i.conflictMessage}</span></p>}
-                  </td>
-                  <td>{i.action !== 'Unchanged' && (
-                    <input type="checkbox" aria-label={t('transfer.includeAria', { key: i.key })} checked={!off}
-                      onChange={() => onToggle(i.group, i.key)} />
-                  )}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
   )
 }
 

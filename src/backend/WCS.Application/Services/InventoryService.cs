@@ -18,7 +18,10 @@ public sealed class InventoryService(
     ITransportTaskRepository tasks,
     IWcsNotifier notifier,
     IClock clock,
-    ILogger<InventoryService> logger) : IInventoryService
+    ILogger<InventoryService> logger,
+    Routing.RackPlacement placement,
+    Routing.ModelGuard modelGuard,
+    IProductModelRepository productModels) : IInventoryService
 {
     private static RackStatus StatusFor(RackKind kind) => kind == RackKind.Full ? RackStatus.Full : RackStatus.Empty;
 
@@ -35,7 +38,9 @@ public sealed class InventoryService(
         {
             var loc = await locations.GetByCodeAsync(code, ct);
             if (loc is null || !loc.Enabled || loc.ReconciliationRequired) continue;
-            var rack = await racks.FindUnreservedAsync(loc.Id, StatusFor(task.RackKind), ct);
+            var rack = modelGuard.Enforcing
+                ? await racks.FindUnreservedAsync(loc.Id, StatusFor(task.RackKind), new RackSelection(null, false, true), ct)   // CR-036: Disposition = Auto only (no model filter: a legacy task has no model)
+                : await racks.FindUnreservedAsync(loc.Id, StatusFor(task.RackKind), ct);
             if (rack is null) continue;
 
             reservations.Add(Reservation.ForSourceRack(task.Id, rack.Id, loc.Id, clock.UtcNow));
@@ -141,6 +146,7 @@ public sealed class InventoryService(
         var before = rack.Status;
         rack.PlaceAt(dest.Id, StatusFor(task.RackKind), clock.UtcNow);
         dest.Touch(clock.UtcNow);
+        if (placement.OnPlaced(rack, dest, task.Id, source, user, clock.UtcNow) is { } dispositionTx) transactions.Add(dispositionTx);   // CR-036 (no-op unless the destination is a manual QC station)
         transactions.Add(new InventoryTransaction(InventoryEventType.DropConfirmed, rack.Id, task.SourceLocationId, dest.Id, task.Id,
             before, rack.Status, source, user, bind,
             bind == BindOutcome.NotBoundByProcess ? "NO_BIND_POINT: external rack id ignored" : null, clock.UtcNow));
@@ -151,7 +157,7 @@ public sealed class InventoryService(
     // -------------------------------------------------------------------------- API-level operations
 
     public Task<IReadOnlyList<Guid>> DeclareInitialStockAsync(string locationCode, RackKind kind, int quantity, string user,
-        CancellationToken ct = default)
+        CancellationToken ct = default, Guid? productModelId = null)
     {
         if (quantity <= 0) throw AppException.Validation("INVALID_QUANTITY", "Quantity must be positive.");
         return Run(async () =>
@@ -163,11 +169,14 @@ public sealed class InventoryService(
             if (occupied + reserved + quantity > loc.RackCapacity)
                 throw AppException.Conflict("CAPACITY_EXCEEDED", $"{loc.Code}: occupied {occupied} + reserved {reserved} + {quantity} exceeds capacity {loc.RackCapacity}.");
 
+            var modelId = await ResolveStockModelAsync(loc, productModelId, ct);   // CR-036
             var ids = new List<Guid>();
             for (var i = 0; i < quantity; i++)
             {
                 var rack = new Rack(StatusFor(kind), loc.Id, null, null, clock.UtcNow);
                 racks.Add(rack);
+                if (modelId is { } mid) { rack.AssignModel(mid); transactions.Add(new InventoryTransaction(InventoryEventType.ModelAssigned, rack.Id, null, loc.Id, null, null, rack.Status, ConfirmationSource.Operator, user, BindOutcome.NotRequested, "Product model declared at stock-in", clock.UtcNow)); }
+                if (placement.OnPlaced(rack, loc, null, ConfirmationSource.Operator, user, clock.UtcNow) is { } dispositionTx) transactions.Add(dispositionTx);
                 transactions.Add(new InventoryTransaction(InventoryEventType.InitialStockDeclared, rack.Id, null, loc.Id, null,
                     null, rack.Status, ConfirmationSource.Operator, user, BindOutcome.NotRequested, "Initial stock declared", clock.UtcNow));
                 ids.Add(rack.Id);
@@ -178,7 +187,7 @@ public sealed class InventoryService(
     }
 
     public Task<int> AdjustStockAsync(string locationCode, RackKind kind, int targetQuantity, string user, string? note,
-        CancellationToken ct = default)
+        CancellationToken ct = default, Guid? productModelId = null)
     {
         if (targetQuantity < 0) throw AppException.Validation("INVALID_QUANTITY", "Target quantity cannot be negative.");
         return Run(async () =>
@@ -196,10 +205,13 @@ public sealed class InventoryService(
             {
                 if (occupiedTotal + reserved + delta > loc.RackCapacity)
                     throw AppException.Conflict("CAPACITY_EXCEEDED", $"{loc.Code}: adjustment exceeds capacity {loc.RackCapacity}.");
+                var modelId = await ResolveStockModelAsync(loc, productModelId, ct);   // CR-036
                 for (var i = 0; i < delta; i++)
                 {
                     var rack = new Rack(status, loc.Id, null, null, clock.UtcNow);
                     racks.Add(rack);
+                    if (modelId is { } mid) { rack.AssignModel(mid); transactions.Add(new InventoryTransaction(InventoryEventType.ModelAssigned, rack.Id, null, loc.Id, null, null, rack.Status, ConfirmationSource.Operator, user, BindOutcome.NotRequested, "Product model declared at stock adjustment", clock.UtcNow)); }
+                    if (placement.OnPlaced(rack, loc, null, ConfirmationSource.Operator, user, clock.UtcNow) is { } dispositionTx) transactions.Add(dispositionTx);
                     transactions.Add(new InventoryTransaction(InventoryEventType.ManualAdjustment, rack.Id, null, loc.Id, null, null,
                         status, ConfirmationSource.Operator, user, BindOutcome.NotRequested, note ?? "Manual adjustment (+)", clock.UtcNow));
                 }
@@ -207,6 +219,18 @@ public sealed class InventoryService(
             else if (delta < 0)
             {
                 var removable = await racks.ListUnreservedAsync(loc.Id, status, -delta, ct);
+                if (modelGuard.On)
+                {
+                    // CR-036 (A.1): a rack in manual handling is NOT removed like an Auto rack. Removing one needs an approved, audited procedure that does not exist yet (open question P2-OQ-16),
+                    // so the request fails closed and nothing changes (no rack removed, no disposition touched).
+                    var unreserved = await racks.ListUnreservedAsync(loc.Id, status, 10_000, ct);
+                    var autoRacks = unreserved.Where(r => r.Disposition == RackDisposition.Auto).ToList();
+                    var manualRacks = unreserved.Count - autoRacks.Count;
+                    if (autoRacks.Count < -delta && autoRacks.Count + manualRacks >= -delta)
+                        throw AppException.Conflict("RACK_MANUAL_HANDLING_REQUIRES_APPROVED_ADJUSTMENT",
+                            $"{loc.Code} holds {manualRacks} rack(s) in manual handling. They are not removed by a stock adjustment: removing them needs an approved procedure (P2-OQ-16). Nothing was changed.");
+                    removable = autoRacks.Take(-delta).ToList();
+                }
                 if (removable.Count < -delta)
                     throw AppException.Conflict("RACKS_RESERVED", "Cannot remove racks that are reserved by active tasks.");
                 foreach (var rack in removable)
@@ -225,6 +249,7 @@ public sealed class InventoryService(
     {
         await uow.ExecuteAsync<bool>(async token =>
         {
+            string? modelIssue = null;   // CR-036 (A.1)
             var task = await tasks.GetAsync(taskId, token) ?? throw AppException.NotFound("TASK_NOT_FOUND", "Task not found.");
             if (!task.IsTerminal) throw AppException.Rejected("TASK_NOT_FINISHED", "Only finished tasks can be reconciled.");
             if (!task.RequiresReconciliation) throw AppException.Rejected("NO_RECONCILIATION_NEEDED", "Task does not require reconciliation.");
@@ -242,13 +267,28 @@ public sealed class InventoryService(
 
                 var before = rack.Status;
                 rack.PlaceAt(actual.Id, StatusFor(task.RackKind), clock.UtcNow);
+                if (placement.OnPlaced(rack, actual, task.Id, ConfirmationSource.WcsReconciliation, user, clock.UtcNow) is { } dispositionTx) transactions.Add(dispositionTx);   // CR-036
                 transactions.Add(new InventoryTransaction(InventoryEventType.Reconciliation, rack.Id, task.SourceLocationId, actual.Id, task.Id,
                     before, rack.Status, ConfirmationSource.WcsReconciliation, user, BindOutcome.NotRequested, note, clock.UtcNow));
+                // CR-036 (A.1): the physical position is recorded as the operator confirmed it. The rack model is NEVER changed to fit the location and the confirmation is NEVER refused:
+                // when rack and location disagree about the model the location is flagged afterwards (so nothing is dispatched from or to it automatically) and the incident is recorded.
+                if (modelGuard.On)
+                {
+                    modelIssue = rack.ProductModelId is null ? (actual.ProductModelId is null ? null : Routing.ModelCodes.RackModelUnknown)
+                        : (rack.ProductModelId == actual.ProductModelId ? null : Routing.ModelCodes.ModelMismatch);
+                    if (modelIssue is not null)
+                    {
+                        task.Note("MODEL_GUARD", $"{modelGuard.Mode}: {modelIssue} - the reconciled rack (model {rack.ProductModelId?.ToString() ?? "unknown"}) was confirmed at {actual.Code} (model {actual.ProductModelId?.ToString() ?? "none"})", "WCS", clock.UtcNow,
+                            HistoryDetail.Of("MODEL_GUARD", ("code", modelIssue), ("location", actual.Code)));
+                        logger.LogWarning("Reconciliation of task {TaskId}: {Code} at {Location} (ModelIsolation {Mode}). {EventCode}", taskId, modelIssue, actual.Code, modelGuard.Mode, "MODEL_GUARD_RECONCILIATION");
+                    }
+                }
             }
 
             foreach (var r in await reservations.ListActiveByTaskAsync(task.Id, token)) r.Release(clock.UtcNow);
             foreach (var id in new[] { task.SourceLocationId, task.DestinationLocationId, actual.Id }.Where(x => x is not null).Distinct())
                 if (await locations.GetAsync(id!.Value, token) is { } l) l.SetReconciliationRequired(false, clock.UtcNow);
+            if (modelIssue is not null && modelGuard.Enforcing) actual.SetReconciliationRequired(true, clock.UtcNow);   // CR-036: after the clean-up above, so it stays set
             task.MarkReconciled(clock.UtcNow);
             task.Note("RECONCILED", $"actual={actual.Code}; by={user}; {note}", "Operator", clock.UtcNow, HistoryDetail.Of("RECONCILED", ("actual", actual.Code), ("by", user), ("note", note)));
             return true;
@@ -261,6 +301,25 @@ public sealed class InventoryService(
 
     private async Task<Location> RequireLocation(string code, CancellationToken ct) =>
         await locations.GetByCodeAsync(code, ct) ?? throw AppException.NotFound("LOCATION_NOT_FOUND", $"Location '{code}' not found.");
+
+    /// <summary>CR-036 (P2-OQ-04, option A): the model of a new rack is declared by the person who enters the stock. Never inferred from the location.</summary>
+    private async Task<Guid?> ResolveStockModelAsync(Location loc, Guid? requested, CancellationToken ct)
+    {
+        if (requested is { } id)
+        {
+            var m = await productModels.GetAsync(id, ct) ?? throw AppException.NotFound("MODEL_NOT_FOUND", "Product model not found.");
+            if (!m.Enabled) throw AppException.Rejected("MODEL_DISABLED", $"Product model {m.Code} is disabled.");
+            if (modelGuard.On && loc.ProductModelId is { } lm && lm != id)
+            {
+                if (modelGuard.Enforcing) throw AppException.Conflict("RACK_MODEL_LOCATION_MISMATCH", $"{loc.Code} belongs to another product model.");
+                logger.LogWarning("Stock of model {Model} entered at {Location}, which belongs to another model (ModelIsolation Warn). {EventCode}", m.Code, loc.Code, "MODEL_GUARD_WARN");
+            }
+            return id;
+        }
+        if (modelGuard.Enforcing && loc.ProductModelId is not null)
+            throw AppException.Validation("RACK_MODEL_REQUIRED", $"{loc.Code} belongs to a product model: the model of the new racks must be given.");
+        return null;
+    }
 
     private async Task<T> Run<T>(Func<Task<T>> work, string locationCode)
     {

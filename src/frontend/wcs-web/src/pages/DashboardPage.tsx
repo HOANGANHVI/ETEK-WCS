@@ -10,7 +10,7 @@ import { IconAgv, IconClock, IconTasks, IconWarehouse } from '../components/icon
 import { linkText, plcView, rcsView } from '../components/linkStatus'
 import { useFleet } from '../fleet/fleetState'
 import { useAuth } from '../auth/AuthContext'
-import { Async, EmptyState, Kpi, PageHeader, Panel, TaskStatePill } from '../components/ui'
+import { Async, EmptyState, Kpi, PageHeader, Panel, SectionHeader, TaskStatePill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
 import { useFinishedTasks } from '../hooks/useFinishedTasks'
@@ -174,11 +174,15 @@ export function DashboardPage() {
         )}
       />
 
+      <SectionHeader title={t('dashboard.secFleet')} />
       <div className="kpi-row dash-kpis">
         <Kpi label={t('dashboard.kpiTotalAgv')} value={agvList ? kpi.totalAgv : '—'} hint="AGV1 · AGV2" icon={<IconAgv />} />
         <Kpi label={t('dashboard.kpiWorking')} value={agvList ? kpi.working : '—'} hint={t('dashboard.kpiWorkingHint')} tone="ok" icon={<IconAgv />} />
         <Kpi label={t('dashboard.kpiWaiting')} value={agvList ? kpi.waiting : '—'} hint={t('dashboard.kpiWaitingHint')} tone="warn" icon={<IconClock />} />
         <Kpi label={t('dashboard.kpiRunning')} value={taskItems ? kpi.running : '—'} hint={t('dashboard.kpiRunningHint')} tone="info" icon={<IconTasks />} />
+      </div>
+      <SectionHeader title={t('dashboard.secPerformance')} hint={periodText} />
+      <div className="kpi-row dash-kpis">
         <Kpi label={t('dashboard.kpiCompleted')} value={stats ? formatNumber(stats.completed) : '—'} hint={periodText} tone="ok" icon={<IconTasks />} />
         <Kpi label={t('dashboard.kpiFailureRate')} value={stats ? (rate === null ? '—' : `${formatNumber(Math.round(rate * 10) / 10)}%`) : '—'}
           hint={stats ? (rate === null ? t('dashboard.noData') : t('dashboard.kpiFailureRateHint', { failed: stats.failed, total: stats.completed + stats.failed })) : undefined} tone="info" icon={<IconTasks />} />
@@ -189,6 +193,7 @@ export function DashboardPage() {
       </div>
       {stats?.truncated && <div className="notice notice-warn">{t('dashboard.truncated', { n: 2000 })}</div>}
 
+      <SectionHeader title={t('dashboard.secAnalytics')} />
       <div className="dc-grid">
         <Panel title={t('dashboard.trendTitle')} className="dc-8" subtitle={range === 'today' ? t('dashboard.trendUnitHour') : t('dashboard.trendUnitDay')}>
           <Async state={finished} empty={{ title: t('dashboard.noData') }}>
@@ -257,6 +262,7 @@ export function DashboardPage() {
           )}
         </Panel>
 
+        <SectionHeader className="dc-12" title={t('dashboard.secHealth')} />
         <Panel title={t('dashboard.liveTitle')} className="dc-7">
           <div className="live-links">
             <div className="live-link"><i className={`led ${backendTone}`} /><strong>{t('monitor.liveBackend')}</strong><span>{backendText}</span></div>
