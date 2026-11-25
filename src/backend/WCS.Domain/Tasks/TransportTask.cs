@@ -51,6 +51,13 @@ public class TransportTask
     public Guid? AgvId { get; private set; }
     /// <summary>CR-028: the AMR (RCS robotCode / agvCode) that the RCS reported for this task, exactly as reported. Null until the RCS assigned one.</summary>
     public string? RobotCode { get; private set; }
+    /// <summary>CR-038: Simulator or Real, fixed when the task is created (null only for rows created before CR-038). It never moves to the other dispatcher.</summary>
+    public WCS.Domain.Rcs.ExecutionMode? ExecutionMode { get; private set; }
+    public void PinExecutionMode(WCS.Domain.Rcs.ExecutionMode mode)
+    {
+        if (ExecutionMode is { } current && current != mode) throw new DomainException("EXECUTION_MODE_FIXED", "The execution mode cannot be changed after creation.");
+        ExecutionMode = mode;
+    }
     /// <summary>CR-028: when WCS first learned the robot of the task from the RCS.</summary>
     public DateTimeOffset? AssignedAt { get; private set; }
     /// <summary>CR-028: hand-over tracking for RcsManaged dispatch; null for Legacy dispatch and for tasks created before CR-028.</summary>

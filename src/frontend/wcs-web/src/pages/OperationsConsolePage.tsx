@@ -14,10 +14,21 @@ import { CreateRequest } from './ops/CreateRequest'
 import { OpsTaskDetail } from './ops/OpsTaskDetail'
 import { TaskMonitor } from './ops/TaskMonitor'
 import { ReconciliationPanel } from './ReconciliationPanel'
+import { CommunicationMonitor } from './ops/CommunicationMonitor'
+import { ModePanel, type ModePanelApi } from './ops/ModePanel'
+import '../styles/ops.css'
 
 const EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted'] as const
 const CANCELLABLE: TaskState[] = ['Pending', 'Validating', 'Queued', 'Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing']
 const FINISHED: TaskState[] = ['Completed', 'Failed', 'Cancelled']
+
+const modeApi: ModePanelApi = {
+  readiness: (target) => api.executionModeReadiness(target),
+  transition: (body) => api.executionModeTransition(body),
+  acknowledge: (requestId, reason) => api.executionModeAcknowledge(requestId, reason),
+  history: () => api.executionModeHistory(20),
+  adoptLegacy: (reason) => api.executionModeAdoptLegacy(reason),
+}
 
 const createApi: CreateApi = {
   create: (flow, station, key) => api.createTask(flow, station, key),
@@ -40,12 +51,14 @@ export function OperationsConsolePage() {
   const flows = useApi(useCallback(() => api.flows(), []))
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])
   const locations = useApi(useCallback(() => api.locations(), []))
-  const gate = dispatchGate(health.data, fleet.data)
+  const mode = useApi(useCallback(() => api.executionMode(), []))
+  const gate = dispatchGate(health.data, fleet.data, mode.error && !mode.data ? null : mode.data)
   const select = (id: string) => setParams({ task: id })
 
   return (
     <>
       <PageHeader title={t('ops.title')} description={t('ops.description')} actions={<Link to="/routing">{t('ops.ordersLink')}</Link>} />
+      <ModePanel view={mode.data} loadFailed={!!mode.error} isAdmin={isAdmin} api={modeApi} onChanged={() => { mode.reload(); health.reload() }} />
       <ConnectionStrip health={health.data} fleet={fleet.data} loadFailed={!!(health.error || fleet.error)} gate={gate} />
       <Async state={flows} isEmpty={(d) => d.length === 0} empty={{ title: t('ops.createLoadFailed') }}>
         {(list) => <CreateRequest flows={list} gate={gate} api={createApi} onCreated={(x) => { tasks.reload(); select(x.id) }} />}
@@ -54,15 +67,27 @@ export function OperationsConsolePage() {
         {(page) => <TaskMonitor tasks={page.items} locations={locations.data ?? []} selectedId={selected} onSelect={select} />}
       </Async>
       <p className="muted small">{t('ops.ordersNote')}</p>
+      {isAdmin && <UnlinkedMessages />}
       {selected ? <SelectedTask id={selected} isAdmin={isAdmin} locations={locations.data ?? []} /> : <p className="muted">{t('ops.detPick')}</p>}
     </>
   )
+}
+
+/** CR-038: messages that belong to no task (for example a callback for an unknown task code), shown as they are and never attached to a task by guesswork. */
+function UnlinkedMessages() {
+  const t = useT()
+  const msgs = useApi(useCallback(() => api.unlinkedRcsMessages(), []), ['RcsMessageRecorded'])
+  const load = useCallback((id: string) => api.rcsMessage(id), [])
+  if (!msgs.data || msgs.data.length === 0) return null
+  return <CommunicationMonitor title={t('ops.comUnlinkedTitle')} note={t('ops.comUnlinkedNote')} messages={msgs.data} error={msgs.error} loadDetail={load} />
 }
 
 function SelectedTask({ id, isAdmin, locations }: { id: string; isAdmin: boolean; locations: import('../api/types').Location[] }) {
   const t = useT()
   const task = useApi(useCallback(() => api.task(id), [id]), [...EVENTS])
   const history = useApi(useCallback(() => api.taskHistory(id), [id]), [...EVENTS])
+  const messages = useApi(useCallback(() => api.taskRcsMessages(id), [id]), ['RcsMessageRecorded', 'TaskStateChanged'])   // CR-038: refreshed by the SignalR event of the hub that already exists
+  const loadMessage = useCallback((mid: string) => api.rcsMessage(mid), [])
   const [reason, setReason] = useState('')
   const [asking, setAsking] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -81,6 +106,7 @@ function SelectedTask({ id, isAdmin, locations }: { id: string; isAdmin: boolean
       {(x: TransportTask) => (
         <>
           <OpsTaskDetail task={x} history={history.data ?? []} locations={locations} />
+          <CommunicationMonitor messages={messages.data} error={messages.error} loadDetail={loadMessage} />
           <section className="panel ops-actions">
             <h3>{t('ops.secActions')}</h3>
             {FINISHED.includes(x.state) ? <p className="muted">{t('ops.actionNone')}</p> : (

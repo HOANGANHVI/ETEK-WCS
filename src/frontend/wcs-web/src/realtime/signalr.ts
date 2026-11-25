@@ -3,7 +3,7 @@ import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } fro
 const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 
 /** Server -> client events published by the WCS API (see the SignalR event list in the Phase 1 report). */
-export const WCS_EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted', 'PlcStatusChanged', 'StationIoChanged', 'PlcLog', 'HandshakePhaseChanged', 'InventoryChanged', 'AgvStatusChanged', 'OrderChanged', 'MaintenanceChanged', 'FleetChanged'] as const
+export const WCS_EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted', 'PlcStatusChanged', 'StationIoChanged', 'PlcLog', 'HandshakePhaseChanged', 'InventoryChanged', 'AgvStatusChanged', 'OrderChanged', 'MaintenanceChanged', 'FleetChanged', 'RcsMessageRecorded'] as const
 export type WcsEventName = (typeof WCS_EVENTS)[number]
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'demo'

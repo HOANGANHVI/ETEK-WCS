@@ -5,6 +5,7 @@ import { formatDateTime } from '../../i18n/format'
 import { describeHistory } from '../../i18n/logCatalog'
 import { DEVICE_EVENT_RE, flowInfo, HISTORY_EVENT_VI, SOURCE_VI, TASK_STATE_VI, taskCode } from '../../i18n/vi'
 import { taskStages, type StageStatus } from '../../lib/opsConsole'
+import { ModeBadge } from './ModePanel'
 
 const TONE: Record<StageStatus, 'ok' | 'muted' | 'warn' | 'bad'> = { done: 'ok', pending: 'muted', unknown: 'warn', failed: 'bad' }
 
@@ -48,6 +49,7 @@ export function OpsTaskDetail({ task, history, locations }: Props) {
         <dt>{t('ops.rowRoute')}</dt><dd>{code(task.sourceLocationId ?? task.requestLocationId)} → {code(task.destinationLocationId)}</dd>
         <dt>{t('ops.rowRack')}</dt><dd className="mono">{task.rackId ?? t('ops.noValue')}</dd>
         <dt>{t('ops.rowModel')}</dt><dd className="muted">{t('ops.modelNotProvided')}</dd>
+        <dt>{t('ops.rowExecMode')}</dt><dd data-exec-mode={task.executionMode ?? 'none'}>{task.executionMode ? <ModeBadge mode={task.executionMode} /> : <span className="muted">{t('ops.execModeLegacy')}</span>}</dd>
         <dt>{t('ops.rowRequestKey')}</dt><dd className="mono">{task.requestKey}</dd>
         <dt>{t('ops.rowCreated')}</dt><dd>{at(task.createdAt)}</dd>
         <dt>{t('ops.rowUpdated')}</dt><dd>{at(task.updatedAt)}</dd>

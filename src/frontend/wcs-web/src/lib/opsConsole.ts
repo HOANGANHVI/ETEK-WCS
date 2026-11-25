@@ -2,23 +2,30 @@
 // is protected against a second send, and how its outcome is classified. Everything is derived from data the server already provides; nothing is guessed. Tested by `npm run ops:test`.
 import type { FleetView } from '../api/fleetTypes'
 import { ApiRequestError } from '../api/errors'
+import type { ExecMode, ExecutionModeView } from '../api/modeTypes'
 import type { SystemHealth, TaskHistory, TransportTask } from '../api/types'
 
 // ------------------------------------------------------------------------------------------------ may a request be created?
 export type GateReason =
   | 'HEALTH_UNKNOWN' | 'BACKEND_DEGRADED' | 'GUARD_UNKNOWN' | 'GUARD_REFUSES'
-  | 'FLEET_UNKNOWN' | 'FLEET_SIMULATED' | 'RCS_NODATA' | 'RCS_DEGRADED' | 'RCS_DISCONNECTED'
-export type GateWarning = 'NO_AMR' | 'INTEGRATION_SIMULATOR'
+  | 'FLEET_UNKNOWN' | 'FLEET_SIMULATED' | 'RCS_NODATA' | 'RCS_DEGRADED' | 'RCS_DISCONNECTED' | 'MODE_UNKNOWN' | 'RECOVERY_REQUIRED'
+export type GateWarning = 'NO_AMR' | 'INTEGRATION_SIMULATOR' | 'SIMULATOR_MODE'
 
-export interface Gate { allowed: boolean; blockers: GateReason[]; warnings: GateWarning[]; integrationMode: string | null; fleetSource: 'Real' | 'Simulator' | null }
+export interface Gate { allowed: boolean; blockers: GateReason[]; warnings: GateWarning[]; integrationMode: string | null; fleetSource: 'Real' | 'Simulator' | null; executionMode: ExecMode | null }
 
 /**
  * The page lets a request be created only when the server data it already shows says the RCS side is real, fresh and willing. This is an advisory gate for the operator: the server stays the
  * authority and refuses what it must refuse. What no API tells the page (for example whether the dispatch adapter itself is real) is NOT assumed: it is said in the confirmation instead.
+ * CR-038: with the operating mode known, Simulator mode is a deliberate choice that sends nothing to the RCS, so the state of the real fleet does not block it (it is still said: SIMULATOR_MODE);
+ * Real mode keeps every check below; a mode that is unknown, or a pending recovery, blocks. Without the third argument the behaviour is exactly the one before CR-038.
  * `health.integration.mode` is informational (it describes the PLC integration, which may legitimately be simulated while the RCS is real), so it warns but never blocks.
  */
-export function dispatchGate(health: SystemHealth | null, fleet: FleetView | null): Gate {
+export function dispatchGate(health: SystemHealth | null, fleet: FleetView | null, mode?: ExecutionModeView | null): Gate {
   const blockers: GateReason[] = []; const warnings: GateWarning[] = []
+  const simulatorMode = mode?.mode === 'Simulator'
+  if (mode === null) blockers.push('MODE_UNKNOWN')
+  else if (mode?.recoveryRequired) blockers.push('RECOVERY_REQUIRED')
+  if (simulatorMode) warnings.push('SIMULATOR_MODE')
   if (!health) blockers.push('HEALTH_UNKNOWN')
   else {
     if (health.status !== 'Healthy') blockers.push('BACKEND_DEGRADED')
@@ -27,7 +34,8 @@ export function dispatchGate(health: SystemHealth | null, fleet: FleetView | nul
     else if (!rcs.dispatchAllowed) blockers.push('GUARD_REFUSES')
     if (health.integration.mode === 'Simulator') warnings.push('INTEGRATION_SIMULATOR')
   }
-  if (!fleet) blockers.push('FLEET_UNKNOWN')
+  if (simulatorMode) { /* nothing is sent to the RCS: the real fleet is not a condition */ }
+  else if (!fleet) blockers.push('FLEET_UNKNOWN')
   else {
     if (fleet.simulatedData || fleet.source !== 'Real') blockers.push('FLEET_SIMULATED')
     else if (fleet.connection === 'NoData') blockers.push('RCS_NODATA')
@@ -35,7 +43,7 @@ export function dispatchGate(health: SystemHealth | null, fleet: FleetView | nul
     else if (fleet.connection === 'Disconnected') blockers.push('RCS_DISCONNECTED')
     else if (fleet.count === 0) warnings.push('NO_AMR')
   }
-  return { allowed: blockers.length === 0, blockers, warnings, integrationMode: health?.integration.mode ?? null, fleetSource: fleet?.source ?? null }
+  return { allowed: blockers.length === 0, blockers, warnings, integrationMode: health?.integration.mode ?? null, fleetSource: fleet?.source ?? null, executionMode: mode?.mode ?? null }
 }
 
 // ------------------------------------------------------------------------------------------------ the stages of one task

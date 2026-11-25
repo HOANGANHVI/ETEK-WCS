@@ -124,6 +124,32 @@ public static class RealDispatchReadiness
         return null;
     }
 
+    /// <summary>
+    /// CR-038: the Real adapter sends a configurable-process leg as ONE generic task from the single leg template (<c>LegTemplate</c>): a Source -> Destination path. Null = usable.
+    /// Without a valid template no leg of a configurable process can be sent to the real RCS (the leg is Blocked, nothing is sent).
+    /// </summary>
+    public static string? LegTemplateProblem(RealDispatchOptions o)
+    {
+        var t = o.LegTemplate;
+        if (t is null || string.IsNullOrWhiteSpace(t.TaskTyp)) return "Rcs:RealDispatch:LegTemplate has no taskTyp: no leg of a configurable process can be sent to the real RCS.";
+        if (t.TaskTyp.Length > 16) return "taskTyp of the leg template is longer than 16 characters.";
+        if (t.PositionPath.Count == 0) return "The leg template has no PositionPath.";
+        if (t.PositionPath.Any(r => !r.Equals("Source", StringComparison.OrdinalIgnoreCase) && !r.Equals("Destination", StringComparison.OrdinalIgnoreCase))) return "PositionPath of the leg template may contain only 'Source' and 'Destination'.";
+        if (t.PodDir is { Length: > 0 } && t.PodDir is not ("180" or "0" or "90" or "-90")) return "podDir of the leg template must be \"180\", \"0\", \"90\" or \"-90\".";
+        if (t.Priority is { Length: > 0 } pr && !(int.TryParse(pr, out var n) && n is >= 1 and <= 127)) return "priority of the leg template must be 1-127.";
+        if (t.TaskMode is { Length: > 0 } tm && tm is not ("0" or "1" or "2" or "3")) return "taskMode of the leg template must be 0-3.";
+        return null;
+    }
+
+    /// <summary>CR-038: the locations of a configurable process that have no valid RCS positionCode (checked BEFORE the first leg is sent, so an order is never half sent).</summary>
+    public static IReadOnlyList<string> LegLocationProblems(RealDispatchOptions o, IEnumerable<string?> locationCodes)
+    {
+        var problems = new List<string>();
+        foreach (var code in locationCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+            if (LocationProblem(code, o.Locations.TryGetValue(code, out var m) ? m : null) is { } p) problems.Add(p);
+        return problems;
+    }
+
     /// <summary>Everything that is missing for the configured flows (used for the start-up log; a call checks only what it needs).</summary>
     public static IReadOnlyList<string> Report(RealDispatchOptions o)
     {

@@ -29,7 +29,8 @@ public sealed record TaskDto(Guid Id, string RequestKey, string Flow, string Rac
     string? StateReason, string RcsRequestCode, string? RcsTaskCode, bool RequiresReconciliation,
     DateTimeOffset? PickConfirmedAt, DateTimeOffset? DropConfirmedAt, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
     DateTimeOffset? FinishedAt, string? StateReasonCode = null, IReadOnlyDictionary<string, string>? StateReasonArgs = null,
-    string? RobotCode = null, string? RcsDispatchState = null, DateTimeOffset? AssignedAt = null);   // CR-028 (additive)
+    string? RobotCode = null, string? RcsDispatchState = null, DateTimeOffset? AssignedAt = null,
+    string? ExecutionMode = null);   // CR-028 / CR-038 (additive): ExecutionMode = Simulator | Real, null for a task created before CR-038
 
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Skip, int Take);
 
@@ -60,7 +61,7 @@ public static class DtoMapper
     public static TaskDto ToDto(this TransportTask t) => new(t.Id, t.RequestKey, t.Flow.ToString(), t.RackKind.ToString(), t.AgvId,
         t.RequestLocationId, t.SourceLocationId, t.DestinationLocationId, t.RackId, t.State.ToString(), t.CurrentLeg.ToString(),
         t.PlcPermissionGranted, t.StateReason, t.RcsRequestCode, t.RcsTaskCode, t.RequiresReconciliation, t.PickConfirmedAt,
-        t.DropConfirmedAt, t.CreatedAt, t.UpdatedAt, t.FinishedAt, ReasonCode(t)?.Code, ReasonCode(t)?.Args, t.RobotCode, t.RcsDispatchState?.ToString(), t.AssignedAt);
+        t.DropConfirmedAt, t.CreatedAt, t.UpdatedAt, t.FinishedAt, ReasonCode(t)?.Code, ReasonCode(t)?.Args, t.RobotCode, t.RcsDispatchState?.ToString(), t.AssignedAt, t.ExecutionMode?.ToString());
 
     private static HistoryDetail? ReasonCode(TransportTask t) =>
         t.StateReasonCode is { } c ? new HistoryDetail(c, HistoryDetail.ParseArgs(t.StateReasonArgsJson)) : HistoryDetail.Legacy("STATE_CHANGED", t.StateReason);

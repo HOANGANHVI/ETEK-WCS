@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "approvedBy": "Project owner (2026-11-25): option A, initial capacity Station = 1, Buffer / ManualBuffer = 2; the values are starting values that an Admin may change",
+  "note": "Each catalog version is applied ONCE per database (marker SEED_LOCATION_CATALOG_APPLIED in audit_log); a row belongs to the version in sinceVersion, so raising the version adds only the new rows. Phase 1 locations only. Not seeded on purpose (no source for their attributes): A3, A4, D1, D2 (legacy, UNCHANGED), P1-P4, M5, M6 (OQ-11, OQ-10), X / Y / Z / E / G stations (OQ-07, OQ-08, OQ-09). ProductModelId and StationRole are never set by the seed.",
+  "locations": [
+    { "code": "A1", "name": "Máy A1", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 1, "source": "ProcessFlows Bp01-03 request / destination; reference-processes BP-01..03" },
+    { "code": "A2", "name": "Máy A2", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 1, "source": "ProcessFlows Bp01-03 request / destination; reference-processes BP-01..03" },
+    { "code": "B1", "name": "Máy B1", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 1, "source": "ProcessFlows Bp01-03; reference-processes BP-01..03" },
+    { "code": "B2", "name": "Máy B2", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 1, "source": "ProcessFlows Bp01-03; reference-processes BP-01..03" },
+    { "code": "F1", "name": "Vị trí đệm rack đầy F1", "type": "Buffer", "capacity": 2, "allowedRackKind": "Full", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp01 destination / Bp05 source (Full rack)" },
+    { "code": "F2", "name": "Vị trí đệm rack đầy F2", "type": "Buffer", "capacity": 2, "allowedRackKind": "Full", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp01 destination / Bp05 source (Full rack)" },
+    { "code": "F3", "name": "Vị trí đệm rack rỗng F3", "type": "Buffer", "capacity": 2, "allowedRackKind": "Empty", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp02 source / Bp03, Bp06 destination (Empty rack)" },
+    { "code": "F4", "name": "Vị trí đệm rack rỗng F4", "type": "Buffer", "capacity": 2, "allowedRackKind": "Empty", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp02 source / Bp03, Bp06 destination (Empty rack)" },
+    { "code": "F5", "name": "Vị trí đệm thủ công F5", "type": "ManualBuffer", "capacity": 2, "allowedRackKind": "Any", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp01 destination, Bp05 / Bp06 request; F5 vs M5 is OQ-10 (open)" }
+  ]
+}

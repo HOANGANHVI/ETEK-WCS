@@ -70,13 +70,15 @@ public class Cr030RealRcsDispatchTests(DatabaseFixture fixture)
     {
         await using (var off = await Harness.CreateAsync(fixture))
         {
-            Assert.IsType<RcsSimulator>(IRcsClientDecorator.Unwrap(off.Services.GetRequiredService<IRcsClient>()));   // default: exactly as before CR-030
+            Assert.IsType<WCS.Infrastructure.ModeControl.RoutedRcsClient>(IRcsClientDecorator.Unwrap(off.Services.GetRequiredService<IRcsClient>()));   // CR-038: the routed client; Simulator is the default mode (exactly as before CR-030)
+            Assert.Equal(WCS.Domain.Rcs.ExecutionMode.Simulator, off.Services.GetRequiredService<IExecutionModeProvider>().Current.Mode);
             Assert.False(off.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<RealDispatchOptions>>().Value.Enabled);
             Assert.Empty(off.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<RealDispatchOptions>>().Value.Locations);   // no mapping unless configured
             Assert.Empty(off.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<RealDispatchOptions>>().Value.Processes);
         }
         var (h, rcs) = await SetupAsync(); await using var _h = h; await using var _r = rcs;
-        Assert.IsType<HikRcsClient>(IRcsClientDecorator.Unwrap(Client(h)));
+        Assert.IsType<WCS.Infrastructure.ModeControl.RoutedRcsClient>(IRcsClientDecorator.Unwrap(Client(h)));   // CR-038: routed; this harness is in Real mode
+        Assert.Equal(WCS.Domain.Rcs.ExecutionMode.Real, h.Services.GetRequiredService<IExecutionModeProvider>().Current.Mode);
         var leg = await h.Scoped(sp => sp.GetRequiredService<ILegDispatcher>().DispatchAsync(new LegDispatchRequest(Guid.NewGuid(), "LEG-x", null, RackKind.Full, "A1", "B1")));
         Assert.Equal(LegDispatchOutcome.Blocked, leg.Outcome);                                      // a leg is not "accepted" by a simulator and not sent without a confirmed mapping
         Assert.Contains("NOT_AVAILABLE_FOR_REAL_RCS", leg.Reason);

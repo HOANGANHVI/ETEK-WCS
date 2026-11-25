@@ -121,6 +121,7 @@ public static class Endpoints
         var admin = AuthSetup.AdminPolicy;
         api.MapMaintenance();   // CR-026
         api.MapConfigTransfer();   // CR-026 (Admin only, on by default)
+        api.MapExecutionMode();   // CR-038: Simulator / Real AGV mode and the RCS message log
 
         // ---- AGV
         var agv = api.MapGroup("/agvs").WithTags("AGV");

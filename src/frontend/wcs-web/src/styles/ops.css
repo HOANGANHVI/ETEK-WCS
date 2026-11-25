@@ -1,0 +1,18 @@
+/* CR-038: operating mode panel and RCS communication monitor (uses the existing design tokens; nothing here changes another page). */
+.ops-mode-now { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.ops-switch { border-top: 1px solid var(--border, #d0d5dd); margin-top: 12px; padding-top: 12px; }
+.ops-conditions { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.ops-ok { color: var(--ok, #067647); font-weight: 600; }
+.ops-bad { color: var(--bad, #b42318); font-weight: 600; }
+.ops-mode-history { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 0.9em; }
+.ops-timeline tbody tr { cursor: pointer; }
+.ops-timeline tbody tr.selected { background: var(--surface-2, rgba(0, 0, 0, 0.05)); }
+.ops-comm-detail { display: grid; gap: 8px; }
+.ops-json { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; background: var(--surface-2, rgba(0, 0, 0, 0.04)); padding: 8px; border-radius: 6px; overflow: auto; max-height: 360px; }
+.ops-json pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
+.json-node > summary { cursor: pointer; }
+.json-children { padding-left: 16px; border-left: 1px dotted var(--border, #d0d5dd); margin-left: 4px; }
+.json-leaf { padding-left: 16px; }
+.json-key { color: var(--muted, #667085); }
+.json-str { color: var(--ok, #067647); }
+.json-val { color: var(--info, #1849a9); }

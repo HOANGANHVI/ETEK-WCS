@@ -190,6 +190,9 @@ for (const lang of ['vi'] as const) {
     && det.includes('data-stage="pickup" data-status="pending"') && det.includes('data-stage="drop" data-status="pending"') && det.includes('data-stage="completed" data-status="pending"'))
   check(`${lang}: detail says the product model is not provided instead of inventing one`, det.includes(T('ops.modelNotProvided')))
   const unk = wrap(createElement(OpsTaskDetail, { task: task({ state: 'Completed', robotCode: 'AMR-7', finishedAt: NOW }), history: [], locations: locs }))
+  const realDetail = wrap(createElement(OpsTaskDetail, { task: task({ executionMode: 'Real' }), history: [], locations: locs }))
+  const legacyDetail = wrap(createElement(OpsTaskDetail, { task: task({ executionMode: null }), history: [], locations: locs }))
+  check(`${lang}: the task shows its execution mode (REAL) and an old task says it has none and that nothing is sent`, realDetail.includes('data-exec-mode="Real"') && realDetail.includes(T('ops.modeTagReal')) && legacyDetail.includes('data-exec-mode="none"') && legacyDetail.includes(T('ops.execModeLegacy')))
   check(`${lang}: an unproven stage shows the check-by-hand hint`, unk.includes('data-status="unknown"') && unk.includes(T('ops.stageUnknownHint')))
   check(`${lang}: detail has no confirm-pickup / confirm-drop / retry button`, !/<button/i.test(det))
 

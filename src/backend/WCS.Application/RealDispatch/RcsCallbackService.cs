@@ -20,7 +20,7 @@ public sealed record RcsCallbackResult(RcsCallbackStatus Status, string Code, st
 /// tell WCS which AMR the RCS chose (recorded by the existing CR-028 rules), that the AMR started, that the RCS ended the task (does NOT complete it without a confirmed drop) or that the task was cancelled.
 /// A repeated reqCode is a duplicate (the RCS repeats a request with the same reqCode); an out-of-order event is noted and ignored by the existing state machine.
 /// </summary>
-public sealed class RcsCallbackService(IOptions<RealDispatchOptions> options, ITaskOrchestrator orchestrator, ILogger<RcsCallbackService> logger)
+public sealed class RcsCallbackService(IOptions<RealDispatchOptions> options, ITaskOrchestrator orchestrator, IRcsMessageRecorder recorder, ILogger<RcsCallbackService> logger)
 {
     public bool Enabled => options.Value.Callback.Enabled;
     public string Path => options.Value.Callback.Path;
@@ -44,7 +44,24 @@ public sealed class RcsCallbackService(IOptions<RealDispatchOptions> options, IT
         return RcsCallbackStatus.Applied;   // "authenticated"
     }
 
+    /// <summary>
+    /// CR-038: an AUTHENTICATED callback is kept exactly as received (secrets masked by the recorder) together with what WCS did with it, linked to the task by its taskCode
+    /// (the WCS request code). A taskCode that matches no task leaves the message unlinked. The caller authenticates first; a refused call is never stored.
+    /// </summary>
     public async Task<RcsCallbackResult> HandleAsync(string? body, CancellationToken ct = default)
+    {
+        var result = await HandleCoreAsync(body, ct);
+        string? taskCode = null, method = null;
+        try { using var doc = JsonDocument.Parse(body ?? ""); taskCode = doc.RootElement.TryGetProperty("taskCode", out var tc) && tc.ValueKind == JsonValueKind.String ? tc.GetString() : null; method = doc.RootElement.TryGetProperty("method", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null; }
+        catch (JsonException) { /* an unreadable body is recorded as it is */ }
+        await recorder.RecordAsync(new RcsMessageEntry(WCS.Domain.Rcs.ExecutionMode.Real, WCS.Domain.Rcs.RcsMessageDirection.In, "AGV Callback" + (method is null ? "" : $": {method}"), "RCS callback (HTTP)", taskCode, Options.Callback.Path, "POST", 200, body,
+            result.Status.ToString(), result.Status is RcsCallbackStatus.Applied or RcsCallbackStatus.Duplicate or RcsCallbackStatus.Ignored ? null : "RCS_CALLBACK_" + result.Status.ToString().ToUpperInvariant(), result.Status == RcsCallbackStatus.Applied ? null : result.Message), CancellationToken.None);
+        return result;
+    }
+
+    private RealDispatchOptions Options => options.Value;
+
+    private async Task<RcsCallbackResult> HandleCoreAsync(string? body, CancellationToken ct)
     {
         RcsCallback? cb = Parse(body);
         if (cb is null || string.IsNullOrWhiteSpace(cb.ReqCode) || string.IsNullOrWhiteSpace(cb.Method) || string.IsNullOrWhiteSpace(cb.RobotCode) || string.IsNullOrWhiteSpace(cb.TaskCode))

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
+using WCS.Application.RealDispatch;
 using WCS.Application.Common;
 using WCS.Application.Diagnostics;
 using WCS.Application.Fleet;
@@ -33,8 +34,8 @@ public interface IRouteEngine
 public sealed class RouteEngine(
     IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IReservationRepository reservations,
     IInventoryTransactionRepository inventoryTx, IAgvRepository agvs, ITransportTaskRepository legacyTasks, RouteConditionEvaluator eval,
-    StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IMaintenanceGate maintenance, IClock clock, IWcsNotifier notifier,
-    IOptions<DispatchOptions> dispatchOptions, IOptions<RouteEngineOptions> routeOptions, ModelGuard modelGuard, ModelGuardThrottle guardThrottle, RackPlacement placement, RcsRobotMapper robotMapper, LegAssignmentThrottle legThrottle, ILogger<RouteEngine> logger) : IRouteEngine
+    StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IMaintenanceGate maintenance, IExecutionModeGate modeGate, IClock clock, IWcsNotifier notifier,
+    IOptions<DispatchOptions> dispatchOptions, IOptions<RouteEngineOptions> routeOptions, ModelGuard modelGuard, ModelGuardThrottle guardThrottle, RackPlacement placement, RcsRobotMapper robotMapper, LegAssignmentThrottle legThrottle, IOptions<RealDispatchOptions> realOptions, ILogger<RouteEngine> logger) : IRouteEngine
 {
     private const string Wcs = "WCS";
     private const int MaxStepsPerAdvance = 50;
@@ -66,9 +67,20 @@ public sealed class RouteEngine(
         {
             if (await routing.GetOrderByRequestKeyAsync(cmd.RequestKey.Trim(), t) is { } existing) return (Guid?)null;   // idempotent
             await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): no new Order during Maintenance (row-locked read in this transaction)
+            var mode = await modeGate.ModeForNewWorkAsync(t);   // CR-038
             var (process, version) = await SelectProcessAsync(cmd, location.Code, t);
             var snapshot = ProcessSnapshot.Of(process, version);
+            if (mode == WCS.Domain.Rcs.ExecutionMode.Real)
+            {
+                // CR-038: a Real order is accepted only when EVERY leg it may need can be sent (template + a positionCode for each location of the process): never half sent, then found unsupported
+                var problems = new List<string>();
+                if (RealDispatchReadiness.LegTemplateProblem(realOptions.Value) is { } tp) problems.Add(tp);
+                var codes = snapshot.Steps.SelectMany(st => st.Candidates.Select(c => c.LocationCode).Append(st.WaitingPositionCode)).Append(location.Code);
+                problems.AddRange(RealDispatchReadiness.LegLocationProblems(realOptions.Value, codes));
+                if (problems.Count > 0) throw AppException.Rejected("REAL_LEG_MAPPING_INCOMPLETE", "This process cannot be sent to the real RCS yet; nothing was created or sent. " + string.Join(" ", problems.Take(3)));
+            }
             var order = TransportOrder.Create(cmd.RequestKey, snapshot, location.Code, cmd.RequestedBy, clock.UtcNow);
+            order.PinExecutionMode(mode);   // CR-038: the order (and its legs) keep this dispatcher for their whole life
             order.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021
             CorrelationCache.Remember(order.Id, order.CorrelationId);
             routing.Add(order);

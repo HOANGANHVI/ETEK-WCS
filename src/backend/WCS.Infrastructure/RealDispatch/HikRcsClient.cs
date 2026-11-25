@@ -8,6 +8,7 @@ using WCS.Application.Abstractions;
 using WCS.Application.Config;
 using WCS.Application.RealDispatch;
 using WCS.Domain.Common;
+using WCS.Domain.Rcs;
 
 namespace WCS.Infrastructure.RealDispatch;
 
@@ -23,7 +24,7 @@ namespace WCS.Infrastructure.RealDispatch;
 ///  - The token is read from the encrypted RCS connection and sent only as \"tokenCode\"; it is never logged and never part of an error message.
 /// Verified only against a mock server that answers like the API document; NOT verified against a real RCS-2000.
 /// </summary>
-public sealed class HikRcsClient(IServiceScopeFactory scopes, IOptions<RealDispatchOptions> options, IClock clock, ILogger<HikRcsClient> logger) : IRcsClient
+public sealed class HikRcsClient(IServiceScopeFactory scopes, IOptions<RealDispatchOptions> options, IClock clock, ILogger<HikRcsClient> logger, IRcsMessageRecorder recorder) : IRcsClient
 {
     private static readonly HttpClient Http = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5), ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = Timeout.InfiniteTimeSpan };
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
@@ -37,7 +38,9 @@ public sealed class HikRcsClient(IServiceScopeFactory scopes, IOptions<RealDispa
     private RealDispatchOptions O => options.Value;
 
     // ------------------------------------------------------------------------------------------------ create
-    public async Task<RcsCallResult> CreateTaskAsync(RcsCreateTaskRequest request, CancellationToken ct = default)
+    public Task<RcsCallResult> CreateTaskAsync(RcsCreateTaskRequest request, CancellationToken ct = default) => Guarded("genAgvSchedulingTask", request.RequestCode, () => CreateTaskCoreAsync(request, ct));
+
+    private async Task<RcsCallResult> CreateTaskCoreAsync(RcsCreateTaskRequest request, CancellationToken ct)
     {
         if (GlobalCheck() is { } notReady) return notReady;
         var process = O.ProcessOf(request.Flow);
@@ -65,7 +68,10 @@ public sealed class HikRcsClient(IServiceScopeFactory scopes, IOptions<RealDispa
     }
 
     // ------------------------------------------------------------------------------------------------ create (CR-035: configurable routing leg)
-    public async Task<RcsCallResult> CreateLegTaskAsync(string requestCode, string? robotCode, string sourceLocationCode, string? destinationLocationCode, CancellationToken ct = default)
+    public Task<RcsCallResult> CreateLegTaskAsync(string requestCode, string? robotCode, string sourceLocationCode, string? destinationLocationCode, CancellationToken ct = default) =>
+        Guarded("genAgvSchedulingTask", requestCode, () => CreateLegTaskCoreAsync(requestCode, robotCode, sourceLocationCode, destinationLocationCode, ct));
+
+    private async Task<RcsCallResult> CreateLegTaskCoreAsync(string requestCode, string? robotCode, string sourceLocationCode, string? destinationLocationCode, CancellationToken ct)
     {
         if (GlobalCheck() is { } notReady) return notReady;
         var template = O.LegTemplate;
@@ -92,7 +98,10 @@ public sealed class HikRcsClient(IServiceScopeFactory scopes, IOptions<RealDispa
     }
 
     // ------------------------------------------------------------------------------------------------ continue
-    public async Task<RcsCallResult> ContinueTaskAsync(string requestCode, string? rcsTaskCode, string destinationLocationCode, CancellationToken ct = default)
+    public Task<RcsCallResult> ContinueTaskAsync(string requestCode, string? rcsTaskCode, string destinationLocationCode, CancellationToken ct = default) =>
+        Guarded("continueTask", requestCode, () => ContinueTaskCoreAsync(requestCode, rcsTaskCode, destinationLocationCode, ct));
+
+    private async Task<RcsCallResult> ContinueTaskCoreAsync(string requestCode, string? rcsTaskCode, string destinationLocationCode, CancellationToken ct)
     {
         if (GlobalCheck() is { } notReady) return notReady;
         var map = O.Locations.TryGetValue(destinationLocationCode ?? "", out var lm) ? lm : null;
@@ -105,7 +114,9 @@ public sealed class HikRcsClient(IServiceScopeFactory scopes, IOptions<RealDispa
     }
 
     // ------------------------------------------------------------------------------------------------ cancel
-    public async Task<RcsCallResult> CancelTaskAsync(string requestCode, string? rcsTaskCode, CancellationToken ct = default)
+    public Task<RcsCallResult> CancelTaskAsync(string requestCode, string? rcsTaskCode, CancellationToken ct = default) => Guarded("cancelTask", requestCode, () => CancelTaskCoreAsync(requestCode, rcsTaskCode, ct));
+
+    private async Task<RcsCallResult> CancelTaskCoreAsync(string requestCode, string? rcsTaskCode, CancellationToken ct)
     {
         if (GlobalCheck() is { } notReady) return notReady;
         var body = Base(ReqCodeOf($"{requestCode}|cancel"));
@@ -176,35 +187,94 @@ public sealed class HikRcsClient(IServiceScopeFactory scopes, IOptions<RealDispa
         return outcome == RcsCallOutcome.Accepted ? new RcsCallResult(RcsCallOutcome.Accepted, requestCode, null) : new RcsCallResult(outcome, null, message);
     }
 
-    /// <summary>One POST. Accepted = code "0" or "6"; Rejected = code "1" (or a configuration problem); Unknown = timeout, connection error, HTTP error, "99", an unreadable or unexpected answer.</summary>
-    private async Task<(RcsCallOutcome Outcome, JsonDocument? Doc, string? Message)> SendAsync(string api, Dictionary<string, object?> body, string requestCode, CancellationToken ct)
+    private const string RealProtocol = "HIK RCS-2000 HTTP";
+    /// <summary>queryTaskStatus is polled continuously: its OUT / IN pair is recorded only when the answer differs from the last recorded one for that request code (first answer, status change, new AMR, or a failure that differs from the previous one).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _lastQuery = new();
+
+    private static string QueryKey(JsonDocument doc, string requestCode)
+    {
+        if (doc.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+            foreach (var item in data.EnumerateArray())
+                if (string.Equals(Str(item, "taskCode"), requestCode, StringComparison.Ordinal)) return $"Accepted|{Str(item, "taskStatus")}|{Str(item, "agvCode")}";
+        return "Accepted|none";
+    }
+    private static string TypeOf(string api) => api switch { "genAgvSchedulingTask" => "Create Task", "continueTask" => "Continue Task", "cancelTask" => "Cancel Task", "queryTaskStatus" => "Query Task Status", _ => api };
+
+    /// <summary>CR-038: a call that was REFUSED BEFORE any network use (RCS not ready, mapping missing) is recorded as "NotSent" so the operator sees why nothing went out.</summary>
+    private async Task<RcsCallResult> Guarded(string api, string requestCode, Func<Task<RcsCallResult>> core)
+    {
+        var r = await core();
+        if (r.Outcome == RcsCallOutcome.Rejected && r.Message is { } m && (m.StartsWith(NotReady + ":", StringComparison.Ordinal) || m.StartsWith(MappingMissing + ":", StringComparison.Ordinal)))
+            await recorder.RecordAsync(new RcsMessageEntry(WCS.Domain.Rcs.ExecutionMode.Real, RcsMessageDirection.Out, TypeOf(api), RealProtocol, requestCode, HttpMethod: "POST", Result: "NotSent",
+                ErrorCode: m[..m.IndexOf(':')], ErrorMessage: m), CancellationToken.None);
+        return r;
+    }
+
+    /// <summary>One POST. Accepted = code "0" or "6"; Rejected = code "1" (or a configuration problem); Unknown = timeout, connection error, HTTP error, "99", an unreadable or unexpected answer.
+    /// CR-038: the request (WITHOUT the token) and the answer are recorded exactly as exchanged; a failure is recorded as what it was (timeout, connection error, HTTP error, RCS code).</summary>
+    private async Task<(RcsCallOutcome Outcome, JsonDocument? Doc, string? Message)> SendAsync(string api, Dictionary<string, object?> body, string requestCode, CancellationToken ct, bool record = true)
     {
         var ep = await ResolveAsync(ct);
-        if (ep.Error is not null) return (RcsCallOutcome.Rejected, null, ep.Error);
+        if (ep.Error is not null)
+        {
+            if (record) await recorder.RecordAsync(new RcsMessageEntry(WCS.Domain.Rcs.ExecutionMode.Real, RcsMessageDirection.Out, TypeOf(api), RealProtocol, requestCode, HttpMethod: "POST", Result: "NotSent",
+                ErrorCode: NotConfigured, ErrorMessage: ep.Error), CancellationToken.None);
+            return (RcsCallOutcome.Rejected, null, ep.Error);
+        }
+        var requestJson = JsonSerializer.Serialize(body, Json);   // the body as built: the token is added below and is never part of the record
         if (!string.IsNullOrEmpty(ep.Value!.Token)) body["tokenCode"] = ep.Value.Token;
         var url = $"{ep.Value.BaseUrl}{O.ServicePath.TrimEnd('/')}/{api}";
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, O.TimeoutSeconds)));
+        var isQuery = api == "queryTaskStatus";
+        var outEntry = new RcsMessageEntry(WCS.Domain.Rcs.ExecutionMode.Real, RcsMessageDirection.Out, TypeOf(api), RealProtocol, requestCode, url, "POST", Payload: requestJson, Result: "Sent");
+        if (record && !isQuery) await recorder.RecordAsync(outEntry, CancellationToken.None);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        async Task In(int? status, string? text, string result, string? code, string? message, string? key = null)
+        {
+            if (!record) return;
+            if (isQuery)
+            {
+                var k = key ?? result;
+                if (_lastQuery.TryGetValue(requestCode, out var prev) && prev == k) return;   // nothing new since the last recorded answer
+                if (_lastQuery.Count > 2000) _lastQuery.Clear();
+                _lastQuery[requestCode] = k;
+                await recorder.RecordAsync(outEntry, CancellationToken.None);
+            }
+            await recorder.RecordAsync(new RcsMessageEntry(WCS.Domain.Rcs.ExecutionMode.Real, RcsMessageDirection.In, TypeOf(api) + " Response", RealProtocol, requestCode, url, "POST", status, text, result, code, message, DurationMs: sw.ElapsedMilliseconds), CancellationToken.None);
+        }
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json") };
             using var res = await Http.SendAsync(req, cts.Token);
             var text = await res.Content.ReadAsStringAsync(cts.Token);
-            if (!res.IsSuccessStatusCode) return (RcsCallOutcome.Unknown, null, $"{api}: HTTP {(int)res.StatusCode}");
+            if (!res.IsSuccessStatusCode)
+            {
+                await In((int)res.StatusCode, text, "HttpError", "HTTP_" + (int)res.StatusCode, $"{api}: HTTP {(int)res.StatusCode}");
+                return (RcsCallOutcome.Unknown, null, $"{api}: HTTP {(int)res.StatusCode}");
+            }
             JsonDocument doc;
-            try { doc = JsonDocument.Parse(text); } catch (JsonException) { return (RcsCallOutcome.Unknown, null, $"{api}: the answer is not JSON"); }
+            try { doc = JsonDocument.Parse(text); }
+            catch (JsonException)
+            {
+                await In((int)res.StatusCode, text, "Unknown", "RCS_NOT_JSON", $"{api}: the answer is not JSON");
+                return (RcsCallOutcome.Unknown, null, $"{api}: the answer is not JSON");
+            }
             var code = Str(doc.RootElement, "code");
             var message = Str(doc.RootElement, "message");
             switch (code)
             {
-                case "0": case "6": return (RcsCallOutcome.Accepted, doc, null);      // "6": no need to resend - the task of the same reqCode is not completed (Appendix A)
-                case "1": doc.Dispose(); return (RcsCallOutcome.Rejected, null, $"{api}: the RCS refused (code 1): {Trim(message)}");
-                default: doc.Dispose(); return (RcsCallOutcome.Unknown, null, $"{api}: the RCS answered code {Trim(code)}: {Trim(message)}");   // "99" unknown error, try again, or an undefined code
+                case "0": case "6": await In((int)res.StatusCode, text, "Accepted", "RCS_CODE_" + code, message, isQuery ? QueryKey(doc, requestCode) : null); return (RcsCallOutcome.Accepted, doc, null);      // "6": no need to resend - the task of the same reqCode is not completed (Appendix A)
+                case "1": doc.Dispose(); await In((int)res.StatusCode, text, "Rejected", "RCS_CODE_1", message); return (RcsCallOutcome.Rejected, null, $"{api}: the RCS refused (code 1): {Trim(message)}");
+                default: doc.Dispose(); await In((int)res.StatusCode, text, "Unknown", "RCS_CODE_" + Trim(code), message); return (RcsCallOutcome.Unknown, null, $"{api}: the RCS answered code {Trim(code)}: {Trim(message)}");   // "99" unknown error, try again, or an undefined code
             }
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return (RcsCallOutcome.Unknown, null, $"{api}: the RCS did not answer within {O.TimeoutSeconds} s"); }
-        catch (HttpRequestException ex) { return (RcsCallOutcome.Unknown, null, $"{api}: connection error ({ex.GetType().Name})"); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { await In(null, null, "Timeout", "RCS_TIMEOUT", $"The RCS did not answer within {O.TimeoutSeconds} s"); return (RcsCallOutcome.Unknown, null, $"{api}: the RCS did not answer within {O.TimeoutSeconds} s"); }
+        catch (HttpRequestException ex) { await In(null, null, "ConnectionError", "RCS_CONNECTION_ERROR", ex.GetType().Name); return (RcsCallOutcome.Unknown, null, $"{api}: connection error ({ex.GetType().Name})"); }
     }
+
+    /// <summary>CR-038: null when the RCS connection (host, port, token) is usable; otherwise why not. Reads the saved connection only: nothing is sent.</summary>
+    public async Task<string?> EndpointProblemAsync(CancellationToken ct = default) => (await ResolveAsync(ct)).Error;
 
     private async Task<(Endpoint? Value, string? Error)> ResolveAsync(CancellationToken ct)
     {
