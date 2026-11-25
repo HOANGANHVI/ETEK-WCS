@@ -8,8 +8,8 @@ import type { SystemHealth, TaskHistory, TransportTask } from '../api/types'
 // ------------------------------------------------------------------------------------------------ may a request be created?
 export type GateReason =
   | 'HEALTH_UNKNOWN' | 'BACKEND_DEGRADED' | 'GUARD_UNKNOWN' | 'GUARD_REFUSES'
-  | 'FLEET_UNKNOWN' | 'FLEET_SIMULATED' | 'RCS_NODATA' | 'RCS_DEGRADED' | 'RCS_DISCONNECTED' | 'MODE_UNKNOWN' | 'RECOVERY_REQUIRED'
-export type GateWarning = 'NO_AMR' | 'INTEGRATION_SIMULATOR' | 'SIMULATOR_MODE'
+  | 'FLEET_UNKNOWN' | 'FLEET_SIMULATED' | 'RCS_NODATA' | 'RCS_DEGRADED' | 'RCS_DISCONNECTED' | 'MODE_UNKNOWN' | 'RECOVERY_REQUIRED' | 'MODE_NOT_CHOSEN'
+export type GateWarning = 'NO_AMR' | 'INTEGRATION_SIMULATOR' | 'SIMULATOR_MODE' | 'BACKEND_DEGRADED_SIMULATOR'
 
 export interface Gate { allowed: boolean; blockers: GateReason[]; warnings: GateWarning[]; integrationMode: string | null; fleetSource: 'Real' | 'Simulator' | null; executionMode: ExecMode | null }
 
@@ -28,10 +28,11 @@ export function dispatchGate(health: SystemHealth | null, fleet: FleetView | nul
   if (simulatorMode) warnings.push('SIMULATOR_MODE')
   if (!health) blockers.push('HEALTH_UNKNOWN')
   else {
-    if (health.status !== 'Healthy') blockers.push('BACKEND_DEGRADED')
+    // Real keeps this check. In Simulator mode nothing leaves WCS and the server accepts the request (the Task page does too), so a degraded backend is said, not blocked.
+    if (health.status !== 'Healthy') { if (simulatorMode) warnings.push('BACKEND_DEGRADED_SIMULATOR'); else blockers.push('BACKEND_DEGRADED') }
     const rcs = health.integration.rcs
     if (rcs === undefined) blockers.push('GUARD_UNKNOWN')
-    else if (!rcs.dispatchAllowed) blockers.push('GUARD_REFUSES')
+    else if (!rcs.dispatchAllowed) blockers.push(simulatorMode && mode?.isExplicit === false ? 'MODE_NOT_CHOSEN' : 'GUARD_REFUSES')
     if (health.integration.mode === 'Simulator') warnings.push('INTEGRATION_SIMULATOR')
   }
   if (simulatorMode) { /* nothing is sent to the RCS: the real fleet is not a condition */ }

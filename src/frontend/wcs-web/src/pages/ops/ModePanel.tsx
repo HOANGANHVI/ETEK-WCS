@@ -60,6 +60,7 @@ function Conditions({ r }: { r: ModeReadiness }) {
 export function ModePanel({ view, loadFailed, isAdmin, api, onChanged }: Props) {
   const t = useT()
   const [open, setOpen] = useState(false)
+  const [choosing, setChoosing] = useState(false)   // confirming the never-chosen Simulator instead of switching to the other mode
   const [readiness, setReadiness] = useState<ModeReadiness | null>(null)
   const [reason, setReason] = useState('')
   const [ack, setAck] = useState(false)
@@ -82,17 +83,18 @@ export function ModePanel({ view, loadFailed, isAdmin, api, onChanged }: Props) 
 
   if (!view) return <section className="panel ops-mode" aria-label={t('ops.modeTitle')}><h2>{t('ops.modeTitle')}</h2><div className={loadFailed ? 'notice notice-bad' : 'muted'}>{t('ops.modeLoadFailed')}</div></section>
 
-  const target = otherMode(view.mode)
+  const notChosen = view.mode === 'Simulator' && !view.isExplicit
+  const target: ExecMode = choosing && notChosen ? 'Simulator' : otherMode(view.mode)
   const state = modeState(view)
-  const realBlockedByDeployment = target === 'Real' && !view.realDispatchConfigured
+  const realBlockedByDeployment = otherMode(view.mode) === 'Real' && !view.realDispatchConfigured
   const phase = tState.phase
 
-  const openSwitch = async () => {
-    setOpen(true); setResult(null); setError(null); setReadiness(null)
+  const openSwitch = async (to: ExecMode) => {
+    setChoosing(to === view.mode); setOpen(true); setResult(null); setError(null); setReadiness(null)
     applyTransition(holder, 'reset')
-    try { setReadiness(await api.readiness(target)) } catch (e) { setError(describeError(e)) }
+    try { setReadiness(await api.readiness(to)) } catch (e) { setError(describeError(e)) }
   }
-  const close = () => { setOpen(false); setReason(''); setAck(false); setResult(null); setError(null); applyTransition(holder, 'reset') }
+  const close = () => { setChoosing(false); setOpen(false); setReason(''); setAck(false); setResult(null); setError(null); applyTransition(holder, 'reset') }
   const confirm = async (event: 'send' | 'retry') => {
     const r = await sendTransition(holder, api, target, reason, ack, event)
     if (r.result) { setResult(r.result); setError(null); if (r.result.succeeded) onChanged() }
@@ -133,7 +135,12 @@ export function ModePanel({ view, loadFailed, isAdmin, api, onChanged }: Props) 
       {!isAdmin ? <p className="muted small">{t('ops.modeAdminOnly')}</p> : (
         <>
           {realBlockedByDeployment && <div className="notice notice-warn" role="note">{t('ops.modeRealNotAllowed')}</div>}
-          {!open && <div className="btn-row"><Button disabled={realBlockedByDeployment || state === 'recovery'} onClick={() => void openSwitch()}>{t('ops.modeSwitchTo', { mode: modeName(t, target) })}</Button></div>}
+          {!open && (
+            <div className="btn-row">
+              {notChosen && <Button variant="primary" disabled={state === 'recovery'} onClick={() => void openSwitch('Simulator')}>{t('ops.modeChooseSimulator')}</Button>}
+              <Button disabled={realBlockedByDeployment || state === 'recovery'} onClick={() => void openSwitch(otherMode(view.mode))}>{t('ops.modeSwitchTo', { mode: modeName(t, otherMode(view.mode)) })}</Button>
+            </div>
+          )}
           {open && (
             <div className="ops-switch" data-target={target}>
               <h3>{t('ops.modeReadinessTitle', { mode: modeName(t, target) })}</h3>

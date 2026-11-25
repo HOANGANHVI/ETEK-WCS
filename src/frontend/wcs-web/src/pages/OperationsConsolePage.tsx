@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
@@ -21,6 +21,8 @@ import '../styles/ops.css'
 const EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted'] as const
 const CANCELLABLE: TaskState[] = ['Pending', 'Validating', 'Queued', 'Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing']
 const FINISHED: TaskState[] = ['Completed', 'Failed', 'Cancelled']
+
+const GATE_REFRESH_MS = 5000
 
 const modeApi: ModePanelApi = {
   readiness: (target) => api.executionModeReadiness(target),
@@ -54,6 +56,13 @@ export function OperationsConsolePage() {
   const mode = useApi(useCallback(() => api.executionMode(), []))
   const gate = dispatchGate(health.data, fleet.data, mode.error && !mode.data ? null : mode.data)
   const select = (id: string) => setParams({ task: id })
+  // The health (server guard) and the mode raise no event of their own: they are read again regularly, so the create gate never stays on an old answer (for example right after a restart)
+  const { reload: reloadHealth } = health
+  const { reload: reloadMode } = mode
+  useEffect(() => {
+    const timer = setInterval(() => { reloadHealth(); reloadMode() }, GATE_REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [reloadHealth, reloadMode])
 
   return (
     <>

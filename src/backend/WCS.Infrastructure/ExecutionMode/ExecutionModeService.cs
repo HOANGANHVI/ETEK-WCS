@@ -59,9 +59,20 @@ internal sealed class ExecutionModeService(WcsDbContext db, IExecutionModeProvid
     {
         var c = new List<ModeCondition>();
         var blocking = new List<BlockingWork>();
-        if (current == target) { c.Add(new("ALREADY_IN_MODE", false, $"The system is already in {target} mode.")); return (c, blocking); }
-
         var state = await db.ExecutionModeStates.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct);
+        if (current == target)
+        {
+            // A fresh database is "Simulator, not chosen" and Production refuses tasks until a mode is CHOSEN. Choosing that very mode changes no dispatcher (nothing to check but a pending
+            // recovery); it records who chose it and why. Real is never reached this way, and a mode that was already chosen is refused as before.
+            if (target == ExecutionMode.Simulator && state is not { IsExplicit: true })
+            {
+                c.Add(new("CHOOSE_SIMULATOR", true, "Simulator has not been chosen yet: confirming it allows tasks to be sent to the simulator only."));
+                c.Add(new("RECOVERY_NOT_REQUIRED", state is null || !state.RecoveryRequired, state is { RecoveryRequired: true } ? $"Recovery is required: {state.RecoveryReason}" : "No recovery pending."));
+                return (c, blocking);
+            }
+            c.Add(new("ALREADY_IN_MODE", false, $"The system is already in {target} mode.")); return (c, blocking);
+        }
+
         c.Add(new("RECOVERY_NOT_REQUIRED", state is null || !state.RecoveryRequired, state is { RecoveryRequired: true } ? $"Recovery is required: {state.RecoveryReason}" : "No recovery pending."));
 
         if (target == ExecutionMode.Real)
