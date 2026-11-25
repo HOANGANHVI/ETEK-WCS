@@ -36,7 +36,7 @@ export function ConnectionStrip({ health, fleet, loadFailed, gate }: Props) {
         <dt>{t('ops.connGuard')}</dt>
         <dd>{guard === undefined ? t('ops.guardUnknown') : guard.dispatchAllowed ? <Pill tone="ok">{t('ops.guardAllowed')}</Pill> : <Pill tone="bad">{t('ops.guardRefused', { code: guard.code })}</Pill>}</dd>
         <dt>{t('ops.connDispatchMode')}</dt>
-        <dd>{fleet?.dispatchMode ?? t('ops.noValue')}</dd>
+        <dd>{fleet?.dispatchMode ? t(`ops.amrChoice_${fleet.dispatchMode}` as MsgKey) : t('ops.noValue')}</dd>
         <dt>{t('ops.connLastSuccess')}</dt>
         <dd>{fleet?.lastSuccessAt ? formatDateTime(fleet.lastSuccessAt) : never}</dd>
         <dt>{t('ops.connLastAttempt')}</dt>

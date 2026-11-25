@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { describeError } from '../i18n/vi'
 import { useRealtime } from '../realtime/RealtimeProvider'
 import type { WcsEventName } from '../realtime/signalr'
@@ -49,10 +49,12 @@ export function useApi<T>(fetcher: () => Promise<T>, refreshOn: WcsEventName[] =
     return () => { off(); clearTimeout(timer) }
   }, [key, subscribe])
 
+  const reload = useCallback(() => setNonce((n) => n + 1), [])   // stable, so it can be used in an effect (for example a refresh timer)
+
   return {
     data: result.data,
     error: result.error,
     loading: result.source !== fetcher,
-    reload: () => setNonce((n) => n + 1),
+    reload,
   }
 }

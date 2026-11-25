@@ -55,3 +55,9 @@ Backend `Cr038DualModeTests` (21) and `Cr038HardeningTests` (17): messages in bo
 * **No retention yet** for `rcs_messages` (payload cut at 32 000 characters, a handful of rows per task). Plan a retention job before the table grows large.
 * The test `PlcWorkerTests.One_PLC_going_offline…` is timing-dependent: it fails when run alone (also on the commit before CR-038) and passes inside the full parallel run. It is not related to this CR; it should be made deterministic separately.
 * Browser pages: NOT VERIFIED (no browser available in the review environment).
+
+## 9. Fix after deployment preparation: creating a request from Operations
+* **Defect:** a fresh Production database is "Simulator, not chosen" and refuses tasks (`RCS_NOT_CONNECTED`), but choosing the mode the system is already in was refused with `ALREADY_IN_MODE` and the page offered only "switch to Real". Simulator could not be chosen at all. **Fix:** an Admin can confirm the never-chosen Simulator (reason required, audited, recovery still blocks); a mode already chosen is refused as before; Real keeps every condition.
+* **Operations gate:** the health and the mode were read once and only again on a task event, so the create button could stay disabled on an old answer. They are now re-read every 5 s. In Simulator mode a degraded backend warns instead of blocking (the server accepts the request, as the Task page does); Real mode is unchanged. The refusal for a never-chosen mode now says what to do.
+* "Cách điều phối: Legacy" is the RCS AMR-selection setting (`Rcs:Dispatch:Mode`, CR-028), not the Simulator / Real mode; the label says so now.
+* Both pages create through the same `POST /api/tasks`; no second pipeline.

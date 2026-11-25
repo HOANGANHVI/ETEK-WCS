@@ -40,6 +40,17 @@ const mv = (over: Partial<ExecutionModeView> = {}): ExecutionModeView => ({ mode
   check('gate: without the mode argument the behaviour is the one before CR-038', dispatchGate(health(), simFleet).blockers.includes('FLEET_SIMULATED') && dispatchGate(health(), fleet()).allowed)
 }
 
+{
+  const degraded = { ...health(), status: 'Degraded' as const }
+  const sim = dispatchGate(degraded, null, mv())
+  check('gate: a degraded backend only warns in Simulator mode (the server accepts the request, like the Task page) and still blocks in Real mode',
+    sim.allowed && sim.warnings.includes('BACKEND_DEGRADED_SIMULATOR') && dispatchGate(degraded, fleet(), mv({ mode: 'Real' })).blockers.includes('BACKEND_DEGRADED'))
+  const refusing: SystemHealth = { ...health(), integration: { mode: 'Simulator', plc: 'x', rcs: { dispatchAllowed: false, code: 'RCS_NOT_CONNECTED' } } }
+  const g = dispatchGate(refusing, null, mv({ isExplicit: false }))
+  check('gate: a server that refuses because no mode was chosen says exactly that (and stays closed)', !g.allowed && g.blockers.includes('MODE_NOT_CHOSEN') && !g.blockers.includes('GUARD_REFUSES'))
+  check('gate: any other refusal stays a server refusal, in Simulator and in Real mode', dispatchGate(refusing, null, mv()).blockers.includes('GUARD_REFUSES') && dispatchGate(refusing, fleet(), mv({ mode: 'Real', isExplicit: false })).blockers.includes('GUARD_REFUSES'))
+}
+
 // ---------------------------------------------------------------- 2. what the panel offers
 check('state: recovery wins, then "not chosen", then ready', modeState(mv({ recoveryRequired: true, isExplicit: false })) === 'recovery' && modeState(mv({ isExplicit: false })) === 'notChosen' && modeState(mv()) === 'ready' && modeState(null) === null)
 const ready: ModeReadiness = { current: 'Simulator', target: 'Real', canSwitch: true, conditions: [], blockingWork: [] }
@@ -129,6 +140,8 @@ const panel = (view: ExecutionModeView | null, isAdmin = true, loadFailed = fals
   check('panel: a fresh environment says that no mode was chosen', panel(mv({ isExplicit: false })).includes(T('ops.modeNotChosen')))
   const rec = panel(mv({ mode: 'Real', recoveryRequired: true, recoveryReason: 'One dispatch has no answer.' }))
   check('panel: RECOVERY_REQUIRED is loud, keeps the mode Real (never Simulator) and offers only the acknowledgement', rec.includes('data-recovery="yes"') && rec.includes(T('ops.modeRecoveryTitle')) && rec.includes('One dispatch has no answer.') && rec.includes(T('ops.modeRecoveryAck')) && rec.includes('data-mode="Real"'))
+  check('panel: a never-chosen Simulator can be chosen (and Real is still offered); a chosen one is not offered again', panel(mv({ isExplicit: false })).includes(T('ops.modeChooseSimulator')) && panel(mv({ isExplicit: false })).includes(T('ops.modeSwitchTo', { mode: T('ops.modeReal') })) && !panel(mv()).includes(T('ops.modeChooseSimulator')) && !panel(mv({ mode: 'Real' })).includes(T('ops.modeChooseSimulator')))
+  check('panel: an Operator cannot choose the mode', !panel(mv({ isExplicit: false }), false).includes(T('ops.modeChooseSimulator')))
   check('panel: an Operator sees the mode but gets no switch', !panel(mv(), false).includes(T('ops.modeSwitchTo', { mode: T('ops.modeReal') })) && panel(mv(), false).includes(T('ops.modeAdminOnly')))
   check('panel: an unreadable mode says so', panel(null, true, true).includes(T('ops.modeLoadFailed')))
 }
