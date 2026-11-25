@@ -52,10 +52,8 @@ public static class RoutingEndpoints
                 var o = await repo.GetOrderAsync(id, t) ?? throw AppException.NotFound("ORDER_NOT_FOUND", "Transport Task not found.");
                 return new { order = o.ToDto(await repo.ListTransactionsAsync(false, null, id, 100, t)), events = (await repo.ListEventsAsync(id, 500, t)).Select(e => e.ToDto()).ToList() };
             }, ct)));
-        // the processes a user may start: published, enabled and not review-blocked (no configuration detail)
-        orders.MapGet("startable-processes", async (HttpContext c, ProcessAdminService s, CancellationToken ct) =>
-            ApiResults.Ok(c, (await s.ListAsync(ct)).Where(p => p.PublishedVersion is not null && p.Enabled && !p.ReviewBlocked)
-                .Select(p => new { p.Code, p.Name, p.RequestType, p.RackKind, p.TriggerLocationCodes }).ToList()));
+        // every published, enabled, not review-blocked process, with whether it accepts a request now (no configuration detail)
+        orders.MapGet("startable-processes", async (HttpContext c, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.StartableAsync(ct)));
         orders.MapPost("orders", async (HttpContext c, StartOrderRequest r, IRouteEngine engine, CancellationToken ct) =>
         {
             var type = DefinitionMapping.ParseRequestType(r.RequestType);

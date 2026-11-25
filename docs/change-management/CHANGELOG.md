@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.30 – CR-039 Default transport process catalog (2026-11-25)
+
+- Default processes PH2-01..04, 06..12 published once per database and NotReady (PH2-05 Draft); PH2-07..12 added to the reference data; PH2-03 overflows to M5; PH2-04 review flag removed (D-09; BP-04 stays REVIEW). Location catalog v2 (X1-X4, Y1/Y2, Z1/Z2, P1-P4, M5, M6). Device conditions moved from Publication to Readiness for flagged processes (migration `AddProcessRequiresReadiness`, not run on a deployment). Both request forms list every published process. A3/A4-D1/D2 unchanged. Not deployed; not verified with real devices. See CR-039.
+
 ## v3.28 – CR-036 Product Model isolation and Manual QC protection, Batch 1 (2026-11-25)
 
 - Additive schema (product models, location model/role, rack model/disposition, process model); guards behind `ModelIsolation:Mode` (default Off); one-way `ManualHandling` disposition at manual QC stations; rollback guard. See CR-036. Not deployed; re-intake, UI, ConfigTransfer export and Queue not included.

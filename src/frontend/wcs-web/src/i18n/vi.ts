@@ -348,6 +348,7 @@ const ERROR_VI = localizedMap({
   REASON_REQUIRED: 'Cần nhập lý do.',
   READINESS_INVALID: 'Mức sẵn sàng phải là NotReady, Ready hoặc Suspended.',
   READINESS_TRANSITION_NOT_DECIDED: 'Chuyển mức sẵn sàng này chưa được quyết định (câu hỏi mở OQ-51).',
+  READINESS_CONDITIONS_UNMET: 'Chưa thể đặt Ready: port hoặc mapping IO PLC của một trạm trong quy trình chưa đạt điều kiện.',
   PROCESS_NOT_READY: 'Quy trình đã Publish nhưng chưa sẵn sàng vận hành: yêu cầu không được nhận.',
 }, {
   RCS_DIAG_ADMIN_ONLY: 'RCS Diagnostics is for Administrators only.',
@@ -482,6 +483,7 @@ const ERROR_VI = localizedMap({
   REASON_REQUIRED: 'A reason is required.',
   READINESS_INVALID: 'Readiness must be NotReady, Ready or Suspended.',
   READINESS_TRANSITION_NOT_DECIDED: 'This readiness transition is not decided yet (open question OQ-51).',
+  READINESS_CONDITIONS_UNMET: 'The version cannot be set Ready: the PLC port or IO mapping of a station of the process does not meet the conditions.',
   PROCESS_NOT_READY: 'The process is Published but not operationally ready: the request is not accepted.',
 })
 
@@ -533,6 +535,7 @@ export const AUDIT_ACTION_VI = localizedMap({
   EXECUTION_MODE_RECOVERY_REQUIRED: 'Hệ thống vào RECOVERY_REQUIRED sau khởi động lại',
   SEED_LOCATION_CREATE: 'Tạo vị trí mặc định (seed)',
   SEED_LOCATION_CATALOG_APPLIED: 'Áp dụng danh mục vị trí mặc định (seed)',
+  SEED_PROCESS_PUBLISH: 'Công bố quy trình mặc định (seed)', SEED_PROCESS_DRAFT: 'Giữ quy trình mặc định ở bản nháp (seed)', SEED_PROCESS_CATALOG_APPLIED: 'Áp dụng danh mục quy trình mặc định (seed)',
   AUTH_LOGOUT: 'Đăng xuất',
   AUTH_PASSWORD_CHANGE: 'Đổi mật khẩu',
   ACCESS_DENIED: 'Truy cập bị từ chối',
@@ -625,6 +628,7 @@ export const AUDIT_ACTION_VI = localizedMap({
   EXECUTION_MODE_RECOVERY_REQUIRED: 'The system entered RECOVERY_REQUIRED after a restart',
   SEED_LOCATION_CREATE: 'Default location created (seed)',
   SEED_LOCATION_CATALOG_APPLIED: 'Default location catalog applied (seed)',
+  SEED_PROCESS_PUBLISH: 'Default process published (seed)', SEED_PROCESS_DRAFT: 'Default process kept as a draft (seed)', SEED_PROCESS_CATALOG_APPLIED: 'Default process catalog applied (seed)',
   AUTH_LOGOUT: 'Sign out',
   AUTH_PASSWORD_CHANGE: 'Change password',
   ACCESS_DENIED: 'Access denied',

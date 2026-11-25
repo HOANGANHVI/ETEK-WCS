@@ -35,7 +35,7 @@ public sealed class RouteEngine(
     IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IReservationRepository reservations,
     IInventoryTransactionRepository inventoryTx, IAgvRepository agvs, ITransportTaskRepository legacyTasks, RouteConditionEvaluator eval,
     StationTransactionService stations, ILegDispatcher dispatcher, IRcsDispatchGuard guard, IMaintenanceGate maintenance, IExecutionModeGate modeGate, IClock clock, IWcsNotifier notifier,
-    IOptions<DispatchOptions> dispatchOptions, IOptions<RouteEngineOptions> routeOptions, ModelGuard modelGuard, ModelGuardThrottle guardThrottle, RackPlacement placement, RcsRobotMapper robotMapper, LegAssignmentThrottle legThrottle, IOptions<RealDispatchOptions> realOptions, ILogger<RouteEngine> logger) : IRouteEngine
+    IOptions<DispatchOptions> dispatchOptions, IOptions<RouteEngineOptions> routeOptions, ModelGuard modelGuard, ModelGuardThrottle guardThrottle, RackPlacement placement, RcsRobotMapper robotMapper, LegAssignmentThrottle legThrottle, IOptions<RealDispatchOptions> realOptions, ProcessValidator validator, ILogger<RouteEngine> logger) : IRouteEngine
 {
     private const string Wcs = "WCS";
     private const int MaxStepsPerAdvance = 50;
@@ -99,6 +99,14 @@ public sealed class RouteEngine(
         return new StartOrderResult(await GetDtoAsync(dupId, ct), false);
     }
 
+    /// <summary>CR-039: for a process that requires Readiness the device conditions are checked at intake too (an approval can be withdrawn after Ready was set).</summary>
+    private async Task<string?> UnmetDeviceConditionAsync(BusinessProcess p, BusinessProcessVersion v, CancellationToken ct)
+    {
+        if (!p.RequiresReadiness) return null;
+        var full = await routing.GetVersionAsync(v.Id, ct) ?? v;
+        return (await validator.DeviceConditionsAsync(p, full, ct)).FirstOrDefault()?.Message;
+    }
+
     private async Task<(BusinessProcess, BusinessProcessVersion)> SelectProcessAsync(StartOrderCommand cmd, string locationCode, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(cmd.ProcessCode))
@@ -108,20 +116,24 @@ public sealed class RouteEngine(
             if (!p.Enabled) throw AppException.Rejected("PROCESS_DISABLED", $"Process {p.Code} is disabled.");
             if (p.ReviewBlocked) throw AppException.Rejected("PROCESS_REVIEW_BLOCKED", $"Process {p.Code} is REVIEW and not approved for execution.");
             var v = await routing.GetPublishedVersionAsync(p.Id, ct) ?? throw AppException.Rejected("PROCESS_NOT_PUBLISHED", $"Process {p.Code} has no published version.");
-            if (routeOptions.Value.EnforceReadiness && v.Readiness != OperationalReadiness.Ready)
-                throw AppException.Rejected("PROCESS_NOT_READY", $"Process {p.Code} v{v.Number} is Published but its Operational Readiness is {v.Readiness}; the request is not accepted.");   // CR-035 D-12
+            if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.Readiness != OperationalReadiness.Ready)
+                throw AppException.Rejected("PROCESS_NOT_READY", $"Process {p.Code} v{v.Number} is Published but its Operational Readiness is {v.Readiness}; the request is not accepted.");   // CR-035 D-12, CR-039
+            if (await UnmetDeviceConditionAsync(p, v, ct) is { } unmet)
+                throw AppException.Rejected("PROCESS_NOT_READY", $"Process {p.Code} v{v.Number} cannot accept a request: {unmet}");
             if (!p.TriggerLocationCodes.Contains(locationCode, StringComparer.OrdinalIgnoreCase))
                 throw AppException.Rejected("LOCATION_NOT_ALLOWED", $"Location {locationCode} cannot start process {p.Code}.");
             return (p, v);
         }
         var found = await routing.FindPublishedAsync(cmd.RequestType, cmd.RackKind, locationCode, ct);
         found = found.Where(x => !x.Process.ReviewBlocked).ToList();
-        if (routeOptions.Value.EnforceReadiness && found.Count > 0)
-        {   // CR-035 D-12: only Published + Ready may be matched; no other version is substituted
-            var ready = found.Where(x => x.Version.Readiness == OperationalReadiness.Ready).ToList();
+        if (found.Count > 0 && (routeOptions.Value.EnforceReadiness || found.Any(x => x.Process.RequiresReadiness)))
+        {   // CR-035 D-12 / CR-039: a process that needs Readiness is matched only when Published + Ready; no other version is substituted
+            var ready = found.Where(x => x.Version.Readiness == OperationalReadiness.Ready || !(routeOptions.Value.EnforceReadiness || x.Process.RequiresReadiness)).ToList();
             if (ready.Count == 0) throw AppException.Rejected("PROCESS_NOT_READY", $"A process answers a {cmd.RequestType} request at {locationCode} but none is Ready; the request is not accepted.");
             found = ready;
         }
+        if (found.Count == 1 && await UnmetDeviceConditionAsync(found[0].Process, found[0].Version, ct) is { } why)
+            throw AppException.Rejected("PROCESS_NOT_READY", $"Process {found[0].Process.Code} cannot accept a request: {why}");
         return found.Count switch
         {
             0 => throw AppException.Rejected("PROCESS_NOT_FOUND", $"No published process answers a {cmd.RequestType} request at {locationCode}."),

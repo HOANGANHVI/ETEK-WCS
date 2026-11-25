@@ -377,8 +377,8 @@
   },
   {
     "code": "PH2-01",
-    "name": "Phase 2: A1/A2 has a full rack",
-    "description": "B1/B2, then P1/P2 (buffer), then M5 (manual QC). P1/P2/M5 are not locations of the Phase 1 baseline: define them before validating.",
+    "name": "A1/A2 có rack đầy → B1/B2, P1/P2, M5",
+    "description": "Rack đầy tại A1/A2: đưa tới B1/B2; không nhận được thì buffer P1/P2; buffer đầy thì QC thủ công M5.",
     "requestType": "PickupRequest",
     "rackKind": "Full",
     "triggerLocationCodes": [
@@ -442,12 +442,13 @@
         }
       ],
       "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
-    }
+    },
+    "defaultSinceVersion": 1
   },
   {
     "code": "PH2-02",
-    "name": "Phase 2: A1/A2 needs an empty rack",
-    "description": "Source: B1/B2, else P1/P2; destination = the requesting A1/A2.",
+    "name": "A1/A2 cần rack rỗng",
+    "description": "Lấy rack rỗng tại B1/B2, nếu không có thì buffer P1/P2; giao tới trạm A1/A2 đã yêu cầu.",
     "requestType": "DeliveryRequest",
     "rackKind": "Empty",
     "triggerLocationCodes": [
@@ -505,12 +506,13 @@
         }
       ],
       "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
-    }
+    },
+    "defaultSinceVersion": 1
   },
   {
     "code": "PH2-03",
-    "name": "Phase 2: B1/B2 has an empty rack",
-    "description": "Pick at B1/B2; destination A1/A2, else P1/P2. The intermediate waiting position of the slides has no declared location yet (NEEDS_CONFIRMATION).",
+    "name": "B1/B2 có rack rỗng → A1/A2, P1/P2, M5",
+    "description": "Rack rỗng tại B1/B2: đưa về A1/A2; không nhận được thì buffer P1/P2; buffer đầy thì QC thủ công M5 (CR-039).",
     "requestType": "PickupRequest",
     "rackKind": "Empty",
     "triggerLocationCodes": [
@@ -557,6 +559,12 @@
               "priority": 2,
               "order": 2,
               "locationCode": "P2"
+            },
+            {
+              "role": "Destination",
+              "priority": 3,
+              "order": 1,
+              "locationCode": "M5"
             }
           ]
         },
@@ -567,21 +575,22 @@
           "candidates": []
         }
       ],
-      "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
-    }
+      "note": "Default catalog CR-039. The order inside one priority group follows the document order (NEEDS_CONFIRMATION)."
+    },
+    "defaultSinceVersion": 1
   },
   {
     "code": "PH2-04",
-    "name": "Phase 2: B1/B2 needs a full rack",
-    "description": "REVIEW (same scenario as BP-04): source A1/A2, else P1/P2. Never publishable.",
+    "name": "B1/B2 cần rack đầy",
+    "description": "Lấy rack đầy tại A1/A2, nếu không có thì buffer P1/P2; giao tới trạm B1/B2 đã yêu cầu (baseline D-09; BP-04 Phase 1 vẫn REVIEW).",
     "requestType": "DeliveryRequest",
     "rackKind": "Full",
     "triggerLocationCodes": [
       "B1",
       "B2"
     ],
-    "reviewBlocked": true,
-    "reviewReason": "Same scenario as BP-04 (REVIEW); not approved for implementation.",
+    "reviewBlocked": false,
+    "reviewReason": null,
     "sourceReference": "WCS_BP_Port_PLC_Transaction_Matrix.xlsx / ETEK Process AGV Phase 2.pptx slide 7",
     "definition": {
       "firstStepKey": "s1",
@@ -631,12 +640,13 @@
         }
       ],
       "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
-    }
+    },
+    "defaultSinceVersion": 1
   },
   {
     "code": "PH2-05",
-    "name": "Phase 2: return an empty rack from M5",
-    "description": "Pick at M5; destination A1/A2, else P1/P2; if none, the AMR waits holding the rack (slide: intermediate waiting position).",
+    "name": "Trả rack rỗng từ M5 (chưa công bố)",
+    "description": "Slide 8. KHÔNG công bố mặc định: yêu cầu mới quy định rack đã vào QC thủ công không quay lại luồng; chờ quy trình tiếp nhận lại được duyệt (OQ).",
     "requestType": "ManualRequest",
     "rackKind": "Empty",
     "triggerLocationCodes": [
@@ -693,12 +703,15 @@
         }
       ],
       "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
-    }
+    },
+    "defaultSinceVersion": 1,
+    "defaultPublish": false,
+    "draftReason": "MANUAL_QC_REINTAKE_NOT_APPROVED: it would take a rack out of manual QC M5 back into the flow (CR-039 OQ)."
   },
   {
     "code": "PH2-06",
-    "name": "Phase 2: bring a full rack to M5",
-    "description": "Take a full rack from P1/P2 to M5; no full rack at P1/P2 is an error (WaitBehavior=Fail).",
+    "name": "Yêu cầu rack đầy tới M5",
+    "description": "Gọi thủ công: lấy rack đầy tại P1/P2 đưa tới M5; không có rack đầy thì báo lỗi (slide 9; OQ-17).",
     "requestType": "ManualRequest",
     "rackKind": "Full",
     "triggerLocationCodes": [
@@ -743,6 +756,355 @@
         }
       ],
       "note": "Reference draft derived from the working matrix; priorities within a group follow the document order (NEEDS_CONFIRMATION)."
-    }
+    },
+    "defaultSinceVersion": 1
+  },
+  {
+    "code": "PH2-07",
+    "name": "X1/X2 có rack đầy → Y1/Y2, P3/P4, M6",
+    "description": "Rack đầy tại X1/X2: đưa tới Y1/Y2; không nhận được thì buffer P3/P4; buffer đầy thì QC thủ công M6.",
+    "requestType": "PickupRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "X1",
+      "X2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "CR-039: project owner transport groups and rules (2026-11-25)",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "Y1"
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "Y2"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "P3"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "P4"
+            },
+            {
+              "role": "Destination",
+              "priority": 3,
+              "order": 1,
+              "locationCode": "M6"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Default catalog CR-039. The order inside one priority group follows the document order (NEEDS_CONFIRMATION)."
+    },
+    "defaultSinceVersion": 1
+  },
+  {
+    "code": "PH2-08",
+    "name": "X1/X2 cần rack rỗng từ buffer",
+    "description": "Lấy rack rỗng tại buffer P3/P4 giao tới trạm X1/X2 đã yêu cầu.",
+    "requestType": "DeliveryRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "X1",
+      "X2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "CR-039: project owner transport groups and rules (2026-11-25)",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "P3"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "P4"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Default catalog CR-039. The order inside one priority group follows the document order (NEEDS_CONFIRMATION)."
+    },
+    "defaultSinceVersion": 1
+  },
+  {
+    "code": "PH2-09",
+    "name": "Y1/Y2 có rack rỗng → X1/X2, P3/P4, M6",
+    "description": "Rack rỗng tại Y1/Y2: đưa về X1/X2; không nhận được thì buffer P3/P4; buffer đầy thì QC thủ công M6.",
+    "requestType": "PickupRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "Y1",
+      "Y2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "CR-039: project owner transport groups and rules (2026-11-25)",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "X1"
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "X2"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 1,
+              "locationCode": "P3"
+            },
+            {
+              "role": "Destination",
+              "priority": 2,
+              "order": 2,
+              "locationCode": "P4"
+            },
+            {
+              "role": "Destination",
+              "priority": 3,
+              "order": 1,
+              "locationCode": "M6"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Default catalog CR-039. The order inside one priority group follows the document order (NEEDS_CONFIRMATION)."
+    },
+    "defaultSinceVersion": 1
+  },
+  {
+    "code": "PH2-10",
+    "name": "Y1/Y2 cần rack đầy từ buffer",
+    "description": "Lấy rack đầy tại buffer P3/P4 giao tới trạm Y1/Y2 đã yêu cầu.",
+    "requestType": "DeliveryRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "Y1",
+      "Y2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "CR-039: project owner transport groups and rules (2026-11-25)",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Delivery",
+          "sourceMode": "Candidates",
+          "destinationMode": "Request",
+          "resolution": "BeforePick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "P3"
+            },
+            {
+              "role": "Source",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "P4"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Default catalog CR-039. The order inside one priority group follows the document order (NEEDS_CONFIRMATION)."
+    },
+    "defaultSinceVersion": 1
+  },
+  {
+    "code": "PH2-11",
+    "name": "X3/X4 có rack đầy → Z1/Z2",
+    "description": "Tuyến thẳng; đích bận thì chờ. Không có buffer hay QC thủ công được định nghĩa cho nhóm này.",
+    "requestType": "PickupRequest",
+    "rackKind": "Full",
+    "triggerLocationCodes": [
+      "X3",
+      "X4"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "CR-039: project owner transport groups and rules (2026-11-25)",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "Z1"
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "Z2"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Default catalog CR-039. The order inside one priority group follows the document order (NEEDS_CONFIRMATION)."
+    },
+    "defaultSinceVersion": 1
+  },
+  {
+    "code": "PH2-12",
+    "name": "Z1/Z2 có rack rỗng → X3/X4",
+    "description": "Tuyến thẳng; đích bận thì chờ. Không có buffer hay QC thủ công được định nghĩa cho nhóm này.",
+    "requestType": "PickupRequest",
+    "rackKind": "Empty",
+    "triggerLocationCodes": [
+      "Z1",
+      "Z2"
+    ],
+    "reviewBlocked": false,
+    "reviewReason": null,
+    "sourceReference": "CR-039: project owner transport groups and rules (2026-11-25)",
+    "definition": {
+      "firstStepKey": "s1",
+      "steps": [
+        {
+          "stepKey": "s1",
+          "order": 1,
+          "type": "Pickup",
+          "sourceMode": "Request",
+          "destinationMode": "Candidates",
+          "resolution": "AfterPick",
+          "nextStepKey": "done",
+          "waitBehavior": "Wait",
+          "errorBehavior": "Fail",
+          "candidates": [
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 1,
+              "locationCode": "X3"
+            },
+            {
+              "role": "Destination",
+              "priority": 1,
+              "order": 2,
+              "locationCode": "X4"
+            }
+          ]
+        },
+        {
+          "stepKey": "done",
+          "order": 2,
+          "type": "ProcessCompletion",
+          "candidates": []
+        }
+      ],
+      "note": "Default catalog CR-039. The order inside one priority group follows the document order (NEEDS_CONFIRMATION)."
+    },
+    "defaultSinceVersion": 1
   }
 ]

@@ -8,7 +8,7 @@ import { useFleet } from '../fleet/fleetState'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { describeError } from '../i18n/vi'
-import { dispatchGate, type CreateApi } from '../lib/opsConsole'
+import { dispatchGate, type CreateApi, type ProcessCreateApi } from '../lib/opsConsole'
 import { ConnectionStrip } from './ops/ConnectionStrip'
 import { CreateRequest } from './ops/CreateRequest'
 import { OpsTaskDetail } from './ops/OpsTaskDetail'
@@ -32,6 +32,11 @@ const modeApi: ModePanelApi = {
   adoptLegacy: (reason) => api.executionModeAdoptLegacy(reason),
 }
 
+const processCreateApi: ProcessCreateApi = {
+  start: async (p, station, key) => (await api.routingStart({ requestKey: key, locationCode: station, requestType: p.requestType, rackKind: p.rackKind, processCode: p.code })).order,
+  list: async () => (await api.routingOrders(undefined, 200)).items,
+}
+
 const createApi: CreateApi = {
   create: (flow, station, key) => api.createTask(flow, station, key),
   list: async () => (await api.tasks(undefined, 0, 200)).items,
@@ -51,6 +56,7 @@ export function OperationsConsolePage() {
   const fleet = useFleet()
   const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
   const flows = useApi(useCallback(() => api.flows(), []))
+  const processes = useApi(useCallback(() => api.routingStartable(), []))
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])
   const locations = useApi(useCallback(() => api.locations(), []))
   const mode = useApi(useCallback(() => api.executionMode(), []))
@@ -59,18 +65,20 @@ export function OperationsConsolePage() {
   // The health (server guard) and the mode raise no event of their own: they are read again regularly, so the create gate never stays on an old answer (for example right after a restart)
   const { reload: reloadHealth } = health
   const { reload: reloadMode } = mode
+  const { reload: reloadProcesses } = processes
   useEffect(() => {
-    const timer = setInterval(() => { reloadHealth(); reloadMode() }, GATE_REFRESH_MS)
+    const timer = setInterval(() => { reloadHealth(); reloadMode(); reloadProcesses() }, GATE_REFRESH_MS)
     return () => clearInterval(timer)
-  }, [reloadHealth, reloadMode])
+  }, [reloadHealth, reloadMode, reloadProcesses])
 
   return (
     <>
       <PageHeader title={t('ops.title')} description={t('ops.description')} actions={<Link to="/routing">{t('ops.ordersLink')}</Link>} />
       <ModePanel view={mode.data} loadFailed={!!mode.error} isAdmin={isAdmin} api={modeApi} onChanged={() => { mode.reload(); health.reload() }} />
       <ConnectionStrip health={health.data} fleet={fleet.data} loadFailed={!!(health.error || fleet.error)} gate={gate} />
+      {processes.error && !processes.data && <div className="notice notice-bad" role="alert">{t('ops.createProcessesFailed')} {processes.error}</div>}
       <Async state={flows} isEmpty={(d) => d.length === 0} empty={{ title: t('ops.createLoadFailed') }}>
-        {(list) => <CreateRequest flows={list} gate={gate} api={createApi} onCreated={(x) => { tasks.reload(); select(x.id) }} />}
+        {(list) => <CreateRequest flows={list} processes={processes.data ?? []} processApi={processCreateApi} gate={gate} api={createApi} onCreated={(x) => { tasks.reload(); select(x.id) }} />}
       </Async>
       <Async state={tasks} empty={{ title: t('ops.monNone') }}>
         {(page) => <TaskMonitor tasks={page.items} locations={locations.data ?? []} selectedId={selected} onSelect={select} />}

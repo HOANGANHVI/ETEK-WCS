@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
@@ -31,6 +31,7 @@ export function TasksPage() {
   const isAdmin = user?.role === 'Admin'
   const [dialog, setDialog] = useState<Dialog>(null)
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const [stateFilter, setStateFilter] = useState<TaskState | ''>('')
   const [agvFilter, setAgvFilter] = useState('')
   const [search, setSearch] = useState('')
@@ -134,7 +135,7 @@ export function TasksPage() {
         )}
       </div>
 
-      {dialog?.kind === 'create' && <CreateTaskDialog onClose={() => setDialog(null)} onCreated={(t) => { setDialog(null); setParams({ id: t.id }); tasks.reload() }} />}
+      {dialog?.kind === 'create' && <CreateTaskDialog onClose={() => setDialog(null)} onCreated={(t) => { setDialog(null); setParams({ id: t.id }); tasks.reload() }} onOrderCreated={() => { setDialog(null); void navigate('/routing') }} />}
       {dialog?.kind === 'edit' && <EditTaskDialog task={dialog.task} stationCode={codes.loc(dialog.task.requestLocationId)} onClose={() => setDialog(null)} onChanged={() => tasks.reload()} />}
       {dialog?.kind === 'delete' && <DeleteTaskDialog task={dialog.task} onClose={() => setDialog(null)} onChanged={() => tasks.reload()} />}
     </>

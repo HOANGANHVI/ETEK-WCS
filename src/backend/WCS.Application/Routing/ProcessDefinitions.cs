@@ -17,8 +17,16 @@ public sealed record VersionDefinition(string FirstStepKey, IReadOnlyList<StepDe
 
 public sealed record ProcessHeader(string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes, Guid? ProductModelId = null);
 
+/// <summary>CR-039: a published process as the request forms see it.</summary>
+public sealed record StartableProcessDto(string Code, string Name, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes, string Readiness,
+    bool AcceptsRequests, string? BlockedCode, string? BlockedDetail);
+
 public sealed record ReferenceProcess(string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes,
-    bool ReviewBlocked, string? ReviewReason, string? SourceReference, VersionDefinition Definition);
+    bool ReviewBlocked, string? ReviewReason, string? SourceReference, VersionDefinition Definition,
+    /// <summary>CR-039: set = this process belongs to the default catalog of that version and is published once per database. NULL = reference only (import as Draft).</summary>
+    int? DefaultSinceVersion = null,
+    /// <summary>CR-039: false = the default catalog creates it as a Draft with <see cref="DraftReason"/> and never publishes it.</summary>
+    bool DefaultPublish = true, string? DraftReason = null);
 
 public sealed record VersionSummaryDto(Guid Id, int Number, string State, DateTimeOffset CreatedAt, string? CreatedBy, DateTimeOffset? ValidatedAt, DateTimeOffset? PublishedAt, string? PublishedBy,
     DateTimeOffset? DisabledAt, string? Note, int StepCount);

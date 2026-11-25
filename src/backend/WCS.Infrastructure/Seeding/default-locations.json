@@ -1,7 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "approvedBy": "Project owner (2026-11-25): option A, initial capacity Station = 1, Buffer / ManualBuffer = 2; the values are starting values that an Admin may change",
-  "note": "Each catalog version is applied ONCE per database (marker SEED_LOCATION_CATALOG_APPLIED in audit_log); a row belongs to the version in sinceVersion, so raising the version adds only the new rows. Phase 1 locations only. Not seeded on purpose (no source for their attributes): A3, A4, D1, D2 (legacy, UNCHANGED), P1-P4, M5, M6 (OQ-11, OQ-10), X / Y / Z / E / G stations (OQ-07, OQ-08, OQ-09). ProductModelId and StationRole are never set by the seed.",
+  "note": "Each catalog version is applied ONCE per database (marker SEED_LOCATION_CATALOG_APPLIED in audit_log); a row belongs to the version in sinceVersion, so raising the version adds only the new rows. Version 1: Phase 1 locations (CR-037). Version 2: locations of the default transport processes (CR-039; initial capacities approved by the project owner: buffer position 1, manual QC 2, station 1; an Admin may change them). Not seeded: A3, A4, D1, D2 (legacy, UNCHANGED), E / G stations. ProductModelId is never set; StationRole only marks M5 / M6 as manual QC.",
   "locations": [
     { "code": "A1", "name": "Máy A1", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 1, "source": "ProcessFlows Bp01-03 request / destination; reference-processes BP-01..03" },
     { "code": "A2", "name": "Máy A2", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 1, "source": "ProcessFlows Bp01-03 request / destination; reference-processes BP-01..03" },
@@ -11,6 +11,20 @@
     { "code": "F2", "name": "Vị trí đệm rack đầy F2", "type": "Buffer", "capacity": 2, "allowedRackKind": "Full", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp01 destination / Bp05 source (Full rack)" },
     { "code": "F3", "name": "Vị trí đệm rack rỗng F3", "type": "Buffer", "capacity": 2, "allowedRackKind": "Empty", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp02 source / Bp03, Bp06 destination (Empty rack)" },
     { "code": "F4", "name": "Vị trí đệm rack rỗng F4", "type": "Buffer", "capacity": 2, "allowedRackKind": "Empty", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp02 source / Bp03, Bp06 destination (Empty rack)" },
-    { "code": "F5", "name": "Vị trí đệm thủ công F5", "type": "ManualBuffer", "capacity": 2, "allowedRackKind": "Any", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp01 destination, Bp05 / Bp06 request; F5 vs M5 is OQ-10 (open)" }
+    { "code": "F5", "name": "Vị trí đệm thủ công F5", "type": "ManualBuffer", "capacity": 2, "allowedRackKind": "Any", "requiresPlcPermission": false, "sinceVersion": 1, "source": "ProcessFlows Bp01 destination, Bp05 / Bp06 request; F5 vs M5 is OQ-10 (open)" },
+    { "code": "X1", "name": "Máy X1", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "X2", "name": "Máy X2", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "X3", "name": "Máy X3", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "X4", "name": "Máy X4", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "Y1", "name": "Máy Y1", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "Y2", "name": "Máy Y2", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "Z1", "name": "Máy Z1", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "Z2", "name": "Máy Z2", "type": "Station", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": true, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "P1", "name": "Buffer P1", "type": "Buffer", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": false, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "P2", "name": "Buffer P2", "type": "Buffer", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": false, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "P3", "name": "Buffer P3", "type": "Buffer", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": false, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "P4", "name": "Buffer P4", "type": "Buffer", "capacity": 1, "allowedRackKind": "Any", "requiresPlcPermission": false, "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "M5", "name": "QC thủ công M5", "type": "ManualBuffer", "capacity": 2, "allowedRackKind": "Any", "requiresPlcPermission": false, "stationRole": "ManualQcStation", "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" },
+    { "code": "M6", "name": "QC thủ công M6", "type": "ManualBuffer", "capacity": 2, "allowedRackKind": "Any", "requiresPlcPermission": false, "stationRole": "ManualQcStation", "sinceVersion": 2, "source": "CR-039 (project owner 2026-11-25)" }
   ]
 }

@@ -9,6 +9,7 @@ import { useT } from '../i18n'
 import { Rich } from '../components/Rich'
 import { describeError, flowInfo, taskCode, TASK_STATE_VI } from '../i18n/vi'
 import { Field } from './config/FormKit'
+import { processOf, processValue } from '../lib/requestOptions'
 
 function useAction(onDone: () => void, onStale: () => void) {
   const [busy, setBusy] = useState(false)
@@ -25,29 +26,52 @@ function useAction(onDone: () => void, onStale: () => void) {
   return { busy, error, run }
 }
 
-export function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (t: TransportTask) => void }) {
+export function CreateTaskDialog({ onClose, onCreated, onOrderCreated }: { onClose: () => void; onCreated: (t: TransportTask) => void; onOrderCreated: () => void }) {
   const t = useT()
   const flows = useApi(useCallback(() => api.flows(), []))
+  const processes = useApi(useCallback(() => api.routingStartable(), []))   // CR-039: every published process, not only the Phase 1 flows
   const [flow, setFlow] = useState('')
   const [station, setStation] = useState('')
   // One key per opened dialog: double-clicking "Tạo" cannot create two tasks (the API is idempotent on this key).
   const [requestKey] = useState(() => crypto.randomUUID())
-  const stations = flows.data?.find((f) => f.flow === flow)?.stations ?? []
+  const process = processOf(flow, processes.data ?? [])
+  const stations = process ? process.triggerLocationCodes : flows.data?.find((f) => f.flow === flow)?.stations ?? []
   const a = useAction(() => undefined, () => undefined)
+  const create = async () => {
+    if (process) {
+      await api.routingStart({ requestKey, locationCode: station, requestType: process.requestType, rackKind: process.rackKind, processCode: process.code })
+      onOrderCreated()
+    } else onCreated(await api.createTask(flow, station, requestKey))
+  }
 
   return (
     <Modal title={t('tasks.createTitle')} onClose={onClose} footer={<>
       <Button onClick={onClose}>{t('tasks.skip')}</Button>
-      <Button variant="primary" disabled={a.busy || !flow || !station}
-        onClick={() => void a.run(async () => { const created = await api.createTask(flow, station, requestKey); onCreated(created) })}>{t('tasks.create')}</Button>
+      <Button variant="primary" disabled={a.busy || !flow || !station || (!!process && !process.acceptsRequests)}
+        onClick={() => void a.run(create)}>{t('tasks.create')}</Button>
     </>}>
       {a.error && <div className="notice notice-bad" role="alert">{a.error}</div>}
+      {processes.error && !processes.data && <div className="notice notice-bad" role="alert">{t('ops.createProcessesFailed')} {processes.error}</div>}
+      {process && !process.acceptsRequests && (
+        <div className="notice notice-warn" role="status">
+          <p>{t('ops.createNotReady', { code: process.code, readiness: process.readiness })}</p>
+          {process.blockedDetail && <p className="muted small">{process.blockedDetail}</p>}
+        </div>
+      )}
+      {process && <p className="muted small">{t('ops.createIsOrder')}</p>}
       {flows.loading && !flows.data ? <Loading /> : flows.error && !flows.data ? <div className="notice notice-bad">{flows.error}</div> : (
         <div className="form-grid single">
           <Field label={t('tasks.flowField')} hint={t('tasks.flowHint')}>
             <select value={flow} onChange={(e) => { setFlow(e.target.value); setStation('') }}>
               <option value="">{t('tasks.chooseFlow')}</option>
-              {(flows.data ?? []).map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
+              <optgroup label={t('ops.createGroupFlows')}>
+                {(flows.data ?? []).map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
+              </optgroup>
+              {(processes.data?.length ?? 0) > 0 && (
+                <optgroup label={t('ops.createGroupProcesses')}>
+                  {processes.data!.map((p) => <option key={p.code} value={processValue(p.code)}>{p.code} · {p.name}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
+                </optgroup>
+              )}
             </select>
           </Field>
           <Field label={t('tasks.stationField')} hint={t('tasks.stationHint')}>

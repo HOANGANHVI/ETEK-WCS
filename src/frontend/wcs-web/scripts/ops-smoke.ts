@@ -13,7 +13,7 @@ import { ApiRequestError } from '../src/api/errors.ts'
 import type { FleetView } from '../src/api/fleetTypes.ts'
 import type { Location, SystemHealth, TaskHistory, TransportTask } from '../src/api/types.ts'
 import {
-  applyCreate, checkOutcome, classifyCreateError, createStep, dispatchGate, filterTasks, NO_TASK_FILTER, sendCreate, taskStages,
+  applyCreate, checkOrderOutcome, checkOutcome, sendProcessCreate, classifyCreateError, createStep, dispatchGate, filterTasks, NO_TASK_FILTER, sendCreate, taskStages,
   type CreateApi, type CreateHolder, type CreateState,
 } from '../src/lib/opsConsole.ts'
 import { ConnectionStrip } from '../src/pages/ops/ConnectionStrip.tsx'
@@ -202,7 +202,27 @@ for (const lang of ['vi'] as const) {
   check(`${lang}: create button is disabled while the gate is closed`, closed.includes(`disabled=""`) && closed.includes(T('ops.createBtn')))
   const open = wrap(createElement(CreateRequest, { flows, gate: dispatchGate(health(), fleet()), api, onCreated: () => {} }))
   check(`${lang}: create form states that the server picks pick-up and drop-off and shows the request key`, open.includes(T('ops.createRoute')) && open.includes('OPS-'))
+  const processes = [
+    { code: 'PH2-07', name: 'X to Y', requestType: 'PickupRequest', rackKind: 'Full', triggerLocationCodes: ['X1', 'X2'], readiness: 'Ready', acceptsRequests: true, blockedCode: null, blockedDetail: null },
+    { code: 'MY-ROUTE', name: 'user route', requestType: 'ManualRequest', rackKind: 'Empty', triggerLocationCodes: ['NEW-1'], readiness: 'NotReady', acceptsRequests: false, blockedCode: 'PROCESS_NOT_READY', blockedDetail: null },
+  ]
+  const listed = wrap(createElement(CreateRequest, { flows, processes, processApi: { start: async () => { throw new Error('not called') }, list: async () => [] }, gate: dispatchGate(health(), fleet()), api, onCreated: () => {} }))
+  check(`${lang}: every published process is listed beside the Phase 1 flows, whatever its stations or code`, listed.includes('process:PH2-07') && listed.includes('process:MY-ROUTE') && listed.includes('value="BP01"'))
+  check(`${lang}: a process that accepts no request is listed and marked, not hidden`, listed.includes(T('ops.createNotReadyTag')) && listed.includes('MY-ROUTE · user route'))
   check(`${lang}: nothing is sent or confirmed on first render`, !open.includes(T('ops.createConfirmTitle')) && !open.includes('data-create='))
+}
+{
+  const proc = { code: 'PH2-07', name: 'X to Y', requestType: 'PickupRequest', rackKind: 'Full', triggerLocationCodes: ['X1'], readiness: 'Ready', acceptsRequests: true, blockedCode: null, blockedDetail: null }
+  let state: CreateState = { phase: 'idle', requestKey: 'OPS-p' }
+  const h: CreateHolder = { get: () => state, set: (s) => { state = s } }
+  const sent: string[] = []
+  const orders = { start: async (p: { code: string }, station: string, key: string) => { sent.push(`${p.code}/${station}/${key}`); return { id: 'o1', requestKey: key, processCode: p.code } as never }, list: async () => [{ id: 'o1', requestKey: 'OPS-p' } as never] }
+  const before = await sendProcessCreate(h, orders, proc, 'X1')
+  check('a process request is not sent before the operator confirms', before.order === null && sent.length === 0)
+  applyCreate(h, 'ask')
+  const [a, b] = await Promise.all([sendProcessCreate(h, orders, proc, 'X1'), sendProcessCreate(h, orders, proc, 'X1')])
+  check('a double click starts exactly one order with the request key', sent.length === 1 && sent[0] === 'PH2-07/X1/OPS-p' && [a, b].filter((r) => r.order).length === 1)
+  check('an order is found again by its request key without creating anything', (await checkOrderOutcome(h, orders))?.id === 'o1' && sent.length === 1)
 }
 i18n.setLang('vi')
 for (const r of results) console.log(r)

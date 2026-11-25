@@ -99,6 +99,7 @@ public static class DependencyInjection
         services.AddSingleton<WCS.Application.Routing.IPlcLinkStatus, PlcRuntimeLinkStatus>();
         services.AddSingleton<WCS.Application.Routing.IPlcObservationSource, UnavailablePlcObservationSource>();
         services.AddScoped<WcsDataSeeder>();
+        services.AddScoped<DefaultProcessSeeder>();   // CR-039
         services.AddScoped<WCS.Application.Logging.ILogQueryService, WCS.Infrastructure.Logging.LogQueryService>();   // CR-007
         services.AddScoped<WCS.Infrastructure.Logging.DeploymentLogImporter>();
         services.AddScoped<WCS.Application.Plc.IPlcConfigRepository, WCS.Infrastructure.Plc.PlcConfigRepository>();

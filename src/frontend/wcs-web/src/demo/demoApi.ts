@@ -30,6 +30,7 @@ export const demoDataApi = {
   health: () => read(() => demo.health()),
   agvs: () => read(() => demo.listAgvs()),
   flows: () => read(() => Object.entries(DEMO_FLOWS).map(([flow, r]) => ({ flow, rackKind: r.kind, stations: [...r.stations] }))),
+  routingStartable: () => read(() => []),   // CR-039: Demo Mode has no configured processes
   locations: () => read(() => demo.listLocations()),
   racks: (location?: string) => read(() => demo.listRacks(location)),
   transactions: (location?: string) => read(() => demo.listTransactions(location)),
