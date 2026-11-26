@@ -62,21 +62,33 @@ internal sealed class RackRepository(WcsDbContext db) : IRackRepository
                             !db.Reservations.Any(v => v.RackId == r.Id && v.Status == ReservationStatus.Active))
             .OrderBy(r => r.LastConfirmedAt).ThenBy(r => r.Id);
 
-    public Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, CancellationToken ct) =>
-        Unreserved(locationId, status).FirstOrDefaultAsync(ct);
+    // CR-042 (OQ-42-08): a rack that a transport order owns is not offered to anyone else (the owner passes its own id)
+    private IQueryable<Rack> Available(Guid locationId, RackStatus status, Guid? orderId) => Unreserved(locationId, status).Where(RackOwnership.NotOwnedByAnother(db, orderId));
 
-    public async Task<IReadOnlyList<Rack>> ListUnreservedAsync(Guid locationId, RackStatus status, int take, CancellationToken ct) =>
-        await Unreserved(locationId, status).Take(take).ToListAsync(ct);
-
-    // CR-036: the filtered variant (same ordering: FIFO by LastConfirmedAt). The query above is NOT changed.
-    public Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, RackSelection selection, CancellationToken ct)
+    private static Task<Rack?> FirstAsync(IQueryable<Rack> q, RackSelection? selection, CancellationToken ct)
     {
-        var q = Unreserved(locationId, status);
+        if (selection is null) return q.FirstOrDefaultAsync(ct);
         if (selection.AutoOnly) q = q.Where(r => r.Disposition == RackDisposition.Auto);
         if (selection.ProductModelId is { } pm) q = q.Where(r => r.ProductModelId == pm);
         else if (selection.RequireNoModel) q = q.Where(r => r.ProductModelId == null);
         return q.OrderBy(r => r.LastConfirmedAt).ThenBy(r => r.Id).FirstOrDefaultAsync(ct);
     }
+
+    public Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, CancellationToken ct) =>
+        FirstAsync(Available(locationId, status, null), null, ct);
+
+    public Task<Rack?> FindForOrderAsync(Guid orderId, Guid locationId, RackStatus status, RackSelection? selection, CancellationToken ct) =>
+        FirstAsync(Available(locationId, status, orderId), selection, ct);
+
+    public Task<bool> IsRackRecordedAsync(Guid locationId, RackStatus status, bool autoOnly, CancellationToken ct) =>
+        Unreserved(locationId, status).AnyAsync(r => !autoOnly || r.Disposition == RackDisposition.Auto, ct);
+
+    public async Task<IReadOnlyList<Rack>> ListUnreservedAsync(Guid locationId, RackStatus status, int take, CancellationToken ct) =>
+        await Unreserved(locationId, status).Take(take).ToListAsync(ct);
+
+    // CR-036: the filtered variant (same ordering: FIFO by LastConfirmedAt).
+    public Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, RackSelection selection, CancellationToken ct) =>
+        FirstAsync(Available(locationId, status, null), selection, ct);
 }
 
 internal sealed class ProductModelRepository(WcsDbContext db) : IProductModelRepository

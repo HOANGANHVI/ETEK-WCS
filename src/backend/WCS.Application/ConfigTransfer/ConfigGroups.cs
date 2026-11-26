@@ -404,6 +404,9 @@ public sealed partial class BusinessProcessConfigGroup(IUnitOfWork uow, IRouting
         return list;
     }
 
+    private static HashSet<string> Triggers(ConfigRecord r) =>
+        (r.Fields["triggerLocationCodes"] as JsonArray ?? []).Select(x => x?.GetValue<string>()?.Trim() ?? "").Where(x => x.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     private static IEnumerable<string> LocationCodes(ConfigRecord r)
     {
         foreach (var c in (r.Fields["triggerLocationCodes"] as JsonArray ?? []).Select(x => x?.GetValue<string>())) if (c is not null) yield return c;
@@ -434,6 +437,8 @@ public sealed partial class BusinessProcessConfigGroup(IUnitOfWork uow, IRouting
             if (target is not null && pkgModel is not null && pkgModel != (target.Fields.ContainsKey("productModelCode") ? GroupKit.Str(target, "productModelCode") : null)
                 && target.Fields["definitionSource"] is JsonObject { } src && src["state"]?.ToString() == "Published")
                 return ("PROCESS_MODEL_LOCKED", $"Process {package.Key} has a Published version: its product model cannot be changed by an import.");
+            if (target is not null && target.Fields["definitionSource"] is JsonObject { } current && current["state"]?.ToString() == "Published" && !Triggers(package).SetEquals(Triggers(target)))
+                return ("PROCESS_HEADER_LOCKED", $"Process {package.Key} has a Published version: its trigger locations cannot be changed by an import (CR-042). Disable the published version first, or exclude the process.");
             var missing = LocationCodes(package).Where(c => !ctx.LocationExists(c)).Distinct(StringComparer.Ordinal).ToList();
             if (missing.Count > 0) return ("MISSING_DEPENDENCY", $"Process {package.Key} uses location(s) that do not exist here and are not part of the selected import: {string.Join(", ", missing)}.");
             return null;

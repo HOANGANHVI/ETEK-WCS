@@ -4,6 +4,7 @@ using WCS.Application.Services;
 using WCS.Domain.Plc;
 using WCS.Infrastructure.Plc.Mc;
 using WCS.Infrastructure.Simulation;
+using WCS.Tests.Support;
 
 namespace WCS.Tests.Plc;
 
@@ -502,6 +503,7 @@ public class McCr003EndpointTests
         var options = new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = { Enabled = true } };
         var denied = WritePolicy.Evaluate(options, ack with { WriteAllowed = true });
         Assert.False(denied.Allowed); Assert.Equal("ADDRESS_NOT_APPROVED", denied.Code);
+        options.Declare(ack);   // CR-044
         Assert.True(WritePolicy.Evaluate(options, ack with { WriteAllowed = true, Pollable = true }).Allowed);
     }
 

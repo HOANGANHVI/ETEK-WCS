@@ -25,6 +25,9 @@ public sealed class RouteEngineOptions
     /// their behaviour (the flag is stored per process at publication).
     /// </summary>
     public bool NewPublicationsRequireReadiness { get; set; } = true;
+
+    /// <summary>CR-042 (OQ-42-04): minutes after which the oldest waiting request of a queue scope is reported as stalled. Nothing is cancelled or overtaken. 0 = no warning.</summary>
+    public int QueueStallWarningMinutes { get; set; } = 10;
 }
 
 /// <summary>Persistence of the routing aggregates. Implemented in Infrastructure; every method takes part in the current unit of work.</summary>
@@ -67,6 +70,12 @@ public interface IRoutingRepository
     Task<IReadOnlyList<Guid>> ListReadyLegIdsAsync(int take, CancellationToken ct = default);
     Task<(IReadOnlyList<TransportOrder> Items, int Total)> QueryOrdersAsync(OrderState? state, int skip, int take, CancellationToken ct = default);
     void Add(RoutingEvent e);
+    /// <summary>CR-042: the newest event of this kind recorded for a leg.</summary>
+    Task<RoutingEvent?> GetLastLegEventAsync(Guid legId, string kind, CancellationToken ct = default);
+    /// <summary>CR-042: true when the order already has an event of this kind recorded at or after the given time.</summary>
+    Task<bool> HasOrderEventSinceAsync(Guid orderId, string kind, DateTimeOffset since, CancellationToken ct = default);
+    /// <summary>CR-042: every queued order that is Waiting, in queue order.</summary>
+    Task<IReadOnlyList<TransportOrder>> ListWaitingQueuedOrdersAsync(int take, CancellationToken ct = default);
     /// <summary>Writes pending changes inside the current unit of work (needed when two updates must reach the database in a fixed order).</summary>
     Task FlushAsync(CancellationToken ct = default);
     Task<IReadOnlyList<RoutingEvent>> ListEventsAsync(Guid orderId, int take, CancellationToken ct = default);
@@ -89,7 +98,7 @@ public interface IRoutingRepository
     /// <summary>CR-040: the PLC → WCS points of a station, as the IO configuration declares them (read only).</summary>
     Task<IReadOnlyList<StationIoPoint>> ListPlcInputPointsAsync(string stationId, CancellationToken ct = default);
     /// <summary>CR-040: the request key of an open transport order that uses the rack (null = none).</summary>
-    Task<string?> FindOpenOrderUsingRackAsync(Guid rackId, CancellationToken ct = default);
+    Task<string?> FindOrderOwningRackAsync(Guid rackId, CancellationToken ct = default);
 }
 
 /// <summary>Whether the link to a PLC is currently up (read from the PLC runtime). Null = unknown.</summary>

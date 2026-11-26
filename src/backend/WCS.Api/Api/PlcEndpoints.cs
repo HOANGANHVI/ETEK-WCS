@@ -24,6 +24,18 @@ public static partial class PlcEndpoints
     /// the monitoring views (state, station list, IO values and quality without addresses or network details) are open to both roles.
     /// Nothing here sends a control signal by itself.
     /// </summary>
+    /// <summary>CR-044: a write request that authentication or the role check refuses never reaches the endpoint; it is recorded here. It changes no response.</summary>
+    public static void UsePlcWriteDenialAudit(this IApplicationBuilder app) => app.Use(async (ctx, next) =>
+    {
+        await next();
+        if (!HttpMethods.IsPost(ctx.Request.Method) || ctx.Response.StatusCode is not (401 or 403)
+            || !(ctx.Request.Path.Value ?? "").EndsWith("/test-write", StringComparison.OrdinalIgnoreCase)) return;
+        var path = ctx.Request.Path.Value!;
+        await ctx.RequestServices.GetRequiredService<WCS.Application.Auth.IAuditLog>().WriteAsync(new WCS.Application.Auth.AuditRecord("PLC_WRITE_DENIED", ctx.User.Identity?.Name, null,
+            "PlcWriteRequest", path.Length > 200 ? path[..200] : path, WCS.Domain.Users.AuditResult.Denied, $"HTTP {ctx.Response.StatusCode}: not authorized to write to a PLC",
+            IpAddress: ctx.Connection.RemoteIpAddress?.ToString()), CancellationToken.None);
+    });
+
     public static void MapPlcApi(this RouteGroupBuilder api)
     {
         var admin = AuthSetup.AdminPolicy;
@@ -205,20 +217,23 @@ public static partial class PlcEndpoints
         // the value validation, WritePolicy (mode REAL_READ_WRITE + AllowLiveConnection + Write.Enabled + never the safety/permit signals) and the MC driver. Every call is audited.
         plc.MapPost("stations/{stationId}/signals/{signal}/test-write", async (HttpContext c, string stationId, string signal, TestWriteRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {
-            var point = (await s.ListPointsAsync(null, stationId, true, ct)).FirstOrDefault(p => p.SignalName == signal) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
-            var type = Enum.Parse<PlcDataType>(point.DataType);
-            var value = ParseValue(type, r.Value);
-            var shape = WriteValueValidator.Check(type, point.WordLength, point.Encoding, value);   // CR-014: reject a wrong value here, before the runtime
-            if (!shape.Ok) throw AppException.Validation(shape.Code!, shape.Message!);
-            var result = await Audited.RunAsync(c, "PLC_TEST_WRITE", "StationIoPoint", point.Id.ToString(), null,
+            // CR-044: the lookup and the value check are inside the audited operation, so a request refused by them is audited too
+            var point = (await s.ListPointsAsync(null, stationId, true, ct)).FirstOrDefault(p => p.SignalName == signal);
+            PointValue? value = null;
+            var result = await Audited.RunAsync(c, "PLC_TEST_WRITE", "StationIoPoint", point?.Id.ToString() ?? $"{stationId}/{signal}", null,
                 async () =>
                 {
+                    if (point is null) throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+                    var type = Enum.Parse<PlcDataType>(point.DataType);
+                    value = ParseValue(type, r.Value);
+                    var shape = WriteValueValidator.Check(type, point.WordLength, point.Encoding, value);   // CR-014: reject a wrong value here, before the runtime
+                    if (!shape.Ok) throw AppException.Validation(shape.Code!, shape.Message!);
                     var w = await rt.WriteAsync(point.PlcId, stationId, signal, value, c.Actor().Username, ct);
                     if (!w.Success) throw AppException.Rejected(w.Code ?? "WRITE_REFUSED", w.Message ?? "Lệnh ghi bị từ chối.");
                     // CR-020 read-back: a successful write request is not proof; read the point once from the PLC and compare. Never retries the write; a failed read-back is reported as UNAVAILABLE.
                     var back = PlcMonitor.Verify(value, await rt.ReadNowAsync(point.PlcId, stationId, signal, ct));
                     return new { success = w.Success, code = w.Code, message = w.Message, isAmbiguous = w.IsAmbiguous, readBack = back };
-                }, res => new { point.PlcId, stationId, signal, value = value.ToString(), readBack = res.readBack.Status });
+                }, res => new { point!.PlcId, stationId, signal, value = value!.ToString(), readBack = res.readBack.Status });
             return ApiResults.Ok(c, result);
         }).RequireAuthorization(admin);
 

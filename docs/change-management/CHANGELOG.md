@@ -1,5 +1,15 @@
 # Change Log
 
+## v3.34 – CR-044 PLC write guard and MissionCompleted correction (2026-11-26)
+
+- **Breaking for real writes (OW-2):** a real PLC write now also needs an explicit declaration in `Plc:Write:AllowList` (PLC, station, signal, address; empty by default) and must not reach a register of `Plc:Write:ReservedAddresses` (the unconfirmed 20/11/2026 interface). Second lock in the connection worker; every real write decision is stored in `audit_log` and a write whose authorization cannot be stored is not sent; refused write requests (401/403, lookup, value) are audited. Reading and the simulator are unchanged. `docker-compose.yml` does not yet pass an allow list: Docker deployments cannot write until it is declared.
+- **Correction (OW-4):** `PLC_MissionCompleted` `1` = Failure, `2` = Success (CLAUDE.md D-4, ADR-0011, traceability, correction banners on the CR-029 V2 documents). No code reads this signal.
+- No migration. Merged into main 2026-11-26, not deployed, tested against the mock PLC and the simulator only. See CR-044.
+
+## v3.33 – CR-042 Approved review decisions (2026-11-26)
+
+- Header of a published process locked (also for catalog drafts and configuration import); catalog processes not approved for publication refused; versions disabled by an Admin hold their waiting requests; stalled queue warning (10 min, `RouteEngine:QueueStallWarningMinutes`); stock adjustment keeps racks of unfinished orders; one engine per station (`Plc:Integration:StationEngines`, default empty); one dispatch-pending event per reason; rack dialog. Corrections to CR-040/CR-041 statements about the physical PLC path. Migration `AddVersionWithdrawnByAdmin` (not run on a deployment). Review follow-up (OQ-42-08): a rack of an unfinished transport order belongs to it (also at a buffer) and is offered to no other order or task; a failed order that moved a rack keeps it until an Admin releases it (`release-racks`, migration `AddOrderRacksHeld`). Open, reproduced, not fixed: PER_AGV is not checked by the task engine against route legs (F1); a reservation of a leg without a free AGV can deadlock (F2). OQ-54 values not applied (deadlock risk). Not deployed; not verified in a browser or with real devices. See CR-042.
+
 ## v3.32 – CR-041 Unified operations, process catalog, PLC input handler, rack records (2026-11-26)
 
 - One request option list and create dialog on the three operation pages; one RequestKey across the task and order engines. Admin can create a Draft from the confirmed catalog for an existing default process. Shared PLC input handler for physical and simulated signals (physical trigger rule not approved: nothing processed); a simulated request creates no work in Real mode (behaviour change); station reset, IO address and simulation history. Rack type and lock reason. Migration `AddSimulatedStationTransaction` (not run on a deployment). Not deployed; not verified in a browser or with real devices. See CR-041.

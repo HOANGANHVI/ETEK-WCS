@@ -19,6 +19,7 @@ import {
 import { readFileSync } from 'node:fs'
 import { requestRows } from '../src/lib/requestRows.ts'
 import { RequestTable } from '../src/components/RequestTable.tsx'
+import { QueueAlertList } from '../src/components/QueueAlertList.tsx'
 import { ConnectionStrip } from '../src/pages/ops/ConnectionStrip.tsx'
 import { CreateRequest } from '../src/pages/ops/CreateRequest.tsx'
 import { OpsTaskDetail } from '../src/pages/ops/OpsTaskDetail.tsx'
@@ -237,6 +238,12 @@ for (const lang of ['vi'] as const) {   // server-side rendering uses the defaul
   check(`${lang}: the list shows queue state, position, scope and the AMR`, html.includes(T('linked.queue_Held')) && html.includes('AREA-A') && html.includes('12') && html.includes('AMR-9') && html.includes('data-request="OPS-TASK-1"'))
 }
 check('task management, RCS operations and multi-leg dispatch show the same request list', ['TasksPage', 'OperationsConsolePage', 'RoutingPage'].every((f) => readFileSync(`src/pages/${f}.tsx`, 'utf8').includes('<RequestOverview')))
+{ // CR-042: the stalled queue warning shows what the server reports and nothing when there is no stall
+  const alert = { orderId: 'o-7', requestKey: 'OPS-STALL', processCode: 'PH2-07', scope: 'S', waitKind: 'QueueBehind', reason: null, waitingSince: NOW, minutes: 12, behind: 3 }
+  const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(QueueAlertList, { alerts: [alert] })))
+  check('a stalled queue head is shown with its minutes, the requests behind and a link to it', html.includes('OPS-STALL') && html.includes('12') && html.includes('/routing?order=o-7') && html.includes(T('linked.alertNote')))
+  check('no stall, no warning', renderToStaticMarkup(createElement(MemoryRouter, null, createElement(QueueAlertList, { alerts: [] }))) === '')
+}
 // CR-041: one option list and one create path for the three pages
 const src = (f: string) => readFileSync('src/' + f, 'utf8')
 check('both request forms take their options from the one shared list', ['pages/TaskDialogs.tsx', 'pages/ops/CreateRequest.tsx'].every((f) => src(f).includes('<RequestOptions ')))

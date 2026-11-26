@@ -14,8 +14,10 @@ namespace WCS.Application.Plc;
 ///  - Request_Ack and Transfer_Permit conditions: not driven here (NEEDS_CONFIRMATION); only approved handshake rules may write.
 /// Stations without a mapping (all of them by default) are monitor-only and can never create a task.
 /// </summary>
-public sealed class PlcStationSignalService(IPlcRuntime runtime, IOptions<PlcRuntimeOptions> options, IPlcEvents events) : IStationSignalService
+public sealed class PlcStationSignalService(IPlcRuntime runtime, IOptions<PlcRuntimeOptions> options, IPlcEvents events, IStationEngineRouter? router = null) : IStationSignalService
 {
+    private readonly IStationEngineRouter _router = router ?? new StationEngineRouter(options);   // CR-042
+
     private readonly ConcurrentDictionary<(string Station, string Signal), bool> _high = new();
     private readonly ConcurrentDictionary<string, bool> _warned = new();
 
@@ -26,6 +28,7 @@ public sealed class PlcStationSignalService(IPlcRuntime runtime, IOptions<PlcRun
         foreach (var map in options.Value.Integration.StationFlows)
         {
             if (map.Signal is not ("Pickup_Request" or "Delivery_Request") || string.IsNullOrWhiteSpace(map.Flow)) continue;
+            if (_router.EngineFor(map.Station) != StationEngine.Task) continue;   // CR-042: the station belongs to the other engine (or its assignment is invalid): this one takes nothing
             var handler = runtime.Handler(map.Station);
             if (handler is null) continue;
             var bit = handler.Read(map.Signal);

@@ -26,7 +26,7 @@ Chưa có: Queue/FIFO/Held/Scope; PLC Simulation còn đòi `PlcSimulation:Allow
 - Mô phỏng từng tín hiệu `PLC → WCS` của trạm (đọc từ cấu hình IO, không sửa mapping), giữ trong bộ nhớ, xóa khi tắt mô phỏng. "Gửi tín hiệu" dựng yêu cầu bằng `PlcRequestAssembler` và đưa vào **`IPlcRequestService`** – cùng bộ tiếp nhận của PLC.
 - Chỉ `Pickup_Request, Delivery_Request, Request_ID, Rack_Full, Rack_Empty, Destination_Available, Rack_Type` được đọc; tín hiệu khác chỉ hiển thị. Trạng thái handshake xem ở Station Transaction.
 - Không ghi xuống PLC. Từ chối port có PLC đang online.
-- **Chưa nối:** runtime PLC thật chưa tự gọi bộ tiếp nhận (ngữ nghĩa cạnh/mức/reset chưa được duyệt, CR-029).
+- **Chưa nối:** runtime PLC thật chưa tự gọi bộ tiếp nhận **của engine lệnh** (ngữ nghĩa cạnh/mức/reset chưa được duyệt, CR-029). *Đính chính (CR-042): đường PLC thật sang engine task đã tồn tại, tắt mặc định.*
 
 ## 4. Bản ghi Rack (Admin)
 

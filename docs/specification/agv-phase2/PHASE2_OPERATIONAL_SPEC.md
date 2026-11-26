@@ -788,3 +788,16 @@ ADR-0011 D-1 ghi "mỗi PLC một hàng đợi FIFO"; D-13 chọn **FIFO theo Sc
 | §15.4b | Intake = Published + Ready; Intake Record; Mermaid | D-10, D-12 |
 | §19 | Hàng 2 (DC-01 đã giải quyết) | D-11 |
 | §22 | Queue Request, Held, Scope, khác biệt Rev 1.1 → 1.2 | D-12, D-13 |
+
+## Cập nhật đã phê duyệt – 2026-11-26 (CR-042)
+
+Các mục dưới đây là quyết định của chủ dự án và **thay thế** nội dung cũ trong tài liệu này nếu mâu thuẫn.
+
+| OQ | Quyết định |
+|---|---|
+| OQ-49 | Transport Order được tạo **khi yêu cầu vào Queue** (là yêu cầu gốc); chặng chỉ tạo khi tới lượt. Thay dòng "Order được tạo khi Queue Dispatch" và phần liên quan của §2.5 |
+| OQ-57 | Yêu cầu Held không giữ chỗ (chưa có chặng) |
+| OQ-58 | Yêu cầu Held ở đầu Scope **chặn** các yêu cầu sau trong Scope |
+| OQ-45 | Admin Disable version đã ghim → yêu cầu chưa điều phối bị Held; version bị thay bởi Publish mới vẫn phục vụ yêu cầu đã ghim (D-10) |
+| OQ-54 | Phương án theo nhóm trạm và chiều cất/cấp đã duyệt nhưng **phát hiện nguy cơ bế tắc**; chờ xác nhận lại, chưa áp dụng (CR-042 §3) |
+| OQ-42-08 | Rack thuộc lệnh vận chuyển chưa hoàn thành được giữ quyền sở hữu, kể cả ở Buffer; không lệnh nào khác lấy. Chỉ giải phóng khi hoàn thành hoặc giải phóng được xác nhận (CR-042 §5) |

@@ -171,6 +171,11 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
         public void Add(WCS.Domain.Intake.StationRequestRecord record) { }
     }
 
+    private sealed class AnyStation : WCS.Application.Plc.IStationSignalOwnership
+    {
+        public Task EnsureTaskEngineAsync(string station, string requestKey, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
     private sealed class RecordingScheduler : ITaskScheduler
     {
         public int Runs;
@@ -215,6 +220,7 @@ public class Cr008aReliabilityTests(DatabaseFixture fixture)
         services.AddSingleton<IUnitOfWork, DirectUnitOfWork>();
         services.AddSingleton<IStationRequestRepository, ThrowingRequestRepository>();   // CR-008B-2: the processor itself now fails -> the host must still run the scheduler
         services.AddSingleton<ITaskScheduler>(scheduler);
+        services.AddSingleton<WCS.Application.Plc.IStationSignalOwnership>(new AnyStation());   // CR-042: the processor now asks who owns the station
         services.Configure<SchedulerOptions>(o => o.TickIntervalMs = 100);
         await using var provider = services.BuildServiceProvider();
 

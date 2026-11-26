@@ -204,6 +204,10 @@ public sealed class PlcRuntimeOptions
 public sealed class PlcWriteOptions
 {
     public bool Enabled { get; set; }
+    /// <summary>CR-044 (OW-2): the points a real PLC may be written at, declared by the deployment. Empty by default: no real write.</summary>
+    public List<PlcWriteDeclaration> AllowList { get; set; } = [];
+    /// <summary>CR-044 (OW-2): registers no real write may reach, even when declared ("D1600" or "D1600-D1601"). Set in appsettings.json.</summary>
+    public List<string> ReservedAddresses { get; set; } = [];
 }
 
 public sealed class PlcIntegrationOptions
@@ -212,6 +216,15 @@ public sealed class PlcIntegrationOptions
     public bool Enabled { get; set; }
     /// <summary>Approved mappings "station + request signal -> process flow". Empty by default: no station creates tasks.</summary>
     public List<StationFlowMapping> StationFlows { get; set; } = [];
+
+    /// <summary>CR-042 (OQ-42-03): which engine takes the requests of a station ("Task" = Phase 1 flows, "TransportOrder" = database processes). Empty = see <see cref="StationEngineRouter"/>.</summary>
+    public List<StationEngineAssignment> StationEngines { get; set; } = [];
+}
+
+public sealed class StationEngineAssignment
+{
+    public string Station { get; set; } = "";
+    public string Engine { get; set; } = "";
 }
 
 public sealed class StationFlowMapping

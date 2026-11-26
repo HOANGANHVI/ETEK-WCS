@@ -6,6 +6,11 @@
 | **Nguồn phê duyệt** | Chỉ thị của chủ dự án ngày 2026-11-26 |
 | **Migration** | `AddSimulatedStationTransaction` (thêm `station_transactions.Simulated`, mặc định `false`). SQL: [`CR-041_migration_up.sql`](CR-041_migration_up.sql), [`CR-041_migration_down.sql`](CR-041_migration_down.sql). **Chỉ mới chạy trên database test** |
 
+> **ĐÍNH CHÍNH (2026-11-26, CR-042).**
+> 1. Câu "PLC thật chưa tạo yêu cầu" và mục tiêu "dùng chung logic với PLC thật" ở §4 **không đúng với source**: đã có đường PLC thật (`PlcStationSignalService` → `StationRequestProcessor` → engine task, cạnh lên, tắt mặc định bằng `Plc:Integration:Enabled`). Mô phỏng của CR-041 đi vào engine lệnh. CR-042 thêm lựa chọn engine theo trạm.
+> 2. `apply-catalog` của CR-041 đổi ngay header và cờ REVIEW của quy trình đang Published. CR-042 đã chặn.
+> 3. Sơ đồ §4 chỉ mô tả đường mới; đường engine task không có trong sơ đồ.
+
 ## 1. Nguyên nhân gốc của danh sách quy trình thiếu
 
 Trên môi trường đã import danh mục từ trước (CR-039 mục "database đã import PH2-01…06"), seeder không sửa mã đã tồn tại. Các quy trình đó nằm ở Draft nên không vào dropdown; `PH2-04` còn cờ REVIEW dù D-09 đã chấp thuận. Hai form vận hành đã đọc quy trình Published từ database (CR-039); trang Điều phối đa chặng có form riêng chỉ liệt kê lệnh theo quy trình.

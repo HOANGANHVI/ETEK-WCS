@@ -62,6 +62,7 @@ public static class RoutingEndpoints
                     commands = await messages.ByRequestCodesAsync(o.Legs.Select(l => l.AgvRequestCode).ToList(), t),
                 };
             }, ct)));
+        orders.MapGet("queue-alerts", async (HttpContext c, IRouteEngine engine, CancellationToken ct) => ApiResults.Ok(c, await engine.QueueAlertsAsync(ct)));
         // every published, enabled, not review-blocked process, with whether it accepts a request now (no configuration detail)
         orders.MapGet("startable-processes", async (HttpContext c, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.StartableAsync(ct)));
         orders.MapPost("orders", async (HttpContext c, StartOrderRequest r, IRouteEngine engine, CancellationToken ct) =>
@@ -75,6 +76,11 @@ public static class RoutingEndpoints
         orders.MapPost("orders/{id:guid}/cancel", async (HttpContext c, Guid id, CancelOrderRequest r, IRouteEngine engine, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "ROUTING_ORDER_CANCEL", "TransportOrder", id.ToString(), null,
                 () => engine.CancelAsync(id, r.Reason ?? "Cancelled by operator", c.Actor().Username, ct), x => new { x.State }))).RequireAuthorization(admin);
+
+        // CR-042 (OQ-42-08): the confirmed release of the racks a failed order still owns
+        orders.MapPost("orders/{id:guid}/release-racks", async (HttpContext c, Guid id, CancelOrderRequest r, IRouteEngine engine, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "ROUTING_ORDER_RELEASE_RACKS", "TransportOrder", id.ToString(), r.Reason,
+                () => engine.ReleaseRacksAsync(id, r.Reason ?? "", c.Actor().Username, ct), x => new { x.State, x.RacksHeld }))).RequireAuthorization(admin);
 
         // physical-event inputs (simulator / AGV system / operator confirmation). Admin only: they move inventory.
         orders.MapPost("legs/{id:guid}/pick", async (HttpContext c, Guid id, IRouteEngine engine, CancellationToken ct) =>

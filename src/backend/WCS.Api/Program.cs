@@ -95,6 +95,7 @@ try
     app.UseExceptionHandler(ExceptionMapping.Configure);
     app.UseCors();
     app.UseAuthentication();
+    app.UsePlcWriteDenialAudit();   // CR-044: a PLC write refused by authentication / role is audited
     app.UseWcsRequestGuards();
     app.UseAuthorization();
     if (app.Environment.IsDevelopment()) app.MapOpenApi().AllowAnonymous();

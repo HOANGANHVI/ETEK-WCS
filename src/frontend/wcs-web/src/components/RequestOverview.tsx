@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { requestRows } from '../lib/requestRows'
 import { RequestTable } from './RequestTable'
+import { QueueAlerts } from './QueueAlerts'
 import { Async, Panel } from './ui'
 
 const EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted', 'OrderChanged'] as const
@@ -20,6 +21,7 @@ export function RequestOverview() {
   }, []), [...EVENTS])
   return (
     <Panel title={t('linked.overviewTitle')} subtitle={t('linked.overviewSub')} flush className="mt">
+      <QueueAlerts />
       <Async state={data} isEmpty={(d) => d.length === 0} empty={{ title: t('linked.overviewNone') }}>
         {(rows) => <RequestTable rows={rows} />}
       </Async>

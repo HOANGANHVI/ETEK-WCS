@@ -168,8 +168,12 @@ public class BusinessProcessVersion
         Readiness = target; ReadinessReason = reason; ReadinessChangedBy = by; ReadinessChangedAt = now; UpdatedAt = now;
     }
 
-    public void Disable(DateTimeOffset now)
+    /// <summary>CR-042 (OQ-45): true = an Admin disabled the version; false = it was replaced by a newer publication (or disabled before CR-042). Queued requests pinned to a withdrawn version are Held.</summary>
+    public bool WithdrawnByAdmin { get; private set; }
+
+    public void Disable(DateTimeOffset now, bool byAdmin = false)
     {
+        if (byAdmin && !WithdrawnByAdmin) { WithdrawnByAdmin = true; UpdatedAt = now; }   // also possible for a version that was already replaced
         if (State == ProcessConfigState.Disabled) return;
         State = ProcessConfigState.Disabled; DisabledAt = now; UpdatedAt = now;
     }

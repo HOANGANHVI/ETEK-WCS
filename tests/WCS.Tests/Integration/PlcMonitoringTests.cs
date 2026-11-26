@@ -23,7 +23,8 @@ namespace WCS.Tests.Integration;
 public class PlcMonitoringTests(DatabaseFixture fixture)
 {
     private static readonly McRoute Route = new(0, 255, 1023, 0);
-    private static Dictionary<string, string?> AllKeys => new() { ["Plc:Mode"] = "RealReadWrite", ["Plc:AllowLiveConnection"] = "true", ["Plc:Write:Enabled"] = "true" };
+    private static Dictionary<string, string?> AllKeys => new Dictionary<string, string?> { ["Plc:Mode"] = "RealReadWrite", ["Plc:AllowLiveConnection"] = "true", ["Plc:Write:Enabled"] = "true" }
+        .Declare(("PLC-01", "A1", "AGV_ID", "D1700"), ("PLC-01", "A1", "Request_Ack", "M101"));   // CR-044
 
     private async Task<(Harness H, WebApplicationFactory<Program> F, HttpClient Admin, HttpClient Op)> BootAsync(MelsecMcMockServer plc, Dictionary<string, string?> cfg)
     {
@@ -115,14 +116,14 @@ public class PlcMonitoringTests(DatabaseFixture fixture)
         await using var plc = new MelsecMcMockServer { ExpectedRoute = Route }; plc.Start();
         var (h, f, admin, op) = await BootAsync(plc, AllKeys);
         await using var _h = h; using var _f = f;
-        var agv = await Id(h, "AGV_ID"); plc.SetWord(1600, 42); await Enter(admin, agv, "D1600");
+        var agv = await Id(h, "AGV_ID"); plc.SetWord(1700, 42); await Enter(admin, agv, "D1700");
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
         // (the first poll may happen before the mock word is read at all: wait for the value itself, not only for the status)
         Assert.True(await WaitFor(async () => { var r = await Row(admin, "AGV_ID"); return r.GetProperty("status").GetString() == "Good" && r.GetProperty("value").ValueKind == JsonValueKind.Number && r.GetProperty("value").GetInt32() == 42; }));
 
         var a = await Row(admin, "AGV_ID");
         Assert.Equal(42, a.GetProperty("value").GetInt32());
-        Assert.Equal("PLC-01", a.GetProperty("plcId").GetString()); Assert.Equal("D1600", a.GetProperty("address").GetString());
+        Assert.Equal("PLC-01", a.GetProperty("plcId").GetString()); Assert.Equal("D1700", a.GetProperty("address").GetString());
         Assert.Equal("NOT_APPROVED", a.GetProperty("writeApproval").GetString());
         Assert.NotEqual(JsonValueKind.Null, a.GetProperty("lastUpdated").ValueKind);
         Assert.False(string.IsNullOrWhiteSpace(a.GetProperty("description").GetString()));
@@ -146,13 +147,13 @@ public class PlcMonitoringTests(DatabaseFixture fixture)
         await using var plc = new MelsecMcMockServer { ExpectedRoute = Route }; plc.Start();
         var (h, f, admin, op) = await BootAsync(plc, AllKeys);
         await using var _h = h; using var _f = f;
-        var agv = await Id(h, "AGV_ID"); plc.SetWord(1600, 11); await Enter(admin, agv, "D1600");
+        var agv = await Id(h, "AGV_ID"); plc.SetWord(1700, 11); await Enter(admin, agv, "D1700");
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
 
         var r1 = await ReadNow(admin, "AGV_ID");
         Assert.Equal(200, r1.Status); Assert.True(r1.Root.GetProperty("data").GetProperty("success").GetBoolean());
         Assert.Equal(11, r1.Root.GetProperty("data").GetProperty("value").GetInt32());
-        plc.SetWord(1600, 12);                                                                             // the PLC changes; a read after that must show it
+        plc.SetWord(1700, 12);                                                                             // the PLC changes; a read after that must show it
         var r2 = await ReadNow(op, "AGV_ID");
         Assert.Equal(200, r2.Status); Assert.Equal(12, r2.Root.GetProperty("data").GetProperty("value").GetInt32());
         Assert.Equal(12, (await Row(admin, "AGV_ID")).GetProperty("value").GetInt32());                    // the shared station handler is updated, not a private copy
@@ -170,7 +171,7 @@ public class PlcMonitoringTests(DatabaseFixture fixture)
         await using var plc = new MelsecMcMockServer { ExpectedRoute = Route }; plc.Start();
         var (h, f, admin, _) = await BootAsync(plc, AllKeys);
         await using var _h = h; using var _f = f;
-        var agv = await Id(h, "AGV_ID"); plc.SetWord(1600, 5); await Enter(admin, agv, "D1600");
+        var agv = await Id(h, "AGV_ID"); plc.SetWord(1700, 5); await Enter(admin, agv, "D1700");
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
         plc.ResponseDelay = TimeSpan.FromMilliseconds(200);                                                // each PLC read now takes 200 ms: 12 un-shared reads would need > 2.4 s
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -186,7 +187,7 @@ public class PlcMonitoringTests(DatabaseFixture fixture)
         await using var plc = new MelsecMcMockServer { ExpectedRoute = Route }; plc.Start();
         var (h, f, admin, _) = await BootAsync(plc, AllKeys);
         await using var _h = h; using var _f = f;
-        var agv = await Id(h, "AGV_ID"); plc.SetWord(1600, 5); await Enter(admin, agv, "D1600");
+        var agv = await Id(h, "AGV_ID"); plc.SetWord(1700, 5); await Enter(admin, agv, "D1700");
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
         Assert.True(await WaitFor(async () => (await Row(admin, "AGV_ID")).GetProperty("status").GetString() == "Good"));
 
@@ -213,7 +214,7 @@ public class PlcMonitoringTests(DatabaseFixture fixture)
         await using var plc = new MelsecMcMockServer { ExpectedRoute = Route }; plc.Start();
         var (h, f, admin, op) = await BootAsync(plc, AllKeys);
         await using var _h = h; using var _f = f;
-        var agv = await Id(h, "AGV_ID"); await Enter(admin, agv, "D1600");
+        var agv = await Id(h, "AGV_ID"); await Enter(admin, agv, "D1700");
         var ack = await Id(h, "Request_Ack"); await Enter(admin, ack, "M101");
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
         Task<(int Status, JsonElement Root, string Raw)> Write(HttpClient c, string s, object v) => c.SendJsonAsync(HttpMethod.Post, $"/api/plc/stations/A1/signals/{s}/test-write", new { value = v });
@@ -229,7 +230,7 @@ public class PlcMonitoringTests(DatabaseFixture fixture)
         Assert.Equal(200, ok.Status);
         var rb = ok.Root.GetProperty("data").GetProperty("readBack");
         Assert.Equal("VERIFIED", rb.GetProperty("status").GetString()); Assert.Equal(321, rb.GetProperty("value").GetInt32());
-        Assert.Equal((ushort)321, plc.GetWord(1600));
+        Assert.Equal((ushort)321, plc.GetWord(1700));
         Assert.Equal(1, WriteFrames(plc));                                                                 // the read-back is a read: the write was sent exactly once
         var audit = await h.Db(db => db.AuditLog.AsNoTracking().Where(a => a.Action == "PLC_TEST_WRITE" && a.Result == AuditResult.Success).ToListAsync());
         Assert.Contains(audit, a => (a.AfterJson ?? "").Contains("VERIFIED"));                              // the verification outcome is audited
@@ -240,7 +241,7 @@ public class PlcMonitoringTests(DatabaseFixture fixture)
         plc.ForceEndCode(0, 0);
         Assert.Equal("WRITE_FAILED", failed.Root.ErrorCode());
         Assert.Equal(2, WriteFrames(plc));                                                                 // the failed write was sent once (answered with an end code) and never resent
-        Assert.NotEqual((ushort)7, plc.GetWord(1600));
+        Assert.NotEqual((ushort)7, plc.GetWord(1700));
         Assert.Equal("WRITE_BLOCKED_SAFETY", (await admin.SendJsonAsync(HttpMethod.Post, $"/api/plc/points/{await Id(h, "Transfer_Permit")}/write-approval", new { decision = "Approve" })).Root.ErrorCode());
     }
 }

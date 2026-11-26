@@ -353,7 +353,8 @@ public static class WritePolicy
                 if (!p.WriteAllowed) return new(false, "WRITE_NOT_ALLOWED", "Tín hiệu chưa nằm trong danh sách được phép ghi.");
                 if (string.IsNullOrWhiteSpace(p.Address)) return new(false, "NO_ADDRESS", "Tín hiệu chưa có địa chỉ được xác nhận.");
                 if (!p.Pollable) return new(false, "ADDRESS_NOT_APPROVED", "Địa chỉ của tín hiệu chưa được kỹ sư PLC xác nhận (duyệt).");
-                return new(true);
+                // CR-044 (OW-2): a real mode and an Admin approval are not enough: the deployment declares the point, and no reserved register is reached
+                return PlcWriteGuard.Check(o, p) is { } guard ? new(false, guard.Code, guard.Reason) : new(true);
         }
     }
 }

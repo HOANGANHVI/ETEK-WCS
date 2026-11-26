@@ -89,6 +89,18 @@ public class TransportOrder
     public DateTimeOffset? FinishedAt { get; private set; }
     public uint Version { get; private set; }
 
+    /// <summary>
+    /// CR-042 (OQ-42-08): true when this order FAILED after it had moved a rack. A failure is not a confirmation of where the rack is or that it may be used, so the order keeps
+    /// owning it until an Admin releases it. (An unfinished order owns its racks without this flag; Completed and Cancelled release them.)
+    /// </summary>
+    public bool RacksHeld { get; private set; }
+
+    public void ReleaseHeldRacks(DateTimeOffset now)
+    {
+        if (!RacksHeld) throw new DomainException("ORDER_HOLDS_NO_RACK", "This order holds no rack that needs a release.");
+        RacksHeld = false; UpdatedAt = now;
+    }
+
     public ICollection<TransportLeg> Legs { get; private set; } = new List<TransportLeg>();
 
     public bool IsTerminal => State is OrderState.Completed or OrderState.Failed or OrderState.Cancelled;
@@ -100,6 +112,7 @@ public class TransportOrder
         if (!Edges[State].Contains(next)) throw new DomainException("INVALID_ORDER_TRANSITION", $"Transport Task transition {State} -> {next} is not allowed.");
         State = next; WaitKind = next == OrderState.Waiting ? wait : WaitKind.None; StateReason = reason; StateEnteredAt = now; UpdatedAt = now;
         if (IsTerminal) FinishedAt = now;
+        if (next == OrderState.Failed && Legs.Any(l => l.PickConfirmedAt is not null)) RacksHeld = true;   // CR-042 (OQ-42-08): the caller loads the legs
     }
 
     public void MoveToStep(string? stepKey, DateTimeOffset now) { CurrentStepKey = stepKey; UpdatedAt = now; }

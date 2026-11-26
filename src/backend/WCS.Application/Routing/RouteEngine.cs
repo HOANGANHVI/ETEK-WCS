@@ -23,6 +23,10 @@ public interface IRouteEngine
     Task<EventResult> ConfirmPickAsync(Guid legId, ConfirmationSource source, string? user, string? eventKey = null, CancellationToken ct = default);
     Task<EventResult> ConfirmDropAsync(Guid legId, ConfirmationSource source, string? user, string? externalRackId = null, CancellationToken ct = default);
     Task<OrderDto> CancelAsync(Guid orderId, string reason, string? user, CancellationToken ct = default);
+    /// <summary>CR-042 (OQ-42-08): an Admin confirms that the racks a FAILED order moved may be used again. Moves nothing and changes no inventory.</summary>
+    Task<OrderDto> ReleaseRacksAsync(Guid orderId, string reason, string? user, CancellationToken ct = default);
+    /// <summary>CR-042: queue scopes whose oldest waiting request has waited longer than the configured time. Read only.</summary>
+    Task<IReadOnlyList<QueueAlertDto>> QueueAlertsAsync(CancellationToken ct = default);
 }
 
 /// <summary>
@@ -208,7 +212,7 @@ public sealed class RouteEngine(
 
                 case RouteStepType.Condition:
                 {
-                    var ok = await EvaluateStepConditionsAsync(step, order.RackKind, ct);
+                    var ok = await EvaluateStepConditionsAsync(step, order, ct);
                     var next = ok ? step.NextStepKey : step.AlternativeNextStepKey;
                     Event(order, null, null, "CONDITION_EVALUATED", $"{step.StepKey}={ok} -> {next}");
                     order.MoveToStep(next, now);
@@ -217,7 +221,7 @@ public sealed class RouteEngine(
 
                 case RouteStepType.Waiting:
                 {
-                    if (await EvaluateStepConditionsAsync(step, order.RackKind, ct))
+                    if (await EvaluateStepConditionsAsync(step, order, ct))
                     {
                         order.MoveToStep(step.NextStepKey, now);
                         if (order.State == OrderState.Waiting) order.TransitionTo(OrderState.InProgress, "Waiting condition met", WaitKind.None, now);
@@ -268,6 +272,7 @@ public sealed class RouteEngine(
         if (p is null || v is null) why = "The pinned process version no longer exists.";
         else if (!p.Enabled) why = "The process is disabled (OQ-45).";
         else if (v.Readiness != OperationalReadiness.Ready) why = $"Operational Readiness of version {v.Number} is {v.Readiness}.";
+        else if (v.WithdrawnByAdmin) why = $"Version {v.Number} was disabled by an Admin (OQ-45): the request is not dispatched; cancel it and request again.";
         else if (v.State != ProcessConfigState.Published && await routing.GetPublishedVersionAsync(p.Id, ct) is null) why = "The process version was disabled and no version replaces it (OQ-45).";
         else if ((await validator.DeviceConditionsAsync(p, v, ct)).FirstOrDefault() is { } unmet) why = unmet.Message;
 
@@ -305,10 +310,10 @@ public sealed class RouteEngine(
         return null;
     }
 
-    private async Task<bool> EvaluateStepConditionsAsync(StepSnapshot step, RackKind kind, CancellationToken ct)
+    private async Task<bool> EvaluateStepConditionsAsync(StepSnapshot step, TransportOrder order, CancellationToken ct)
     {
         foreach (var c in step.Conditions)
-            if (c.LocationCode is null || !await eval.EvaluateAsync(c, c.LocationCode, kind, ct)) return false;
+            if (c.LocationCode is null || !await eval.EvaluateAsync(c, c.LocationCode, order.RackKind, ct, null, order.Id)) return false;
         return true;
     }
 
@@ -374,7 +379,7 @@ public sealed class RouteEngine(
         }
 
         var srcLoc = (await locations.GetByCodeAsync(sourceCode!, ct))!;
-        rack ??= sel is null ? await racks.FindUnreservedAsync(srcLoc.Id, StatusOf(kind), ct) : await racks.FindUnreservedAsync(srcLoc.Id, StatusOf(kind), sel, ct);   // CR-036: filtered only when enforcing
+        rack ??= await racks.FindForOrderAsync(order.Id, srcLoc.Id, StatusOf(kind), sel, ct);   // CR-036: filtered only when enforcing; CR-042: never a rack another order owns
         if (rack is null) return await NoCandidateAsync(order, step, WaitKind.SourceUnavailable, $"No unreserved {kind} rack at {sourceCode}", ct);
 
         if (modelGuard.Mode == ModelIsolationMode.Warn && ModelGuard.RackViolation(rack, mc.ProcessModelId) is { } warnCode) modelGuard.Report(warnCode, $"rack {rack.Id} at {sourceCode}");
@@ -478,7 +483,46 @@ public sealed class RouteEngine(
         var ids = await uow.ExecuteAsync(t => routing.ListOpenOrderIdsAsync(200, t), ct);
         foreach (var id in ids) await AdvanceAsync(id, ct);
         await SyncLegRobotsAsync(ct);
+        await RecordStalledQueuesAsync(ct);
         return ids.Count;
+    }
+
+    public Task<IReadOnlyList<QueueAlertDto>> QueueAlertsAsync(CancellationToken ct = default) => uow.ExecuteAsync(StalledHeadsAsync, ct);
+
+    /// <summary>The oldest waiting request of each scope (requests without a scope form one group), when it has been waiting for at least the configured time.</summary>
+    private async Task<IReadOnlyList<QueueAlertDto>> StalledHeadsAsync(CancellationToken ct)
+    {
+        var minutes = routeOptions.Value.QueueStallWarningMinutes;
+        if (minutes <= 0) return [];
+        var waiting = new List<(string? Scope, TransportOrder Order)>();
+        foreach (var o in await routing.ListWaitingQueuedOrdersAsync(500, ct))
+            waiting.Add((o.QueueScope ?? (await routing.GetProcessAsync(o.ProcessId, ct))?.QueueScope, o));
+        var now = clock.UtcNow;
+        return waiting.GroupBy(x => x.Scope).Select(g => (Scope: g.Key, Head: g.First().Order, Behind: g.Count() - 1))
+            .Where(x => now - x.Head.StateEnteredAt >= TimeSpan.FromMinutes(minutes))
+            .Select(x => new QueueAlertDto(x.Head.Id, x.Head.RequestKey, x.Head.ProcessCode, x.Scope, x.Head.WaitKind.ToString(), x.Head.StateReason, x.Head.StateEnteredAt,
+                (int)(now - x.Head.StateEnteredAt).TotalMinutes, x.Behind))
+            .ToList();
+    }
+
+    /// <summary>Records the warning once per waiting period of the head. It informs only: the queue order is not changed.</summary>
+    private async Task RecordStalledQueuesAsync(CancellationToken ct)
+    {
+        var added = await uow.ExecuteAsync(async t =>
+        {
+            var fresh = new List<QueueAlertDto>();
+            foreach (var a in await StalledHeadsAsync(t))
+            {
+                if (await routing.HasOrderEventSinceAsync(a.OrderId, "QUEUE_STALLED", a.WaitingSince, t)) continue;
+                var order = (await routing.GetOrderAsync(a.OrderId, t))!;
+                Event(order, null, null, "QUEUE_STALLED", $"Waiting {a.Minutes} min at the head of scope {a.Scope ?? "not declared"}; {a.Behind} request(s) behind. {a.Reason}");
+                fresh.Add(a);
+            }
+            return fresh;
+        }, ct);
+        foreach (var a in added)
+            logger.LogWarning("Queue scope {Scope}: request {RequestKey} has been waiting for {Minutes} minutes. {EventCode}", a.Scope ?? "-", a.RequestKey, a.Minutes, "QUEUE_STALLED");
+        if (added.Count > 0) await notifier.PublishAsync([new WcsEvent("OrderChanged", new { added[0].OrderId })], ct);
     }
 
     /// <summary>
@@ -682,7 +726,10 @@ public sealed class RouteEngine(
                     break;
                 default:
                     // Blocked / Unknown: keep the leg; the next pass retries (the dispatcher is idempotent per request code)
-                    Event(order, leg, null, "LEG_DISPATCH_PENDING", result.Reason);
+                    // CR-042: recorded when the reason is new or has changed, not on every pass
+                    var reason = result.Reason is { Length: > 1000 } ? result.Reason[..1000] : result.Reason;
+                    if (await routing.GetLastLegEventAsync(leg.Id, "LEG_DISPATCH_PENDING", t) is not { } last || last.Detail != reason)
+                        Event(order, leg, null, "LEG_DISPATCH_PENDING", reason);
                     break;
             }
             return 0;
@@ -812,6 +859,27 @@ public sealed class RouteEngine(
             }
             order.TransitionTo(OrderState.Cancelled, reason, WaitKind.None, now);
             Event(order, null, null, "ORDER_CANCELLED", $"{reason} by {user}");
+            return 0;
+        }, ct);
+        await notifier.PublishAsync([new WcsEvent("OrderChanged", new { orderId })], ct);
+        return await GetDtoAsync(orderId, ct);
+    }
+
+    public async Task<OrderDto> ReleaseRacksAsync(Guid orderId, string reason, string? user, CancellationToken ct = default)
+    {
+        var why = reason?.Trim();
+        if (string.IsNullOrEmpty(why)) throw AppException.Validation("REASON_REQUIRED", "A reason is required.");
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfOrderAsync(orderId, ct));
+        await uow.ExecuteAsync(async t =>
+        {
+            var order = await routing.GetOrderAsync(orderId, t) ?? throw AppException.NotFound("ORDER_NOT_FOUND", "Transport Task not found.");
+            if (!order.RacksHeld) throw AppException.Rejected("ORDER_HOLDS_NO_RACK", "This order holds no rack that needs a release.");
+            var ids = order.Legs.Where(l => l.PickConfirmedAt is not null && l.RackId is not null).Select(l => l.RackId!.Value).Distinct().ToList();
+            foreach (var id in ids)   // a rack without a confirmed position is not released: its position has to be resolved first
+                if (await racks.GetAsync(id, t) is { } rack && (rack.CurrentLocationId is null || rack.Status is RackStatus.InTransit or RackStatus.Unknown))
+                    throw AppException.Conflict("RACK_POSITION_NOT_CONFIRMED", $"Rack {rack.ExternalRackId ?? id.ToString()} has no confirmed position: reconcile it first. Nothing was released.");
+            order.ReleaseHeldRacks(clock.UtcNow);
+            Event(order, null, null, "ORDER_RACKS_RELEASED", $"{why} by {user}; racks: {string.Join(", ", ids)}");
             return 0;
         }, ct);
         await notifier.PublishAsync([new WcsEvent("OrderChanged", new { orderId })], ct);

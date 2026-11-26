@@ -334,6 +334,11 @@ public class Cr026ConfigTransferTests(DatabaseFixture fixture)
         var ok = await ApplyAsync(s.B, idC, planC, skipConflicts: true);                                                       // explicitly skipped: reported, nothing created
         Assert.Equal(1, ok.ConflictsSkipped); Assert.Equal(0, await s.B.H.Db(db => db.Agvs.CountAsync(a => a.Code == "AGV9")));
 
+        // CR-042: while a version is Published its trigger locations are locked, and the Preview says so instead of the Apply failing
+        var (_, locked) = await UploadAndPreviewAsync(s.B, await ExportAsync(s.A, ConfigGroupIds.Location, ConfigGroupIds.PlcStation, ConfigGroupIds.BusinessProcess));
+        Assert.Equal("PROCESS_HEADER_LOCKED", locked.Items.Single(i => i.Group == ConfigGroupIds.BusinessProcess).ConflictCode);
+        await s.B.With(sp => sp.GetRequiredService<ProcessAdminService>().DisableAsync(v));
+
         var (idH, planH) = await UploadAndPreviewAsync(s.B, await ExportAsync(s.A, ConfigGroupIds.Location, ConfigGroupIds.PlcStation, ConfigGroupIds.BusinessProcess));
         var proc = planH.Items.Single(i => i.Group == ConfigGroupIds.BusinessProcess);
         Assert.Equal(PlanAction.Update, proc.Action); Assert.True(proc.HeaderChange);
@@ -343,7 +348,7 @@ public class Cr026ConfigTransferTests(DatabaseFixture fixture)
         Assert.Equal("HEADER_CHANGES_NOT_CONFIRMED", unconfirmed.Code);
         await ApplyAsync(s.B, idH, planH, confirm: true);
         var versions = await s.B.H.Db(db => db.BusinessProcessVersions.AsNoTracking().Where(x => x.ProcessId == pid).OrderBy(x => x.Number).ToListAsync());
-        Assert.Equal([ProcessConfigState.Published, ProcessConfigState.Draft], versions.Select(x => x.State).ToArray());      // the Published version is untouched, a new Draft was added
+        Assert.Equal([ProcessConfigState.Disabled, ProcessConfigState.Draft], versions.Select(x => x.State).ToArray());       // the earlier version is kept, a new Draft was added
         Assert.Equal(v, versions[0].Id);
     }
 

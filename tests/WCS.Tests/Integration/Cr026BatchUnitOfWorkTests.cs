@@ -93,7 +93,7 @@ public class Cr026BatchUnitOfWorkTests(DatabaseFixture fixture)
             var plc = sp.GetRequiredService<PlcProvisioningService>();
             await uow.ExecuteBatchAsync(async ct =>
             {
-                await admin.UpdateAsync(processId, new ProcessHeader("T-PART", "renamed", "d", "PickupRequest", "Full", ["A1"]), true, ct);
+                await admin.UpdateAsync(processId, new ProcessHeader("T-PART", "renamed", "d", "PickupRequest", "Full", ["A1", "A2"]), true, ct);   // CR-042: the triggers of a published process are locked
                 var nv = await admin.NewVersionAsync(processId, null, "admin", ct);
                 await admin.SaveDefinitionAsync(nv.Id, OneLeg("Request", Dest(1, "C1")), ct);   // the new version is visible to the next service call of the same batch
                 newVersion = nv.Id;

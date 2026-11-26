@@ -1,6 +1,7 @@
 using WCS.Application.Plc;
 using WCS.Domain.Plc;
 using WCS.Infrastructure.Plc;
+using WCS.Tests.Support;
 
 namespace WCS.Tests.Plc;
 
@@ -144,6 +145,7 @@ public class WritePolicyTests
         Assert.Equal(PlcRuntimeMode.RealReadOnly, WritePolicy.EffectiveMode(rw));                      // keys missing: degrades, never upgrades
         Assert.Equal("READ_ONLY", WritePolicy.Evaluate(rw, p).Code);
         rw.Write.Enabled = true;
+        rw.Declare(p);   // CR-044: a real write is declared by the deployment
         Assert.Equal(PlcRuntimeMode.RealReadWrite, WritePolicy.EffectiveMode(rw));
         Assert.True(WritePolicy.Evaluate(rw, p).Allowed);
         Assert.Equal("WRITE_NOT_ALLOWED", WritePolicy.Evaluate(rw, Pt("Request_Ack", "Command", PlcSignalDirection.SoftwareToPlc, false)).Code);

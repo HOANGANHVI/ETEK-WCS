@@ -37,6 +37,7 @@ export function PlcSimulationSignals({ active, real, onResult }: { active: boole
               </select>
               {s && (
                 <>
+                  <div className={s.engine === 'Invalid' ? 'notice notice-bad' : 'muted'}>{t(`linked.engine_${s.engine ?? 'Unassigned'}` as never)}</div>
                   <div className="muted">{s.activeTransaction ? t('linked.simTx', { state: s.activeTransaction.state, step: s.activeTransaction.handshakeStep, request: s.activeTransaction.requestId ?? '—' }) : t('linked.simNoTx')}</div>
                   <div className="table-wrap">
                     <table className="grid">

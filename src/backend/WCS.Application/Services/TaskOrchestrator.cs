@@ -96,6 +96,8 @@ public sealed class TaskOrchestrator(
                 throw AppException.Conflict("REQUEST_KEY_IN_USE", "This RequestKey already belongs to a transport order; nothing was created.");
             await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): row-locked read in THIS transaction - a task cannot slip in while Maintenance is being switched on
             var mode = await modeGate.ModeForNewWorkAsync(t);   // CR-038: Simulator or Real, read FOR SHARE in this transaction; a mode change waits for it
+            if (cmd.SimulationOnly && mode == WCS.Domain.Rcs.ExecutionMode.Real)   // CR-042
+                throw AppException.Rejected(WCS.Application.Routing.SimulationCodes.RealMode, WCS.Application.Routing.SimulationCodes.RealModeMessage);
             var task = TransportTask.Create(cmd.RequestKey, flow, rule.RackKind, agv?.Id, station.Id, cmd.RequestedBy, clock.UtcNow, rcsManaged: Managed);
             task.PinExecutionMode(mode);   // CR-038: the task keeps this dispatcher for its whole life
             task.SetCorrelation(DiagnosticContext.CorrelationId ?? DiagnosticContext.NewCorrelationId());   // CR-021: the task keeps the id of the request that created it (or a new one)

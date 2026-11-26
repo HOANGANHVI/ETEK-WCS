@@ -83,6 +83,7 @@ Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + m�
 | `PLC_MODE` | `RealReadWrite` (mặc định, chế độ hỗ trợ ghi) hoặc `RealReadOnly`. Thiếu `PLC_ALLOW_LIVE_CONNECTION` hoặc `PLC_WRITE_ENABLED` thì runtime **vẫn chỉ đọc** (hiển thị trên trang PLC) | `RealReadWrite` |
 | `PLC_ALLOW_LIVE_CONNECTION` | `false`: **không mở socket tới PLC thật** | `false` |
 | `PLC_WRITE_ENABLED` | Khóa ghi (CR-015/CR-019): `true` để cho phép ghi | `false` |
+| `Plc:Write:AllowList` (CR-044) | **Bắt buộc để ghi thật:** danh sách điểm được ghi (PLC, trạm, tín hiệu, địa chỉ). `docker-compose.yml` chưa truyền biến này nên bản Docker không ghi được cho tới khi bổ sung. Xem `docs/change-management/CR-044_PLC_WRITE_GUARD_AND_MISSION_COMPLETED.md` | rỗng |
 | *(đã bỏ, CR-019)* `PLC_WRITE_APPROVAL_REFERENCE`, `PLC_WRITE_HANDSHAKE_APPROVED` | Không còn được đọc. Dòng cũ trong `.env` được bỏ qua, không gây lỗi; có thể xóa. Phê duyệt duy nhất là **Duyệt ghi theo từng IO** của Admin | — |
 | `PLC_ALLOW_SIMULATOR_IN_PRODUCTION` | Production từ chối `Plc:Mode=Simulator` trừ khi `true` (chỉ để khởi động có giám sát khi chưa có PLC) | `false` |
 | `WCS_ALLOW_NETWORK_PROBE` | Cho phép phép thử TCP của "Kiểm tra kết nối" (chỉ mở/đóng cổng) | `false` |

@@ -15,7 +15,7 @@ public sealed record StationTransactionDto(Guid Id, string PortId, string PlcId,
 public sealed record OrderDto(Guid Id, string RequestKey, string ProcessCode, int ProcessVersion, string RackKind, string RequestLocationCode, string State, string WaitKind,
     string? StateReason, string? CurrentStepKey, Guid? RackId, IReadOnlyList<LegDto> Legs, IReadOnlyList<StationTransactionDto> Transactions,
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? FinishedAt,
-    long? QueueSequence = null, string? QueueScope = null, string? QueueStatus = null, string? RequestedBy = null, string? ExecutionMode = null);
+    long? QueueSequence = null, string? QueueScope = null, string? QueueStatus = null, string? RequestedBy = null, string? ExecutionMode = null, bool RacksHeld = false);
 
 public sealed record RoutingEventDto(Guid Id, Guid? LegId, Guid? TransactionId, string Kind, string? Detail, string Source, DateTimeOffset OccurredAt);
 
@@ -32,7 +32,7 @@ public static class RoutingMapping
     public static OrderDto ToDto(this TransportOrder o, IEnumerable<StationTransaction>? transactions = null) => new(o.Id, o.RequestKey, o.ProcessCode, o.ProcessVersionNumber,
         o.RackKind.ToString(), o.RequestLocationCode, o.State.ToString(), o.WaitKind.ToString(), o.StateReason, o.CurrentStepKey, o.RackId,
         o.Legs.OrderBy(l => l.Sequence).Select(l => l.ToDto()).ToList(), (transactions ?? []).OrderBy(t => t.CreatedAt).Select(t => t.ToDto()).ToList(),
-        o.CreatedAt, o.UpdatedAt, o.FinishedAt, o.QueueSequence, o.QueueScope, QueueStatusOf(o), o.RequestedBy, o.ExecutionMode?.ToString());
+        o.CreatedAt, o.UpdatedAt, o.FinishedAt, o.QueueSequence, o.QueueScope, QueueStatusOf(o), o.RequestedBy, o.ExecutionMode?.ToString(), o.RacksHeld);
 
     /// <summary>CR-040: the queue state of a request (NULL = not a queued request). Waiting / Held = not dispatched yet.</summary>
     public static string? QueueStatusOf(TransportOrder o) => o.QueueSequence is null ? null
@@ -51,6 +51,9 @@ public static class SimulationCodes
 }
 
 public sealed record StartOrderResult(OrderDto Order, bool Created);
+
+/// <summary>CR-042 (OQ-42-04): the oldest waiting request of a queue scope that has waited too long. Information for the operator; nothing is done automatically.</summary>
+public sealed record QueueAlertDto(Guid OrderId, string RequestKey, string ProcessCode, string? Scope, string WaitKind, string? Reason, DateTimeOffset WaitingSince, int Minutes, int Behind);
 
 public enum EventOutcome { Applied = 1, Duplicate = 2, Rejected = 3 }
 

@@ -21,7 +21,8 @@ public sealed class InventoryService(
     ILogger<InventoryService> logger,
     Routing.RackPlacement placement,
     Routing.ModelGuard modelGuard,
-    IProductModelRepository productModels) : IInventoryService
+    IProductModelRepository productModels,
+    Routing.IRoutingRepository routing) : IInventoryService   // CR-042
 {
     private static RackStatus StatusFor(RackKind kind) => kind == RackKind.Full ? RackStatus.Full : RackStatus.Empty;
 
@@ -218,12 +219,19 @@ public sealed class InventoryService(
             }
             else if (delta < 0)
             {
-                var removable = await racks.ListUnreservedAsync(loc.Id, status, -delta, ct);
+                // CR-042 (OQ-42-07): a rack of an unfinished transport order (e.g. stored at a buffer between two legs) is not reserved, but it is not stock to remove either
+                var free = new List<Rack>(); string? boundTo = null; var bound = 0;
+                foreach (var r in await racks.ListUnreservedAsync(loc.Id, status, 10_000, ct))
+                    if (await routing.FindOrderOwningRackAsync(r.Id, ct) is { } openOrder) { boundTo ??= openOrder; bound++; }
+                    else free.Add(r);
+                if (free.Count < -delta && bound > 0)
+                    throw AppException.Conflict("RACK_IN_USE_BY_ORDER", $"{loc.Code} holds {bound} rack(s) of an unfinished transport order (e.g. {boundTo}). Finish or cancel it (a failed order: release its racks) first. Nothing was changed.");
+                IReadOnlyList<Rack> removable = free.Take(-delta).ToList();
                 if (modelGuard.On)
                 {
                     // CR-036 (A.1): a rack in manual handling is NOT removed like an Auto rack. Removing one needs an approved, audited procedure that does not exist yet (open question P2-OQ-16),
                     // so the request fails closed and nothing changes (no rack removed, no disposition touched).
-                    var unreserved = await racks.ListUnreservedAsync(loc.Id, status, 10_000, ct);
+                    var unreserved = free;
                     var autoRacks = unreserved.Where(r => r.Disposition == RackDisposition.Auto).ToList();
                     var manualRacks = unreserved.Count - autoRacks.Count;
                     if (autoRacks.Count < -delta && autoRacks.Count + manualRacks >= -delta)
