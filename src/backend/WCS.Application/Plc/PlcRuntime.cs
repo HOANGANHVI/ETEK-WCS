@@ -62,7 +62,9 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         if (o.Mode != PlcRuntimeMode.Simulator && !o.AllowLiveConnection) notes.Add("[LIVE_CONNECTION_DISABLED] Plc:AllowLiveConnection = false: không mở socket tới PLC thật.");
         if (o.Mode == PlcRuntimeMode.RealReadWrite && effective != PlcRuntimeMode.RealReadWrite)
             notes.Add("[WRITE_KEYS_MISSING] REAL_READ_WRITE đã được yêu cầu nhưng thiếu khóa ghi (AllowLiveConnection, Write.Enabled): hệ thống chạy REAL_READ_ONLY.");
-        if (effective == PlcRuntimeMode.RealReadWrite && o.Write.AllowList.Count == 0)
+        if (o.Mode != PlcRuntimeMode.Simulator && PlcWriteGuard.ParseAllowList(o.Write.AllowListText) is null)
+            notes.Add("[WRITE_ALLOWLIST_INVALID] Plc:Write:AllowListText cannot be read: nothing is declared, so nothing is written to a real PLC.");
+        else if (effective == PlcRuntimeMode.RealReadWrite && PlcWriteGuard.Declarations(o).Count == 0)
             notes.Add("[WRITE_ALLOWLIST_EMPTY] Plc:Write:AllowList is empty: no point is written to a real PLC.");
         if (o.Mode == PlcRuntimeMode.Simulator) notes.Add("[SIMULATOR_MODE] Chế độ mô phỏng: không có kết nối nào tới PLC vật lý.");
         return new PlcRuntimeInfo(o.Mode.ToString(), effective.ToString(), o.AllowLiveConnection, o.Write.Enabled, WritePolicy.WriteKeysComplete(o), _running, notes, WritePolicy.MissingWriteKeys(o));

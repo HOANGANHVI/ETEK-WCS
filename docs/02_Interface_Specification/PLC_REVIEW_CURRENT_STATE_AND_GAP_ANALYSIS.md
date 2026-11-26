@@ -1,5 +1,7 @@
 # PLC Communication – Khảo sát hiện trạng và đối chiếu yêu cầu mới
 
+> **IO MAP HIỆN HÀNH (2026-11-26, CR-045).** Dự án chỉ dùng một IO Map: [AGV_PLC Interface_List_22_11_2026.xlsx](PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx) (SHA-256 `405586c9…34da3`). Các workbook cũ (IO Map v2, 10/11, 20/11) **đã ngừng sử dụng và đã gỡ khỏi repository**; nội dung dựa trên chúng trong tài liệu này chỉ còn giá trị lịch sử. IO Map 22/11 **chưa** được kỹ sư PLC xác nhận là hợp đồng IO. [Trạng thái từng tín hiệu](PLC_IO_Map/README.md).
+
 > **⚠ SUPERSEDED (cơ sở tín hiệu) – CR-029, 2026-11-21.** Bảng khoảng cách này dựa trên giao diện 10/11/2026. Phân tích tác động mới: [PLC_INTERFACE_CHANGE_IMPACT_ANALYSIS_20_11_2026.md](PLC_20_11_2026/PLC_INTERFACE_CHANGE_IMPACT_ANALYSIS_20_11_2026.md). Giữ nguyên để truy vết.
 
 **Trạng thái:** `DRAFT – CR-010 PENDING_APPROVAL`. Đây là tài liệu phân tích. Không có mã nguồn, database schema, migration hay cấu hình runtime nào bị thay đổi. Tài liệu baseline đã được duyệt (`docs/specification/*`, `README.md`, ADR, workbook v2) **không bị sửa**.

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Ngày lập** | 2026-11-26 |
-| **Tài liệu đối chiếu** | `AGV_PLC Interface_List_20_11_2026.xlsx`, sheet `IO Matrix` và `Trang_tính1`; mã kiểm tra SHA-256 `a291d28fac907c3dbf5e3620425abf62cb718d058ab472eec9ccf8c0701babb3` |
+| **Tài liệu đối chiếu** | `AGV_PLC Interface_List_22_11_2026.xlsx`, sheet `IO Matrix` và `Trang_tính1`; mã kiểm tra SHA-256 `405586c9e4d2893f1d3a33922259ecfe1c400ca877710877b3b482e049b34da3` |
 | **Tình trạng** | Hợp đồng IO **chưa được chốt**. Mọi câu hỏi đang `OPEN`. Phần mềm chưa ghi gì tới PLC theo tài liệu này |
 | **Cách trả lời** | Trả lời bằng văn bản theo mã câu hỏi, điền các bảng ở mục 2 và 3; gửi kèm tài liệu hoặc sơ đồ. Nội dung chưa xác định được: ghi "chưa xác định" và người phụ trách |
 
@@ -13,7 +13,7 @@ Trong tài liệu: **"Theo workbook"** là nội dung file ở trên; **"Phía d
 
 1. `AGV_RequestTranfer` là **yêu cầu** phần mềm gửi tới PLC, không trực tiếp điều khiển cửa hay kẹp. PLC tiếp nhận và tự điều khiển cửa/kẹp theo logic và interlock của PLC. Phần mềm không coi việc đã ghi yêu cầu là cửa/kẹp đã mở; phản hồi từ PLC là `PLC_ReaddyTranfer`.
 2. Tín hiệu handshake **giữ trạng thái** (không phải xung). Bên nào ghi tín hiệu thì bên đó đưa tín hiệu về trạng thái OFF; không bên nào reset tín hiệu của bên kia.
-3. `AGV_RequestTranfer` và `AGV_TranferCompleted` **dùng chung một thanh ghi INT cho mỗi trạm**, phân biệt bằng giá trị. Mã "hoàn thành Drop" được **đề nghị là `5`** thay cho `4` đang ghi trong workbook, để không trùng mã "yêu cầu Drop".
+3. `AGV_RequestTranfer` và `AGV_TranferCompleted` **dùng chung một thanh ghi INT cho mỗi trạm**, phân biệt bằng giá trị theo bảng ở mục 2.1.
 4. Các trạm A3, A4, D1, D2: phía dự án chỉ giám sát (đọc), không ghi tín hiệu của các trạm này.
 5. Khi chưa có thỏa thuận khác, phần mềm không dùng giá trị `1–3` của `Mission_Feedback` làm mã định danh cố định của xe AGV (xem PLC-OQ-06).
 
@@ -23,15 +23,15 @@ Trong tài liệu: **"Theo workbook"** là nội dung file ở trên; **"Phía d
 
 ### 2.1 Bảng mã
 
-| Giá trị | Ý nghĩa | Tín hiệu | Theo workbook | Đề nghị | Kỹ sư PLC xác nhận |
-|---:|---|---|---|---|---|
-| 1 | Yêu cầu mở cửa/kẹp để Pick | `AGV_RequestTranfer` | 1 | 1 | |
-| 4 | Yêu cầu mở cửa/kẹp để Drop | `AGV_RequestTranfer` | 4 | 4 | |
-| 3 | Hoàn thành Pick | `AGV_TranferCompleted` | 3 | 3 | |
-| **5** | Hoàn thành Drop | `AGV_TranferCompleted` | **4** | **5** | |
-| 0 và giá trị khác | Chưa định nghĩa | – | – | Xin định nghĩa | |
+| Giá trị | Ý nghĩa | Tín hiệu | Kỹ sư PLC xác nhận |
+|---:|---|---|---|
+| 1 | Yêu cầu mở cửa/kẹp để Pick | `AGV_RequestTranfer` | |
+| 4 | Yêu cầu mở cửa/kẹp để Drop | `AGV_RequestTranfer` | |
+| 3 | Hoàn thành Pick | `AGV_TranferCompleted` | |
+| 6 | Hoàn thành Drop | `AGV_TranferCompleted` | |
+| 0 và giá trị khác | Chưa định nghĩa | – | Xin định nghĩa |
 
-Workbook hiện tại vẫn ghi "hoàn thành Drop" = `4`; giá trị `5` chưa có hiệu lực cho tới khi kỹ sư PLC xác nhận. Nếu chương trình PLC đang dùng `4`, xin cho biết; hai bên cần đổi cùng thời điểm và workbook cần phát hành bản mới.
+Giá trị "hoàn thành Drop" theo workbook 22/11 là `6`. Các bản trước dùng `4`, và trong trao đổi từng có đề nghị `5`: xin cho biết giá trị chương trình PLC đang dùng hoặc sẽ dùng.
 
 ### 2.2 Địa chỉ theo PLC và trạm
 
@@ -60,7 +60,7 @@ Workbook hiện tại vẫn ghi "hoàn thành Drop" = `4`; giá trị `5` chưa 
 
 Mỗi lần ghi giá trị mới sẽ **ghi đè** giá trị cũ:
 
-- khi phần mềm ghi `3` hoặc `5`, giá trị yêu cầu (`1` hoặc `4`) không còn được giữ;
+- khi phần mềm ghi `3` hoặc `6`, giá trị yêu cầu (`1` hoặc `4`) không còn được giữ;
 - khi phần mềm ghi `0` (nếu `0` là trạng thái OFF), cả yêu cầu và báo hoàn thành cùng mất.
 
 Xin kỹ sư PLC xác nhận **trình tự chuyển giá trị và reset**, ví dụ `1 → 3 → 0` hay `1 → 0 → 3 → 0`, ai chờ điều kiện nào giữa hai lần ghi, và PLC cần giữ mỗi giá trị tối thiểu bao lâu để đọc được (PLC-OQ-21).
@@ -88,7 +88,7 @@ Xin điền đầy đủ cho cả Pick và Drop. Phần đã điền lấy từ 
 | 2 | `Mission_Feedback` | Phần mềm | (xem PLC-OQ-06) | | | | | |
 | 3 | `AGV_RequestTranfer` | Phần mềm | 4 | | | | | |
 | 4 | `PLC_ReaddyTranfer` | PLC | 2 (10 = lỗi) | | | | | |
-| 5 | `AGV_TranferCompleted` | Phần mềm | 5 (đề nghị; workbook: 4) | | | | | |
+| 5 | `AGV_TranferCompleted` | Phần mềm | 6 | | | | | |
 | 6 | `PLC_MissionCompleted` | PLC | 2 thành công, 1 thất bại | | | | | |
 
 Trong cả hai bảng, bước 5 ghi vào **cùng thanh ghi** với bước 3 (mục 2.3).
@@ -101,15 +101,15 @@ Xin trả lời thêm: điều kiện để **bắt đầu giao dịch tiếp th
 
 | Mã | Câu hỏi | Gợi ý để thảo luận | Tình trạng |
 |---|---|---|---|
-| PLC-OQ-01 | Xác nhận địa chỉ dùng chung cho từng PLC/trạm (mục 2.2) và bảng mã `1`, `4`, `3`, `5` (mục 2.1; workbook hiện ghi `4` cho hoàn thành Drop) | – | OPEN |
+| PLC-OQ-01 | Xác nhận địa chỉ dùng chung cho từng PLC/trạm (mục 2.2) và bảng mã `1`, `4`, `3`, `6` (mục 2.1) | – | OPEN |
 | PLC-OQ-03 | Điền bảng handshake mục 3 cho Pick và Drop: bên ON/OFF, điều kiện chuyển bước, điều kiện và thời điểm OFF/reset, thời hạn, lỗi và phục hồi; ý nghĩa giá trị `0` của từng tín hiệu; điều kiện bắt đầu giao dịch tiếp theo | – | OPEN |
-| PLC-OQ-21 | (a) PLC phân biệt `1`, `4`, `3`, `5` theo trạng thái giao dịch thế nào? (b) Điều kiện PLC chấp nhận giá trị yêu cầu và giá trị hoàn thành? (c) Điều kiện chuyển từ yêu cầu sang hoàn thành; ghi đè trực tiếp hay phải qua `0`? (d) Đưa thanh ghi về giá trị nào sau từng bước, khi nào; mỗi giá trị cần giữ tối thiểu bao lâu? (e) Nhận giá trị không hợp lệ hoặc sai thứ tự (ví dụ `3` khi đang Drop, `5` khi chưa yêu cầu) thì xử lý và báo lại thế nào? (f) Chống nhận lặp cùng một giá trị; sau khi mất kết nối rồi nối lại, giá trị đang giữ được hiểu thế nào? | Giá trị chỉ có hiệu lực khi đúng trạng thái giao dịch; giá trị lạ hoặc sai thứ tự không gây hành động và được báo lỗi | OPEN |
+| PLC-OQ-21 | (a) PLC phân biệt `1`, `4`, `3`, `6` theo trạng thái giao dịch thế nào? (b) Điều kiện PLC chấp nhận giá trị yêu cầu và giá trị hoàn thành? (c) Điều kiện chuyển từ yêu cầu sang hoàn thành; ghi đè trực tiếp hay phải qua `0`? (d) Đưa thanh ghi về giá trị nào sau từng bước, khi nào; mỗi giá trị cần giữ tối thiểu bao lâu? (e) Nhận giá trị không hợp lệ hoặc sai thứ tự (ví dụ `3` khi đang Drop, `6` khi chưa yêu cầu) thì xử lý và báo lại thế nào? (f) Chống nhận lặp cùng một giá trị; sau khi mất kết nối rồi nối lại, giá trị đang giữ được hiểu thế nào? | Giá trị chỉ có hiệu lực khi đúng trạng thái giao dịch; giá trị lạ hoặc sai thứ tự không gây hành động và được báo lỗi | OPEN |
 
 ### 4.2 Trình tự
 
 | Mã | Câu hỏi | Gợi ý để thảo luận | Tình trạng |
 |---|---|---|---|
-| PLC-OQ-02 | Thao tác Drop dùng mã `2` ở `PLC_ReaddyTranfer`, `4` ở yêu cầu và `5` (đề nghị; workbook: `4`) ở hoàn thành. Xác nhận từng tín hiệu có bảng mã riêng như vậy | Giữ bảng mã riêng, ghi rõ trong workbook | OPEN |
+| PLC-OQ-02 | Thao tác Drop dùng mã `2` ở `PLC_ReaddyTranfer`, `4` ở yêu cầu và `6` ở hoàn thành. Xác nhận từng tín hiệu có bảng mã riêng như vậy | Giữ bảng mã riêng, ghi rõ trong workbook | OPEN |
 | PLC-OQ-04 | Không còn mã yêu cầu duy nhất. Làm sao phân biệt hai yêu cầu liên tiếp cùng loại tại một trạm và tránh xử lý lặp, đặc biệt sau khởi động lại? | (a) PLC cung cấp số thứ tự giao dịch. (b) Chỉ coi là yêu cầu mới khi đã thấy tín hiệu về `0` | OPEN |
 | PLC-OQ-05 | Chính xác khi nào phần mềm được ghi `AGV_RequestTranfer`? Khi nào được rút yêu cầu (AGV huỷ nhiệm vụ)? | Chỉ ghi khi hệ thống điều khiển AGV xác nhận AGV đã đến điểm chờ trước cửa | OPEN |
 | PLC-OQ-08 | Điều kiện ghi `AGV_TranferCompleted` cho Pick và cho Drop? Sơ đồ trong workbook chỉ mô tả "AGV đã lấy và ra ngoài" | Cung cấp sơ đồ Drop | OPEN |
@@ -130,7 +130,7 @@ Xin trả lời thêm: điều kiện để **bắt đầu giao dịch tiếp th
 | Mã | Câu hỏi | Gợi ý để thảo luận | Tình trạng |
 |---|---|---|---|
 | PLC-OQ-06 | `Mission_Feedback`: ghi khi nào, giữ đến khi nào? Workbook ghi `1–3` = AGV1–3, trong khi hệ thống điều khiển AGV tự chọn xe trong một đội có thể thay đổi. PLC có cần biết xe nào không? | Chỉ báo trạng thái tiếp nhận/lỗi; nếu PLC cần mã xe thì dùng vùng dữ liệu riêng | OPEN |
-| PLC-OQ-11 | `HeartBit` `M9200`: một tín hiệu cho mỗi PLC? "Chu kỳ 1 giây" là đổi trạng thái mỗi 1 giây hay mỗi 0,5 giây? Khi quá 10 giây PLC làm gì? Có heartbeat chiều PLC → phần mềm không? | Mỗi PLC một tín hiệu | OPEN |
+| PLC-OQ-11 | `HeartBit` `M9200` (workbook ghi dùng chung cho mỗi PLC): "chu kỳ 1 giây" là đổi trạng thái mỗi 1 giây hay mỗi 0,5 giây? Khi quá 10 giây PLC làm gì? Có heartbeat chiều PLC → phần mềm không? | Đổi trạng thái mỗi 1 giây | OPEN |
 | PLC-OQ-15 | Phần mềm cần biết loại rack, rack có mặt tại trạm và mã rack. Nguồn nào cung cấp? | PLC bổ sung tín hiệu, hoặc chỉ định thiết bị khác | OPEN |
 
 ### 4.5 Kết nối, trạm, phiên bản, chuyển đổi
@@ -140,5 +140,5 @@ Xin trả lời thêm: điều kiện để **bắt đầu giao dịch tiếp th
 | PLC-OQ-13 | Mỗi IP là một CPU riêng? Cổng TCP, loại frame, network number, PC number, module I/O, station number, monitoring timer? Tên chính thức của từng PLC (cột PLC ghi `A1`, `BCD`, `A2`, `EF-G`; `A1`, `A2` trùng tên trạm) | – | OPEN |
 | PLC-OQ-14 | Workbook ghi trạm X4, G1, G2; tài liệu trước ghi X6, G3, G7. Danh sách nào đúng? Các vị trí Y1, Y2, Z1, Z2, M5, M6 có tín hiệu PLC không? | Một danh sách chính thức | OPEN |
 | PLC-OQ-18 | Mỗi giá trị INT là một word 16 bit có dấu? | – | OPEN |
-| PLC-OQ-19 | Bản workbook này có phải bản chính thức? Đã có hai nội dung khác nhau cùng tên file | Thêm số hiệu và ngày phiên bản | OPEN |
+| PLC-OQ-19 | Phía dự án dùng workbook 22/11 làm danh sách IO duy nhất. Chương trình PLC đang theo đúng bản này không? Nếu khác, khác ở đâu? | Ghi số hiệu và ngày phiên bản trong file | OPEN |
 | PLC-OQ-20 | Thời điểm và cách chuyển chương trình PLC sang giao tiếp mới; thanh ghi cũ còn hiệu lực không? Lưu ý: một số địa chỉ trong mẫu giao tiếp cũ trùng thanh ghi mới (ví dụ `D1500`, `D1600`, `D1610`) | Chuyển theo từng PLC, khóa chức năng ghi trong lúc chuyển | OPEN |

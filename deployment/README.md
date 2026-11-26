@@ -70,6 +70,33 @@ Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + m�
 > **Khuyến nghị cho vận hành chính thức: HTTPS + `WCS_COOKIE_SECURE=Always`.** Bản này chưa tích hợp chứng chỉ TLS (cần CR riêng hoặc một bộ chấm dứt TLS phía trước Nginx).
 > **HTTP + `WCS_COOKIE_SECURE=SameAsRequest` chỉ dành cho LAN thử nghiệm đáng tin cậy**: cookie phiên đi qua mạng không mã hóa, ai nghe được mạng có thể chiếm phiên. Nếu dùng HTTP thì phải đặt `SameAsRequest`, nếu không trình duyệt không gửi cookie đăng nhập. Không dùng `SameAsRequest` cho vận hành hoặc qua Internet. Backend ghi cảnh báo trong log khi Production chạy với `SameAsRequest`.
 
+## 3a. Máy kiểm thử PLC (CR-045)
+
+Làm theo thứ tự. **Chưa bước nào được kiểm chứng trên Docker thật hoặc PLC thật.**
+
+**Bước A – Chạy thử với bộ mô phỏng** (không kết nối thiết bị). Ngoài các giá trị bắt buộc, đặt trong `.env`:
+
+```
+PLC_MODE=Simulator
+PLC_ALLOW_SIMULATOR_IN_PRODUCTION=true
+PLC_ALLOW_LIVE_CONNECTION=false
+PLC_WRITE_ENABLED=false
+PLC_WRITE_ALLOWLIST=
+RCS_ALLOW_SIMULATOR_IN_PRODUCTION=true
+RCS_REAL_DISPATCH_ENABLED=false
+WCS_COOKIE_SECURE=SameAsRequest
+```
+
+(`SameAsRequest` chỉ khi dùng HTTP trong LAN kiểm thử.) Danh sách AMR để trống và báo mất kết nối RCS là bình thường khi chưa khai báo RCS.
+
+Chạy `deploy.ps1`, rồi `status.ps1`; đăng nhập, đổi mật khẩu; chạy `docs/DEPLOYMENT_TEST_CHECKLIST.md`.
+
+**Bước B – Kết nối PLC chỉ đọc** (chỉ khi kỹ sư PLC đồng ý): `PLC_MODE=RealReadOnly`, `PLC_ALLOW_SIMULATOR_IN_PRODUCTION=false`, `PLC_ALLOW_LIVE_CONNECTION=true`; giữ `PLC_WRITE_ENABLED=false` và danh sách rỗng. Xem mục 8.
+
+**Bước C – Ghi thử:** chưa được phép. Cần đủ điều kiện ở báo cáo Phase 2 §8.
+
+Bản này có các migration chỉ-tiến (gồm CR-041 và CR-042); `deploy.ps1` tự sao lưu rồi áp dụng. Không chạy trên database vận hành khi chưa được phê duyệt.
+
 ## 4. Cấu hình `.env`
 
 | Biến | Ý nghĩa | Mặc định |
@@ -83,7 +110,7 @@ Mở `http://localhost` (hoặc `http://<IP máy>`), đăng nhập `admin` + m�
 | `PLC_MODE` | `RealReadWrite` (mặc định, chế độ hỗ trợ ghi) hoặc `RealReadOnly`. Thiếu `PLC_ALLOW_LIVE_CONNECTION` hoặc `PLC_WRITE_ENABLED` thì runtime **vẫn chỉ đọc** (hiển thị trên trang PLC) | `RealReadWrite` |
 | `PLC_ALLOW_LIVE_CONNECTION` | `false`: **không mở socket tới PLC thật** | `false` |
 | `PLC_WRITE_ENABLED` | Khóa ghi (CR-015/CR-019): `true` để cho phép ghi | `false` |
-| `Plc:Write:AllowList` (CR-044) | **Bắt buộc để ghi thật:** danh sách điểm được ghi (PLC, trạm, tín hiệu, địa chỉ). `docker-compose.yml` chưa truyền biến này nên bản Docker không ghi được cho tới khi bổ sung. Xem `docs/change-management/CR-044_PLC_WRITE_GUARD_AND_MISSION_COMPLETED.md` | rỗng |
+| `PLC_WRITE_ALLOWLIST` (CR-044, CR-045) | **Bắt buộc để ghi thật.** Danh sách điểm được ghi, một dòng, ngăn bằng `;`: `PlcId\|StationId\|Signal\|Address` (tín hiệu STRING thêm `\|Words`). Rỗng = không ghi gì. Một mục sai thì **cả danh sách không có hiệu lực**. Thanh ghi dành riêng của IO Map chưa xác nhận bị chặn dù đã khai báo | rỗng |
 | *(đã bỏ, CR-019)* `PLC_WRITE_APPROVAL_REFERENCE`, `PLC_WRITE_HANDSHAKE_APPROVED` | Không còn được đọc. Dòng cũ trong `.env` được bỏ qua, không gây lỗi; có thể xóa. Phê duyệt duy nhất là **Duyệt ghi theo từng IO** của Admin | — |
 | `PLC_ALLOW_SIMULATOR_IN_PRODUCTION` | Production từ chối `Plc:Mode=Simulator` trừ khi `true` (chỉ để khởi động có giám sát khi chưa có PLC) | `false` |
 | `WCS_ALLOW_NETWORK_PROBE` | Cho phép phép thử TCP của "Kiểm tra kết nối" (chỉ mở/đóng cổng) | `false` |
@@ -143,7 +170,7 @@ Trình tự an toàn (mỗi bước cần kỹ sư PLC):
 2. Kiểm tra đường mạng từ container (chỉ mở/đóng TCP, **không gửi byte nào**):
    `deployment\scripts\plc-route-test.ps1 -Port <cổng đã xác nhận>` — tham số `-Port` bắt buộc, dự án không giả định cổng.
 3. Đặt `PLC_ALLOW_LIVE_CONNECTION=true`, chạy lại `deploy.ps1`/`start.ps1`; Admin bật kết nối từng PLC; **bắt đầu chỉ đọc** (`PLC_MODE=RealReadOnly`).
-4. Việc đọc chỉ cần địa chỉ IO hợp lệ (CR-012). **Ghi** (CR-015) chỉ xảy ra khi đủ: `PLC_MODE=RealReadWrite`, `PLC_ALLOW_LIVE_CONNECTION=true`, `PLC_WRITE_ENABLED=true`; IO có **duyệt quyền ghi** của Admin (*Cấu hình địa chỉ IO → Duyệt ghi*); người ghi là Admin; giá trị đúng kiểu; không phải tín hiệu Safety/Permit. Mỗi lần ghi có hộp thoại xác nhận và Audit Log. Chỉ bật các khóa này khi thực sự có ý định ghi.
+4. Việc đọc chỉ cần địa chỉ IO hợp lệ (CR-012). **Ghi** (CR-015) chỉ xảy ra khi đủ: `PLC_MODE=RealReadWrite`, `PLC_ALLOW_LIVE_CONNECTION=true`, `PLC_WRITE_ENABLED=true`; IO có **duyệt quyền ghi** của Admin (*Cấu hình địa chỉ IO → Duyệt ghi*); điểm được **khai báo trong `PLC_WRITE_ALLOWLIST`** và địa chỉ ngoài thanh ghi dành riêng (CR-044); người ghi là Admin; giá trị đúng kiểu; không phải tín hiệu Safety/Permit. Mỗi lần ghi có hộp thoại xác nhận và Audit Log. Chỉ bật các khóa này khi thực sự có ý định ghi.
 
 Nếu không tới được PLC: kiểm tra PLC bật và cùng mạng 192.168.10.x, đúng cổng, Windows Firewall, và danh sách IP được phép trên PLC (dùng IP máy Windows).
 
@@ -197,7 +224,7 @@ Backend tự đọc cgroup của chính container (CPU, RAM theo giới hạn `W
 
 Trang *Cấu hình địa chỉ IO* hiển thị banner "Trạng thái ghi PLC" và liệt kê khóa còn thiếu theo **giá trị backend thực sự nhận được**. Nếu banner báo thiếu mà bạn tin là đã đặt:
 
-1. Chạy `deployment\scripts\plc-write-config.ps1`. Script chỉ đọc: so sánh `.env` (đường dẫn được in ra) với biến môi trường **thực sự trong container backend**; chỉ hiển thị 3 khóa còn hiệu lực (CR-019).
+1. Chạy `deployment\scripts\plc-write-config.ps1`. Script chỉ đọc: so sánh `.env` (đường dẫn được in ra) với biến môi trường **thực sự trong container backend**; hiển thị 3 khóa ghi (CR-019) và danh sách `PLC_WRITE_ALLOWLIST` (CR-045).
 2. Nguyên nhân thường gặp: (a) `.env` được tạo từ `.env.example` cũ có `PLC_MODE=RealReadOnly` (ép chỉ đọc, khóa nào cũng vô hiệu); (b) thiếu `PLC_ALLOW_LIVE_CONNECTION` hoặc `PLC_WRITE_ENABLED`; (c) sửa `.env` nhưng chưa chạy lại `deploy.ps1`/`start.ps1` nên container backend chưa được tạo lại; (d) `.env` sai thư mục (`WCS_CONFIG_DIR`, mặc định `C:\ETEK-WCS\config\.env`); (e) giá trị boolean không phải `true`/`false`.
 3. Log backend khi khởi động có dòng `RUNTIME_START` nêu chế độ yêu cầu, chế độ hiệu lực và tên các khóa còn thiếu (không có giá trị).
 

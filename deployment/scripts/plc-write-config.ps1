@@ -1,6 +1,6 @@
 # CR-017: shows whether the PLC WRITE settings really reach the backend. Read-only: it changes nothing, sends nothing to a PLC.
 # For each setting it compares  (1) the .env file the deployment scripts use  (2) what docker-compose.yml resolves from it  (3) what the RUNNING backend container was created with.
-# CR-019: only three settings remain (the approval reference and handshake approval keys were removed; old lines in .env are ignored). ASCII only (Windows PowerShell 5.1).
+# CR-019 removed the approval reference and handshake approval keys (old lines in .env are ignored). CR-045 adds PLC_WRITE_ALLOWLIST (the declared points). ASCII only (Windows PowerShell 5.1).
 #   deployment\scripts\plc-write-config.ps1            report (needs Docker for the container column)
 #   deployment\scripts\plc-write-config.ps1 -NoContainer   only .env + compose defaults (no Docker needed)
 param([switch]$NoContainer)
@@ -11,7 +11,8 @@ $ErrorActionPreference = 'Stop'
 $script:WriteKeys = @(
     @{ EnvName = 'PLC_MODE';                      Option = 'Plc__Mode';                                  Default = 'RealReadWrite'; Need = 'RealReadWrite'; Secret = $false },
     @{ EnvName = 'PLC_ALLOW_LIVE_CONNECTION';     Option = 'Plc__AllowLiveConnection';                   Default = 'false';         Need = 'true';          Secret = $false },
-    @{ EnvName = 'PLC_WRITE_ENABLED';             Option = 'Plc__Write__Enabled';                        Default = 'false';         Need = 'true';          Secret = $false }
+    @{ EnvName = 'PLC_WRITE_ENABLED';             Option = 'Plc__Write__Enabled';                        Default = 'false';         Need = 'true';          Secret = $false },
+    @{ EnvName = 'PLC_WRITE_ALLOWLIST';           Option = 'Plc__Write__AllowListText';                  Default = '';              Need = '<declared>';    Secret = $false }
 )
 
 # What docker-compose resolves for one key: a value that is set AND non-empty wins over the default (${NAME:-default}).
@@ -34,7 +35,7 @@ function Get-PlcWriteConfigReport([hashtable]$dotEnv, $containerEnv) {
         $inContainer = $null
         if ($null -ne $containerEnv) { $inContainer = if ($containerEnv.ContainsKey($k.Option)) { "$($containerEnv[$k.Option])" } else { '' } }
         $effective = if ($null -ne $inContainer) { $inContainer } else { $resolved }          # what the backend has (or will have)
-        $met = if ($k.Secret) { $effective.Length -gt 0 } else { $effective.Trim().ToLowerInvariant() -eq $k.Need.ToLowerInvariant() }
+        $met = if ($k.Secret -or $k.Need -eq '<declared>') { $effective.Trim().Length -gt 0 } else { $effective.Trim().ToLowerInvariant() -eq $k.Need.ToLowerInvariant() }
         $note = ''
         if ($null -ne $inContainer -and $inContainer -ne $resolved) { $note = 'container differs from .env: the container was NOT recreated after the .env change (run deploy.ps1 or start.ps1)' }
         elseif (-not $met -and $k.EnvName -eq 'PLC_MODE' -and $effective -eq 'RealReadOnly') { $note = 'PLC_MODE=RealReadOnly forces read-only: set RealReadWrite (or remove the line)' }
@@ -71,6 +72,6 @@ if (-not $NoContainer) {
 $rows = Get-PlcWriteConfigReport $dotEnv $containerEnv
 $rows | Format-Table Setting, DotEnv, Compose, Container, @{ n = 'Met'; e = { if ($_.Met) { 'yes' } else { 'NO' } } }, Note -AutoSize -Wrap | Out-String -Width 200 | Write-Host
 $missing = @($rows | Where-Object { -not $_.Met } | ForEach-Object { $_.Setting })
-if ($missing.Count -eq 0) { Write-Ok 'Every write setting is in effect: the runtime is REAL_READ_WRITE (each IO still needs an Admin write approval).' }
+if ($missing.Count -eq 0) { Write-Ok 'Every write setting is in effect: the runtime is REAL_READ_WRITE. Each write still needs an Admin write approval, a declared point and an address outside the reserved registers.' }
 else { Write-Warn2 ('Writing is NOT possible yet. Missing: ' + ($missing -join ', ') + '. The IO mapping page shows the same list from the running backend.') }
 Write-Host "Nothing was changed."

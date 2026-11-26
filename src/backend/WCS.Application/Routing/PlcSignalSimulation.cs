@@ -9,7 +9,7 @@ namespace WCS.Application.Routing;
 
 /// <summary>
 /// CR-040: turns the PLC → WCS input signals of ONE station into the request a PLC runtime hands to <see cref="IPlcRequestService"/>. It is the only place that reads these signals by name
-/// (the names of IO Map v2), so a simulated and a physical source cannot be interpreted differently. It decides nothing about the business: validation and processing stay in the request service.
+/// (the names of the retired IO Map v2; the standard IO Map of 22/11/2026 is not implemented yet), so a simulated and a physical source cannot be interpreted differently. It decides nothing about the business: validation and processing stay in the request service.
 /// The physical PLC runtime does not call it yet: when a signal change counts as a request (edge / level, reset) is not approved (CR-029).
 /// </summary>
 public static class PlcRequestAssembler

@@ -37,7 +37,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
     PlcSimulationState state, PlcSimulatedInputs inputs, WCS.Application.Plc.IStationEngineRouter engines, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock, IPlcLinkStatus? link = null)
 {
     public const string Banner = "PLC SIMULATION";
-    public const string MappingSource = "TEST CONFIGURATION: logical signals of IO Map v2 (Pickup_Request / Delivery_Request / Request_ID / Rack_Full / Rack_Empty, PlcLocationCodes 1-4). Not the 20/11/2026 mapping (CR-029 PENDING_APPROVAL); no PLC address is read or written.";
+    public const string MappingSource = "TEST CONFIGURATION: logical signals of the retired IO Map v2 (Pickup_Request / Delivery_Request / Request_ID / Rack_Full / Rack_Empty, PlcLocationCodes 1-4). Not the standard IO Map of 22/11/2026 (not yet confirmed by the PLC engineer); no PLC address is read or written.";
 
     public SimulationStatusDto Status()
     {

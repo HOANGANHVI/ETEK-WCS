@@ -223,6 +223,8 @@ Each PLC has one WCS connection. Do not create a separate TCP connection per Sta
 
 `docs/02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`
 
+**Update 2026-11-26 (CR-045, owner decision):** the workbook above is retired and removed. The only IO map is `docs/02_Interface_Specification/PLC_IO_Map/AGV_PLC Interface_List_22_11_2026.xlsx`, not yet confirmed by the PLC engineer.
+
 The workbook is the controlled working interface reference. Preserve signal names, direction, data type and descriptions. The workbook deliberately leaves actual per-Station addresses unassigned pending PLC-engineer allocation.
 
 ### Configuration and commissioning

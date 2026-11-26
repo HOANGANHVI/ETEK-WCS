@@ -1,5 +1,7 @@
 # PLC Communication Specification – Bản đề xuất (DRAFT)
 
+> **IO MAP HIỆN HÀNH (2026-11-26, CR-045).** Dự án chỉ dùng một IO Map: [AGV_PLC Interface_List_22_11_2026.xlsx](PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx) (SHA-256 `405586c9…34da3`). Các workbook cũ (IO Map v2, 10/11, 20/11) **đã ngừng sử dụng và đã gỡ khỏi repository**; nội dung dựa trên chúng trong tài liệu này chỉ còn giá trị lịch sử. IO Map 22/11 **chưa** được kỹ sư PLC xác nhận là hợp đồng IO. [Trạng thái từng tín hiệu](PLC_IO_Map/README.md).
+
 > **⚠ SUPERSEDED / OBSOLETE (một phần) – CR-029, 2026-11-21.** Cơ sở giao diện của tài liệu này là `AGV_PLC_IO_Interface_List_10_11_2026.xlsx` (22 tín hiệu M9xxx/Dxxxx, 9 bước). Giao diện mới `AGV_PLC Interface_List_20_11_2026.xlsx` **thay thế** phần tín hiệu, IO mapping, quy trình 9 bước, `Request_ID`/`Rack_Full…` (§3, §4, §7, §8) – xem [PLC_20_11_2026/](PLC_20_11_2026/PLC_INTERFACE_SPECIFICATION_V2_20_11_2026.md) (Interface, Handshake, IO Mapping, Impact Analysis). Các nguyên tắc ràng buộc (§1.2), phục hồi (§11–13) và hàng đợi (§9, **xung đột C-1 với ADR-0008 chưa được quyết định**) chỉ còn giá trị tham khảo. Nội dung bên dưới được giữ nguyên để truy vết; không xóa.
 
 **Trạng thái:** `DRAFT – chờ chủ dự án review/phê duyệt (CR-010)`. Tài liệu này **không** thay thế bất kỳ đặc tả đã duyệt nào cho đến khi CR-010 được phê duyệt. Không có mã nguồn, schema hay cấu hình nào bị thay đổi để viết tài liệu này.

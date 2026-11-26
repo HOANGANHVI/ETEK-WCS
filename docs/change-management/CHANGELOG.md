@@ -1,5 +1,11 @@
 # Change Log
 
+## v3.35 – CR-045 Single IO map and test deployment (2026-11-26) – version 2026.11.26.1
+
+- The only PLC IO map is `AGV_PLC Interface_List_22_11_2026.xlsx` (sha256 `405586c9…34da3`); the 20/11 and 10/11 workbooks are removed (IO Map v2 stays removed). Running catalog, database and communication logic unchanged; the IO contract is not confirmed by the PLC engineer. OW-5 and OW-6 closed.
+- Docker: `PLC_WRITE_ALLOWLIST` reaches the backend (`Plc:Write:AllowListText`, empty by default; one unreadable entry declares nothing). Test-machine instructions; `deploy.ps1` summary shows the real default PLC mode.
+- No migration. Not deployed; Docker images not built and no real PLC test.
+
 ## v3.34 – CR-044 PLC write guard and MissionCompleted correction (2026-11-26)
 
 - **Breaking for real writes (OW-2):** a real PLC write now also needs an explicit declaration in `Plc:Write:AllowList` (PLC, station, signal, address; empty by default) and must not reach a register of `Plc:Write:ReservedAddresses` (the unconfirmed 20/11/2026 interface). Second lock in the connection worker; every real write decision is stored in `audit_log` and a write whose authorization cannot be stored is not sent; refused write requests (401/403, lookup, value) are audited. Reading and the simulator are unchanged. `docker-compose.yml` does not yet pass an allow list: Docker deployments cannot write until it is declared.

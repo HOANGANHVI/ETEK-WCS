@@ -1,5 +1,7 @@
 # CR-010 – Hợp nhất quy trình nghiệp vụ và đặc tả giao tiếp PLC: mô hình Transport Task / Leg / Station Transaction (DRAFT)
 
+> **IO MAP HIỆN HÀNH (2026-11-26, CR-045).** Dự án chỉ dùng một IO Map: [AGV_PLC Interface_List_22_11_2026.xlsx](PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx) (SHA-256 `405586c9…34da3`). Các workbook cũ (IO Map v2, 10/11, 20/11) **đã ngừng sử dụng và đã gỡ khỏi repository**; nội dung dựa trên chúng trong tài liệu này chỉ còn giá trị lịch sử. IO Map 22/11 **chưa** được kỹ sư PLC xác nhận là hợp đồng IO. [Trạng thái từng tín hiệu](PLC_IO_Map/README.md).
+
 > **⚠ Hiệu lực một phần – CR-029, 2026-11-21.** Mô hình Transport Task / Leg / Station Transaction (ADR-0008) **còn hiệu lực**. Các mô tả tín hiệu, 9 bước và dữ liệu `Request_ID`/`Rack_Full…` dựa trên giao diện 10/11 đã bị thay bởi [PLC_20_11_2026/](PLC_20_11_2026/PLC_INTERFACE_SPECIFICATION_V2_20_11_2026.md) (Handshake, Transaction Lifecycle). Giữ nguyên để truy vết.
 
 **Trạng thái:** `DRAFT – chờ chủ dự án review/phê duyệt (CR-010)`. Chỉ là tài liệu. Không có mã nguồn, database, migration, API, UI hay cấu hình runtime nào bị thay đổi. Không sửa đặc tả baseline đã duyệt (xem §11).
