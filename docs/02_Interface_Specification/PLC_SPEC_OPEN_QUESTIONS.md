@@ -1,5 +1,7 @@
 # PLC Communication – Điểm cần xác nhận (TBD / Open Questions)
 
+> **IO MAP HIỆN HÀNH (2026-11-26, CR-045).** Dự án chỉ dùng một IO Map: [AGV_PLC Interface_List_22_11_2026.xlsx](PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx) (SHA-256 `405586c9…34da3`). Các workbook cũ (IO Map v2, 10/11, 20/11) **đã ngừng sử dụng và đã gỡ khỏi repository**; nội dung dựa trên chúng trong tài liệu này chỉ còn giá trị lịch sử. IO Map 22/11 **chưa** được kỹ sư PLC xác nhận là hợp đồng IO. [Trạng thái từng tín hiệu](PLC_IO_Map/README.md).
+
 > **⚠ SUPERSEDED một phần – CR-029, 2026-11-21.** Các câu hỏi gắn với tín hiệu của giao diện 10/11 (M9101, M9120, M9122, M9123, `Rack_Full`…) được thay bằng danh sách mới [PLC_VENDOR_CLARIFICATION_QUESTIONS_20_11_2026.md](PLC_20_11_2026/PLC_VENDOR_CLARIFICATION_QUESTIONS_20_11_2026.md) (PQ-01…PQ-25). Các câu hỏi **không** phụ thuộc tín hiệu (Q-LEG-1, Q-GATE-*, Q-MLEG-*, Q-AGV-1, Q-BUF-1, Q-INV-2, Q-LOC-1, Q-PH2-1…) **vẫn mở**. Giữ nguyên để truy vết.
 
 **Trạng thái:** `DRAFT – CR-010`. Danh sách này chỉ gồm những thông tin **thực sự chưa có căn cứ** trong `AGV_PLC_IO_Interface_List_10_11_2026.xlsx` hoặc trong yêu cầu ngày 2026-11-17. Những điều đã được xác nhận (mục 1) **không** được hỏi lại.

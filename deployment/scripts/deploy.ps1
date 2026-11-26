@@ -76,7 +76,7 @@ if (-not (Wait-Healthy)) { Fail 'The stack did not become healthy in time. Run s
 Write-Ok "ETEK WCS $commit is running."
 Write-Host ("   healthz: " + (Get-HealthzReport))
 Write-Host ("   open:    http://localhost:" + (Get-HttpPort))
-$mode = if ($e['PLC_MODE']) { $e['PLC_MODE'] } else { 'RealReadOnly' }
-Write-Host "   PLC mode: $mode, live connection allowed: $(if ($e['PLC_ALLOW_LIVE_CONNECTION']) { $e['PLC_ALLOW_LIVE_CONNECTION'] } else { 'false' }). RCS: simulator adapter only (no real RCS)."
+$mode = if ($e['PLC_MODE']) { $e['PLC_MODE'] } else { 'RealReadWrite' }   # the default of docker-compose.yml
+Write-Host "   PLC mode: $mode, live connection allowed: $(if ($e['PLC_ALLOW_LIVE_CONNECTION']) { $e['PLC_ALLOW_LIVE_CONNECTION'] } else { 'false' }). PLC write enabled: $(if ($e['PLC_WRITE_ENABLED']) { $e['PLC_WRITE_ENABLED'] } else { 'false' }), declared write points: $(if ($e['PLC_WRITE_ALLOWLIST']) { 'configured' } else { 'none' }). RCS: simulator adapter only (no real RCS)."
 Complete-WcsRun 0
 exit 0

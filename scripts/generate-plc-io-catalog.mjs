@@ -1,3 +1,5 @@
+// RETIRED INPUT (CR-045, 2026-11-26): the project's only IO map is "AGV_PLC Interface_List_22_11_2026.xlsx". The workbook this script reads (IO Map v2) is no longer in the repository
+// (Git history: commit 34c45b2). The catalog it produced stays in use unchanged until the new IO map is implemented under an approved change; do not run this script to create a new one.
 // Generates src/backend/WCS.Infrastructure/Plc/Catalog/plc-io-catalog.json from the controlled IO workbook (CR-002).
 // The workbook stays the source of truth; this file is a derived, versioned copy that the seeder loads. No value is invented:
 // Actual_PLC_Address stays empty, port / MC parameters stay empty, handshake rows stay PENDING.
@@ -13,6 +15,10 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const xlsx = path.join(root, 'docs/02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx')
 const outFile = path.join(root, 'src/backend/WCS.Infrastructure/Plc/Catalog/plc-io-catalog.json')
+if (!fs.existsSync(xlsx)) {
+  console.error('The input workbook (IO Map v2) is retired and not in the repository; the committed catalog is left unchanged. See docs/02_Interface_Specification/PLC_IO_Map/README.md.')
+  process.exit(2)
+}
 
 // ---- minimal .xlsx reader (zip central directory + inflate) -------------------------------------------------
 function readZip(buf) {

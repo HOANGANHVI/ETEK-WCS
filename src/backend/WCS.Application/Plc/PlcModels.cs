@@ -206,6 +206,11 @@ public sealed class PlcWriteOptions
     public bool Enabled { get; set; }
     /// <summary>CR-044 (OW-2): the points a real PLC may be written at, declared by the deployment. Empty by default: no real write.</summary>
     public List<PlcWriteDeclaration> AllowList { get; set; } = [];
+    /// <summary>
+    /// CR-045: the same declarations as ONE value, for deployments that pass settings as environment variables (docker-compose): entries separated by ";", fields by "|":
+    /// <c>PlcId|StationId|Signal|Address</c> (STRING: <c>|Words</c>). Empty by default. One unreadable entry and the whole value declares nothing.
+    /// </summary>
+    public string? AllowListText { get; set; }
     /// <summary>CR-044 (OW-2): registers no real write may reach, even when declared ("D1600" or "D1600-D1601"). Set in appsettings.json.</summary>
     public List<string> ReservedAddresses { get; set; } = [];
 }

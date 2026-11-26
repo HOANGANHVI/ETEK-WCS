@@ -1,5 +1,7 @@
 # PLC Error Handling & Recovery – cập nhật theo giao diện 20/11/2026
 
+> **IO MAP HIỆN HÀNH (2026-11-26, CR-045).** Dự án chỉ dùng một IO Map: [AGV_PLC Interface_List_22_11_2026.xlsx](../PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx) (SHA-256 `405586c9…34da3`). Các workbook cũ (IO Map v2, 10/11, 20/11) **đã ngừng sử dụng và đã gỡ khỏi repository**; nội dung dựa trên chúng trong tài liệu này chỉ còn giá trị lịch sử. IO Map 22/11 **chưa** được kỹ sư PLC xác nhận là hợp đồng IO. [Trạng thái từng tín hiệu](../PLC_IO_Map/README.md).
+
 > **ĐÍNH CHÍNH 2026-11-26 (OW-4).** Tài liệu này phân tích bản workbook cũ (`3c5da74b…`), trong đó `PLC_MissionCompleted` là BOOL `0` thất bại / `1` thành công. Bản đang dùng làm căn cứ (`a291d28f…`) là INT **`1` = Thất bại, `2` = Thành công**. Mọi câu dưới đây coi `1` là thành công **không còn đúng**. Một giá trị INT không đủ để kết luận hoàn thành khi chưa xác minh đúng giao dịch (ADR-0011 D-4). Hợp đồng IO vẫn chờ kỹ sư PLC xác nhận. Xem [báo cáo Phase 2](PLC_PHASE2_REVIEW_2026-11-26.md).
 
 | | |

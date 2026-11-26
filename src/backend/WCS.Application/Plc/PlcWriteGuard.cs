@@ -53,11 +53,30 @@ public static class PlcWriteGuard
         return ranges.Any(r => r.Device == a.Device && a.Number <= r.To && last >= r.From);
     }
 
+    /// <summary>CR-045: the declarations of <c>Plc:Write:AllowListText</c>. NULL = unreadable (nothing of it counts).</summary>
+    public static IReadOnlyList<PlcWriteDeclaration>? ParseAllowList(string? text)
+    {
+        var result = new List<PlcWriteDeclaration>();
+        foreach (var entry in (text ?? "").Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f = entry.Split('|', StringSplitOptions.TrimEntries);
+            int? words = null;
+            if (f.Length is < 4 or > 5 || f.Take(4).Any(x => x.Length == 0 || x.Contains('*'))) return null;
+            if (f.Length == 5) { if (!int.TryParse(f[4], out var w) || w <= 0) return null; words = w; }
+            result.Add(new PlcWriteDeclaration { PlcId = f[0], StationId = f[1], Signal = f[2], Address = f[3], Words = words });
+        }
+        return result;
+    }
+
+    /// <summary>Every declaration in force: the list plus the text form. An unreadable text declares nothing at all (the list included): a half-understood configuration writes nothing.</summary>
+    public static IReadOnlyList<PlcWriteDeclaration> Declarations(PlcRuntimeOptions o) =>
+        ParseAllowList(o.Write.AllowListText) is { } text ? [.. o.Write.AllowList, .. text] : [];
+
     public static bool IsDeclared(PlcRuntimeOptions o, IoPointRef p)
     {
         if (string.IsNullOrWhiteSpace(p.Address)) return false;
         var address = DeviceAddress.Normalize(p.Address);
-        return o.Write.AllowList.Any(d => Same(d.PlcId, p.PlcId) && Same(d.StationId, p.StationId) && Same(d.Signal, p.SignalName)
+        return Declarations(o).Any(d => Same(d.PlcId, p.PlcId) && Same(d.StationId, p.StationId) && Same(d.Signal, p.SignalName)
             && !string.IsNullOrWhiteSpace(d.Address) && DeviceAddress.Normalize(d.Address) == address
             && (p.DataType != PlcDataType.String || (d.Words is { } w && w == p.WordLength)));
         static bool Same(string declared, string actual) => string.Equals(declared?.Trim(), actual, StringComparison.OrdinalIgnoreCase);

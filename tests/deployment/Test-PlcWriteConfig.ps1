@@ -16,7 +16,7 @@ try {
     . (Join-Path $scripts 'plc-write-config.ps1') -NoContainer      # functions only (dot-sourced)
 
     function EnvMap([string[]]$lines) { Set-Content -LiteralPath (Join-Path $tmp 'config\.env') -Encoding ascii -Value $lines; return (Read-EnvFile) }
-    $all = @('POSTGRES_PASSWORD=x', 'PLC_ALLOW_LIVE_CONNECTION=true', 'PLC_WRITE_ENABLED=true')
+    $all = @('POSTGRES_PASSWORD=x', 'PLC_ALLOW_LIVE_CONNECTION=true', 'PLC_WRITE_ENABLED=true', 'PLC_WRITE_ALLOWLIST=PLC-01|A1|Request_Ack|M101')
 
     # 1) the file operators copy: it must not force read-only and must not enable anything
     $example = Get-Content -LiteralPath (Join-Path $repo 'deployment\.env.example')
@@ -26,6 +26,7 @@ try {
     $rows = Get-PlcWriteConfigReport $m $null
     Check 'a copy of .env.example: the mode is fine' ((Row $rows 'PLC_MODE').Met)
     Check 'a copy of .env.example enables NOTHING (live and write both off)' (-not (Row $rows 'PLC_ALLOW_LIVE_CONNECTION').Met -and -not (Row $rows 'PLC_WRITE_ENABLED').Met)
+    Check 'a copy of .env.example declares NO write point (CR-045)' (-not (Row $rows 'PLC_WRITE_ALLOWLIST').Met -and $m['PLC_WRITE_ALLOWLIST'] -eq '')
     Check '.env.example lists PLC_WRITE_ENABLED and no longer the removed approval reference / handshake keys (CR-019)' ($m.ContainsKey('PLC_WRITE_ENABLED') -and -not $m.ContainsKey('PLC_WRITE_APPROVAL_REFERENCE') -and -not $m.ContainsKey('PLC_WRITE_HANDSHAKE_APPROVED'))
 
     # 2) every key set by the operator
@@ -33,7 +34,7 @@ try {
     Check 'all keys set: every setting is met' (@($rows | Where-Object { -not $_.Met }).Count -eq 0)
 
     # 3) each key missing alone
-    foreach ($drop in 'PLC_ALLOW_LIVE_CONNECTION', 'PLC_WRITE_ENABLED') {
+    foreach ($drop in 'PLC_ALLOW_LIVE_CONNECTION', 'PLC_WRITE_ENABLED', 'PLC_WRITE_ALLOWLIST') {
         $r = Get-PlcWriteConfigReport (EnvMap ($all | Where-Object { $_ -notlike "$drop=*" })) $null
         $missing = @($r | Where-Object { -not $_.Met } | ForEach-Object { $_.Setting })
         Check "missing only $drop" ($missing.Count -eq 1 -and $missing[0] -eq $drop) ($missing -join ',')
@@ -47,7 +48,7 @@ try {
     $stale = @{ 'Plc__Mode' = 'RealReadOnly'; 'Plc__AllowLiveConnection' = 'false'; 'Plc__Write__Enabled' = 'false' }
     $r = Get-PlcWriteConfigReport (EnvMap $all) $stale
     Check 'container not recreated: every setting is judged by the CONTAINER and the report says so' ((@($r | Where-Object { -not $_.Met }).Count -ge 3) -and (Row $r 'PLC_WRITE_ENABLED').Note -like '*NOT recreated*')
-    $fresh = @{ 'Plc__Mode' = 'RealReadWrite'; 'Plc__AllowLiveConnection' = 'true'; 'Plc__Write__Enabled' = 'True' }
+    $fresh = @{ 'Plc__Mode' = 'RealReadWrite'; 'Plc__AllowLiveConnection' = 'true'; 'Plc__Write__Enabled' = 'True'; 'Plc__Write__AllowListText' = 'PLC-01|A1|Request_Ack|M101' }
     $r = Get-PlcWriteConfigReport (EnvMap $all) $fresh
     Check 'container recreated with both keys: all met, no difference note (True == true)' (@($r | Where-Object { -not $_.Met -or $_.Note }).Count -eq 0)
 
@@ -56,7 +57,7 @@ try {
     $old = Get-PlcWriteConfigReport (EnvMap ($all + 'PLC_WRITE_APPROVAL_REFERENCE=' + $ref + '', 'PLC_WRITE_HANDSHAKE_APPROVED=false')) $null
     $oldText = $old | Out-String
     Check 'old removed keys in .env: no row, no mention, value not printed, nothing missing' (($oldText -notmatch [regex]::Escape($ref)) -and ($oldText -notmatch 'APPROVAL_REFERENCE|HANDSHAKE') -and (@($old | Where-Object { -not $_.Met }).Count -eq 0))
-    Check 'the report has exactly the three remaining settings' (@($old).Count -eq 3)
+    Check 'the report has exactly the four settings' (@($old).Count -eq 4)
 
     # 7) the .env check of the deployment scripts warns about a forced read-only mode
     Set-Content -LiteralPath (Join-Path $tmp 'config\.env') -Encoding ascii -Value @('POSTGRES_PASSWORD=x', 'PLC_MODE=RealReadOnly')

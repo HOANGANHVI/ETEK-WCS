@@ -1,5 +1,7 @@
 # AGV Phase 2 – Đặc tả vận hành tổng thể (P0)
 
+> **IO MAP HIỆN HÀNH (2026-11-26, CR-045).** Dự án chỉ dùng một IO Map: [AGV_PLC Interface_List_22_11_2026.xlsx](../../02_Interface_Specification/PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx) (SHA-256 `405586c9…34da3`). Các workbook cũ (IO Map v2, 10/11, 20/11) **đã ngừng sử dụng và đã gỡ khỏi repository**; nội dung dựa trên chúng trong tài liệu này chỉ còn giá trị lịch sử. IO Map 22/11 **chưa** được kỹ sư PLC xác nhận là hợp đồng IO. [Trạng thái từng tín hiệu](../../02_Interface_Specification/PLC_IO_Map/README.md).
+
 | | |
 |---|---|
 | **Trạng thái** | **DRAFT – CHỜ CHỦ DỰ ÁN DUYỆT (Revision 1.2).** Đây là tài liệu P0 (phân tích/đặc tả); **không** phải CR được duyệt, **không** cho phép sửa code. Không mục nào ở đây được coi là *Approved / Published / Passed* nếu chưa có xác nhận ghi rõ. |

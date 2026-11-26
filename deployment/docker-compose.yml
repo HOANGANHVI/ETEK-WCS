@@ -84,6 +84,9 @@ services:
       Plc__Mode: ${PLC_MODE:-RealReadWrite}
       Plc__AllowLiveConnection: ${PLC_ALLOW_LIVE_CONNECTION:-false}
       Plc__Write__Enabled: ${PLC_WRITE_ENABLED:-false}
+      # CR-044 / CR-045: deny by default. A real write also needs the point declared here: "PlcId|StationId|Signal|Address" entries separated by ";" (empty = nothing is written).
+      # The reserved registers of the unconfirmed IO map are part of the application settings and are refused even when declared.
+      Plc__Write__AllowListText: ${PLC_WRITE_ALLOWLIST:-}
       Plc__AllowSimulatorInProduction: ${PLC_ALLOW_SIMULATOR_IN_PRODUCTION:-false}
       # RCS has only a simulator adapter (project baseline): Integration:Mode must stay "Simulator"; no network probe unless enabled.
       Integration__Mode: Simulator

@@ -4,6 +4,7 @@
 - **Status:** Decisions **accepted by the project owner** (2026-11-21). Implementation: **none yet** (no code, no migration, no database change). The 20/11/2026 interface itself remains **pending PLC engineer confirmation**; CR-029 stays `PENDING_APPROVAL`, not `APPROVED` and not `READY FOR IMPLEMENTATION`.
 - **Numbering note:** ADR-0009 and ADR-0010 exist on the unmerged CR-027 / CR-028 branches; this ADR is numbered 0011 to avoid a clash.
 - **Amendment 2026-11-26 (OW-4, CR-044):** the success value in D-4 is corrected to `PLC_MissionCompleted = 2` (`1` = Failure). The rest of D-1 to D-4 is unchanged.
+- **Amendment 2026-11-26 (CR-045):** the only IO map is `AGV_PLC Interface_List_22_11_2026.xlsx`; the workbooks named below (20/11, 10/11, IO Map v2) are retired and removed from the repository. This replaces the "nothing deleted" statement of D-3 for those workbooks; documents are kept.
 - **Supersedes in part:** ADR-0008 decision 4 ("one active Station Transaction per port, no PLC-wide lock") — see D-1. ADR-0004 decisions 6 and 8 and the 23-signal template are affected by the new interface (see CR-029 / Impact Analysis); their text is unchanged.
 - **Does not change:** the 13 task states, `PER_AGV` of Legacy dispatch, BP-04 `REVIEW`, WCS ownership of inventory, A3/A4 and D1/D2 `UNCHANGED`, CR-028 decisions, any PLC IP / address / mapping that is running.
 - **Inputs:** `AGV_PLC Interface_List_20_11_2026.xlsx`; `docs/02_Interface_Specification/PLC_20_11_2026/*`; conflicts C-1…C-5 of CR-029.

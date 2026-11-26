@@ -46,6 +46,6 @@ This package does not invent missing details. In particular, BP-04 remains REVIE
 The Phase 1 PLC topology and controlled working IO interface are documented in:
 - `specification/business-rules.md` section 1.8.
 - `specification/integration-requirements.md` section 5.10.
-- `02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`.
+- **Hiện hành (2026-11-26, CR-045):** `02_Interface_Specification/PLC_IO_Map/AGV_PLC Interface_List_22_11_2026.xlsx` là IO Map duy nhất ([trạng thái](02_Interface_Specification/PLC_IO_Map/README.md)); workbook IO Map v2 từng nêu ở đây đã ngừng sử dụng.
 
 The approved direction is four physical PLCs, four WCS PLC connections, and four independent Station IO sets per PLC (16 Station IO sets total). Read the addenda and workbook together. The workbook does not yet constitute a commissioned actual-address map; actual per-Station addresses and handshake details require PLC-engineer confirmation.

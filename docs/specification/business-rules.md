@@ -119,6 +119,7 @@ This addendum supersedes only the earlier PLC topology statements in sections 1.
 - Each Station must have its own register allocation within its owning PLC. Device addresses may repeat across different physical PLCs, but allocations for independent Stations on the same PLC must not overlap where that would cause data collision.
 - A signal is uniquely identified by `PLC_ID + Station_ID + Signal_Name`.
 - The official working interface workbook is `docs/02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx`.
+- **Update 2026-11-26 (CR-045, owner decision):** the workbook above is retired and removed. The only IO map is `docs/02_Interface_Specification/PLC_IO_Map/AGV_PLC Interface_List_22_11_2026.xlsx`, not yet confirmed by the PLC engineer. No other business rule changes.
 - Actual per-Station PLC device addresses, protocol settings and handshake/reset details remain unconfirmed until approved by the PLC engineer. The workbook's `Template_Address_Reference` is not an actual per-Station address allocation.
 - Do not infer register offsets or change the 23 source signal definitions without an approved change.
 

@@ -48,7 +48,7 @@ Một lệnh ghi chỉ được gửi khi **tất cả** đúng:
 | Đối tượng | Ảnh hưởng |
 |---|---|
 | Triển khai đang ghi PLC thật | **Mọi lệnh ghi bị chặn** cho tới khi khai báo |
-| Docker | `docker-compose.yml` **chưa truyền** `Plc__Write__AllowList__*`; muốn ghi phải bổ sung biến hoặc file cấu hình. Không sửa trong CR này |
+| Docker | `docker-compose.yml` **chưa truyền** `Plc__Write__AllowList__*`; muốn ghi phải bổ sung biến hoặc file cấu hình. Không sửa trong CR này. **Đã đóng ở CR-045** (`PLC_WRITE_ALLOWLIST`, mặc định rỗng) |
 | Điểm đã duyệt ghi trên database máy phát triển (9) | Không chạm thanh ghi dành riêng; cần khai báo nếu chạy Real |
 | Điểm đặt ở thanh ghi dành riêng | Vẫn đọc; bị chặn ghi ở Real; sự kiện `WRITE_GUARD_CHECK` liệt kê khi khởi động / nạp lại |
 | CR-019 | "Phê duyệt duy nhất là duyệt ghi của Admin" **được thay một phần**: thêm khai báo của bản triển khai |
