@@ -183,6 +183,12 @@ public sealed class PlcWorker : IAsyncDisposable
         while (_writes.Reader.TryRead(out var w))
         {
             if (_endpoint is null || _endpoint.State != EndpointState.Connected) { w.Done.TrySetResult(new WriteResult(false, "NOT_CONNECTED", "PLC chưa kết nối; lệnh ghi không được xếp hàng chờ.")); continue; }
+            if (_mode != PlcRuntimeMode.Simulator && RealWriteRefusal(w.Point) is { } refusal)
+            {   // CR-044: second lock at the connection itself: only a point of this worker, exactly as configured, that the policy allows - never an address supplied by a caller
+                _events.Log(PlcLogLevel.Warning, _plcId, w.Point.StationId, "WRITE_DENIED", $"worker: {w.Point.StationId}/{w.Point.SignalName} blocked ({refusal.Code}).",
+                    PlcDiag.Args(PlcDiagCodes.WriteBlocked, PlcDiagStages.Write, ("actor", "worker"), ("station", w.Point.StationId), ("signal", w.Point.SignalName), ("code", refusal.Code), ("blockedBy", refusal.Code), ("mode", _mode.ToString()), ("address", w.Point.Address)));
+                w.Done.TrySetResult(refusal); continue;
+            }
             try
             {
                 await _endpoint.WritePointAsync(w.Point, w.Value, ct);
@@ -205,6 +211,13 @@ public sealed class PlcWorker : IAsyncDisposable
                 w.Done.TrySetResult(new WriteResult(false, "WRITE_FAILED", ex.Message));
             }
         }
+    }
+
+    private WriteResult? RealWriteRefusal(IoPointRef point)
+    {
+        if (!_stations.Any(s => s.Points.Contains(point))) return new WriteResult(false, PlcWriteGuard.UnknownPoint, "The point does not match the configuration of this connection.");
+        var decision = WritePolicy.Evaluate(_options, point);
+        return decision.Allowed ? null : new WriteResult(false, decision.Code, decision.Reason);
     }
 
     // -------------------------------------------------------------------------------------------------------------------- main loop

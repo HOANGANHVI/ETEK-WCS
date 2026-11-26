@@ -46,7 +46,7 @@ public interface ISimulatorControl
 /// REAL_READ_WRITE) and exposes snapshots. A real connection is opened only when BOTH the deployment guard and the Admin switch allow it.
 /// </summary>
 public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeOptions> options, IPlcEndpointFactory factory, IPlcEvents events, IClock clock,
-    ILogger<PlcRuntime> logger) : IPlcRuntime
+    ILogger<PlcRuntime> logger, IPlcWriteAudit? writeAudit = null) : IPlcRuntime
 {
     private readonly ConcurrentDictionary<string, PlcWorker> _workers = new();
     private readonly SemaphoreSlim _sync = new(1, 1);
@@ -62,6 +62,8 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         if (o.Mode != PlcRuntimeMode.Simulator && !o.AllowLiveConnection) notes.Add("[LIVE_CONNECTION_DISABLED] Plc:AllowLiveConnection = false: không mở socket tới PLC thật.");
         if (o.Mode == PlcRuntimeMode.RealReadWrite && effective != PlcRuntimeMode.RealReadWrite)
             notes.Add("[WRITE_KEYS_MISSING] REAL_READ_WRITE đã được yêu cầu nhưng thiếu khóa ghi (AllowLiveConnection, Write.Enabled): hệ thống chạy REAL_READ_ONLY.");
+        if (effective == PlcRuntimeMode.RealReadWrite && o.Write.AllowList.Count == 0)
+            notes.Add("[WRITE_ALLOWLIST_EMPTY] Plc:Write:AllowList is empty: no point is written to a real PLC.");
         if (o.Mode == PlcRuntimeMode.Simulator) notes.Add("[SIMULATOR_MODE] Chế độ mô phỏng: không có kết nối nào tới PLC vật lý.");
         return new PlcRuntimeInfo(o.Mode.ToString(), effective.ToString(), o.AllowLiveConnection, o.Write.Enabled, WritePolicy.WriteKeysComplete(o), _running, notes, WritePolicy.MissingWriteKeys(o));
     }
@@ -136,6 +138,7 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
             var cfg = new PlcEndpointConfig(c.Id, c.IpAddress, c.Port, c.Protocol, c.NetworkNumber, c.PcNumber, c.ModuleIoNumber, c.PlcStationNumber, c.MonitoringTimer, c.TimeoutMs, c.PollingIntervalMs,
                 c.ConnectTimeoutMs, c.ReadTimeoutMs, c.WriteTimeoutMs, c.XyAddressBase, c.WAddressBase);
             result.Add(new PlcWorker(c.Id, c.Name, mode, o, cfg, enabled, why, handlers, factory, events, clock));
+            LogWriteGuardCheck(c.Id, mode, o, handlers);
             LogConfigSnapshot(c, cfg, mode, enabled, why, handlers);
         }
         return result;
@@ -171,23 +174,63 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         catch (Exception) { /* diagnostics must never disturb start-up */ }
     }
 
+    /// <summary>CR-044: says at start-up / reload which configured points the write guard refuses, so an address that collides with a reserved register is seen before anyone writes. Reading is not touched.</summary>
+    private void LogWriteGuardCheck(string plcId, PlcRuntimeMode mode, PlcRuntimeOptions o, IReadOnlyList<StationIoHandler> handlers)
+    {
+        var writable = handlers.SelectMany(h => h.Points).Where(p => p.Direction == PlcSignalDirection.SoftwareToPlc && !string.IsNullOrWhiteSpace(p.Address)).ToList();
+        var reserved = writable.Where(p => PlcWriteGuard.OverlapsReserved(o, p) != false).ToList();
+        var undeclared = mode == PlcRuntimeMode.Simulator ? [] : writable.Where(p => p.WriteAllowed && !PlcWriteGuard.IsDeclared(o, p)).ToList();
+        if (reserved.Count == 0 && undeclared.Count == 0) return;
+        var sample = string.Join(", ", reserved.Concat(undeclared).Distinct().Take(5).Select(p => $"{p.StationId}/{p.SignalName}={p.Address}"));
+        events.Log(PlcLogLevel.Warning, plcId, null, "WRITE_GUARD_CHECK",
+            $"{plcId}: {reserved.Count} Software -> PLC point(s) on a reserved register, {undeclared.Count} write-approved point(s) not declared for real writes ({sample}). They are refused in a real mode; reading is unchanged.",
+            WCS.Application.Logging.LogArgs.Of(("plc", plcId), ("reserved", reserved.Count), ("undeclared", undeclared.Count), ("sample", sample)));
+    }
+
     public async Task<WriteResult> WriteAsync(string plcId, string stationId, string signal, PointValue value, string actor, CancellationToken ct = default, bool handshake = false)
     {
         var worker = Worker(plcId);
         var handler = worker?.Stations.FirstOrDefault(s => s.StationId == stationId);
         var point = handler?.Find(signal);
-        if (worker is null || handler is null || point is null) return new WriteResult(false, "NOT_FOUND", "Không tìm thấy IO point.");
+        // CR-044: every write decision in a real mode is audited (refused and authorized); the simulator is unchanged
+        var audited = Options.Mode != PlcRuntimeMode.Simulator;
+        PlcWriteAuditRecord Record(string action, bool denied, bool success, string? code) => new(action, denied, success, actor, plcId, stationId, signal, point?.Address, value.ToString(),
+            WritePolicy.EffectiveMode(Options).ToString(), code, point?.Id);
+        async Task<WriteResult> Refuse(string code, string? reason)
+        {
+            if (audited) await TryAuditAsync(Record("PLC_WRITE_DENIED", true, false, code));
+            return new WriteResult(false, code, reason);
+        }
+
+        if (worker is null || handler is null || point is null) return await Refuse("NOT_FOUND", "IO point not found.");
         var decision = WritePolicy.Evaluate(Options, point, handshake);
         if (!decision.Allowed)
         {
             events.Log(PlcLogLevel.Warning, plcId, stationId, "WRITE_DENIED", $"{actor}: {stationId}/{signal} blocked ({decision.Code}).", PlcDiag.Args(PlcDiagCodes.WriteBlocked, PlcDiagStages.Write, ("actor", actor), ("station", stationId), ("signal", signal), ("code", decision.Code), ("blockedBy", decision.Code),
                 ("mode", WritePolicy.EffectiveMode(Options).ToString()), ("address", point.Address)));
-            return new WriteResult(false, decision.Code, decision.Reason);
+            return await Refuse(decision.Code!, decision.Reason);
         }
         // CR-014: the value is checked against the signal (type, 16-bit INT range, ASCII STRING length) before anything is queued
         var shape = WriteValueValidator.Check(point.DataType, point.WordLength, point.Encoding, value);
-        if (!shape.Ok) return new WriteResult(false, shape.Code, shape.Message);
-        return await worker.EnqueueWriteAsync(point, value).WaitAsync(ct);
+        if (!shape.Ok) return await Refuse(shape.Code!, shape.Message);
+        // CR-044: the authorization is stored BEFORE anything is sent; without it nothing is sent
+        if (audited && !await TryAuditAsync(Record("PLC_WRITE_AUTHORIZED", false, true, null)))
+            return new WriteResult(false, PlcWriteGuard.AuditUnavailable, "The audit record could not be stored: the write was not sent.");
+
+        var result = new WriteResult(false, "OUTCOME_UNKNOWN", null, IsAmbiguous: true);
+        try { return result = await worker.EnqueueWriteAsync(point, value).WaitAsync(ct); }
+        finally { if (audited) await TryAuditAsync(Record("PLC_WRITE_RESULT", false, result.Success, result.Code)); }
+    }
+
+    private async Task<bool> TryAuditAsync(PlcWriteAuditRecord record)
+    {
+        if (writeAudit is null) return false;
+        try { await writeAudit.RecordAsync(record, CancellationToken.None); return true; }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "The audit record {Action} of a PLC write to {PlcId} {Station}/{Signal} could not be stored. {EventCode}", record.Action, record.PlcId, record.StationId, record.Signal, "PLC_WRITE_AUDIT_FAILED");
+            return false;
+        }
     }
 
     public async Task<ReadResult> ReadNowAsync(string plcId, string stationId, string signal, CancellationToken ct = default)

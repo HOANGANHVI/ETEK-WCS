@@ -24,10 +24,10 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
 {
     private static readonly McRoute Route = new(0, 255, 1023, 0);
 
-    private static Dictionary<string, string?> AllKeys => new()
+    private static Dictionary<string, string?> AllKeys => new Dictionary<string, string?>
     {
         ["Plc:Mode"] = "RealReadWrite", ["Plc:AllowLiveConnection"] = "true", ["Plc:Write:Enabled"] = "true",
-    };
+    }.Declare(("PLC-01", "A1", "Request_Ack", "M101"), ("PLC-01", "A1", "AGV_ID", "D1700"), ("PLC-01", "A1", "Heartbeat_SW", "M103"));   // CR-044
 
     /// <summary>A PRODUCTION host (secure cookies, no development shortcuts) on the given configuration, with the PLC runtime started and PLC-01 pointed at the mock.</summary>
     private async Task<(Harness H, WebApplicationFactory<Program> F, HttpClient Admin, HttpClient Op)> BootProductionAsync(MelsecMcMockServer plc, Dictionary<string, string?> cfg)
@@ -89,7 +89,7 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         var (h, f, admin, op) = await BootProductionAsync(plc, AllKeys);
         await using var _h = h; using var _f = f;   // (a recorder of an earlier test may still flush late rows into the shared database: only rows of THIS run count)
         var ack = await Id(h, "Request_Ack"); var agv = await Id(h, "AGV_ID"); var beat = await Id(h, "Heartbeat_SW");
-        await Enter(admin, ack, "M101"); await Enter(admin, agv, "D1600"); await Enter(admin, beat, "M103");
+        await Enter(admin, ack, "M101"); await Enter(admin, agv, "D1700"); await Enter(admin, beat, "M103");
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
         var ov = await admin.SendJsonAsync(HttpMethod.Get, "/api/plc/overview");
         var rt = ov.Root.GetProperty("data").GetProperty("runtime");
@@ -126,7 +126,7 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         Assert.Equal(200, ok.Status);
         Assert.True(plc.GetBit(101));                                                                                       // the (mock) PLC really holds it
         Assert.Equal(200, (await Write(admin, "AGV_ID", 321)).Status);
-        Assert.Equal((ushort)321, plc.GetWord(1600));
+        Assert.Equal((ushort)321, plc.GetWord(1700));
         Assert.Equal("WRITE_NOT_ALLOWED", (await Write(admin, "Heartbeat_SW", true)).Root.ErrorCode());                      // the unapproved sibling stays out
         Assert.False(plc.GetBit(103));
         Assert.True(Writes(plc) == 2, "write frames: " + string.Join(" | ", plc.ReceivedFrames.Select(x => McFrame.ParseRequest(x)).Where(r => r.Command == McFrame.CommandBatchWrite).Select(r => $"{r.Head} x{r.Points}")));
@@ -140,7 +140,7 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         // diagnostics: the MC request/response of the writes is kept
         var rec = f.Services.GetRequiredService<PlcExchangeRecorder>(); await rec.FlushAsync(8000);
         var rows = await h.Db(db => db.PlcExchangeLog.AsNoTracking().Where(x => x.PlcId == "PLC-01" && x.Operation == "WRITE").ToListAsync());
-        Assert.Equal("M101;D1600", string.Join(";", rows.OrderBy(r => r.OccurredAt).Select(r => $"{r.Device}{r.StartAddress}")));   // exactly the two approved writes
+        Assert.Equal("M101;D1700", string.Join(";", rows.OrderBy(r => r.OccurredAt).Select(r => $"{r.Device}{r.StartAddress}")));   // exactly the two approved writes
         Assert.All(rows, r => { Assert.Equal("OK", r.Outcome); Assert.False(string.IsNullOrWhiteSpace(r.RequestHex)); Assert.False(string.IsNullOrWhiteSpace(r.ResponseHex)); });
         Assert.Contains(await h.Db(db => db.PlcCommLog.AsNoTracking().Where(l => l.Event == "WRITE").Select(l => l.Message).ToListAsync()), m => m.Contains("Request_Ack"));
     }
@@ -178,7 +178,7 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         var (h, f, admin, _) = await BootProductionAsync(plc, AllKeys);
         await using var _h = h; using var _f = f;
         var agv = await Id(h, "AGV_ID");
-        await Enter(admin, agv, "D1600"); Assert.Equal(200, (await Approve(admin, agv)).Status);
+        await Enter(admin, agv, "D1700"); Assert.Equal(200, (await Approve(admin, agv)).Status);
         Assert.True(await WaitFor(async () => await State(admin) == "Connected"));
         async Task Reconnected() => Assert.True(await WaitFor(async () => await State(admin) == "Connected", 10000));
 
@@ -188,7 +188,7 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
         plc.ForceEndCode(0, 0);
         Assert.Equal(("WRITE_FAILED", 422), (endCode.Root.ErrorCode(), endCode.Status));
         Assert.Contains("4031", endCode.Raw);
-        Assert.NotEqual((ushort)7, plc.GetWord(1600));
+        Assert.NotEqual((ushort)7, plc.GetWord(1700));
 
         // a PLC that does not answer in time: the write may have been executed -> ambiguous (never "success", never retried)
         var before = Writes(plc);
@@ -214,7 +214,7 @@ public class PlcWriteEnablementTests(DatabaseFixture fixture)
 
         // after recovery a normal write is confirmed again
         Assert.Equal(200, (await Write(admin, "AGV_ID", 10)).Status);
-        Assert.Equal((ushort)10, plc.GetWord(1600));
+        Assert.Equal((ushort)10, plc.GetWord(1700));
 
         // the PLC goes away: never reported as written or connected
         await plc.DisposeAsync();

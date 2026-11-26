@@ -8,6 +8,7 @@ using WCS.Domain.Plc;
 using WCS.Infrastructure.Plc;
 using WCS.Infrastructure.Simulation;
 using WCS.Tests.Config;
+using WCS.Tests.Support;
 
 namespace WCS.Tests.Plc;
 
@@ -175,6 +176,7 @@ public class HandshakeTests
             Handshake = { Definitions = [AckRule(), Permit()] },
         };
         var rw = new FakeRuntime(rwOptions, ("PLC-01", "A1")); rw.LiveBaseline("A1"); rw.Set("A1", "Pickup_Request", true);
+        rwOptions.Declare(rw.Handler("A1")!.Find("Request_Ack")!, rw.Handler("A1")!.Find("Transfer_Permit")!);   // CR-044: declared; the motion permit stays blocked even so
         var hsRw = Coordinator(rw, new FakeEvents());
         Assert.Equal(1, await hsRw.StepAsync());
         Assert.Equal("Request_Ack", Assert.Single(rw.Writes).Signal);

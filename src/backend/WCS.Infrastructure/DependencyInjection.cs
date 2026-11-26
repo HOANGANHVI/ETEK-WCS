@@ -124,6 +124,7 @@ public static class DependencyInjection
         services.AddScoped<WCS.Application.Auth.IUserRepository, WCS.Infrastructure.Auth.UserRepository>();
         services.AddSingleton<WCS.Application.Auth.IPasswordService, WCS.Infrastructure.Auth.PasswordService>();
         services.AddScoped<WCS.Application.Auth.IAuditLog, WCS.Infrastructure.Auth.AuditLog>();
+        services.AddSingleton<WCS.Application.Plc.IPlcWriteAudit, WCS.Infrastructure.Plc.PlcWriteAudit>();   // CR-044
         services.AddScoped<WCS.Infrastructure.Auth.AdminBootstrapper>();
 
         var dp = services.AddDataProtection().SetApplicationName("ETEK.WCS");

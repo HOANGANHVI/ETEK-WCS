@@ -204,6 +204,10 @@ public sealed class PlcRuntimeOptions
 public sealed class PlcWriteOptions
 {
     public bool Enabled { get; set; }
+    /// <summary>CR-044 (OW-2): the points a real PLC may be written at, declared by the deployment. Empty by default: no real write.</summary>
+    public List<PlcWriteDeclaration> AllowList { get; set; } = [];
+    /// <summary>CR-044 (OW-2): registers no real write may reach, even when declared ("D1600" or "D1600-D1601"). Set in appsettings.json.</summary>
+    public List<string> ReservedAddresses { get; set; } = [];
 }
 
 public sealed class PlcIntegrationOptions

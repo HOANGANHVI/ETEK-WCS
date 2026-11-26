@@ -80,6 +80,8 @@ public class WriteValueValidatorTests
         var all = new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadWrite, AllowLiveConnection = true, Write = new PlcWriteOptions { Enabled = true } };
         var point = new IoPointRef(Guid.NewGuid(), "PLC-01", "A1", "Request_Ack", PlcSignalDirection.SoftwareToPlc, PlcDataType.Bool, "M101", null, null, WriteAllowed: false, "Command", Pollable: true);
         Assert.Equal("WRITE_NOT_ALLOWED", WritePolicy.Evaluate(all, point).Code);                                         // pollable is not enough
+        Assert.Equal("WRITE_NOT_DECLARED", WritePolicy.Evaluate(all, point with { WriteAllowed = true }).Code);              // CR-044: nor is the Admin approval
+        all.Declare(point);
         Assert.True(WritePolicy.Evaluate(all, point with { WriteAllowed = true }).Allowed);
         Assert.Equal("READ_ONLY", WritePolicy.Evaluate(new PlcRuntimeOptions { Mode = PlcRuntimeMode.RealReadOnly, AllowLiveConnection = true }, point with { WriteAllowed = true }).Code);   // the mode still wins
     }
@@ -217,10 +219,10 @@ public class PlcWriteApprovalTests(DatabaseFixture fixture)
     public async Task A_write_needs_the_write_approval_a_value_of_the_right_type_and_reports_what_the_PLC_answered()
     {
         await using var plc = new MelsecMcMockServer { ExpectedRoute = Route }; plc.Start();
-        var (h, f, admin) = await BootAsync(new()
+        var (h, f, admin) = await BootAsync(new Dictionary<string, string?>
         {
             ["Plc:Mode"] = "RealReadWrite", ["Plc:AllowLiveConnection"] = "true", ["Plc:Write:Enabled"] = "true",
-        });
+        }.Declare(("PLC-01", "A1", "Request_Ack", "M101"), ("PLC-01", "A1", "AGV_ID", "D1700"), ("PLC-01", "A1", "Heartbeat_SW", "M103")));
         await using var _h = h; using var _f = f;
         Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, "/api/plc/connections/PLC-01", new
         {
@@ -228,7 +230,7 @@ public class PlcWriteApprovalTests(DatabaseFixture fixture)
             monitoringTimer = 16, timeoutMs = 300, pollingIntervalMs = 50, enabled = true,
         })).Status);
         var ack = await Id(h, "A1", "Request_Ack"); var agv = await Id(h, "A1", "AGV_ID"); var beat = await Id(h, "A1", "Heartbeat_SW");
-        foreach (var (id, a) in new[] { (ack, "M101"), (agv, "D1600"), (beat, "M103") })
+        foreach (var (id, a) in new[] { (ack, "M101"), (agv, "D1700"), (beat, "M103") })
             Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{id}/address", new { address = a })).Status);
         Assert.True(await WaitFor(async () => await State(admin, "PLC-01") == "Connected"));
         int Writes() => plc.ReceivedFrames.Select(x => McFrame.ParseRequest(x)).Count(r => r.Command == McFrame.CommandBatchWrite);
@@ -255,9 +257,9 @@ public class PlcWriteApprovalTests(DatabaseFixture fixture)
         Assert.Equal(200, (await TestWrite("Request_Ack", true)).Status);
         Assert.True(plc.GetBit(101));
         Assert.Equal(200, (await TestWrite("AGV_ID", 1234)).Status);
-        Assert.Equal((ushort)1234, plc.GetWord(1600));
+        Assert.Equal((ushort)1234, plc.GetWord(1700));
         Assert.Equal(200, (await TestWrite("AGV_ID", -5)).Status);
-        Assert.Equal(unchecked((ushort)-5), plc.GetWord(1600));
+        Assert.Equal(unchecked((ushort)-5), plc.GetWord(1700));
         Assert.Equal(3, Writes());
 
         // not approved for writing -> still refused although the approved ones work
@@ -273,7 +275,7 @@ public class PlcWriteApprovalTests(DatabaseFixture fixture)
         plc.ForceEndCode(0x4031, 1);
         var failed = await TestWrite("AGV_ID", 7);
         Assert.NotEqual(200, failed.Status); Assert.StartsWith("WRITE_", failed.Root.ErrorCode());
-        Assert.NotEqual((ushort)7, plc.GetWord(1600));
+        Assert.NotEqual((ushort)7, plc.GetWord(1700));
         var audit = await h.Db(db => db.AuditLog.AsNoTracking().Where(a => a.Action == "PLC_TEST_WRITE").ToListAsync());
         Assert.Contains(audit, a => a.Result == AuditResult.Success); Assert.Contains(audit, a => a.Result != AuditResult.Success);
     }

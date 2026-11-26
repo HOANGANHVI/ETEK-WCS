@@ -3,8 +3,8 @@
 | | |
 |---|---|
 | **Ngày** | 2026-11-26 |
-| **Trạng thái** | `BÁO CÁO CHỜ REVIEW – CHỜ KỸ SƯ PLC XÁC NHẬN HỢP ĐỒNG IO`. Không `APPROVED`, không `READY FOR IMPLEMENTATION`. Không sửa mã, mapping, workbook, CR-029, `CLAUDE.md`, database |
-| **Bản sửa** | Rev 3 (2026-11-26): ghi trạng thái OW-1…OW-8, kết quả kiểm tra OW-6. Rev 2: PD-1…PD-4 |
+| **Trạng thái** | `BÁO CÁO CHỜ REVIEW – CHỜ KỸ SƯ PLC XÁC NHẬN HỢP ĐỒNG IO`. Không `APPROVED`, không `READY FOR IMPLEMENTATION`. Không sửa mapping/catalog, workbook, CR-029, database |
+| **Bản sửa** | Rev 4 (2026-11-26): OW-2 và OW-4 đã thực hiện ([CR-044](../../change-management/CR-044_PLC_WRITE_GUARD_AND_MISSION_COMPLETED.md), chưa commit, chưa deploy). Rev 3: OW-1…OW-8, OW-6. Rev 2: PD-1…PD-4. §3–§7 mô tả hiện trạng **trước** CR-044 |
 | **Căn cứ phân tích** | `PLC_IO_Map/AGV_PLC Interface_List_20_11_2026.xlsx`, SHA-256 `a291d28fac907c3dbf5e3620425abf62cb718d058ab472eec9ccf8c0701babb3` (Git blob `5799a155`) |
 | **Phạm vi kiểm chứng** | Đọc đủ hai sheet (giá trị ô, ô gộp, đường nối); đọc source; `SELECT` trên database trên máy. Không kết nối PLC. Không xem workbook bằng Excel |
 | **Quản lý source** | Tài liệu này **không thuộc CR-042** (đang HOLD) và phải tách khi commit |
@@ -28,12 +28,12 @@ Hai bộ mã khác nhau: **`PD-n`** là quyết định về hợp đồng IO (b
 
 | # | Phát hiện | Mức |
 |---|---|---|
-| **K-1** | Địa chỉ trong mẫu cũ (v2) **đè lên tín hiệu mới**: `AGV_ID` mẫu `D1600` và `Error_Code` mẫu `D1610` là thanh ghi dùng chung `AGV_RequestTranfer`/`TranferCompleted` của trạm 1 và 2. Nếu ai nhập tay địa chỉ mẫu cho tín hiệu cũ, được duyệt ghi và chạy Real với PLC đã lập trình theo bản mới, WCS có thể gửi **yêu cầu mở cửa/kẹp hoặc báo hoàn thành không chủ đích** (ví dụ ghi `1` hoặc `3`). Theo PD-1, PLC tự xử lý theo interlock; interlock đó **chưa được xác nhận bằng văn bản** | **An toàn – nghiêm trọng** |
-| **K-2** | `CLAUDE.md` §7.8 và ADR-0011 D-4 viết "`PLC_MissionCompleted = 1` là điều kiện cần". Bản hiện tại: **`1` = Thất bại, `2` = Thành công**. Làm theo câu chữ cũ sẽ coi thất bại là hoàn thành. **OW-4 `APPROVED`** việc sửa diễn giải; hai văn bản đó **chưa được sửa** | **Nghiêm trọng** |
+| **K-1** | Địa chỉ trong mẫu cũ (v2) **đè lên tín hiệu mới**: `AGV_ID` mẫu `D1600` và `Error_Code` mẫu `D1610` là thanh ghi dùng chung `AGV_RequestTranfer`/`TranferCompleted` của trạm 1 và 2. Trước CR-044, nhập tay địa chỉ đó, duyệt ghi và chạy Real có thể gửi yêu cầu mở cửa/kẹp không chủ đích. **CR-044 chặn mọi lệnh ghi Real chạm các thanh ghi này**, chỉ ở nơi đã triển khai bản mới. Interlock phía PLC vẫn chưa được xác nhận | **An toàn** – xử lý trong mã, chưa triển khai |
+| **K-2** | `CLAUDE.md` §7.8 và ADR-0011 D-4 từng viết "`PLC_MissionCompleted = 1` là điều kiện cần", trong khi `1` = Thất bại. **Đã sửa (OW-4)** thành `2`, kèm điều kiện xác minh đúng giao dịch. CR-029 còn câu cũ (không sửa đợt này) | Đã xử lý, trừ CR-029 |
 | **K-3** | File cùng tên đã **đổi nội dung** sau khi CR-029 phân tích. Bộ tài liệu CR-029 mô tả bản cũ | Cao |
 | **K-4** | Ô địa chỉ **gộp** thể hiện `AGV_RequestTranfer` và `AGV_TranferCompleted` **dùng chung thanh ghi** ở cả 16 trạm [WB], được xác nhận là chủ đích [QĐ PD-3]. Bảng mã trong workbook còn dùng `4` cho cả yêu cầu Drop và xong Drop; quyết định đổi xong Drop thành `5`. **Workbook chưa cập nhật, PLC chưa xác nhận**: nếu một bên làm theo `4`, báo xong Drop bị hiểu là yêu cầu Drop | Cao |
 | **K-5** | **Không tín hiệu nào** trong 7 tín hiệu của workbook có trong hệ thống. Mô hình tiếp nhận hiện tại cần `Request_ID`, bit Pick/Drop và mã vị trí rack, bản mới không có | Cao |
-| **K-6** | Danh sách tín hiệu cấm ghi chỉ gồm tên cũ; `AGV_RequestTranfer` (yêu cầu tác động tới cơ cấu, dù PLC quyết định theo PD-1) sẽ **không bị chặn** nếu thêm vào catalog mà không sửa chính sách. Lớp chặn ghi mặc định: **OW-2 `APPROVED`, chưa hiện thực** | An toàn |
+| **K-6** | Danh sách cấm ghi theo tên chỉ gồm tên cũ. **CR-044 chuyển sang chặn mặc định**: ghi Real cần khai báo tường minh, nên tín hiệu mới không tự ghi được | An toàn – xử lý trong mã, chưa triển khai |
 | **K-7** | IO Map v2 (xlsx) **đã bị xóa khỏi Git** trong merge `a8c8787`, trái `CLAUDE.md` §7.6/7.8. Còn trong commit `34c45b2`; catalog đang chạy sinh từ file này. **OW-5 `APPROVED`** khôi phục làm tài liệu `LEGACY/HISTORICAL`, **chưa thực hiện** | Cao – quản lý tài liệu |
 
 **Hiện trạng an toàn trên máy này:** PLC mode `Simulator`; bảng trao đổi MC Protocol trống; không có kết nối tới `192.168.10.*`. K-1 chưa xảy ra ở đây. Máy vận hành khác **chưa kiểm tra**. Đề nghị: không bật `Plc:Write:Enabled` ở bất kỳ đâu cho tới khi mapping thống nhất.
@@ -112,7 +112,7 @@ Sheet **không** nêu: giữ mức hay xung, ai reset, thời hạn, nhánh lỗ
 | Mã | Bên A | Bên B | Tình trạng |
 |---|---|---|---|
 | C-6 | ADR-0011 D-2, `CLAUDE.md` §7.8: `Mission_Feedback` 1–3 **không** là định danh AMR | Workbook: 1 AGV1, 2 AGV2, 3 AGV3 | `DECIDED` (OW-3): giữ D-2. Cách PLC nhận phản hồi: PLC-OQ-06 `OPEN` |
-| C-7 | ADR-0011 D-4: `MissionCompleted = 1` cần nhưng chưa đủ | Workbook: 1 = thất bại, 2 = thành công | `APPROVED` (OW-4); văn bản cũ chưa sửa. Nguyên tắc "chưa đủ bằng chứng" của D-4 giữ nguyên |
+| C-7 | ADR-0011 D-4: `MissionCompleted = 1` cần nhưng chưa đủ | Workbook: 1 = thất bại, 2 = thành công | Đã sửa (OW-4). Nguyên tắc "chưa đủ bằng chứng" giữ nguyên; CR-029 còn câu cũ |
 | C-8 | `CLAUDE.md` §7.8: cột địa chỉ trống | Bản hiện tại có địa chỉ | Căn cứ phân tích: `DECIDED` (OW-1). Bản chính thức: PLC-OQ-19 `OPEN`. Sửa câu chữ `CLAUDE.md`: chưa có quyết định |
 | C-4 | `CLAUDE.md` §7.2: X6; G3, G7 | Workbook: X4; G1, G2 | PLC-OQ-14 `OPEN` |
 | C-9 | Chỉ đạo trước: `AGV_TranferCompleted` chưa có địa chỉ | Ô gộp cho thấy `D16n0` | `DECIDED` (PD-3): dùng chung. Địa chỉ từng trạm: PLC-OQ-01 `OPEN` |
@@ -184,13 +184,18 @@ Phân loại: **Khớp** · **Khác biệt** · **Chưa có mapping** · **Thi�
 
 ## 8. Việc đã được phép, việc còn chờ
 
-**Đã được cho phép, chưa thực hiện** (đợt cập nhật tài liệu này không sửa source, workbook hay văn bản ngoài hai file Phase 2):
+**Đã thực hiện** (CR-044; chưa commit, chưa deploy):
 
-| Việc | Căn cứ | Ghi chú |
+| Việc | Căn cứ | Xử lý |
 |---|---|---|
-| Lớp chặn ghi mặc định: mọi tín hiệu không nằm trong danh sách cho phép đều bị chặn (xử lý K-1, K-6) | OW-2 | Tách khỏi Giai đoạn 3; sửa source |
-| Sửa diễn giải D-4 trong ADR-0011 và `CLAUDE.md` §7.8 | OW-4 | Xử lý K-2 |
-| Khôi phục IO Map v2 từ `34c45b2`, đánh dấu `LEGACY/HISTORICAL` | OW-5 | Xử lý K-7 |
+| Lớp chặn ghi mặc định: ghi Real chỉ khi điểm được khai báo; thanh ghi của giao diện mới bị chặn; audit mọi quyết định | OW-2 | K-1, K-6 |
+| Sửa diễn giải D-4 trong ADR-0011 và `CLAUDE.md` §7.8 | OW-4 | K-2 |
+
+**Đã được cho phép, chưa thực hiện:**
+
+| Việc | Căn cứ | Xử lý |
+|---|---|---|
+| Khôi phục IO Map v2 từ `34c45b2`, đánh dấu `LEGACY/HISTORICAL` | OW-5 | K-7 |
 
 **Thuộc Giai đoạn 3 (chưa bắt đầu; nhánh theo OW-8):**
 
@@ -246,9 +251,9 @@ Nội dung đầy đủ để gửi: [PLC_ENGINEER_QUESTIONS_2026-11-26.md](PLC_
 | Mã | Nội dung | Trạng thái | Thực hiện |
 |---|---|---|---|
 | OW-1 | Workbook hash `a291d28f…babb3` là căn cứ phân tích | `DECIDED` | Đã áp dụng trong báo cáo. Không phải xác nhận hợp đồng IO |
-| OW-2 | Lớp chặn ghi mặc định, tách khỏi Giai đoạn 3 | `APPROVED` | Chưa hiện thực |
+| OW-2 | Lớp chặn ghi mặc định, tách khỏi Giai đoạn 3 | `APPROVED` | Đã hiện thực (CR-044); chưa commit, chưa deploy |
 | OW-3 | Giữ D-2; không dùng enum 1–3 làm định danh AGV cố định khi chưa xác nhận | `DECIDED` | Đã áp dụng trong báo cáo |
-| OW-4 | Sửa diễn giải D-4: 1 = thất bại, 2 = thành công | `APPROVED` | ADR-0011, `CLAUDE.md` chưa sửa |
+| OW-4 | Sửa diễn giải D-4: 1 = thất bại, 2 = thành công | `APPROVED` | Đã sửa ADR-0011, `CLAUDE.md`, truy vết; đính chính bộ tài liệu V2 (trừ chính CR-029) |
 | OW-5 | Khôi phục IO Map v2 từ commit `34c45b2` làm tài liệu `LEGACY/HISTORICAL` | `APPROVED` | Chưa thực hiện |
 | OW-6 | File `AGV_PLC_IO_Interface_List_10_11_2026.xlsx` bị xóa trong working tree | `OPEN` – cần xác nhận chủ ý | Đã kiểm tra, chưa khôi phục (bên dưới) |
 | OW-7 | A3/A4, D1/D2 chỉ giám sát | `DECIDED` | Áp dụng khi lập catalog |
@@ -276,5 +281,5 @@ Nội dung đầy đủ để gửi: [PLC_ENGINEER_QUESTIONS_2026-11-26.md](PLC_
 4. Thêm rủi ro K-1, K-2, K-6, K-7.
 5. Đánh dấu phần lỗi thời trong chín tài liệu `PLC_*_V2_20_11_2026.md` và `PLC_IO_Map/README.md` (địa chỉ trống, kiểu BOOL, hash cũ).
 6. Liên kết PLC-OQ-01…21 với PQ-01…29; đóng PQ nào đã được bản mới trả lời **sau khi** kỹ sư PLC xác nhận.
-7. Sửa diễn giải D-4 trong ADR-0011 và `CLAUDE.md` §7.8 (OW-4, `APPROVED`). Sửa câu "cột địa chỉ trống" (C-8): đề xuất, chưa có quyết định.
+7. Ghi nhận đã sửa D-4 (OW-4, CR-044) và sửa câu cũ trong chính CR-029. Sửa câu "cột địa chỉ trống" (C-8): đề xuất, chưa có quyết định.
 8. `docs/reviews/ENGINEER_QUESTIONS_PLC_RCS_2026-11-26.md` (thuộc CR-042, không sửa đợt này) dùng tên tín hiệu v2; khi gửi kỹ sư PLC, dùng [bộ câu hỏi mới](PLC_ENGINEER_QUESTIONS_2026-11-26.md) thay cho phần PLC của tài liệu đó.
