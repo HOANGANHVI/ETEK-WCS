@@ -19,6 +19,16 @@ Trong tài liệu: **"Theo workbook"** là nội dung file ở trên; **"Phía d
 
 **Câu hỏi trọng tâm: PLC-OQ-01, PLC-OQ-03 và PLC-OQ-21** (mục 4.1).
 
+### Cần trả lời trước (bản ngắn)
+
+| Mã | Xin xác nhận |
+|---|---|
+| PLC-OQ-14 | Trạm của PLC `.121` và `.131`: **X4, G1, G2** (workbook) hay **X6, G3, G7** (tài liệu cũ)? Nếu là trạm khác nhau, mỗi trạm ở đâu trên mặt bằng? |
+| PLC-OQ-01, 02 | Giá trị hoàn thành Drop là `6`? Chương trình PLC đang dùng giá trị nào? |
+| PLC-OQ-21, 03 | `D16n0` dùng chung: trình tự đổi giá trị và reset; điều kiện chấp nhận mỗi giá trị |
+| PLC-OQ-13 | Cổng, loại frame và tham số MC của 4 PLC |
+| PLC-OQ-11 | `M9200`: chu kỳ và hành vi khi quá 10 giây |
+
 ## 2. Thanh ghi dùng chung (PLC-OQ-01)
 
 ### 2.1 Bảng mã

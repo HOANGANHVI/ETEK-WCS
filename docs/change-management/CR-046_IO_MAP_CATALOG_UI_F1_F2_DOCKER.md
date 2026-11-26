@@ -79,4 +79,24 @@ Hoàn tác commit và deploy bản trước. Không đổi schema. Dòng IO Map 
 
 ## 7. Kết quả kiểm thử
 
-<!-- RESULTS -->
+Ngày 2026-11-26. **Không chạy Full Backend Regression** (theo chỉ đạo).
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Build backend Release | Đạt |
+| Test backend mục tiêu: catalog, PLC, handshake, route engine, task, hàng đợi, dispatch, fleet, log, chẩn đoán | 1064/1064 đạt (sau F1/F2) |
+| Chạy lại phần PLC/monitoring/chẩn đoán/Cr046 sau lần sửa giao diện cuối | 80/80 đạt |
+| `Cr046IoMapCatalogTests` (workbook → catalog → API, database mới và database đang có dữ liệu, chặn ghi) | Đạt |
+| `Cr046AgvAndQueueTests` (F1: chờ, đồng thời; F2: chuỗi bế tắc đã tái hiện, tắt cờ) | Đạt; thay cho `Cr042OpenFindingsTests` |
+| Một test thời gian (`PlcWorkerTests`, một PLC mất kết nối) | Lỗi 2 lần khi chạy trong nhóm lớn, đạt khi chạy lại (3 lần riêng và trong nhóm 80); không liên quan catalog |
+| Frontend: `tsc`, lint, build, `i18n:test` 76, `plcmonitor:test` 37, `plcwrite:test` 20 | Đạt |
+| `i18n:check` | 7 lỗi mẫu log RCS có từ trước |
+| Giao diện trên Edge (bản publish, Production + mô phỏng, database tạm đã xóa) | Tổng quan, trạm, giám sát, cấu hình địa chỉ, lọc theo PLC, tiếng Anh: đạt; không log lỗi backend |
+| **Docker** trên GitHub Actions ([run](https://github.com/HOANGANHVI/ETEK-WCS/actions/runs/45809588716), Ubuntu 24.04) | 3 image dựng được; Compose healthy; migrator exit 0; Nginx, SignalR/WebSocket, 96 IO/16 trạm, khởi động lại giữ dữ liệu, mặc định chỉ đọc/ghi tắt, allow-list sai: đạt; 0 log Error/Fatal |
+| Script triển khai | Cú pháp 0 lỗi; test cấu hình ghi 16/16, logging 20/20 |
+
+Lỗi phát hiện khi kiểm tra trên trình duyệt và đã sửa: chế độ mô phỏng hiện giá trị mặc định và "đã cấu hình" cho điểm **chưa có địa chỉ**.
+
+Ảnh sau sửa: [trạm X4](../reports/cr-046-ui/station-X4-simulator.png) · [giám sát I/O](../reports/cr-046-ui/io-monitoring.png) · [cấu hình địa chỉ](../reports/cr-046-ui/io-address-configuration.png) · [lọc G1](../reports/cr-046-ui/io-address-configuration-G1.png).
+
+**Chưa kiểm chứng:** Docker Desktop trên Windows và `deploy.ps1`/`start.ps1`/`status.ps1` trên máy đích; nâng cấp trên bản sao database vận hành; PLC thật; RCS/AGV thật.

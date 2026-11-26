@@ -2,10 +2,13 @@
 
 | | |
 |---|---|
-| **Bản** | **Rev 5** (2026-11-26, CR-045). Rev 1–4 và đối chiếu chi tiết theo workbook cũ nằm trong lịch sử Git (merge `fa0caae`) |
-| **Trạng thái** | Giai đoạn 2 (rà soát và chuẩn hóa tài liệu) **hoàn tất**. Hợp đồng IO **chờ kỹ sư PLC xác nhận**: không `APPROVED`, không `READY FOR IMPLEMENTATION`. PLC thật: **chưa kiểm thử** |
+| **Bản** | **Rev 6** (2026-11-26, CR-046). Các bản trước trong lịch sử Git |
+| **Trạng thái** | Giai đoạn 2 **hoàn tất**. Hợp đồng IO **chờ kỹ sư PLC xác nhận**: không `APPROVED`, không `READY FOR IMPLEMENTATION` |
+| **Development** | Catalog, API, giao diện theo IO Map 22/11; handshake chưa hiện thực |
+| **Deploy readiness** | Image và Compose đã dựng, chạy, kiểm tra trên Linux (GitHub Actions). **Chưa** chạy trên máy kiểm thử đích |
+| **Real PLC verification** | **Chưa thực hiện** |
 | **IO Map duy nhất** | [`AGV_PLC Interface_List_22_11_2026.xlsx`](../PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx), SHA-256 `405586c9e4d2893f1d3a33922259ecfe1c400ca877710877b3b482e049b34da3`. Trạng thái từng tín hiệu: [README](../PLC_IO_Map/README.md) |
-| **Kiểm chứng** | Đọc đủ hai sheet của workbook 22/11 (120 dòng, ô gộp, đường nối); đọc source. Không kết nối PLC |
+| **Kiểm chứng** | Workbook, source, test mục tiêu, trình duyệt, Docker (xem [CR-046](../../change-management/CR-046_IO_MAP_CATALOG_UI_F1_F2_DOCKER.md) §7). Không kết nối PLC |
 
 Ký hiệu: **[QĐ]** chủ dự án quyết định · **[WB]** workbook thể hiện · **[PLC]** chờ kỹ sư PLC.
 
@@ -13,10 +16,15 @@ Ký hiệu: **[QĐ]** chủ dự án quyết định · **[WB]** workbook thể 
 
 | Hạng mục | Trạng thái |
 |---|---|
-| CR-042, tài liệu CR-043, tài liệu Phase 2, CR-044 | Trong `main` từ merge `fa0caae` (đã xác minh trên remote) |
-| **OW-2** lớp chặn ghi PLC mặc định | Triển khai trong mã, kiểm thử trên PLC giả lập (CR-044); CR-045 cho Docker truyền được danh sách khai báo |
-| **OW-4** `PLC_MissionCompleted`: `1` Failure, `2` Success | Đã sửa `CLAUDE.md`, ADR-0011, truy vết; đính chính CR-029 và bộ tài liệu V2 |
-| Mapping 22/11 trong hệ thống (catalog, tín hiệu, handshake) | **Chưa hiện thực** (Giai đoạn 3) |
+| CR-042, CR-044, CR-045, tài liệu Phase 2 | Trong `main` (`f503f0c`) |
+| **OW-2** lớp chặn ghi PLC mặc định | Đã triển khai và kiểm thử (CR-044, CR-045); CR-046 thêm cấm ghi mọi tín hiệu chưa xác nhận |
+| **OW-4** `PLC_MissionCompleted`: `1` Failure, `2` Success | Đã sửa trong tài liệu |
+| PLC catalog theo IO Map 22/11 | **Đã cập nhật** (CR-046); dòng cũ giữ trong database, không dùng |
+| Giao diện IO | **Đã sửa** (CR-046 §3), kiểm tra trên trình duyệt |
+| Docker | Dựng và chạy được trên Linux (CR-046 §5); chưa trên máy đích |
+| F1 (`PER_AGV` giữa hai engine) | **Đã sửa** |
+| F2 (bế tắc do giữ chỗ) | Chuỗi đã tái hiện **đã sửa** cho chặng đầu; phần còn lại ở CR-046 §4 |
+| Handshake theo IO Map | **Chưa hiện thực** (Giai đoạn 3) |
 
 ## 2. Quyết định
 
@@ -50,19 +58,17 @@ Bảng tín hiệu, địa chỉ, giá trị và trạm: [README của IO Map](.
 
 Trình tự trên sheet: `PLC_MissionRequest` → `Mission_Feedback` → `AGV_RequestTranfer` → `PLC_ReaddyTranfer` → `AGV_TranferCompleted` → `PLC_MissionCompleted`. Sheet không nêu reset, thời hạn, nhánh lỗi, khác biệt của Drop. Không suy diễn các điểm này.
 
-## 4. Đối chiếu với hệ thống
+## 4. Đối chiếu với hệ thống (sau CR-046)
 
 | IO | Trong hệ thống | Khoảng trống |
 |---|---|---|
-| `PLC_MissionRequest` | Chưa có (đang dùng `Pickup_Request`, `Delivery_Request`, `Request_ID` của v2) | Thiết kế lại tiếp nhận và chống trùng |
-| `PLC_ReaddyTranfer`, `PLC_MissionCompleted` | Chưa có | Tín hiệu INT, enum, xác minh giao dịch |
-| `AGV_RequestTranfer`, `AGV_TranferCompleted` | Chưa có | Hai tín hiệu một thanh ghi: bộ kiểm tra địa chỉ hiện coi là trùng |
-| `Mission_Feedback` | Chưa có | PLC-OQ-06 |
-| `HeartBit` | Chưa có chức năng phát; chưa hỗ trợ điểm cấp PLC | PLC-OQ-11 |
-| Trạm | Catalog: X6, G3, G7 | PLC-OQ-14 |
-| Kết nối 4 PLC, IP; kiểu BOOL/INT; đọc; log | Dùng lại được | Tham số MC: `NEEDS_CONFIGURATION` |
+| 6 tín hiệu mỗi trạm | Có trong catalog, API, giao diện; địa chỉ tham chiếu; đọc được khi Admin nhập địa chỉ; cấm ghi thật | Chưa có xử lý nghiệp vụ, enum, reset |
+| `AGV_RequestTranfer` / `AGV_TranferCompleted` | Đánh dấu dùng chung thanh ghi | Chỉ một tín hiệu nhận được địa chỉ cấu hình |
+| `HeartBit`, dự phòng | Hiển thị cấp PLC | Chưa phát heartbeat (PLC-OQ-11) |
+| Trạm | Theo workbook: X4, G1, G2. X6, G3, G7 giữ trong database cũ, không ghép | PLC-OQ-14 |
+| Tiếp nhận yêu cầu | Chưa theo IO Map; mô phỏng dùng tín hiệu thử trong bộ nhớ | Giai đoạn 3 |
 | Sự kiện RCS "đến trước cửa", "đã ra ngoài" | Chưa có | Chặn bước 3 và 5 |
-| Mô phỏng PLC | Tín hiệu logic của v2, ghi rõ trên giao diện | Giai đoạn sau |
+| Kết nối 4 PLC, IP | Dùng lại được | Tham số MC: `NEEDS_CONFIGURATION` |
 
 ## 5. Rủi ro
 
@@ -71,7 +77,7 @@ Trình tự trên sheet: `PLC_MissionRequest` → `Mission_Feedback` → `AGV_Re
 | K-1 | Địa chỉ mẫu cũ (`D1600`, `D1610`) đè lên thanh ghi yêu cầu mới | Chặn ghi Real ở thanh ghi dành riêng (CR-044); chỉ có hiệu lực nơi đã deploy bản mới |
 | K-2 | Văn bản cũ coi `MissionCompleted = 1` là thành công | Đã sửa và đính chính |
 | K-4 | Giá trị xong Drop chưa thống nhất (`5` / `6`) | Mở: Q-1 |
-| K-5 | Chưa tín hiệu nào của IO Map được hiện thực | Mở: Giai đoạn 3 |
+| K-5 | Chưa có handshake cho IO Map | Mở: Giai đoạn 3 |
 | K-6 | Tín hiệu mới không nằm trong danh sách cấm theo tên | Đã chuyển sang chặn mặc định |
 
 K-3 và K-7 (nhiều phiên bản workbook, file bị xóa không kiểm soát): đã đóng bằng quyết định IO Map duy nhất.
@@ -108,7 +114,7 @@ Bản gửi đi: [PLC_ENGINEER_QUESTIONS_2026-11-26.md](PLC_ENGINEER_QUESTIONS_2
 
 | Mã | Câu hỏi | Đề xuất | Nếu chưa quyết |
 |---|---|---|---|
-| **Q-1** | Xong Drop là `5` (PD-3) hay `6` (IO Map 22/11)? | **`6`**: là giá trị của IO Map duy nhất, không trùng mã khác; ghi nhận PD-3 được sửa | Không cản build và deploy (chưa mã nào dùng); cản Giai đoạn 3 và việc chốt với kỹ sư PLC |
+| **Q-1** | Xong Drop là `5` (PD-3) hay `6` (IO Map 22/11)? | **`6`**: là giá trị của IO Map duy nhất, không trùng mã khác; ghi nhận PD-3 được sửa | Không cản build và deploy (không mã nào gửi giá trị; tín hiệu bị cấm ghi thật); cản Giai đoạn 3 và việc chốt với kỹ sư PLC |
 
 ## 8. Điều kiện bắt đầu tích hợp PLC thật
 
@@ -118,7 +124,7 @@ Bản gửi đi: [PLC_ENGINEER_QUESTIONS_2026-11-26.md](PLC_ENGINEER_QUESTIONS_2
 | 2 | Q-1 được chốt | Chưa |
 | 3 | Tham số kết nối MC và danh sách trạm (13, 14) | Chưa |
 | 4 | CR-029 được phê duyệt; Change Request Giai đoạn 3 và kế hoạch chuyển đổi mapping | Chưa |
-| 5 | Hiện thực mapping 22/11 và kiểm thử với PLC giả lập | Chưa |
+| 5 | Hiện thực handshake theo IO Map 22/11 và kiểm thử với PLC giả lập; gỡ trạng thái "chưa xác nhận" | Chưa (catalog đã xong) |
 | 6 | Bản đã deploy lên máy kiểm thử; chạy checklist triển khai | Chưa |
 | 7 | Bắt đầu **chỉ đọc**; kỹ sư PLC phê duyệt từng điểm trước khi khai báo ghi | Chưa |
 
