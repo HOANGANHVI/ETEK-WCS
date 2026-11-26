@@ -188,6 +188,12 @@ function OperationPanel({ p, onSaved, onError }: { p: Process; onSaved: (msg: st
     <section className="detail-sec">
       <h3>{t('linked.opTitle')}</h3>
       <p className="muted small">{t(p.requiresReadiness ? 'linked.opQueued' : 'linked.opNotQueued')}</p>
+      {p.catalogStatus === 'Differs' && (
+        <div className="notice notice-warn" role="status">
+          <p>{t('linked.catalogDiffers')}</p>
+          <Button disabled={!ready} onClick={() => void run(() => api.processApplyCatalog(p.id, reason))}>{t('linked.catalogApply')}</Button>
+        </div>
+      )}
       <dl className="kv2">
         <dt>{t('linked.opReadiness')}</dt><dd>{published ? `${t('routing.versionShort', { n: published.number })} · ${t(`linked.readiness_${published.readiness ?? 'NotReady'}` as never)}` : t('routing.procNotPublished')}</dd>
         <dt>{t('linked.opScope')}</dt><dd className="mono">{p.queueScope ?? t('linked.scopeNone')}</dd>

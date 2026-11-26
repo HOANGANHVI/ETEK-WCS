@@ -33,7 +33,7 @@ public sealed record SimulationStartResult(string Outcome, string Code, string M
 /// and never touches inventory itself. It grants nothing on the RCS side: where an order is sent is decided by the operating mode and its own conditions (CR-038). Refused for a port whose
 /// PLC is online (no mixing of a physical PLC and the simulation on the same resources).
 /// </summary>
-public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository routing, IPlcRequestService plcRequests, IRouteEngine engine, ILegDispatcher dispatcher,
+public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository routing, IPlcRequestService plcRequests, IPlcInputHandler inputHandler, IRouteEngine engine, ILegDispatcher dispatcher,
     PlcSimulationState state, PlcSimulatedInputs inputs, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock, IPlcLinkStatus? link = null)
 {
     public const string Banner = "PLC SIMULATION";
@@ -45,7 +45,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
         var notes = new List<string>
         {
             current == WCS.Domain.Rcs.ExecutionMode.Real
-                ? "Operating mode REAL: a request accepted from this simulation can be sent to the REAL RCS and a real AMR may move."
+                ? "Operating mode REAL: signals can be set and read, but a simulated request creates no work and nothing is sent to the RCS."
                 : "Operating mode Simulator: requests accepted from this simulation are not sent to a real RCS.",
             "Only PLC to WCS signals are simulated. Nothing answers for the RCS or an AMR, and nothing is written to a PLC.",
         };
@@ -75,7 +75,8 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
             var signals = (await routing.ListPlcInputPointsAsync(port.Id, t)).Select(p =>
             {
                 var v = inputs.Get(port.Id, p.SignalName);
-                return new SimSignalDto(p.SignalName, p.DataType.ToString(), p.Description, v?.Value, v?.At, PlcRequestAssembler.IntakeSignals.Contains(p.SignalName));
+                return new SimSignalDto(p.SignalName, p.DataType.ToString(), p.Description, v?.Value, v?.At, PlcRequestAssembler.IntakeSignals.Contains(p.SignalName),
+                    string.IsNullOrWhiteSpace(p.ActualAddress) ? null : p.ActualAddress);
             }).ToList();
             var active = await routing.GetActiveTransactionForPortAsync(port.Id, t);
             list.Add(new(port.Id, port.PlcId, port.LocationCode!, link?.IsOnline(port.PlcId), await routing.IsPortMappingApprovedAsync(port.Id, t), active?.ToDto(), signals));
@@ -98,14 +99,22 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
         return (await ListStationsAsync(ct)).First(s => s.StationId == stationId);
     }
 
-    /// <summary>Hands the current input signals of one station to the request intake, exactly as one read of a PLC would.</summary>
+    /// <summary>CR-041: back to the normal state - every simulated value of the station is removed. Nothing already accepted is changed or cancelled.</summary>
+    public async Task<SimStationDto> ResetStationAsync(string stationId, CancellationToken ct = default)
+    {
+        EnsureActive();
+        var port = await uow.ExecuteAsync(t => SimulatablePortAsync(stationId, t), ct);
+        inputs.Clear(port.Id);
+        return (await ListStationsAsync(ct)).First(s => s.StationId == port.Id);
+    }
+
+    /// <summary>Hands the current input signals of one station to the shared PLC input handler, exactly as one read of a PLC would.</summary>
     public async Task<SimulationStartResult> EvaluateStationAsync(string stationId, bool safetyAcknowledged, CancellationToken ct = default)
     {
         EnsureActive();
         if (!safetyAcknowledged) throw AppException.Validation("SAFETY_ACK_REQUIRED", "The operator must confirm that the test area is safe: with the real mode an AMR may move.");
         var port = await uow.ExecuteAsync(t => SimulatablePortAsync(stationId, t), ct);
-        var snapshot = PlcRequestAssembler.FromSignals(port.PlcId, port.Id, inputs.Of(port.Id));
-        var r = await plcRequests.HandleRequestAsync(snapshot, ct);
+        var (snapshot, r) = await inputHandler.HandleAsync(PlcInputSource.Simulation, port.PlcId, port.Id, inputs.Of(port.Id), ct);
         return new(r.Outcome.ToString(), r.Code, r.Message, r.Order, r.Transaction, snapshot.RequestId);
     }
 
@@ -174,7 +183,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
             if (!int.TryParse(raw, out var code)) throw AppException.Rejected("UNSUPPORTED_LOCATION_CODE", $"{trig.LocationCode} has no confirmed position code; nothing is simulated.");
             if (flow.RackKind == nameof(RackKind.Full)) full = code; else empty = code;
         }
-        var r = await plcRequests.HandleRequestAsync(new PlcRequestSnapshot(trig.PlcId, trig.PortId, requestId, pickup, !pickup, full, empty, null, null), ct);
+        var r = await plcRequests.HandleRequestAsync(new PlcRequestSnapshot(trig.PlcId, trig.PortId, requestId, pickup, !pickup, full, empty, null, null, Simulated: true), ct);
         return new(r.Outcome.ToString(), r.Code, r.Message, r.Order, r.Transaction, requestId);
     }
 
@@ -189,6 +198,8 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
             if (string.IsNullOrWhiteSpace(leg.AgvTaskCode)) throw AppException.Rejected("RCS_TASK_NOT_CREATED", "The leg has no RCS task yet: nothing can be confirmed.");
             if (drop && leg.PickConfirmedAt is null) throw AppException.Rejected("PICK_NOT_CONFIRMED", "The Pick must be confirmed before the Drop.");
             if (!drop && leg.PickConfirmedAt is not null) throw AppException.Rejected("PICK_ALREADY_CONFIRMED", "The Pick was already confirmed.");
+            if ((await routing.GetOrderAsync(leg.OrderId, t))?.ExecutionMode == WCS.Domain.Rcs.ExecutionMode.Real)
+                throw AppException.Rejected("SIMULATION_REAL_ORDER", "The order runs in Real mode: the simulation page confirms nothing for it. Use the operator confirmation on the multi-leg page.");
             return leg.AgvRequestCode;
         }, ct);
         var info = await dispatcher.QueryAsync(requestCode, ct);   // the REAL RCS answers; outside any transaction

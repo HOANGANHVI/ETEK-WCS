@@ -7,10 +7,13 @@ using WCS.Domain.Locations;
 
 namespace WCS.Application.Services;
 
-public sealed record RackCreateCommand(string LocationCode, RackKind RackKind, string? ExternalRackId, Guid? ProductModelId, string Reason);
+public sealed record RackCreateCommand(string LocationCode, RackKind RackKind, string? ExternalRackId, Guid? ProductModelId, string Reason, string? RackType = null);
 
 /// <summary>NULL = unchanged. <see cref="ExternalRackId"/> "" removes the identifier.</summary>
-public sealed record RackUpdateCommand(string? LocationCode, RackKind? RackKind, string? ExternalRackId, string Reason);
+public sealed record RackUpdateCommand(string? LocationCode, RackKind? RackKind, string? ExternalRackId, string Reason, string? RackType = null, Guid? ProductModelId = null);
+
+/// <summary>CR-041: whether a person may correct or remove a rack now, and if not, why (the same guard the change itself runs).</summary>
+public sealed record RackEditabilityDto(bool Editable, string? Code, string? Message);
 
 /// <summary>
 /// CR-040: create, correct, move and remove ONE rack record. These are corrections of what WCS believes about the physical world, confirmed by a person with a reason; they never move a rack.
@@ -29,13 +32,8 @@ public sealed class RackAdminService(IUnitOfWork uow, IRackRepository racks, ILo
             await FreeSlotAsync(loc, t);
             var externalId = await UniqueIdAsync(cmd.ExternalRackId, null, t);
             var now = clock.UtcNow;
-            var rack = new Rack(StatusOf(cmd.RackKind), loc.Id, null, externalId, now);
-            if (cmd.ProductModelId is { } mid)
-            {
-                var m = await models.GetAsync(mid, t) ?? throw AppException.NotFound("MODEL_NOT_FOUND", "Product model not found.");
-                if (!m.Enabled) throw AppException.Rejected("MODEL_DISABLED", $"Product model {m.Code} is disabled.");
-                rack.AssignModel(mid);
-            }
+            var rack = new Rack(StatusOf(cmd.RackKind), loc.Id, RackTypeOf(cmd.RackType), externalId, now);
+            if (cmd.ProductModelId is { } mid) await AssignModelAsync(rack, mid, t);
             racks.Add(rack);
             if (placement.OnPlaced(rack, loc, null, ConfirmationSource.Operator, user, now) is { } disposition) transactions.Add(disposition);
             Record(rack.Id, null, loc.Id, null, rack.Status, user, $"Rack {Name(externalId)} created at {loc.Code}: {reason}");
@@ -65,6 +63,8 @@ public sealed class RackAdminService(IUnitOfWork uow, IRackRepository racks, ILo
                 var externalId = await UniqueIdAsync(cmd.ExternalRackId, rack.Id, t);
                 if (externalId != rack.ExternalRackId) { changes.Add($"id {Name(rack.ExternalRackId)} -> {Name(externalId)}"); rack.CorrectExternalId(externalId); }
             }
+            if (cmd.RackType is not null && RackTypeOf(cmd.RackType) is var type && type != rack.RackType) { changes.Add($"type {rack.RackType ?? "(none)"} -> {type ?? "(none)"}"); rack.CorrectRackType(type); }
+            if (cmd.ProductModelId is { } model && model != rack.ProductModelId) { await AssignModelAsync(rack, model, t); changes.Add("product model assigned"); }
             if (StatusOf(kind) != before) changes.Add($"{before} -> {StatusOf(kind)}");
             if (moving) changes.Add($"{current.Code} -> {target.Code}");
             if (changes.Count == 0) throw AppException.Rejected("RACK_NOTHING_TO_CHANGE", "Nothing to change.");
@@ -91,6 +91,27 @@ public sealed class RackAdminService(IUnitOfWork uow, IRackRepository racks, ILo
         }, ct);
         await NotifyAsync(code, ct);
         return id;
+    }
+
+    public Task<RackEditabilityDto> CheckEditableAsync(Guid id, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        try { await EditableAsync(id, t); return new RackEditabilityDto(true, null, null); }
+        catch (AppException e) when (e.Kind != ErrorKind.NotFound) { return new RackEditabilityDto(false, e.Code, e.Message); }
+    }, ct);
+
+    private async Task AssignModelAsync(Rack rack, Guid modelId, CancellationToken ct)
+    {
+        var m = await models.GetAsync(modelId, ct) ?? throw AppException.NotFound("MODEL_NOT_FOUND", "Product model not found.");
+        if (!m.Enabled) throw AppException.Rejected("MODEL_DISABLED", $"Product model {m.Code} is disabled.");
+        try { rack.AssignModel(modelId); }
+        catch (DomainException e) { throw AppException.Conflict(e.Code, e.Message); }
+    }
+
+    private static string? RackTypeOf(string? text)
+    {
+        var value = text?.Trim();
+        if (string.IsNullOrEmpty(value)) return null;
+        return value.Length <= 100 ? value : throw AppException.Validation("RACK_TYPE_TOO_LONG", "A rack type has at most 100 characters.");
     }
 
     // ------------------------------------------------------------------ guards

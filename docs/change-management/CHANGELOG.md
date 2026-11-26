@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.32 – CR-041 Unified operations, process catalog, PLC input handler, rack records (2026-11-26)
+
+- One request option list and create dialog on the three operation pages; one RequestKey across the task and order engines. Admin can create a Draft from the confirmed catalog for an existing default process. Shared PLC input handler for physical and simulated signals (physical trigger rule not approved: nothing processed); a simulated request creates no work in Real mode (behaviour change); station reset, IO address and simulation history. Rack type and lock reason. Migration `AddSimulatedStationTransaction` (not run on a deployment). Not deployed; not verified in a browser or with real devices. See CR-041.
+
 ## v3.31 – CR-040 Transport queue, linked operations, PLC simulation, rack records (2026-11-25)
 
 - Queue: Published + Ready admission, fixed queue position, strict FIFO per declared scope, Held; no scope declared by default (OQ-54). New publications require Ready. PLC simulation needs only Admin + confirmation and simulates single PLC → WCS signals through the one request intake. Guarded rack create / edit / delete (Admin). One request list on the three operation pages, RCS commands per leg, readiness and scope controls. Migration `AddTransportQueue` (not run on a deployment). Not deployed; not verified with real devices. See CR-040.

@@ -100,7 +100,7 @@ function Screen() {
                     </select>
                     <label><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> {t('linked.psAck')}</label>
                     <div>
-                      <Button variant="primary" disabled={busy || !ack || !location || !sel.startableNow || !status.data?.active}
+                      <Button variant="primary" disabled={busy || !ack || !location || !sel.startableNow || !status.data?.active || status.data.executionMode === 'Real'}
                         onClick={() => run(async () => setLast(await api.simStart(sel.code, location, ack)), t('linked.psSent'))}>{t('linked.psCreate')}</Button>
                     </div>
                   </>
@@ -111,7 +111,7 @@ function Screen() {
           }}
         </Async>
 
-        <SignalPanel active={!!status.data?.active} onResult={(r) => { setLast(r); orders.reload() }} />
+        <SignalPanel active={!!status.data?.active} real={status.data?.executionMode === 'Real'} onResult={(r) => { setLast(r); orders.reload() }} />
 
         <Async state={orders} empty={{ title: t('linked.psNoJob') }} isEmpty={(o) => o.items.length === 0}>
           {(o) => (

@@ -89,4 +89,20 @@ public class Cr040ApiTests(DatabaseFixture fixture)
         Assert.NotEmpty(commands);
         Assert.All(commands, c => Assert.Equal(code, c.GetProperty("requestCode").GetString()));
     }
+
+    [Fact]
+    public async Task The_CR041_actions_are_Admin_only_and_the_simulation_history_keeps_who_set_which_value()
+    {
+        var (h, f, admin, op) = await ArrangeAsync();
+        await using var _h = h; await using var _f = f;
+        var id = Guid.NewGuid();
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Get, $"/api/inventory/racks/{id}/editability")).Status);
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Post, $"/api/processes/{id}/apply-catalog", new { reason = "x" })).Status);
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Get, "/api/plc-simulation/history")).Status);
+        Assert.Equal(403, (await op.SendJsonAsync(HttpMethod.Post, "/api/plc-simulation/stations/A1/reset")).Status);
+        Assert.Equal(404, (await admin.SendJsonAsync(HttpMethod.Get, $"/api/inventory/racks/{id}/editability")).Status);
+        await admin.SendJsonAsync(HttpMethod.Put, "/api/plc-simulation/stations/A1/signals/Pickup_Request", new { value = "on" });   // refused (not active): still on record
+        var history = (await admin.SendJsonAsync(HttpMethod.Get, "/api/plc-simulation/history")).Root.GetProperty("data").ToString();
+        Assert.Contains("PLC_SIM_SIGNAL", history); Assert.Contains("A1.Pickup_Request", history); Assert.Contains("admin1", history);
+    }
 }

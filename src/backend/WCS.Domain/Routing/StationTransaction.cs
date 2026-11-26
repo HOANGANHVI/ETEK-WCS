@@ -34,6 +34,10 @@ public class StationTransaction
         StationTransactionState.HandoverCompleted, StationTransactionState.AgvExited, StationTransactionState.Completed,
     ];
 
+    /// <summary>CR-041: the request came from the PLC simulation, not from a PLC. Kept so that an interrupted start stays a simulated one.</summary>
+    public bool Simulated { get; private set; }
+    public void MarkSimulated() => Simulated = true;
+
     public Guid Id { get; private set; }
     /// <summary>PlcStation id (the port).</summary>
     public string PortId { get; private set; } = default!;

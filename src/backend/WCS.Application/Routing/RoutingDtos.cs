@@ -10,7 +10,7 @@ public sealed record LegDto(Guid Id, int Sequence, string StepKey, string StepTy
 
 public sealed record StationTransactionDto(Guid Id, string PortId, string PlcId, string LocationCode, string Operation, Guid? OrderId, Guid? LegId, string? RequestId,
     string State, int HandshakeStep, Guid? AgvId, bool Suspended, string? SuspendedReason, string? ReconciliationReason, string? FailureReason,
-    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? FinishedAt);
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? FinishedAt, bool Simulated = false);
 
 public sealed record OrderDto(Guid Id, string RequestKey, string ProcessCode, int ProcessVersion, string RackKind, string RequestLocationCode, string State, string WaitKind,
     string? StateReason, string? CurrentStepKey, Guid? RackId, IReadOnlyList<LegDto> Legs, IReadOnlyList<StationTransactionDto> Transactions,
@@ -27,7 +27,7 @@ public static class RoutingMapping
 
     public static StationTransactionDto ToDto(this StationTransaction t) => new(t.Id, t.PortId, t.PlcId, t.LocationCode, t.Operation.ToString(), t.OrderId, t.LegId,
         t.RequestId, t.State.ToString(), t.HandshakeStep, t.AgvId, t.Suspended, t.SuspendedReason, t.ReconciliationReason, t.FailureReason,
-        t.CreatedAt, t.UpdatedAt, t.FinishedAt);
+        t.CreatedAt, t.UpdatedAt, t.FinishedAt, t.Simulated);
 
     public static OrderDto ToDto(this TransportOrder o, IEnumerable<StationTransaction>? transactions = null) => new(o.Id, o.RequestKey, o.ProcessCode, o.ProcessVersionNumber,
         o.RackKind.ToString(), o.RequestLocationCode, o.State.ToString(), o.WaitKind.ToString(), o.StateReason, o.CurrentStepKey, o.RackId,
@@ -41,7 +41,14 @@ public static class RoutingMapping
     public static RoutingEventDto ToDto(this RoutingEvent e) => new(e.Id, e.LegId, e.TransactionId, e.Kind, e.Detail, e.Source, e.OccurredAt);
 }
 
-public sealed record StartOrderCommand(string RequestKey, string RequestLocationCode, RequestType RequestType, RackKind? RackKind, string? ProcessCode, string? RequestedBy, Guid? TransactionId = null);
+public sealed record StartOrderCommand(string RequestKey, string RequestLocationCode, RequestType RequestType, RackKind? RackKind, string? ProcessCode, string? RequestedBy, Guid? TransactionId = null, bool SimulationOnly = false);
+
+/// <summary>CR-041: work that comes from the PLC simulation is never created while the operating mode is Real.</summary>
+public static class SimulationCodes
+{
+    public const string RealMode = "SIMULATION_REAL_MODE";
+    public const string RealModeMessage = "The operating mode is Real: a simulated PLC request creates no work, so nothing can reach the real RCS. Switch to Simulator to run the request.";
+}
 
 public sealed record StartOrderResult(OrderDto Order, bool Created);
 

@@ -8,12 +8,6 @@ export default defineMessages({
 
   // monitoring page
   startBtn: 'Khởi tạo Transport Task',
-  startTitle: 'Khởi tạo Transport Task theo quy trình đã Publish',
-  startProcess: 'Quy trình',
-  startLocation: 'Vị trí phát yêu cầu',
-  startConfirm: 'Khởi tạo',
-  startNoProcess: 'Chưa có quy trình nào được Publish',
-  startNoProcessHint: 'Admin cần kiểm tra và Publish một quy trình ở màn hình Quy trình và tuyến.',
   title: 'Điều phối đa chặng',
   tabTasks: 'Transport Task',
   tabTransactions: 'Giao dịch tại cổng',
@@ -210,12 +204,6 @@ export default defineMessages({
 }, {
   navRouting: 'Multi-leg dispatch',
   startBtn: 'Start a Transport Task',
-  startTitle: 'Start a Transport Task from a published process',
-  startProcess: 'Process',
-  startLocation: 'Request location',
-  startConfirm: 'Start',
-  startNoProcess: 'No process is published',
-  startNoProcessHint: 'An Admin must validate and publish a process on the Processes and routes screen.',
   navProcesses: 'Processes and routes',
 
   title: 'Multi-leg dispatch',

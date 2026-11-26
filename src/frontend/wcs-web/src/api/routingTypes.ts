@@ -118,6 +118,8 @@ export interface Process {
   enabled: boolean; reviewBlocked: boolean; reviewReason: string | null; sourceReference: string | null
   publishedVersion: number | null; latestVersion: number; versions: VersionSummary[]
   requiresReadiness?: boolean; queueScope?: string | null
+  /** CR-041: compared with the confirmed default catalog */
+  catalogStatus?: 'NotDefault' | 'Matches' | 'Differs'
 }
 export interface QueueScopeResult { processId: string; code: string; queueScope: string | null; requiresReadiness: boolean; sharedLocationsWithOtherScopes: string[] }
 export interface ProcessVersion {

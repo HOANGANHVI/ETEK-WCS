@@ -367,6 +367,7 @@ public class Cr040QueueSimulationRackTests(DatabaseFixture fixture)
                 orderId = (await RequestAsync(kit, "m", "A1", "Q-M")).Id;
                 var refused = await Assert.ThrowsAnyAsync<Exception>(() => Context(cs).GetService<IMigrator>().MigrateAsync(beforeBoth));
                 Assert.Contains("ROLLBACK_REFUSED", refused.ToString());
+                await Context(cs).Database.MigrateAsync();   // CR-041: later migrations were already rolled back before the refusal; bring them back
                 await kit.With(sp => sp.GetRequiredService<IRouteEngine>().CancelAsync(orderId, "rollback", "admin"));
                 await Admin(kit, s => s.DisableAsync(version));
             }

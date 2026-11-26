@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CreateTaskDialog } from './TaskDialogs'
 import { RequestOverview } from '../components/RequestOverview'
-import { Field } from './config/FormKit'
 import { api } from '../api/client'
 import type { Leg, OrderState, StationTransaction, WaitKind } from '../api/routingTypes'
 import { ORDER_STATES } from '../api/routingTypes'
@@ -41,15 +41,17 @@ export function RoutingPage() {
   const t = useT()
   const [tab, setTab] = useState<'tasks' | 'tx'>('tasks')
   const [starting, setStarting] = useState(false)
+  const [created, setCreated] = useState(0)
+  const navigate = useNavigate()
   return (
     <>
-      <PageHeader title={t('routing.title')} actions={<Button variant="primary" onClick={() => setStarting(true)}>{t('routing.startBtn')}</Button>} />
+      <PageHeader title={t('routing.title')} description={t('linked.roleRouting')} actions={<Button variant="primary" onClick={() => setStarting(true)}>{t('routing.startBtn')}</Button>} />
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'tasks'} className={tab === 'tasks' ? 'tab active' : 'tab'} onClick={() => setTab('tasks')}>{t('routing.tabTasks')}</button>
         <button role="tab" aria-selected={tab === 'tx'} className={tab === 'tx' ? 'tab active' : 'tab'} onClick={() => setTab('tx')}>{t('routing.tabTransactions')}</button>
       </div>
-      {tab === 'tasks' ? <><OrdersTab key={String(starting)} /><RequestOverview /></> : <TransactionsTab />}
-      {starting && <StartOrderDialog onClose={() => setStarting(false)} />}
+      {tab === 'tasks' ? <><OrdersTab key={created} /><RequestOverview key={`all-${created}`} /></> : <TransactionsTab />}
+      {starting && <CreateTaskDialog onClose={() => setStarting(false)} onCreated={(x) => { setStarting(false); void navigate(`/tasks?id=${x.id}`) }} onOrderCreated={() => { setStarting(false); setCreated((n) => n + 1) }} />}
     </>
   )
 }
@@ -302,55 +304,6 @@ function ResolveDialog({ tx, onClose, onDone }: { tx: StationTransaction; onClos
         </select>
       </label>
       <label className="radio"><input type="radio" checked={mode === 'close'} onChange={() => setMode('close')} /> {t('routing.txResolveClose')}</label>
-    </Modal>
-  )
-}
-
-
-// ====================================================================================================================== start a Transport Task by hand
-function StartOrderDialog({ onClose }: { onClose: () => void }) {
-  const t = useT()
-  const list = useApi(useCallback(() => api.routingStartable(), []))
-  const [code, setCode] = useState('')
-  const [location, setLocation] = useState('')
-  const [key] = useState(() => (globalThis.crypto?.randomUUID?.() ?? String(Date.now())))   // one key per opened dialog: a double click cannot start two tasks
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const processes = list.data ?? []
-  const chosen = processes.find((p) => p.code === code) ?? processes[0]
-  const loc = chosen && chosen.triggerLocationCodes.includes(location) ? location : chosen?.triggerLocationCodes[0] ?? ''
-  const submit = async () => {
-    if (!chosen) return
-    setBusy(true); setError(null)
-    try { await api.routingStart({ requestKey: key, locationCode: loc, requestType: chosen.requestType, rackKind: chosen.rackKind, processCode: chosen.code }); onClose() }
-    catch (e) { setError(describeError(e)) } finally { setBusy(false) }
-  }
-  return (
-    <Modal title={t('routing.startTitle')} onClose={onClose}
-      footer={<><Button onClick={onClose}>{t('routing.closeDialog')}</Button><Button variant="primary" disabled={busy || !chosen || !loc || !chosen.acceptsRequests} onClick={submit}>{t('routing.startConfirm')}</Button></>}>
-      {error && <div className="notice notice-error" role="alert">{error}</div>}
-      {chosen && !chosen.acceptsRequests && (
-        <div className="notice notice-warn" role="status">
-          <p>{t('ops.createNotReady', { code: chosen.code, readiness: chosen.readiness })}</p>
-          {chosen.blockedDetail && <p className="muted small">{chosen.blockedDetail}</p>}
-        </div>
-      )}
-      <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: t('routing.startNoProcess'), hint: t('routing.startNoProcessHint') }}>
-        {() => (
-          <div className="form-grid">
-            <Field label={t('routing.startProcess')} wide>
-              <select value={chosen?.code ?? ''} onChange={(e) => setCode(e.target.value)}>
-                {processes.map((p) => <option key={p.code} value={p.code}>{p.code} – {p.name}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
-              </select>
-            </Field>
-            <Field label={t('routing.startLocation')}>
-              <select value={loc} onChange={(e) => setLocation(e.target.value)}>
-                {(chosen?.triggerLocationCodes ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </Field>
-          </div>
-        )}
-      </Async>
     </Modal>
   )
 }

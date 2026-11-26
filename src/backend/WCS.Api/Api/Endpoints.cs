@@ -170,10 +170,12 @@ public static class Endpoints
         // ---- CR-040: one rack record (Admin). Corrections of what WCS believes; guarded against reserved / moving racks; history is kept.
         inv.MapPost("racks", async (HttpContext c, RackCreateRequest r, WCS.Application.Services.RackAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "RACK_CREATE", "Rack", r.LocationCode, null,
-                () => s.CreateAsync(new(r.LocationCode, r.RackKind, r.ExternalRackId, r.ProductModelId, r.Reason), c.Actor().Username, ct), x => new { x.Id, x.ExternalRackId, x.Status }, r.Reason), StatusCodes.Status201Created)).RequireAuthorization(admin);
+                () => s.CreateAsync(new(r.LocationCode, r.RackKind, r.ExternalRackId, r.ProductModelId, r.Reason, r.RackType), c.Actor().Username, ct), x => new { x.Id, x.ExternalRackId, x.Status, x.RackType, x.CurrentLocationId }, r.Reason), StatusCodes.Status201Created)).RequireAuthorization(admin);
         inv.MapPut("racks/{id:guid}", async (HttpContext c, Guid id, RackUpdateRequest r, WCS.Application.Services.RackAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "RACK_UPDATE", "Rack", id.ToString(), null,
-                () => s.UpdateAsync(id, new(r.LocationCode, r.RackKind, r.ExternalRackId, r.Reason), c.Actor().Username, ct), x => new { x.ExternalRackId, x.Status, x.CurrentLocationId }, r.Reason))).RequireAuthorization(admin);
+                () => s.UpdateAsync(id, new(r.LocationCode, r.RackKind, r.ExternalRackId, r.Reason, r.RackType, r.ProductModelId), c.Actor().Username, ct), x => new { x.ExternalRackId, x.Status, x.CurrentLocationId, x.RackType, x.ProductModelId }, r.Reason))).RequireAuthorization(admin);
+        inv.MapGet("racks/{id:guid}/editability", async (HttpContext c, Guid id, WCS.Application.Services.RackAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.CheckEditableAsync(id, ct))).RequireAuthorization(admin);
         inv.MapDelete("racks/{id:guid}", async (HttpContext c, Guid id, string? reason, WCS.Application.Services.RackAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, new { id = await Audited.RunAsync(c, "RACK_DELETE", "Rack", id.ToString(), null, () => s.DeleteAsync(id, reason ?? "", c.Actor().Username, ct), x => new { id = x }, reason) })).RequireAuthorization(admin);
 

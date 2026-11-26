@@ -65,9 +65,13 @@ public sealed class RouteEngine(
 
         var id = await uow.ExecuteAsync(async t =>
         {
+            await routing.LockQueueAsync("request-key:" + cmd.RequestKey.Trim(), t);   // CR-041: one RequestKey is one request, whichever engine receives it
             if (await routing.GetOrderByRequestKeyAsync(cmd.RequestKey.Trim(), t) is { } existing) return (Guid?)null;   // idempotent
+            if (await legacyTasks.GetByRequestKeyAsync(cmd.RequestKey.Trim(), t) is not null)
+                throw AppException.Conflict("REQUEST_KEY_IN_USE", "This RequestKey already belongs to a transport task; nothing was created.");
             await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): no new Order during Maintenance (row-locked read in this transaction)
             var mode = await modeGate.ModeForNewWorkAsync(t);   // CR-038
+            if (cmd.SimulationOnly && mode == WCS.Domain.Rcs.ExecutionMode.Real) throw AppException.Rejected(SimulationCodes.RealMode, SimulationCodes.RealModeMessage);   // CR-041
             var (process, version) = await SelectProcessAsync(cmd, location.Code, t);
             var snapshot = ProcessSnapshot.Of(process, version);
             if (mode == WCS.Domain.Rcs.ExecutionMode.Real)

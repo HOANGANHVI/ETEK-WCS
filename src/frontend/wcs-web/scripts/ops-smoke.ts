@@ -236,7 +236,13 @@ for (const lang of ['vi'] as const) {   // server-side rendering uses the defaul
   const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(RequestTable, { rows })))
   check(`${lang}: the list shows queue state, position, scope and the AMR`, html.includes(T('linked.queue_Held')) && html.includes('AREA-A') && html.includes('12') && html.includes('AMR-9') && html.includes('data-request="OPS-TASK-1"'))
 }
-check('task management, RCS operations and multi-leg dispatch show the same request list', ['TasksPage', 'OperationsConsolePage', 'RoutingPage'].every((f) => readFileSync(`src/pages/${f}.tsx`, 'utf8').includes('<RequestOverview />')))
+check('task management, RCS operations and multi-leg dispatch show the same request list', ['TasksPage', 'OperationsConsolePage', 'RoutingPage'].every((f) => readFileSync(`src/pages/${f}.tsx`, 'utf8').includes('<RequestOverview')))
+// CR-041: one option list and one create path for the three pages
+const src = (f: string) => readFileSync('src/' + f, 'utf8')
+check('both request forms take their options from the one shared list', ['pages/TaskDialogs.tsx', 'pages/ops/CreateRequest.tsx'].every((f) => src(f).includes('<RequestOptions ')))
+check('multi-leg dispatch creates through the task management dialog, not through a form of its own', src('pages/RoutingPage.tsx').includes('<CreateTaskDialog ') && !src('pages/RoutingPage.tsx').includes('routingStart('))
+check('no request form writes a process code', ['pages/TaskDialogs.tsx', 'pages/ops/CreateRequest.tsx', 'components/RequestOptions.tsx', 'pages/RoutingPage.tsx'].every((f) => !/['"](BP|PH2)-dd['"]/.test(src(f))))
+check('a task row leads to the RCS monitor and an order row to its legs', renderToStaticMarkup(createElement(MemoryRouter, null, createElement(RequestTable, { rows: requestRows([task({ id: 't-9', requestKey: 'K9' })], []) }))).includes('/operations?task=t-9'))
 i18n.setLang('vi')
 for (const r of results) console.log(r)
 const failed = results.filter((r) => r.startsWith('FAIL')).length

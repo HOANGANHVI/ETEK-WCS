@@ -74,6 +74,9 @@ public class Rack
 
     public void MarkUnknown(DateTimeOffset now) { Status = RackStatus.Unknown; LastConfirmedAt = now; }
 
+    /// <summary>CR-041: an audited correction of the rack type (NULL = unclassified).</summary>
+    public void CorrectRackType(string? rackType) => RackType = string.IsNullOrWhiteSpace(rackType) ? null : rackType.Trim();
+
     /// <summary>CR-040: an audited correction of the identifier (NULL = the rack has none).</summary>
     public void CorrectExternalId(string? externalRackId) => ExternalRackId = string.IsNullOrWhiteSpace(externalRackId) ? null : externalRackId.Trim();
 

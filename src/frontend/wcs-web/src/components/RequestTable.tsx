@@ -13,7 +13,7 @@ export function RequestTable({ rows }: { rows: ReturnType<typeof requestRows> })
   return (
     <div className="table-wrap capped">
       <table className="grid">
-        <thead><tr><th>{t('linked.colKey')}</th><th>{t('linked.colKind')}</th><th>{t('linked.colProcess')}</th><th>{t('linked.colState')}</th><th>{t('linked.colQueue')}</th><th>{t('linked.colLegs')}</th><th>{t('linked.colRobot')}</th><th>{t('linked.colCreated')}</th></tr></thead>
+        <thead><tr><th>{t('linked.colKey')}</th><th>{t('linked.colKind')}</th><th>{t('linked.colProcess')}</th><th>{t('linked.colState')}</th><th>{t('linked.colQueue')}</th><th>{t('linked.colLegs')}</th><th>{t('linked.colRobot')}</th><th>{t('linked.colCreated')}</th><th>{t('linked.colFollow')}</th></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} data-request={r.requestKey}>
@@ -25,6 +25,7 @@ export function RequestTable({ rows }: { rows: ReturnType<typeof requestRows> })
               <td className="num">{r.legs ?? '—'}</td>
               <td className="mono">{r.robots || '—'}</td>
               <td className="nowrap">{formatDateTime(r.createdAt)}</td>
+              <td className="nowrap"><Link to={r.kind === 'task' ? `/operations?task=${r.id}` : r.link}>{t(r.kind === 'task' ? 'linked.followTask' : 'linked.followOrder')}</Link></td>
             </tr>
           ))}
         </tbody>

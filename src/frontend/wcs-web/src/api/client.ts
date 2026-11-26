@@ -252,9 +252,11 @@ const realApi = {
   processQueueScope: (processId: string, scope: string | null, reason: string) =>
     request<QueueScopeResult>(`/api/processes/${processId}/queue-scope`, { method: 'PUT', body: JSON.stringify({ scope, reason }) }),
   // CR-040: one rack record (Admin)
-  rackCreate: (b: { locationCode: string; rackKind: 'Full' | 'Empty'; externalRackId: string | null; reason: string }) =>
+  rackEditability: (id: string) => request<{ editable: boolean; code: string | null; message: string | null }>(`/api/inventory/racks/${id}/editability`),
+  processApplyCatalog: (processId: string, reason: string) => request<ProcessVersion>(`/api/processes/${processId}/apply-catalog`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  rackCreate: (b: { locationCode: string; rackKind: 'Full' | 'Empty'; externalRackId: string | null; reason: string; rackType?: string }) =>
     request<Rack>('/api/inventory/racks', { method: 'POST', body: JSON.stringify(b) }),
-  rackUpdate: (id: string, b: { locationCode?: string; rackKind?: 'Full' | 'Empty'; externalRackId?: string; reason: string }) =>
+  rackUpdate: (id: string, b: { locationCode?: string; rackKind?: 'Full' | 'Empty'; externalRackId?: string; reason: string; rackType?: string }) =>
     request<Rack>(`/api/inventory/racks/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   rackDelete: (id: string, reason: string) => request<{ id: string }>(`/api/inventory/racks/${id}${qs({ reason })}`, { method: 'DELETE' }),
   plcAdd: (b: AddPlcBody) => request<PlcConnection>('/api/plc/connections', { method: 'POST', body: JSON.stringify(b) }),
@@ -309,6 +311,8 @@ const realApi = {
     request<SimStation>(`/api/plc-simulation/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}`, { method: 'PUT', body: JSON.stringify({ value }) }),
   simEvaluate: (stationId: string, safetyAcknowledged: boolean) =>
     request<SimStartResult>(`/api/plc-simulation/stations/${encodeURIComponent(stationId)}/evaluate`, { method: 'POST', body: JSON.stringify({ safetyAcknowledged }) }),
+  simReset: (stationId: string) => request<SimStation>(`/api/plc-simulation/stations/${encodeURIComponent(stationId)}/reset`, { method: 'POST' }),
+  simHistory: () => request<AuditRow[]>('/api/plc-simulation/history?take=100'),
   simDeactivate: () => request<SimStatus>('/api/plc-simulation/deactivate', { method: 'POST' }),
   simFlows: () => request<SimFlow[]>('/api/plc-simulation/flows'),
   simStart: (flowCode: string, locationCode: string, safetyAcknowledged: boolean) =>

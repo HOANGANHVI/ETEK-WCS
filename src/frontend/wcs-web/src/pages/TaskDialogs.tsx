@@ -9,7 +9,8 @@ import { useT } from '../i18n'
 import { Rich } from '../components/Rich'
 import { describeError, flowInfo, taskCode, TASK_STATE_VI } from '../i18n/vi'
 import { Field } from './config/FormKit'
-import { processOf, processValue } from '../lib/requestOptions'
+import { processOf } from '../lib/requestOptions'
+import { RequestOptions } from '../components/RequestOptions'
 
 function useAction(onDone: () => void, onStale: () => void) {
   const [busy, setBusy] = useState(false)
@@ -64,14 +65,7 @@ export function CreateTaskDialog({ onClose, onCreated, onOrderCreated }: { onClo
           <Field label={t('tasks.flowField')} hint={t('tasks.flowHint')}>
             <select value={flow} onChange={(e) => { setFlow(e.target.value); setStation('') }}>
               <option value="">{t('tasks.chooseFlow')}</option>
-              <optgroup label={t('ops.createGroupFlows')}>
-                {(flows.data ?? []).map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
-              </optgroup>
-              {(processes.data?.length ?? 0) > 0 && (
-                <optgroup label={t('ops.createGroupProcesses')}>
-                  {processes.data!.map((p) => <option key={p.code} value={processValue(p.code)}>{p.code} · {p.name}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
-                </optgroup>
-              )}
+              <RequestOptions flows={flows.data ?? []} processes={processes.data ?? []} />
             </select>
           </Field>
           <Field label={t('tasks.stationField')} hint={t('tasks.stationHint')}>
