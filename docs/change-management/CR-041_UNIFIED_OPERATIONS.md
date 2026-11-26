@@ -101,7 +101,7 @@ Backend và giao diện cho phép Admin thêm / sửa / chuyển / xóa từ CR-
 | ID | Nội dung và đề xuất | Cách làm hiện tại |
 |---|---|---|
 | OQ-40-01 | Chuyển BP-01…06 sang quy trình database và bỏ nhóm cấu hình. Đề xuất: duyệt định nghĩa BP trong DB, thêm vào danh mục mặc định, rồi tắt engine cũ theo từng luồng | Hai nhóm trong cùng dropdown, ghi rõ loại |
-| OQ-39-08 | BP và PH2 cùng trigger tại A1/A2, B1/B2: yêu cầu PLC không kèm mã quy trình bị `PROCESS_AMBIGUOUS`. Đề xuất: tắt BP trùng trên môi trường dùng PH2 | Không tự tắt |
+| OQ-39-08 | BP và PH2 cùng trigger tại A1/A2, B1/B2: khi quy trình PH2 đã Ready, yêu cầu PLC không kèm mã quy trình bị `PROCESS_AMBIGUOUS` (trước đó chỉ BP nhận). Đề xuất: tắt BP trùng trên môi trường dùng PH2 | Không tự tắt |
 | OQ-41-01 | Mô phỏng tạo công việc khi hệ thống ở Real (cần tách tồn kho/AGV giả khỏi thật). Đề xuất: giữ chặn | Chặn |
 | OQ-41-02 | Quy tắc cạnh/mức/reset/handshake để tín hiệu PLC thật tạo yêu cầu (CR-029) | PLC thật không tạo yêu cầu |
 | OQ-54, 58, 45, 49, 55 | Như CR-040 | Không đổi |
