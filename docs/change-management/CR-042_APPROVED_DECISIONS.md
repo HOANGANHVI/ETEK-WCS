@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| **Trạng thái** | **`HOLD`** từ 2026-11-26 theo chỉ đạo chủ dự án. `IMPLEMENTED – TESTED (Simulator / mock) – NOT COMMITTED – NOT DEPLOYED`. Chưa đóng |
-| **Nhánh / HEAD** | `feature/cr-042-approved-decisions` / `844c415`; thay đổi nằm trong working tree |
+| **Trạng thái** | `MERGED – NOT DEPLOYED` (chủ dự án cho phép đưa vào `main` ngày 2026-11-26). Đã kiểm thử trên Simulator / mock. Chưa đóng: còn F1, F2 và các OQ ở §8 |
+| **Commit** | `3811180` (nhánh `feature/cr-042-approved-decisions`) |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-26, trả lời [INITIAL REVIEW](../reviews/INITIAL_REVIEW_2026-11-26.md) |
 | **Migration** | `AddVersionWithdrawnByAdmin`, `AddOrderRacksHeld` ([up](CR-042_migration_up.sql), [down](CR-042_migration_down.sql)). Chỉ mới chạy trên database test |
-| **Review** | Chủ dự án, 2026-11-26: chưa cho phép commit, merge, push cho tới khi review kết quả sửa OQ-42-08 |
+| **Review** | Chủ dự án, 2026-11-26: HOLD trong lúc xác minh, sau đó cho phép commit, merge và push |
 
 ## 1. Quyết định và cách hiện thực
 
@@ -164,4 +164,4 @@ Test `Cr042OpenFindingsTests` (2/2 đạt, ba lần chạy liên tiếp) mô t�
 | Nút giải phóng rack trên trình duyệt; PLC, RCS, AGV thật | **NOT VERIFIED** |
 | Database vận hành | Chưa chạy migration; backend đang chạy trên máy vẫn là bản cũ |
 
-**Giữ nguyên khi HOLD:** không commit, merge, push, reset; không triển khai OQ đang chờ. Tài liệu CR-043 và tài liệu chuẩn hóa PLC Interface trong cùng working tree **không thuộc** CR-042 và phải tách khi commit.
+**Cập nhật 2026-11-26:** HOLD đã được gỡ; mã được đưa vào `main`. Không deploy, không chạy migration trên database vận hành.

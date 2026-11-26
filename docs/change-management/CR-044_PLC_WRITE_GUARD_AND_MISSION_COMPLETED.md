@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `IMPLEMENTED – TESTED (mock / simulator) – NOT COMMITTED – NOT DEPLOYED` |
+| **Trạng thái** | `MERGED – NOT DEPLOYED` (chủ dự án cho phép đưa vào `main` ngày 2026-11-26). Đã kiểm thử trên PLC giả lập / Simulator |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-26 (OW-2, OW-4) |
-| **Nền** | HEAD `844c415`, nhánh `feature/cr-042-approved-decisions`; working tree còn thay đổi CR-042 (HOLD) chưa commit, **phải tách khi commit** |
+| **Nền / commit** | Nền `844c415`; commit `b25b4b6`, sau các commit CR-042, CR-043 (tài liệu) và Phase 2 |
 | **Migration** | Không |
 | **Không đổi** | Workbook, catalog IO, mapping, CR-029, đọc PLC, Simulator, hợp đồng IO đang chờ kỹ sư PLC, câu "cột địa chỉ trống" trong `CLAUDE.md` (C-8) |
 

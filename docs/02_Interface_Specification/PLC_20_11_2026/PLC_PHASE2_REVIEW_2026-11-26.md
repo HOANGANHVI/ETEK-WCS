@@ -4,10 +4,10 @@
 |---|---|
 | **Ngày** | 2026-11-26 |
 | **Trạng thái** | `BÁO CÁO CHỜ REVIEW – CHỜ KỸ SƯ PLC XÁC NHẬN HỢP ĐỒNG IO`. Không `APPROVED`, không `READY FOR IMPLEMENTATION`. Không sửa mapping/catalog, workbook, CR-029, database |
-| **Bản sửa** | Rev 4 (2026-11-26): OW-2 và OW-4 đã thực hiện ([CR-044](../../change-management/CR-044_PLC_WRITE_GUARD_AND_MISSION_COMPLETED.md), chưa commit, chưa deploy). Rev 3: OW-1…OW-8, OW-6. Rev 2: PD-1…PD-4. §3–§7 mô tả hiện trạng **trước** CR-044 |
+| **Bản sửa** | Rev 4 (2026-11-26): OW-2 và OW-4 đã thực hiện ([CR-044](../../change-management/CR-044_PLC_WRITE_GUARD_AND_MISSION_COMPLETED.md), đã vào `main` ngày 2026-11-26, chưa deploy). Rev 3: OW-1…OW-8, OW-6. Rev 2: PD-1…PD-4. §3–§7 mô tả hiện trạng **trước** CR-044 |
 | **Căn cứ phân tích** | `PLC_IO_Map/AGV_PLC Interface_List_20_11_2026.xlsx`, SHA-256 `a291d28fac907c3dbf5e3620425abf62cb718d058ab472eec9ccf8c0701babb3` (Git blob `5799a155`) |
 | **Phạm vi kiểm chứng** | Đọc đủ hai sheet (giá trị ô, ô gộp, đường nối); đọc source; `SELECT` trên database trên máy. Không kết nối PLC. Không xem workbook bằng Excel |
-| **Quản lý source** | Tài liệu này **không thuộc CR-042** (đang HOLD) và phải tách khi commit |
+| **Quản lý source** | Đưa vào `main` ngày 2026-11-26 cùng CR-042 và CR-044, commit riêng |
 
 Chỉ đạo dùng workbook làm căn cứ **phân tích** không phê duyệt handshake nào để triển khai.
 
@@ -184,7 +184,7 @@ Phân loại: **Khớp** · **Khác biệt** · **Chưa có mapping** · **Thi�
 
 ## 8. Việc đã được phép, việc còn chờ
 
-**Đã thực hiện** (CR-044; chưa commit, chưa deploy):
+**Đã thực hiện** (CR-044; đã vào `main`, chưa deploy):
 
 | Việc | Căn cứ | Xử lý |
 |---|---|---|
@@ -251,7 +251,7 @@ Nội dung đầy đủ để gửi: [PLC_ENGINEER_QUESTIONS_2026-11-26.md](PLC_
 | Mã | Nội dung | Trạng thái | Thực hiện |
 |---|---|---|---|
 | OW-1 | Workbook hash `a291d28f…babb3` là căn cứ phân tích | `DECIDED` | Đã áp dụng trong báo cáo. Không phải xác nhận hợp đồng IO |
-| OW-2 | Lớp chặn ghi mặc định, tách khỏi Giai đoạn 3 | `APPROVED` | Đã hiện thực (CR-044); chưa commit, chưa deploy |
+| OW-2 | Lớp chặn ghi mặc định, tách khỏi Giai đoạn 3 | `APPROVED` | Đã hiện thực (CR-044); đã vào `main`, chưa deploy |
 | OW-3 | Giữ D-2; không dùng enum 1–3 làm định danh AGV cố định khi chưa xác nhận | `DECIDED` | Đã áp dụng trong báo cáo |
 | OW-4 | Sửa diễn giải D-4: 1 = thất bại, 2 = thành công | `APPROVED` | Đã sửa ADR-0011, `CLAUDE.md`, truy vết; đính chính bộ tài liệu V2 (trừ chính CR-029) |
 | OW-5 | Khôi phục IO Map v2 từ commit `34c45b2` làm tài liệu `LEGACY/HISTORICAL` | `APPROVED` | Chưa thực hiện |

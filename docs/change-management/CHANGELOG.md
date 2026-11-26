@@ -4,7 +4,7 @@
 
 - **Breaking for real writes (OW-2):** a real PLC write now also needs an explicit declaration in `Plc:Write:AllowList` (PLC, station, signal, address; empty by default) and must not reach a register of `Plc:Write:ReservedAddresses` (the unconfirmed 20/11/2026 interface). Second lock in the connection worker; every real write decision is stored in `audit_log` and a write whose authorization cannot be stored is not sent; refused write requests (401/403, lookup, value) are audited. Reading and the simulator are unchanged. `docker-compose.yml` does not yet pass an allow list: Docker deployments cannot write until it is declared.
 - **Correction (OW-4):** `PLC_MissionCompleted` `1` = Failure, `2` = Success (CLAUDE.md D-4, ADR-0011, traceability, correction banners on the CR-029 V2 documents). No code reads this signal.
-- No migration. Not committed, not deployed, tested against the mock PLC and the simulator only. See CR-044.
+- No migration. Merged into main 2026-11-26, not deployed, tested against the mock PLC and the simulator only. See CR-044.
 
 ## v3.33 – CR-042 Approved review decisions (2026-11-26)
 
