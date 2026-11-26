@@ -110,6 +110,12 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
     }
 
     public void Add(RoutingEvent e) => db.RoutingEvents.Add(e);
+    public Task<RoutingEvent?> GetLastLegEventAsync(Guid legId, string kind, CancellationToken ct) =>
+        db.RoutingEvents.AsNoTracking().Where(e => e.LegId == legId && e.Kind == kind).OrderByDescending(e => e.OccurredAt).FirstOrDefaultAsync(ct);
+    public Task<bool> HasOrderEventSinceAsync(Guid orderId, string kind, DateTimeOffset since, CancellationToken ct) =>
+        db.RoutingEvents.AnyAsync(e => e.OrderId == orderId && e.Kind == kind && e.OccurredAt >= since, ct);
+    public async Task<IReadOnlyList<TransportOrder>> ListWaitingQueuedOrdersAsync(int take, CancellationToken ct) =>
+        await db.TransportOrders.AsNoTracking().Where(o => o.QueueSequence != null && o.State == OrderState.Waiting).OrderBy(o => o.QueueSequence).Take(take).ToListAsync(ct);
     public Task FlushAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 
     public async Task<IReadOnlyList<RoutingEvent>> ListEventsAsync(Guid orderId, int take, CancellationToken ct) =>
@@ -153,11 +159,8 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
     public async Task<IReadOnlyList<StationIoPoint>> ListPlcInputPointsAsync(string stationId, CancellationToken ct) =>
         await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == stationId && p.Direction == PlcSignalDirection.PlcToSoftware).OrderBy(p => p.Seq).ToListAsync(ct);
 
-    public Task<string?> FindOpenOrderUsingRackAsync(Guid rackId, CancellationToken ct) =>
-        db.TransportOrders.AsNoTracking()
-            .Where(o => o.State != OrderState.Completed && o.State != OrderState.Failed && o.State != OrderState.Cancelled
-                        && (o.RackId == rackId || o.Legs.Any(l => l.RackId == rackId && l.State != LegState.Completed && l.State != LegState.Failed && l.State != LegState.Cancelled)))
-            .Select(o => (string?)o.RequestKey).FirstOrDefaultAsync(ct);
+    public Task<string?> FindOrderOwningRackAsync(Guid rackId, CancellationToken ct) =>
+        db.TransportOrders.AsNoTracking().Where(RackOwnership.Owns(rackId)).OrderBy(o => o.CreatedAt).Select(o => (string?)o.RequestKey).FirstOrDefaultAsync(ct);
 
     public Task<bool> IsPlcEnabledAsync(string plcId, CancellationToken ct) => db.PlcConnections.AsNoTracking().Where(c => c.Id == plcId).Select(c => c.Enabled).FirstOrDefaultAsync(ct);
 }

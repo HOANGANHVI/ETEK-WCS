@@ -80,6 +80,8 @@ export interface Order {
   queueStatus?: string | null
   requestedBy?: string | null
   executionMode?: 'Simulator' | 'Real' | null
+  /** CR-042: a failed order that still owns the racks it moved (until an Admin releases them) */
+  racksHeld?: boolean
 }
 
 export interface RoutingEvent { id: string; legId: string | null; transactionId: string | null; kind: string; detail: string | null; source: string; occurredAt: string }
@@ -121,6 +123,8 @@ export interface Process {
   /** CR-041: compared with the confirmed default catalog */
   catalogStatus?: 'NotDefault' | 'Matches' | 'Differs'
 }
+/** CR-042: the oldest waiting request of a queue scope that has waited too long */
+export interface QueueAlert { orderId: string; requestKey: string; processCode: string; scope: string | null; waitKind: string; reason: string | null; waitingSince: string; minutes: number; behind: number }
 export interface QueueScopeResult { processId: string; code: string; queueScope: string | null; requiresReadiness: boolean; sharedLocationsWithOtherScopes: string[] }
 export interface ProcessVersion {
   id: string; processId: string; processCode: string; number: number; state: VersionSummary['state']; editable: boolean; note: string | null

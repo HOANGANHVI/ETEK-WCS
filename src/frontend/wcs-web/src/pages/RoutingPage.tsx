@@ -109,10 +109,11 @@ function OrderDetailPanel({ id }: { id: string }) {
   const [dialog, setDialog] = useState<{ kind: 'pick' | 'drop'; leg: Leg } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [releaseReason, setReleaseReason] = useState<string | null>(null)   // CR-042: null = dialog closed
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError(null)
-    try { await fn(); setDialog(null); detail.reload() } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
+    try { await fn(); setDialog(null); setReleaseReason(null); detail.reload() } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
   }
 
   return (
@@ -122,6 +123,12 @@ function OrderDetailPanel({ id }: { id: string }) {
           <>
             {order.state === 'ReconciliationRequired' && <div className="notice notice-warn" role="alert">{t('routing.reconNotice')}</div>}
             {error && <div className="notice notice-error" role="alert">{error}</div>}
+            {order.racksHeld && (
+              <div className="notice notice-warn" role="alert">
+                {t('linked.racksHeldNotice')}{' '}
+                {isAdmin && <Button size="sm" variant="danger" onClick={() => { setError(null); setReleaseReason('') }}>{t('linked.btnReleaseRacks')}</Button>}
+              </div>
+            )}
             <section className="detail-sec">
               <h3>{t('routing.secGeneral')}</h3>
               <dl className="kv2">
@@ -210,6 +217,15 @@ function OrderDetailPanel({ id }: { id: string }) {
           </>
         )}
       </Async>
+      {releaseReason !== null && (
+        <Modal title={t('linked.releaseRacksTitle')} onClose={() => setReleaseReason(null)}
+          footer={<><Button onClick={() => setReleaseReason(null)}>{t('routing.closeDialog')}</Button>
+            <Button variant="danger" disabled={busy || !releaseReason.trim()} onClick={() => run(() => api.routingReleaseRacks(id, releaseReason.trim()))}>{t('routing.confirm')}</Button></>}>
+          <p>{t('linked.releaseRacksBody')}</p>
+          {error && <div className="notice notice-error" role="alert">{error}</div>}
+          <label>{t('linked.releaseRacksReason')}<input type="text" value={releaseReason} maxLength={500} onChange={(e) => setReleaseReason(e.target.value)} /></label>
+        </Modal>
+      )}
       {dialog && (
         <Modal title={t(dialog.kind === 'pick' ? 'routing.confirmPickTitle' : 'routing.confirmDropTitle')} onClose={() => setDialog(null)}
           footer={<><Button onClick={() => setDialog(null)}>{t('routing.closeDialog')}</Button>

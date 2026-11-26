@@ -25,7 +25,7 @@ public sealed record SimulationFlowDto(string Code, string Name, string RequestT
 
 public sealed record SimulationTriggerDto(string LocationCode, string? PortId, string? PlcId, bool PortMappingApproved, bool? PlcOnline, bool PortBusy);
 
-public sealed record SimulationStartResult(string Outcome, string Code, string Message, OrderDto? Order, StationTransactionDto? Transaction, string RequestId);
+public sealed record SimulationStartResult(string Outcome, string Code, string Message, OrderDto? Order, StationTransactionDto? Transaction, string RequestId, Guid? TaskId = null);
 
 /// <summary>
 /// CR-035 / CR-040. Admin-only manual PLC simulation, opened by an explicit confirmation. It replaces ONLY the physical PLC as the source of PLC → WCS signals: the request goes through the
@@ -34,7 +34,7 @@ public sealed record SimulationStartResult(string Outcome, string Code, string M
 /// PLC is online (no mixing of a physical PLC and the simulation on the same resources).
 /// </summary>
 public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository routing, IPlcRequestService plcRequests, IPlcInputHandler inputHandler, IRouteEngine engine, ILegDispatcher dispatcher,
-    PlcSimulationState state, PlcSimulatedInputs inputs, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock, IPlcLinkStatus? link = null)
+    PlcSimulationState state, PlcSimulatedInputs inputs, WCS.Application.Plc.IStationEngineRouter engines, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock, IPlcLinkStatus? link = null)
 {
     public const string Banner = "PLC SIMULATION";
     public const string MappingSource = "TEST CONFIGURATION: logical signals of IO Map v2 (Pickup_Request / Delivery_Request / Request_ID / Rack_Full / Rack_Empty, PlcLocationCodes 1-4). Not the 20/11/2026 mapping (CR-029 PENDING_APPROVAL); no PLC address is read or written.";
@@ -79,7 +79,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
                     string.IsNullOrWhiteSpace(p.ActualAddress) ? null : p.ActualAddress);
             }).ToList();
             var active = await routing.GetActiveTransactionForPortAsync(port.Id, t);
-            list.Add(new(port.Id, port.PlcId, port.LocationCode!, link?.IsOnline(port.PlcId), await routing.IsPortMappingApprovedAsync(port.Id, t), active?.ToDto(), signals));
+            list.Add(new(port.Id, port.PlcId, port.LocationCode!, link?.IsOnline(port.PlcId), await routing.IsPortMappingApprovedAsync(port.Id, t), active?.ToDto(), signals, engines.EngineFor(port.Id).ToString()));
         }
         return list;
     }, ct);
@@ -115,7 +115,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
         if (!safetyAcknowledged) throw AppException.Validation("SAFETY_ACK_REQUIRED", "The operator must confirm that the test area is safe: with the real mode an AMR may move.");
         var port = await uow.ExecuteAsync(t => SimulatablePortAsync(stationId, t), ct);
         var (snapshot, r) = await inputHandler.HandleAsync(PlcInputSource.Simulation, port.PlcId, port.Id, inputs.Of(port.Id), ct);
-        return new(r.Outcome.ToString(), r.Code, r.Message, r.Order, r.Transaction, snapshot.RequestId);
+        return new(r.Outcome.ToString(), r.Code, r.Message, r.Order, r.Transaction, snapshot.RequestId, r.TaskId);
     }
 
     private async Task<WCS.Domain.Plc.PlcStation> SimulatablePortAsync(string stationId, CancellationToken ct)

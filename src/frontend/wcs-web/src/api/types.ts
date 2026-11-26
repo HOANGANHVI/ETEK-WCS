@@ -58,6 +58,8 @@ export interface Rack {
   id: string
   externalRackId: string | null
   rackType: string | null
+  /** CR-036: product model of the rack (null = unknown) */
+  productModelId?: string | null
   status: 'Unknown' | 'Full' | 'Empty' | 'InTransit'
   currentLocationId: string | null
   currentTaskId: string | null

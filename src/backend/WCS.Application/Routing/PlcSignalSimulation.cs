@@ -1,5 +1,9 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using Microsoft.Extensions.Options;
+using WCS.Application.Abstractions;
+using WCS.Application.Common;
+using WCS.Application.Plc;
 
 namespace WCS.Application.Routing;
 
@@ -42,7 +46,7 @@ public interface IPlcInputHandler
 /// the only differences are that a simulated request is marked as such (it creates no work in Real mode) and that a PHYSICAL signal set is not processed yet: when a signal change counts
 /// as a request (edge / level, reset, handshake) is not approved (CR-029, OQ-41-02), so nothing is derived from it.
 /// </summary>
-public sealed class PlcInputHandler(IPlcRequestService requests) : IPlcInputHandler
+public sealed class PlcInputHandler(IPlcRequestService requests, IStationEngineRouter engines, IOptions<PlcRuntimeOptions> plc, ITaskOrchestrator tasks, IRoutingRepository routing, IUnitOfWork uow, IExecutionModeGate modeGate) : IPlcInputHandler
 {
     public const string TriggerNotApproved = "PLC_TRIGGER_NOT_APPROVED";
 
@@ -51,7 +55,34 @@ public sealed class PlcInputHandler(IPlcRequestService requests) : IPlcInputHand
         var snapshot = PlcRequestAssembler.FromSignals(plcId, stationId, signals) with { Simulated = source == PlcInputSource.Simulation };
         if (source == PlcInputSource.Physical)
             return (snapshot, new(PlcRequestOutcome.Rejected, TriggerNotApproved, "The rule that turns physical PLC signals into a request is not approved yet (CR-029): nothing is processed.", null, null));
-        return (snapshot, await requests.HandleRequestAsync(snapshot, ct));
+        return engines.EngineFor(stationId) == StationEngine.Task
+            ? (snapshot, await ToTaskAsync(snapshot, stationId, ct))
+            : (snapshot, await requests.HandleRequestAsync(snapshot, ct));   // an unassigned station is simulated on the transport order engine
+    }
+
+    /// <summary>
+    /// CR-042 (OQ-42-03): a simulated read of a station assigned to the task engine: the same approved station-to-flow mapping, the same key (PlcId:Station:Request_ID) and the same
+    /// orchestrator as the physical intake. One read = one request; it creates nothing in Real mode.
+    /// </summary>
+    private async Task<PlcRequestResult> ToTaskAsync(PlcRequestSnapshot s, string station, CancellationToken ct)
+    {
+        PlcRequestResult Reject(string code, string message) => new(PlcRequestOutcome.Rejected, code, message, null, null);
+        if (string.IsNullOrWhiteSpace(s.RequestId)) return Reject("REQUEST_ID_MISSING", "Request_ID could not be read.");
+        if (s.PickupRequest && s.DeliveryRequest) return Reject("CONFLICTING_REQUESTS", "Pickup and Delivery are both requested; neither is processed.");
+        if (!s.PickupRequest && !s.DeliveryRequest) return Reject("NO_REQUEST", "No request bit is set.");
+        var signal = s.PickupRequest ? PlcRequestAssembler.PickupRequest : PlcRequestAssembler.DeliveryRequest;
+        var map = plc.Value.Integration.StationFlows.FirstOrDefault(m => m.Station == station && m.Signal == signal && !string.IsNullOrWhiteSpace(m.Flow));
+        if (map is null) return Reject(StationEngineCodes.NoFlow, $"No approved flow is mapped to {signal} of station {station}: nothing is created.");
+        if (await uow.ExecuteAsync(async t => await routing.GetTransactionByRequestIdAsync(s.PlcId, s.RequestId, t), ct) is { } other && other.PortId == station)
+            return Reject(StationEngineCodes.TakenByOther, "The transport order engine already received this Request_ID of this station.");
+        if (await uow.ExecuteAsync(t => modeGate.ModeForNewWorkAsync(t), ct) == WCS.Domain.Rcs.ExecutionMode.Real) return Reject(SimulationCodes.RealMode, SimulationCodes.RealModeMessage);
+        try
+        {
+            var r = await tasks.CreateTaskAsync(new CreateTaskCommand($"{s.PlcId}:{station}:{s.RequestId.Trim()}", map.Flow, station, "PLC-SIMULATION", SimulationOnly: true), ct);
+            return new(r.Created ? PlcRequestOutcome.Accepted : PlcRequestOutcome.Duplicate, r.Created ? "ACCEPTED" : "DUPLICATE_REQUEST_ID",
+                r.Created ? "Request accepted by the task engine." : "This Request_ID was already processed.", null, null, r.Task.Id);
+        }
+        catch (AppException e) { return Reject(e.Code, e.Message); }
     }
 }
 
@@ -86,4 +117,5 @@ public sealed class PlcSimulatedInputs
 }
 
 public sealed record SimSignalDto(string Signal, string DataType, string Description, string? Value, DateTimeOffset? ChangedAt, bool ReadByIntake, string? Address = null);
-public sealed record SimStationDto(string StationId, string PlcId, string LocationCode, bool? PlcOnline, bool PortMappingApproved, StationTransactionDto? ActiveTransaction, IReadOnlyList<SimSignalDto> Signals);
+public sealed record SimStationDto(string StationId, string PlcId, string LocationCode, bool? PlcOnline, bool PortMappingApproved, StationTransactionDto? ActiveTransaction, IReadOnlyList<SimSignalDto> Signals,
+    string Engine = "Unassigned");

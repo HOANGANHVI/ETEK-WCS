@@ -212,6 +212,15 @@ public sealed class PlcIntegrationOptions
     public bool Enabled { get; set; }
     /// <summary>Approved mappings "station + request signal -> process flow". Empty by default: no station creates tasks.</summary>
     public List<StationFlowMapping> StationFlows { get; set; } = [];
+
+    /// <summary>CR-042 (OQ-42-03): which engine takes the requests of a station ("Task" = Phase 1 flows, "TransportOrder" = database processes). Empty = see <see cref="StationEngineRouter"/>.</summary>
+    public List<StationEngineAssignment> StationEngines { get; set; } = [];
+}
+
+public sealed class StationEngineAssignment
+{
+    public string Station { get; set; } = "";
+    public string Engine { get; set; } = "";
 }
 
 public sealed class StationFlowMapping

@@ -77,7 +77,7 @@ public enum SignalOutcome { Applied = 1, Duplicate = 2, Ignored = 3, Rejected = 
 
 public sealed record SignalResult(SignalOutcome Outcome, string Message, TaskDto? Task);
 
-public sealed record CreateTaskCommand(string RequestKey, string Flow, string StationCode, string? RequestedBy);
+public sealed record CreateTaskCommand(string RequestKey, string Flow, string StationCode, string? RequestedBy, bool SimulationOnly = false);
 
 public sealed record CreateTaskResult(TaskDto Task, bool Created);
 

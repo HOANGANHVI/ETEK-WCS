@@ -20,7 +20,8 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
     /// <summary>True for a location type that can hold a stored rack (an intermediate waiting position never does).</summary>
     public static bool CanStoreRack(LocationType t) => StoresRacks(t);
 
-    public async Task<bool> EvaluateAsync(ConditionSpec c, string defaultLocationCode, RackKind kind, CancellationToken ct = default, RackSelection? selection = null)
+    /// <param name="orderId">CR-042 (OQ-42-08): the order that asks. Racks it owns count for it; racks owned by another order are never "present" for anyone else.</param>
+    public async Task<bool> EvaluateAsync(ConditionSpec c, string defaultLocationCode, RackKind kind, CancellationToken ct = default, RackSelection? selection = null, Guid? orderId = null)
     {
         var code = string.IsNullOrWhiteSpace(c.LocationCode) ? defaultLocationCode : c.LocationCode!;
         var loc = await locations.GetByCodeAsync(code, ct);
@@ -37,10 +38,10 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
                 return StoresRacks(loc.Type) && loc.HasFreeSlot(occ, res);
             }
             case ConditionType.RackPresent:
-                return loc.Enabled && !loc.ReconciliationRequired && await FindRackAsync(loc.Id, kind, selection, ct) is not null;
+                return loc.Enabled && !loc.ReconciliationRequired && await FindRackAsync(loc.Id, kind, selection, orderId, ct) is not null;
             case ConditionType.RackTypeMatch:
             {
-                var rack = await FindRackAsync(loc.Id, kind, selection, ct);
+                var rack = await FindRackAsync(loc.Id, kind, selection, orderId, ct);
                 if (rack is null || string.IsNullOrWhiteSpace(c.Parameter)) return false;
                 if (Enum.TryParse<RackKind>(c.Parameter, true, out var wanted)) return wanted == kind;
                 return string.Equals(rack.RackType, c.Parameter, StringComparison.OrdinalIgnoreCase);
@@ -63,7 +64,7 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
             }
             case ConditionType.RackBinding:
             {
-                var rack = await FindRackAsync(loc.Id, kind, selection, ct);
+                var rack = await FindRackAsync(loc.Id, kind, selection, orderId, ct);
                 if (rack is null) return false;
                 return (c.Parameter ?? "").Trim().ToLowerInvariant() switch
                 {
@@ -78,14 +79,15 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
     }
 
     // CR-036: with a selection (Enforce) the model / manual-handling filter applies; without it the historical query is used.
-    private Task<Rack?> FindRackAsync(Guid locationId, RackKind kind, RackSelection? selection, CancellationToken ct) =>
-        selection is null ? racks.FindUnreservedAsync(locationId, StatusOf(kind), ct) : racks.FindUnreservedAsync(locationId, StatusOf(kind), selection, ct);
+    private Task<Rack?> FindRackAsync(Guid locationId, RackKind kind, RackSelection? selection, Guid? orderId, CancellationToken ct) =>
+        orderId is { } id ? racks.FindForOrderAsync(id, locationId, StatusOf(kind), selection, ct)
+        : selection is null ? racks.FindUnreservedAsync(locationId, StatusOf(kind), ct) : racks.FindUnreservedAsync(locationId, StatusOf(kind), selection, ct);
 
     /// <summary>All conditions must hold.</summary>
-    public async Task<bool> AllAsync(IEnumerable<ConditionSpec> conditions, string defaultLocationCode, RackKind kind, CancellationToken ct = default, RackSelection? selection = null)
+    public async Task<bool> AllAsync(IEnumerable<ConditionSpec> conditions, string defaultLocationCode, RackKind kind, CancellationToken ct = default, RackSelection? selection = null, Guid? orderId = null)
     {
         foreach (var c in conditions)
-            if (!await EvaluateAsync(c, defaultLocationCode, kind, ct, selection)) return false;
+            if (!await EvaluateAsync(c, defaultLocationCode, kind, ct, selection, orderId)) return false;
         return true;
     }
 
@@ -100,12 +102,12 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
             if (v is not null) { modelGuard.Report(v, $"source location {code}"); if (modelGuard.Enforcing) return false; }
         }
         var ok = await EvaluateAsync(new ConditionSpec(ConditionType.LocationEnabled), code, kind, ct)
-                 && await EvaluateAsync(new ConditionSpec(ConditionType.RackPresent), code, kind, ct, sel)
+                 && await EvaluateAsync(new ConditionSpec(ConditionType.RackPresent), code, kind, ct, sel, orderId)
                  && await PortReadyAsync(code, orderId, ct) && await PlcOnlineAsync(code, ct)
-                 && await AllAsync(extra, code, kind, ct, sel);
+                 && await AllAsync(extra, code, kind, ct, sel, orderId);
         // say WHY (Enforce: a rack was excluded; Warn: a rack would be excluded) - the rack query without the filter is only used to explain
         if (mc is not null && modelGuard.On && (sel is not null ? !ok : ok) && await locations.GetByCodeAsync(code, ct) is { } loc
-            && await racks.FindUnreservedAsync(loc.Id, StatusOf(kind), ct) is { } any && ModelGuard.RackViolation(any, mc.ProcessModelId) is { } rv)
+            && await FindRackAsync(loc.Id, kind, null, orderId, ct) is { } any && ModelGuard.RackViolation(any, mc.ProcessModelId) is { } rv)
             modelGuard.Report(rv, $"rack at {code}");
         return ok;
     }
@@ -125,7 +127,7 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
         await EvaluateAsync(new ConditionSpec(ConditionType.LocationEnabled), code, kind, ct)
         && await EvaluateAsync(new ConditionSpec(ConditionType.LocationAvailable), code, kind, ct)
         && await PortReadyAsync(code, orderId, ct) && await PlcOnlineAsync(code, ct)
-        && await AllAsync(extra, code, kind, ct);
+        && await AllAsync(extra, code, kind, ct, null, orderId);
 
     /// <param name="orderId">A transaction that already belongs to this order (for example the one opened by the PLC request) does not make the port busy for the order itself.</param>
     public async Task<bool> PortReadyAsync(string locationCode, Guid? orderId, CancellationToken ct)

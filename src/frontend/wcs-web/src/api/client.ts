@@ -9,7 +9,7 @@ import type { SimFlow, SimStartResult, SimStation, SimStatus } from './simTypes'
 import type { ExecMode, ExecutionModeView, LegacyAdoptionResult, ModeReadiness, ModeTransitionBody, ModeTransitionResult, ModeTransitionView, RcsMessageDetail, RcsMessageSummary } from './modeTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
-import type { AddPlcBody, StartableProcess, QueueScopeResult, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
+import type { AddPlcBody, QueueAlert, StartableProcess, QueueScopeResult, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
@@ -229,6 +229,7 @@ const realApi = {
   routingStart: (b: { requestKey: string; locationCode: string; requestType: string; rackKind?: string; processCode: string }) =>
     request<{ order: Order; created: boolean }>('/api/routing/orders', { method: 'POST', body: JSON.stringify(b) }),
   routingCancel: (id: string, reason?: string) => request<Order>(`/api/routing/orders/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  routingReleaseRacks: (id: string, reason: string) => request<Order>(`/api/routing/orders/${id}/release-racks`, { method: 'POST', body: JSON.stringify({ reason }) }),
   routingPick: (legId: string) => request<unknown>(`/api/routing/legs/${legId}/pick`, { method: 'POST' }),
   routingDrop: (legId: string) => request<unknown>(`/api/routing/legs/${legId}/drop`, { method: 'POST', body: JSON.stringify({}) }),
   routingTransactions: (activeOnly: boolean) => request<StationTransaction[]>(`/api/routing/transactions${qs({ activeOnly: activeOnly ? 'true' : undefined, take: 200 })}`),
@@ -254,9 +255,9 @@ const realApi = {
   // CR-040: one rack record (Admin)
   rackEditability: (id: string) => request<{ editable: boolean; code: string | null; message: string | null }>(`/api/inventory/racks/${id}/editability`),
   processApplyCatalog: (processId: string, reason: string) => request<ProcessVersion>(`/api/processes/${processId}/apply-catalog`, { method: 'POST', body: JSON.stringify({ reason }) }),
-  rackCreate: (b: { locationCode: string; rackKind: 'Full' | 'Empty'; externalRackId: string | null; reason: string; rackType?: string }) =>
+  rackCreate: (b: { locationCode: string; rackKind: 'Full' | 'Empty'; externalRackId: string | null; reason: string; rackType?: string; productModelId?: string }) =>
     request<Rack>('/api/inventory/racks', { method: 'POST', body: JSON.stringify(b) }),
-  rackUpdate: (id: string, b: { locationCode?: string; rackKind?: 'Full' | 'Empty'; externalRackId?: string; reason: string; rackType?: string }) =>
+  rackUpdate: (id: string, b: { locationCode?: string; rackKind?: 'Full' | 'Empty'; externalRackId?: string; reason: string; rackType?: string; productModelId?: string }) =>
     request<Rack>(`/api/inventory/racks/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   rackDelete: (id: string, reason: string) => request<{ id: string }>(`/api/inventory/racks/${id}${qs({ reason })}`, { method: 'DELETE' }),
   plcAdd: (b: AddPlcBody) => request<PlcConnection>('/api/plc/connections', { method: 'POST', body: JSON.stringify(b) }),
@@ -304,6 +305,7 @@ const realApi = {
   transferUpload: (file: File) => uploadPackage(file),
   transferPreview: (id: string, selection: Selection) => request<ImportPlan>(`/api/config-transfer/imports/${id}/preview`, { method: 'POST', body: JSON.stringify(selection) }),
   // CR-035 Admin manual PLC simulation (PLC only; RCS is real). The server enforces Admin and the safety acknowledgement.
+  queueAlerts: () => request<QueueAlert[]>('/api/routing/queue-alerts'),
   simStatus: () => request<SimStatus>('/api/plc-simulation/status'),
   simActivate: (confirmed: boolean) => request<SimStatus>('/api/plc-simulation/activate', { method: 'POST', body: JSON.stringify({ confirmed }) }),
   simStations: () => request<SimStation[]>('/api/plc-simulation/stations'),

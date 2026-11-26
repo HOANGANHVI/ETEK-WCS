@@ -84,6 +84,8 @@ public static class DependencyInjection
         services.AddScoped<Plc.PlcProvisioningService>();   // CR-010
         services.AddSingleton<Plc.IPlcRuntime, Plc.PlcRuntime>();
         services.AddSingleton<Plc.HandshakeCoordinator>();
+        services.AddSingleton<Plc.IStationEngineRouter, Plc.StationEngineRouter>();   // CR-042
+        services.AddScoped<Plc.IStationSignalOwnership, Routing.StationSignalOwnership>();
         services.AddSingleton<Plc.PlcStationSignalService>();
 
         services.Configure<Auth.AuthOptions>(configuration.GetSection(Auth.AuthOptions.SectionName));

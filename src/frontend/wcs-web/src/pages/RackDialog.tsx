@@ -23,13 +23,16 @@ export function RackDialog({ state, locations, defaultLocation, codeOf, onClose,
   const [rackType, setRackType] = useState(rack?.rackType ?? '')
   const editability = useApi(useCallback(() => (rack ? api.rackEditability(rack.id) : Promise.resolve({ editable: true, code: null, message: null })), [rack]))
   const locked = editability.data && !editability.data.editable ? editability.data : null
+  const models = useApi(useCallback(() => api.productModels(), []))
+  const [model, setModel] = useState(rack?.productModelId ?? '')
+  const modelChoice = (models.data ?? []).filter((m) => m.enabled || m.id === rack?.productModelId)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const save = async () => {
     setBusy(true); setError(null)
     try {
-      if (state.kind === 'create') await api.rackCreate({ locationCode: location, rackKind: kind, externalRackId: externalId.trim() || null, reason, rackType: rackType.trim() })
-      else if (state.kind === 'edit') await api.rackUpdate(state.rack.id, { locationCode: location, rackKind: kind, externalRackId: externalId.trim(), reason, rackType: rackType.trim() })
+      if (state.kind === 'create') await api.rackCreate({ locationCode: location, rackKind: kind, externalRackId: externalId.trim() || null, reason, rackType: rackType.trim(), productModelId: model || undefined })
+      else if (state.kind === 'edit') await api.rackUpdate(state.rack.id, { locationCode: location, rackKind: kind, externalRackId: externalId.trim(), reason, rackType: rackType.trim(), productModelId: !state.rack.productModelId && model ? model : undefined })
       else await api.rackDelete(state.rack.id, reason)
       onDone()
     } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
@@ -42,6 +45,7 @@ export function RackDialog({ state, locations, defaultLocation, codeOf, onClose,
     </>}>
       <div className="notice notice-warn" role="note">{t('linked.rackWarning')}</div>
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
+      {editability.error && rack && <div className="notice notice-warn" role="status">{t('linked.rackCheckFailed')} {editability.error}</div>}
       {locked && <div className="notice notice-bad" role="status" data-rack-locked={locked.code}>{t('linked.rackLocked')} {locked.message} <span className="mono">({locked.code})</span></div>}
       {rack && <p className="mono">{rack.externalRackId ?? rack.id.slice(0, 8)} · {RACK_STATUS_VI[rack.status]} · {codeOf(rack.currentLocationId) || '—'}</p>}
       <div className="form-grid single">
@@ -60,6 +64,12 @@ export function RackDialog({ state, locations, defaultLocation, codeOf, onClose,
               </select>
             </Field>
             <Field label={t('linked.rackType')}><input value={rackType} maxLength={100} onChange={(e) => setRackType(e.target.value)} /></Field>
+            <Field label={t('linked.rackModel')} hint={rack?.productModelId ? t('linked.rackModelFixed') : undefined}>
+              <select value={model} disabled={!!rack?.productModelId} onChange={(e) => setModel(e.target.value)}>
+                <option value="">{t('linked.rackModelNone')}</option>
+                {modelChoice.map((m) => <option key={m.id} value={m.id}>{m.code} · {m.name}</option>)}
+              </select>
+            </Field>
             <Field label={t('linked.rackId')}><input value={externalId} maxLength={100} onChange={(e) => setExternalId(e.target.value)} /></Field>
           </>
         )}

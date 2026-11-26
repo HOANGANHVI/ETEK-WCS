@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
+using WCS.Application.Plc;
 using WCS.Domain.Common;
 using WCS.Domain.Routing;
 
@@ -15,7 +16,7 @@ public sealed record PlcRequestSnapshot(string PlcId, string? PortId, string Req
 
 public enum PlcRequestOutcome { Accepted = 1, Duplicate = 2, Rejected = 3, ReconciliationRequired = 4 }
 
-public sealed record PlcRequestResult(PlcRequestOutcome Outcome, string Code, string Message, StationTransactionDto? Transaction, OrderDto? Order);
+public sealed record PlcRequestResult(PlcRequestOutcome Outcome, string Code, string Message, StationTransactionDto? Transaction, OrderDto? Order, Guid? TaskId = null);
 
 public interface IPlcRequestService
 {
@@ -29,7 +30,7 @@ public interface IPlcRequestService
 /// It does NOT write M9101 or any other PLC signal (timing of the acknowledgement is an open decision, Q-ORD-1) and never substitutes another position for an invalid one.
 /// </summary>
 public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IRouteEngine engine, IMaintenanceGate maintenance,
-    IClock clock, IOptions<RouteEngineOptions> options, ModelGuard modelGuard, IExecutionModeGate modeGate) : IPlcRequestService
+    IClock clock, IOptions<RouteEngineOptions> options, ModelGuard modelGuard, IExecutionModeGate modeGate, IStationEngineRouter engines, IStationRequestRepository legacyRequests) : IPlcRequestService
 {
     public async Task<PlcRequestResult> HandleRequestAsync(PlcRequestSnapshot s, CancellationToken ct = default)
     {
@@ -85,6 +86,13 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
         if (s.PortId is not null && !string.Equals(port.Id, s.PortId, StringComparison.Ordinal)) return Reject("LOCATION_CODE_MISMATCH", $"The reported position {locationCode} belongs to port {port.Id}, not {s.PortId}.");
         if (!await routing.IsPlcEnabledAsync(port.PlcId, ct)) return Reject("PLC_DISABLED", $"PLC {port.PlcId} is disabled.");
 
+        // CR-042 (OQ-42-03): one signal, one engine
+        var assigned = engines.EngineFor(port.Id);
+        if (assigned == StationEngine.Task) return Reject(StationEngineCodes.IsTask, $"Station {port.Id} is assigned to the Phase 1 task engine: the transport order engine takes nothing from it.");
+        if (assigned == StationEngine.Invalid) return Reject(StationEngineCodes.Invalid, $"The engine assignment of station {port.Id} is invalid or contradicts itself: nothing is processed.");
+        if (await uow.ExecuteAsync(async t => await legacyRequests.GetByKeyAsync($"{s.PlcId}:{port.Id}:{s.RequestId.Trim()}", t), ct) is not null)
+            return Reject(StationEngineCodes.TakenByOther, "The task engine already received this Request_ID of this station: no second request is created.");
+
         // ---- a port with an active Station Transaction takes no second request (checked before anything else is judged about the new request)
         if (await uow.ExecuteAsync(async t => await routing.GetActiveTransactionForPortAsync(port.Id, t) is not null, ct))
             return Reject("PORT_BUSY", $"Port {port.Id} already has an active Station Transaction.");
@@ -99,7 +107,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
                 if (loc is null) return true;
                 var wanted = kind == RackKind.Full ? RackStatus.Full : RackStatus.Empty;
                 // CR-036: with Enforce a rack in manual handling does not count as the rack the PLC reports (the request is reconciled, never served automatically)
-                return (modelGuard.Enforcing ? await racks.FindUnreservedAsync(loc.Id, wanted, new RackSelection(null, false, true), t) : await racks.FindUnreservedAsync(loc.Id, wanted, t)) is null;
+                return !await racks.IsRackRecordedAsync(loc.Id, wanted, modelGuard.Enforcing, t);   // CR-042: a rack an order owns is physically there: no disagreement (the new order will not take it)
             }, ct);
             if (mismatch)
             {

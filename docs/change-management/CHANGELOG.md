@@ -1,5 +1,9 @@
 # Change Log
 
+## v3.33 – CR-042 Approved review decisions (2026-11-26)
+
+- Header of a published process locked (also for catalog drafts and configuration import); catalog processes not approved for publication refused; versions disabled by an Admin hold their waiting requests; stalled queue warning (10 min, `RouteEngine:QueueStallWarningMinutes`); stock adjustment keeps racks of unfinished orders; one engine per station (`Plc:Integration:StationEngines`, default empty); one dispatch-pending event per reason; rack dialog. Corrections to CR-040/CR-041 statements about the physical PLC path. Migration `AddVersionWithdrawnByAdmin` (not run on a deployment). Review follow-up (OQ-42-08): a rack of an unfinished transport order belongs to it (also at a buffer) and is offered to no other order or task; a failed order that moved a rack keeps it until an Admin releases it (`release-racks`, migration `AddOrderRacksHeld`). Open, reproduced, not fixed: PER_AGV is not checked by the task engine against route legs (F1); a reservation of a leg without a free AGV can deadlock (F2). OQ-54 values not applied (deadlock risk). Not deployed; not verified in a browser or with real devices. See CR-042.
+
 ## v3.32 – CR-041 Unified operations, process catalog, PLC input handler, rack records (2026-11-26)
 
 - One request option list and create dialog on the three operation pages; one RequestKey across the task and order engines. Admin can create a Draft from the confirmed catalog for an existing default process. Shared PLC input handler for physical and simulated signals (physical trigger rule not approved: nothing processed); a simulated request creates no work in Real mode (behaviour change); station reset, IO address and simulation history. Rack type and lock reason. Migration `AddSimulatedStationTransaction` (not run on a deployment). Not deployed; not verified in a browser or with real devices. See CR-041.

@@ -53,6 +53,9 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
     public Task<ProcessDto> UpdateAsync(Guid id, ProcessHeader h, bool enabled, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
     {
         var p = await routing.GetProcessAsync(id, t) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found.");
+        if (await routing.GetPublishedVersionAsync(p.Id, t) is not null
+            && !SameHeader(p, DefinitionMapping.ParseRequestType(h.RequestType), DefinitionMapping.ParseRackKind(h.RackKind), h.TriggerLocationCodes ?? []))
+            throw HeaderLocked(p);   // CR-042 (OQ-42-01)
         p.Update(h.Name, h.Description, DefinitionMapping.ParseRequestType(h.RequestType), DefinitionMapping.ParseRackKind(h.RackKind), h.TriggerLocationCodes ?? [], enabled, clock.UtcNow);
         if (h.ProductModelId is { } pm1 && pm1 != p.ProductModelId)
         {   // CR-036: null = unchanged. A model is not changed under a Published version (its snapshot, validation and running orders were made for the old one).
@@ -89,6 +92,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
         var p = await ProcessOf(v, t);
         if (v.State == ProcessConfigState.Published) return ToVersionDto(p, v);   // idempotent
+        EnsureApprovedForUse(p);   // CR-042 (OQ-42-02)
         if (v.State != ProcessConfigState.Validated) throw AppException.Rejected("VERSION_NOT_VALIDATED", "Validate the version before publishing it.");
         // the checks run again NOW: locations, ports and PLC approvals may have changed since the last validation
         var outcome = await validator.ValidateAsync(p, v, t);
@@ -110,7 +114,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
     public Task<VersionDto> DisableAsync(Guid versionId, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
     {
         var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
-        v.Disable(clock.UtcNow);
+        v.Disable(clock.UtcNow, byAdmin: true);   // CR-042 (OQ-45)
         return ToVersionDto(await ProcessOf(v, t), v);
     }, ct);
 
@@ -121,6 +125,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         if (string.IsNullOrWhiteSpace(reason)) throw AppException.Validation("REASON_REQUIRED", "A reason is required for a Readiness change.");
         var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
         var p = await ProcessOf(v, t);
+        if (r == OperationalReadiness.Ready) EnsureApprovedForUse(p);   // CR-042
         if (r == OperationalReadiness.Ready && p.RequiresReadiness && await validator.DeviceConditionsAsync(p, v, t) is { Count: > 0 } unmet)
             throw AppException.Rejected("READINESS_CONDITIONS_UNMET", "The version cannot be set Ready: " + string.Join(" ", unmet.Select(i => i.Message).Take(5)) + (unmet.Count > 5 ? $" (+{unmet.Count - 5} more)" : ""));
         try { v.SetReadiness(r, user, reason.Trim(), clock.UtcNow); }
@@ -238,8 +243,17 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         var all = await routing.ListVersionsAsync(p.Id, t);
         if (all.Any(x => x.State is ProcessConfigState.Draft or ProcessConfigState.Validated && x.Note == CatalogNote))
             throw AppException.Conflict("CATALOG_DRAFT_EXISTS", "A draft made from the catalog already exists: validate and publish it, or edit it.");
-        p.MarkReview(item.ReviewBlocked, item.ReviewReason, item.SourceReference, clock.UtcNow);
-        p.Update(item.Name, item.Description, DefinitionMapping.ParseRequestType(item.RequestType), DefinitionMapping.ParseRackKind(item.RackKind), item.TriggerLocationCodes, p.Enabled, clock.UtcNow);
+        var published = await routing.GetPublishedVersionAsync(p.Id, t) is not null;
+        if (published)
+        {   // CR-042 (OQ-42-01): a draft must not change what the published version does - header and review flag stay as they are, or nothing is created
+            if (p.ReviewBlocked != item.ReviewBlocked || !SameHeader(p, DefinitionMapping.ParseRequestType(item.RequestType), DefinitionMapping.ParseRackKind(item.RackKind), item.TriggerLocationCodes))
+                throw HeaderLocked(p);
+        }
+        else
+        {
+            p.MarkReview(item.ReviewBlocked, item.ReviewReason, item.SourceReference, clock.UtcNow);
+            p.Update(item.Name, item.Description, DefinitionMapping.ParseRequestType(item.RequestType), DefinitionMapping.ParseRackKind(item.RackKind), item.TriggerLocationCodes, p.Enabled, clock.UtcNow);
+        }
         var v = new BusinessProcessVersion(p.Id, all.Count == 0 ? 1 : all.Max(x => x.Number) + 1, user, CatalogNote, clock.UtcNow);
         v.ReplaceDefinition(item.Definition.FirstStepKey, item.Definition.Steps.Select(s => s.ToStep()).ToList(), CatalogNote, clock.UtcNow);
         routing.Add(v);
@@ -247,6 +261,19 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
     }, ct);
 
     private const string CatalogNote = "Draft from the confirmed default catalog";
+
+    private static bool SameHeader(BusinessProcess p, RequestType type, RackKind kind, IEnumerable<string> triggers) =>
+        p.RequestType == type && p.RackKind == kind && p.TriggerLocationCodes.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(triggers.Select(x => x.Trim()).Where(x => x.Length > 0));
+
+    private static AppException HeaderLocked(BusinessProcess p) => AppException.Rejected("PROCESS_HEADER_LOCKED",
+        $"Process {p.Code} has a Published version: its request type, rack kind, trigger locations and review flag cannot be changed. Disable the published version first, or create a new process.");
+
+    /// <summary>CR-042 (OQ-42-02): a process the confirmed default catalog marks as not for publication cannot be published or set Ready until the catalog allows it.</summary>
+    private static void EnsureApprovedForUse(BusinessProcess p)
+    {
+        if (DefaultItem(ReferenceProcessCatalog.Load(), p.Code) is { DefaultPublish: false } item)
+            throw AppException.Rejected("PROCESS_NOT_APPROVED_FOR_PUBLICATION", $"Process {p.Code} is not approved for publication in the default catalog. {item.DraftReason}");
+    }
 
     private static ReferenceProcess? DefaultItem(IReadOnlyList<ReferenceProcess> catalog, string code) =>
         catalog.FirstOrDefault(x => x.DefaultSinceVersion is not null && string.Equals(x.Code.Trim(), code, StringComparison.OrdinalIgnoreCase));

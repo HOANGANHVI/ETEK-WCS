@@ -66,9 +66,20 @@ public interface IRackRepository
     Task<IReadOnlyList<Rack>> ListAsync(Guid? locationId, RackStatus? status, int take, CancellationToken ct = default);
     Task<int> CountAtLocationAsync(Guid locationId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountByLocationAsync(CancellationToken ct = default);
-    /// <summary>First rack at the location with the given status that has no ACTIVE reservation (deterministic order).</summary>
+    /// <summary>
+    /// First rack at the location with the given status that has no ACTIVE reservation and that NO transport order owns (CR-042, OQ-42-08), in a deterministic order.
+    /// This is what every automatic source search of a requester other than the owner uses.
+    /// </summary>
     Task<Rack?> FindUnreservedAsync(Guid locationId, RackStatus status, CancellationToken ct = default);
+    /// <summary>Racks without an ACTIVE reservation, ownership NOT considered: for callers that check the owner themselves and say why (stock adjustment).</summary>
     Task<IReadOnlyList<Rack>> ListUnreservedAsync(Guid locationId, RackStatus status, int take, CancellationToken ct = default);
+    /// <summary>CR-042 (OQ-42-08): the source search of a transport order: its own racks stay visible to it, racks owned by another order do not. <paramref name="selection"/> NULL = no CR-036 filter.</summary>
+    Task<Rack?> FindForOrderAsync(Guid orderId, Guid locationId, RackStatus status, RackSelection? selection, CancellationToken ct = default);
+    /// <summary>
+    /// Whether WCS records a rack here that has no ACTIVE reservation, WHOEVER owns it. Only to compare a station signal with inventory (a rack that an order owns is physically there,
+    /// so it is not an inventory disagreement). Never use it to choose a source. <paramref name="autoOnly"/> = CR-036 Enforce.
+    /// </summary>
+    Task<bool> IsRackRecordedAsync(Guid locationId, RackStatus status, bool autoOnly, CancellationToken ct = default);
     /// <summary>
     /// CR-036: the same query with a rack filter (product model / manual handling). A NEW overload on purpose: the overload above (used by the legacy flows) is unchanged.
     /// </summary>

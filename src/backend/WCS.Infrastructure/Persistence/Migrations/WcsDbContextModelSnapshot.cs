@@ -1652,6 +1652,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
+                    b.Property<bool>("WithdrawnByAdmin")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProcessId")
@@ -2107,6 +2110,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<bool>("RacksHeld")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("RequestKey")
                         .IsRequired()

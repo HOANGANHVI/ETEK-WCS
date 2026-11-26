@@ -121,7 +121,7 @@ public sealed class RackAdminService(IUnitOfWork uow, IRackRepository racks, ILo
         var rack = await racks.GetAsync(id, ct) ?? throw AppException.NotFound("RACK_NOT_FOUND", "Rack not found.");
         if (rack.Status == RackStatus.InTransit || rack.CurrentTaskId is not null) throw AppException.Conflict("RACK_IN_TRANSPORT", "The rack is being transported (or still belongs to a task). It cannot be changed.");
         if (await reservations.HasActiveForRackAsync(id, ct)) throw AppException.Conflict("RACK_RESERVED", "The rack is reserved by an active task or transport order. It cannot be changed.");
-        if (await routing.FindOpenOrderUsingRackAsync(id, ct) is { } order) throw AppException.Conflict("RACK_IN_USE_BY_ORDER", $"The rack belongs to the open transport order {order}. Finish or cancel the order first.");
+        if (await routing.FindOrderOwningRackAsync(id, ct) is { } order) throw AppException.Conflict("RACK_IN_USE_BY_ORDER", $"The rack belongs to the transport order {order}. Finish or cancel it (a failed order: release its racks) first.");
         if (rack.Disposition == RackDisposition.ManualHandling) throw AppException.Conflict("RACK_MANUAL_HANDLING_REQUIRES_APPROVED_ADJUSTMENT", "The rack is in manual handling: changing it needs an approved procedure (P2-OQ-16).");
         if (rack.Status is not (RackStatus.Full or RackStatus.Empty) || rack.CurrentLocationId is not { } locationId) throw AppException.Conflict("RACK_STATE_UNKNOWN", "The physical state of the rack is not confirmed: reconcile it first.");
         var loc = (await locations.ListAsync(ct)).First(l => l.Id == locationId);

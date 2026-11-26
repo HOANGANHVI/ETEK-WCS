@@ -19,7 +19,8 @@ namespace WCS.Application.Services;
 ///  - the same key detected again (restart, bit toggled with the same Request_ID) never creates a second record or task.
 /// </summary>
 public sealed class StationRequestProcessor(IStationSignalService stations, ITaskOrchestrator orchestrator, IRcsDispatchGuard rcsGuard, IMaintenanceGate maintenance,
-    IStationRequestRepository requests, IUnitOfWork uow, IClock clock, IOptions<SchedulerOptions> options, ILogger<StationRequestProcessor> logger)
+    IStationRequestRepository requests, IUnitOfWork uow, IClock clock, IOptions<SchedulerOptions> options, ILogger<StationRequestProcessor> logger,
+    WCS.Application.Plc.IStationSignalOwnership ownership)
 {
     private const int BatchSize = 100;
 
@@ -88,6 +89,7 @@ public sealed class StationRequestProcessor(IStationSignalService stations, ITas
             using var _frame = DiagnosticContext.Begin(DiagnosticContext.NewCorrelationId(), stationId: p.StationCode);   // CR-021: the task created for this PLC request keeps this id
             try
             {
+                await ownership.EnsureTaskEngineAsync(p.StationCode, p.RequestKey, ct);   // CR-042 (OQ-42-03): one signal, one engine
                 var result = await orchestrator.CreateTaskAsync(new CreateTaskCommand(p.RequestKey, p.Flow, p.StationCode, "PLC"), ct);
                 await Decide(p.RequestKey, r => r.MarkAccepted(result.Task.Id, clock.UtcNow), ct);   // the task is already committed; this only records it
                 using (DiagnosticContext.Begin(null, taskId: result.Task.Id.ToString("D")))
