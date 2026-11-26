@@ -74,7 +74,7 @@ export function OperationsConsolePage() {
 
   return (
     <>
-      <PageHeader title={t('ops.title')} description={t('ops.description')} actions={<Link to="/routing">{t('ops.ordersLink')}</Link>} />
+      <PageHeader title={t('ops.title')} description={`${t('ops.description')} ${t('linked.roleOps')}`} actions={<Link to="/routing">{t('ops.ordersLink')}</Link>} />
       <ModePanel view={mode.data} loadFailed={!!mode.error} isAdmin={isAdmin} api={modeApi} onChanged={() => { mode.reload(); health.reload() }} />
       <ConnectionStrip health={health.data} fleet={fleet.data} loadFailed={!!(health.error || fleet.error)} gate={gate} />
       {processes.error && !processes.data && <div className="notice notice-bad" role="alert">{t('ops.createProcessesFailed')} {processes.error}</div>}

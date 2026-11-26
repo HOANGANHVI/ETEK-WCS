@@ -25,6 +25,7 @@ public sealed class TaskOrchestrator(
     IRcsDispatchGuard rcsGuard,
     IMaintenanceGate maintenance,   // CR-026
     IExecutionModeGate modeGate,    // CR-038
+    WCS.Application.Routing.IRoutingRepository routing,   // CR-041: cross-engine RequestKey
     IStationSignalService stations,
     IProcessedEventRepository processed,
     IReservationRepository reservationRepo,
@@ -88,8 +89,11 @@ public sealed class TaskOrchestrator(
         string? createdCorrelation = null;
         var created = await Tx(async (events, _, t) =>
         {
+            await routing.LockQueueAsync("request-key:" + cmd.RequestKey.Trim(), t);   // CR-041: one RequestKey is one request, whichever engine receives it
             var existing = await tasks.GetByRequestKeyAsync(cmd.RequestKey.Trim(), t);
             if (existing is not null) return (Guid?)null;
+            if (await routing.GetOrderByRequestKeyAsync(cmd.RequestKey.Trim(), t) is not null)
+                throw AppException.Conflict("REQUEST_KEY_IN_USE", "This RequestKey already belongs to a transport order; nothing was created.");
             await maintenance.EnsureOpenAsync(t);   // CR-026 (OQ-1): row-locked read in THIS transaction - a task cannot slip in while Maintenance is being switched on
             var mode = await modeGate.ModeForNewWorkAsync(t);   // CR-038: Simulator or Real, read FOR SHARE in this transaction; a mode change waits for it
             var task = TransportTask.Create(cmd.RequestKey, flow, rule.RackKind, agv?.Id, station.Id, cmd.RequestedBy, clock.UtcNow, rcsManaged: Managed);

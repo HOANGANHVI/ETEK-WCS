@@ -65,6 +65,8 @@ public static class DependencyInjection
         services.AddScoped<Routing.StationTransactionService>();
         services.AddScoped<Routing.IRouteEngine, Routing.RouteEngine>();
         services.AddScoped<Routing.IPlcRequestService, Routing.PlcRequestService>();
+        services.AddScoped<Routing.IPlcInputHandler, Routing.PlcInputHandler>();   // CR-041: the one entry of PLC input
+        services.AddScoped<Routing.PhysicalPlcInputAdapter>();
         services.Configure<Routing.ModelIsolationOptions>(configuration.GetSection(Routing.ModelIsolationOptions.SectionName));   // CR-036 (default Mode = Off)
         services.AddSingleton<Routing.ModelGuardThrottle>();
         services.AddScoped<Routing.ModelGuard>();

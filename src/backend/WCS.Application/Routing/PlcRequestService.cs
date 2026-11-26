@@ -11,7 +11,7 @@ namespace WCS.Application.Routing;
 /// Nothing is dispatched before this snapshot is read and validated.
 /// </summary>
 public sealed record PlcRequestSnapshot(string PlcId, string? PortId, string RequestId, bool PickupRequest, bool DeliveryRequest,
-    int? RackFull, int? RackEmpty, int? DestinationAvailable, int? RackType);
+    int? RackFull, int? RackEmpty, int? DestinationAvailable, int? RackType, bool Simulated = false);
 
 public enum PlcRequestOutcome { Accepted = 1, Duplicate = 2, Rejected = 3, ReconciliationRequired = 4 }
 
@@ -29,7 +29,7 @@ public interface IPlcRequestService
 /// It does NOT write M9101 or any other PLC signal (timing of the acknowledgement is an open decision, Q-ORD-1) and never substitutes another position for an invalid one.
 /// </summary>
 public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routing, ILocationRepository locations, IRackRepository racks, IRouteEngine engine, IMaintenanceGate maintenance,
-    IClock clock, IOptions<RouteEngineOptions> options, ModelGuard modelGuard) : IPlcRequestService
+    IClock clock, IOptions<RouteEngineOptions> options, ModelGuard modelGuard, IExecutionModeGate modeGate) : IPlcRequestService
 {
     public async Task<PlcRequestResult> HandleRequestAsync(PlcRequestSnapshot s, CancellationToken ct = default)
     {
@@ -50,6 +50,10 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
             return new PlcRequestResult(PlcRequestOutcome.Duplicate, "DUPLICATE_REQUEST_ID", "This Request_ID was already processed.", d.ToDto(), order?.ToDto([d]));
         }, ct);
         if (dup is not null) return dup;
+
+        // CR-041: a simulated request never creates work while the operating mode is Real (checked before anything is recorded or flagged; locked again when the order is created)
+        if (s.Simulated && await uow.ExecuteAsync(t => modeGate.ModeForNewWorkAsync(t), ct) == WCS.Domain.Rcs.ExecutionMode.Real)
+            return Reject(SimulationCodes.RealMode, SimulationCodes.RealModeMessage);
 
         // CR-026 (OQ-1): during Maintenance a NEW request is refused BEFORE anything is recorded (no Station Transaction, no port claimed); the caller may repeat it later.
         // A repeated Request_ID was answered above (idempotent). The locked check in the recording transaction below closes the race with the switch.
@@ -108,6 +112,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
                     tx.Advance(StationTransactionState.Requested, clock.UtcNow);
                     tx.ObserveHandshakeStep(1, clock.UtcNow);
                     tx.RequireReconciliation("RECON_PLC_INVENTORY_MISMATCH", clock.UtcNow);
+                    if (s.Simulated) tx.MarkSimulated();
                     routing.Add(tx);
                     return tx.ToDto();
                 }, ct);
@@ -128,6 +133,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
                 tx.Advance(StationTransactionState.Requested, clock.UtcNow);
                 tx.Advance(StationTransactionState.Accepted, clock.UtcNow);     // WCS recorded the request ("Recorded"; the acknowledgement signal is not written here)
                 tx.ObserveHandshakeStep(1, clock.UtcNow);
+                if (s.Simulated) tx.MarkSimulated();
                 routing.Add(tx);
                 return tx.ToDto();
             }, ct);
@@ -143,7 +149,7 @@ public sealed class PlcRequestService(IUnitOfWork uow, IRoutingRepository routin
         var type = tx.Operation == nameof(StationOperation.Pickup) ? RequestType.PickupRequest : RequestType.DeliveryRequest;
         try
         {
-            var r = await engine.StartAsync(new StartOrderCommand($"{tx.PlcId}:{tx.RequestId}", tx.LocationCode, type, kind, null, "PLC", tx.Id), ct);
+            var r = await engine.StartAsync(new StartOrderCommand($"{tx.PlcId}:{tx.RequestId}", tx.LocationCode, type, kind, null, tx.Simulated ? "PLC-SIMULATION" : "PLC", tx.Id, SimulationOnly: tx.Simulated), ct);
             var fresh = (await uow.ExecuteAsync(async t => (await routing.GetTransactionAsync(tx.Id, t))!.ToDto(), ct));
             return new PlcRequestResult(PlcRequestOutcome.Accepted, "ACCEPTED", "Request recorded and Transport Task started.", fresh, r.Order);
         }

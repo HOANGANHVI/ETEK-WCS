@@ -36,7 +36,15 @@ public sealed record VersionSummaryDto(Guid Id, int Number, string State, DateTi
 
 public sealed record ProcessDto(Guid Id, string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes,
     bool Enabled, bool ReviewBlocked, string? ReviewReason, string? SourceReference, int? PublishedVersion, int LatestVersion, IReadOnlyList<VersionSummaryDto> Versions, Guid? ProductModelId = null,
-    bool RequiresReadiness = false, string? QueueScope = null);
+    bool RequiresReadiness = false, string? QueueScope = null, string CatalogStatus = CatalogStatuses.NotDefault);
+
+/// <summary>CR-041: an existing process compared with the confirmed default catalog.</summary>
+public static class CatalogStatuses
+{
+    public const string NotDefault = "NotDefault";
+    public const string Matches = "Matches";
+    public const string Differs = "Differs";
+}
 
 /// <summary>CR-035: the two independent axes of a process version.</summary>
 public sealed record ReadinessDto(Guid VersionId, string PublicationState, string Readiness, string? Reason, string? ChangedBy, DateTimeOffset? ChangedAt);

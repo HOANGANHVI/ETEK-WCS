@@ -1882,6 +1882,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)");
 
+                    b.Property<bool>("Simulated")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(40)

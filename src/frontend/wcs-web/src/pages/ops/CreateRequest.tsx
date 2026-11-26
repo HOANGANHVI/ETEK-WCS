@@ -8,7 +8,8 @@ import { Modal } from '../../components/Modal'
 import { useT } from '../../i18n'
 import { describeError, flowInfo, RACK_KIND_VI, TASK_STATE_VI, taskCode } from '../../i18n/vi'
 import { applyCreate, checkOrderOutcome, checkOutcome, newRequestKey, sendCreate, sendProcessCreate, type CreateApi, type CreateEvent, type CreateState, type Gate, type ProcessCreateApi } from '../../lib/opsConsole'
-import { processOf, processValue } from '../../lib/requestOptions'
+import { processOf } from '../../lib/requestOptions'
+import { RequestOptions } from '../../components/RequestOptions'
 
 
 interface Props {
@@ -67,14 +68,7 @@ export function CreateRequest({ flows, gate, api, onCreated, processes = [], pro
         <Field label={t('ops.createFlow')}>
           <select value={flow} disabled={phase !== 'idle'} onChange={(e) => { setFlow(e.target.value); setStation('') }}>
             <option value="">{t('ops.createChooseFlow')}</option>
-            <optgroup label={t('ops.createGroupFlows')}>
-              {flows.map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
-            </optgroup>
-            {processApi && processes.length > 0 && (
-              <optgroup label={t('ops.createGroupProcesses')}>
-                {processes.map((p) => <option key={p.code} value={processValue(p.code)}>{p.code} · {p.name}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
-              </optgroup>
-            )}
+            <RequestOptions flows={flows} processes={processApi ? processes : []} />
           </select>
         </Field>
         <Field label={t('ops.createStation')}>

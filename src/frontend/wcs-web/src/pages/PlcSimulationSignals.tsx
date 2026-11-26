@@ -4,25 +4,28 @@ import type { SimStartResult, SimStation } from '../api/simTypes'
 import { Async, Button } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
+import { formatDateTime } from '../i18n/format'
 import { describeError } from '../i18n/vi'
 
 /** CR-040: set one PLC → WCS signal at a time (bit ON / OFF or a value), then hand the station's signals to the request intake. The Station Transaction shows the handshake state. */
-export function PlcSimulationSignals({ active, onResult }: { active: boolean; onResult: (r: SimStartResult) => void }) {
+export function PlcSimulationSignals({ active, real, onResult }: { active: boolean; real: boolean; onResult: (r: SimStartResult) => void }) {
   const t = useT()
   const stations = useApi(useCallback(() => api.simStations(), []), ['OrderChanged'])
+  const history = useApi(useCallback(() => api.simHistory(), []))
   const [id, setId] = useState('')
   const [ack, setAck] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setMessage(null)
-    try { await fn() } catch (e) { setMessage(describeError(e)) } finally { setBusy(false); stations.reload() }
+    try { await fn() } catch (e) { setMessage(describeError(e)) } finally { setBusy(false); stations.reload(); history.reload() }
   }
   return (
     <div className="card pad stack">
       <strong>{t('linked.simTitle')}</strong>
       <span className="muted">{t('linked.simIntro')}</span>
-      {message && <div className="notice notice-bad" role="alert">{message}</div>}
+      {real && <div className="notice notice-warn" role="note">{t('linked.simRealBlocked')}</div>}
+      {message && <div className="notice notice-info" role="status">{t('linked.simResponse')} {message}</div>}
       <Async state={stations} empty={{ title: t('linked.simNoStations') }} isEmpty={(s) => s.length === 0}>
         {(list: SimStation[]) => {
           const s = list.find((x) => x.stationId === id)
@@ -37,19 +40,43 @@ export function PlcSimulationSignals({ active, onResult }: { active: boolean; on
                   <div className="muted">{s.activeTransaction ? t('linked.simTx', { state: s.activeTransaction.state, step: s.activeTransaction.handshakeStep, request: s.activeTransaction.requestId ?? '—' }) : t('linked.simNoTx')}</div>
                   <div className="table-wrap">
                     <table className="grid">
-                      <thead><tr><th>{t('linked.simSignal')}</th><th>{t('linked.simValue')}</th><th /></tr></thead>
+                      <thead><tr><th>{t('linked.simSignal')}</th><th>{t('linked.simAddress')}</th><th>{t('linked.simDescription')}</th><th>{t('linked.simValue')}</th><th /></tr></thead>
                       <tbody>
-                        {s.signals.map((x) => <SignalRow key={`${s.stationId}:${x.signal}:${x.value ?? ''}`} signal={x} disabled={!active || busy || !!s.plcOnline} onSet={(v) => void run(() => api.simSetSignal(s.stationId, x.signal, v))} />)}
+                        {s.signals.map((x) => <SignalRow key={`${s.stationId}:${x.signal}:${x.value ?? ''}`} signal={x} disabled={!active || busy || !!s.plcOnline} onSet={(v) => void run(async () => { await api.simSetSignal(s.stationId, x.signal, v); setMessage(t('linked.simStored', { signal: x.signal })) })} />)}
                       </tbody>
                     </table>
                   </div>
                   <label><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> {t('linked.simAck')}</label>
-                  <div><Button variant="primary" disabled={!active || busy || !ack || !!s.plcOnline} onClick={() => void run(async () => { const r = await api.simEvaluate(s.stationId, ack); onResult(r); setMessage(`${r.outcome} / ${r.code} – ${r.message}`) })}>{t('linked.simEvaluate')}</Button></div>
+                  <div className="btn-row">
+                    <Button variant="primary" disabled={!active || real || busy || !ack || !!s.plcOnline} onClick={() => void run(async () => { const r = await api.simEvaluate(s.stationId, ack); onResult(r); setMessage(`${r.outcome} / ${r.code} – ${r.message}`) })}>{t('linked.simEvaluate')}</Button>
+                    <Button disabled={!active || busy || !!s.plcOnline} onClick={() => void run(async () => { await api.simReset(s.stationId); setMessage(t('linked.simResetDone')) })}>{t('linked.simReset')}</Button>
+                  </div>
                 </>
               )}
             </>
           )
         }}
+      </Async>
+      <strong>{t('linked.simHistory')}</strong>
+      <Async state={history} empty={{ title: t('linked.simNoHistory') }} isEmpty={(h) => h.length === 0}>
+        {(rows) => (
+          <div className="table-wrap capped">
+            <table className="grid">
+              <thead><tr><th>{t('linked.colCreated')}</th><th>{t('linked.simWho')}</th><th>{t('linked.simAction')}</th><th>{t('linked.simSignal')}</th><th>{t('linked.cmdResult')}</th></tr></thead>
+              <tbody>
+                {rows.map((h) => (
+                  <tr key={h.id}>
+                    <td className="nowrap">{formatDateTime(h.occurredAt)}</td>
+                    <td>{h.actor ?? '—'}</td>
+                    <td className="mono">{h.action}</td>
+                    <td className="mono">{h.targetId ?? '—'}</td>
+                    <td>{h.result}{h.afterJson ? <div className="muted small mono">{h.afterJson}</div> : null}{h.detail ? <div className="muted small">{h.detail}</div> : null}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Async>
     </div>
   )
@@ -61,6 +88,8 @@ function SignalRow({ signal, disabled, onSet }: { signal: SimStation['signals'][
   return (
     <tr>
       <td><strong className="mono">{signal.signal}</strong>{!signal.readByIntake && <div className="muted small">{t('linked.simNotRead')}</div>}</td>
+      <td className="mono">{signal.address ?? <span className="muted">NEEDS_CONFIGURATION</span>}</td>
+      <td className="muted small">{signal.description}</td>
       <td className="mono">{signal.dataType === 'Bool' ? (signal.value === 'true' ? 'ON' : signal.value === 'false' ? 'OFF' : '—') : signal.value ?? '—'}</td>
       <td className="nowrap">
         {signal.dataType === 'Bool'

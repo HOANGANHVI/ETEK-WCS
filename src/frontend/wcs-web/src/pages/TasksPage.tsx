@@ -72,6 +72,7 @@ export function TasksPage() {
     <>
       <PageHeader
         title={tr('tasks.title')}
+        description={tr('linked.roleTasks')}
         actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>{tr('tasks.create')}</Button>}
       />
       <Panel title={tr('tasks.sumTitle')} subtitle={tr('tasks.sumSub', { n: allTasks.data?.items.length ?? 0 })} className="mb">

@@ -225,6 +225,48 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         return new ImportResult(imported.Count, skipped, imported);
     }, ct);
 
+    /// <summary>
+    /// CR-041: brings an EXISTING default process (imported earlier and therefore never touched by the seeder) to the confirmed catalog definition: a new Draft version with the catalog
+    /// steps, and the review flag as the catalog states it. Only processes of the default catalog; nothing is validated, published or set Ready here; no version is removed.
+    /// </summary>
+    public Task<VersionDto> ApplyCatalogAsync(Guid processId, IReadOnlyList<ReferenceProcess> catalog, string? reason, string? user, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        if (string.IsNullOrWhiteSpace(reason)) throw AppException.Validation("REASON_REQUIRED", "A reason is required.");
+        var p = await routing.GetProcessAsync(processId, t) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found.");
+        var item = DefaultItem(catalog, p.Code) ?? throw AppException.Rejected("PROCESS_NOT_IN_CATALOG", $"{p.Code} is not a default process of the confirmed catalog.");
+        if (await CatalogStatusAsync(p, catalog, t) == CatalogStatuses.Matches) throw AppException.Rejected("CATALOG_ALREADY_APPLIED", $"{p.Code} already matches the catalog.");
+        var all = await routing.ListVersionsAsync(p.Id, t);
+        if (all.Any(x => x.State is ProcessConfigState.Draft or ProcessConfigState.Validated && x.Note == CatalogNote))
+            throw AppException.Conflict("CATALOG_DRAFT_EXISTS", "A draft made from the catalog already exists: validate and publish it, or edit it.");
+        p.MarkReview(item.ReviewBlocked, item.ReviewReason, item.SourceReference, clock.UtcNow);
+        p.Update(item.Name, item.Description, DefinitionMapping.ParseRequestType(item.RequestType), DefinitionMapping.ParseRackKind(item.RackKind), item.TriggerLocationCodes, p.Enabled, clock.UtcNow);
+        var v = new BusinessProcessVersion(p.Id, all.Count == 0 ? 1 : all.Max(x => x.Number) + 1, user, CatalogNote, clock.UtcNow);
+        v.ReplaceDefinition(item.Definition.FirstStepKey, item.Definition.Steps.Select(s => s.ToStep()).ToList(), CatalogNote, clock.UtcNow);
+        routing.Add(v);
+        return ToVersionDto(p, v);
+    }, ct);
+
+    private const string CatalogNote = "Draft from the confirmed default catalog";
+
+    private static ReferenceProcess? DefaultItem(IReadOnlyList<ReferenceProcess> catalog, string code) =>
+        catalog.FirstOrDefault(x => x.DefaultSinceVersion is not null && string.Equals(x.Code.Trim(), code, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Compares the version that would run (the Published one, else the newest) with the catalog: steps, header and review flag. Names and notes are not compared.</summary>
+    private async Task<string> CatalogStatusAsync(BusinessProcess p, IReadOnlyList<ReferenceProcess> catalog, CancellationToken ct)
+    {
+        if (DefaultItem(catalog, p.Code) is not { } item) return CatalogStatuses.NotDefault;
+        var versions = await routing.ListVersionsAsync(p.Id, ct);
+        var current = versions.FirstOrDefault(v => v.State == ProcessConfigState.Published) ?? versions.OrderByDescending(v => v.Number).FirstOrDefault();
+        if (current is null || p.ReviewBlocked != item.ReviewBlocked || p.RequestType != DefinitionMapping.ParseRequestType(item.RequestType) || p.RackKind != DefinitionMapping.ParseRackKind(item.RackKind)
+            || !p.TriggerLocationCodes.Order(StringComparer.OrdinalIgnoreCase).SequenceEqual(item.TriggerLocationCodes.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase))
+            return CatalogStatuses.Differs;
+        var full = await routing.GetVersionAsync(current.Id, ct) ?? current;
+        var expected = new BusinessProcessVersion(p.Id, 1, null, null, clock.UtcNow);
+        expected.ReplaceDefinition(item.Definition.FirstStepKey, item.Definition.Steps.Select(s => s.ToStep()).ToList(), null, clock.UtcNow);
+        static string Shape(VersionDefinition d) => JsonSerializer.Serialize(new VersionDefinition(d.FirstStepKey, d.Steps.OrderBy(s => s.Order).ToList(), null), Json);
+        return Shape(full.ToDefinition()) == Shape(expected.ToDefinition()) ? CatalogStatuses.Matches : CatalogStatuses.Differs;
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private async Task<BusinessProcess> ProcessOf(BusinessProcessVersion v, CancellationToken ct) =>
@@ -242,7 +284,8 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         return new ProcessDto(p.Id, p.Code, p.Name, p.Description, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, p.Enabled, p.ReviewBlocked, p.ReviewReason,
             p.SourceReference, versions.FirstOrDefault(v => v.State == ProcessConfigState.Published)?.Number, versions.Count == 0 ? 0 : versions.Max(v => v.Number),
             versions.OrderByDescending(v => v.Number).Select(v => new VersionSummaryDto(v.Id, v.Number, v.State.ToString(), v.CreatedAt, v.CreatedBy, v.ValidatedAt, v.PublishedAt,
-                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count, v.Readiness.ToString())).ToList(), p.ProductModelId, p.RequiresReadiness, p.QueueScope);
+                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count, v.Readiness.ToString())).ToList(), p.ProductModelId, p.RequiresReadiness, p.QueueScope,
+            await CatalogStatusAsync(p, ReferenceProcessCatalog.Load(), ct));
     }
 
     private static VersionDto ToVersionDto(BusinessProcess p, BusinessProcessVersion v)
