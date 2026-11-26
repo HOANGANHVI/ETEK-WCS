@@ -105,8 +105,21 @@ public static partial class PlcEndpoints
             return ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_CONNECTION_TEST", "PlcConnection", plcId, null, () => Task.FromResult(result), res => new { res.Outcome, res.Mode }));
         }).RequireAuthorization(admin);
 
-        plc.MapGet("points", async (HttpContext c, string? plcId, string? stationId, PlcConfigService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.ListPointsAsync(plcId, stationId, includeConfiguration: true, ct))).RequireAuthorization(admin);
+        plc.MapGet("points", async (HttpContext c, string? plcId, string? stationId, bool? includeRetired, PlcConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.ListPointsAsync(plcId, stationId, includeConfiguration: true, ct, includeRetired == true))).RequireAuthorization(admin);
+        // CR-046: what the IO map in use says (source, PLC-level rows, stations the database still has from an earlier map). Read only; nothing here is a configured address.
+        plc.MapGet("io-map", async (HttpContext c, PlcConfigService s, WCS.Infrastructure.Plc.PlcCatalog cat, CancellationToken ct) =>
+        {
+            var retired = (await s.ListPointsAsync(null, null, true, ct, includeRetired: true)).GroupBy(p => (p.PlcId, p.StationId)).Where(g => g.All(p => p.InIoMap == false))
+                .Select(g => new { g.Key.PlcId, g.Key.StationId, points = g.Count(), withAddress = g.Count(p => p.ActualAddress is not null) }).OrderBy(x => x.PlcId).ThenBy(x => x.StationId).ToList();
+            return ApiResults.Ok(c, new
+            {
+                sourceFile = Path.GetFileName(cat.Source.File), sourceSha256 = cat.Source.Sha256, confirmed = false,
+                plcs = cat.Plcs.Select(p => new { p.PlcId, p.DocumentLabel, p.IpAddress, p.Stations }),
+                plcSignals = cat.PlcSignals.Select(x => new { x.PlcId, x.SignalName, x.Direction, x.DataType, x.Address, x.Values, x.Meaning, x.Spare }),
+                stationsNotInMap = retired,
+            });
+        }).RequireAuthorization(admin);
         plc.MapPut("points/{id:guid}/address", async (HttpContext c, Guid id, SetPointAddressRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {
             var view = await Audited.RunAsync(c, "PLC_IO_ADDRESS_SET", "StationIoPoint", id.ToString(), null,
@@ -163,7 +176,9 @@ public static partial class PlcEndpoints
                 {
                     st.StationId, st.PlcId, st.Order, st.Role,
                     locationCode = adm ? st.LocationCode : null,
-                    total = snap?.Total ?? st.PointCount, configured = snap?.Configured ?? st.ConfiguredPoints, good = snap?.Good ?? 0,
+                    total = snap?.Total ?? st.PointCount,
+                    // CR-046: the simulator answers for points without an address too; "configured" always means that an address exists
+                    configured = rt.Info().EffectiveMode == nameof(PlcRuntimeMode.Simulator) ? st.ConfiguredPoints : snap?.Configured ?? st.ConfiguredPoints, good = snap?.Good ?? 0,
                     approved = adm ? st.ApprovedPoints : (int?)null,
                 };
             }).ToList();
@@ -185,7 +200,8 @@ public static partial class PlcEndpoints
                     var cfg = config[p.Id];
                     return new MonitorPointView(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName, cfg.Description, p.Direction, p.DataType, p.Value, p.Quality,
                         PlcMonitor.StatusOf(p.Quality, p.LastUpdated, now, staleAfter), p.LastUpdated, p.Address, p.Error,
-                        adm ? cfg.WriteApproval : null, adm ? cfg.WriteSupported : null, WritePolicy.IsBlockedSignal(p.SignalName, p.Group), cfg.WordLength, cfg.Encoding);
+                        adm ? cfg.WriteApproval : null, adm ? cfg.WriteSupported : null, WritePolicy.IsBlockedSignal(p.SignalName, p.Group), cfg.WordLength, cfg.Encoding,
+                        !UnconfirmedSignals.Contains(p.SignalName), adm ? cfg.TemplateAddressReference : null, p.HasAddress);   // CR-046
                 }).OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).ToList();
             return ApiResults.Ok(c, new { serverTime = now, staleAfterSeconds = (int)staleAfter.TotalSeconds, points = rows });
         });
@@ -201,9 +217,8 @@ public static partial class PlcEndpoints
         });
 
         plc.MapGet("handshake", (HttpContext c, HandshakeCoordinator hs) => ApiResults.Ok(c, hs.States()));
-        plc.MapGet("handshake/catalog", (HttpContext c) =>
+        plc.MapGet("handshake/catalog", (HttpContext c, WCS.Infrastructure.Plc.PlcCatalog cat) =>
         {
-            var cat = WCS.Infrastructure.Plc.PlcCatalog.LoadEmbedded();
             var covered = cat.Handshake.Select(h => h.SignalName).Distinct().ToHashSet();
             return ApiResults.Ok(c, new
             {

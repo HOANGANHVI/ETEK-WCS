@@ -1,0 +1,22 @@
+# CR-046: proves the Compose stack builds and starts on a clean Linux Docker host. No secret is used (passwords are generated per run), nothing is published or deployed.
+name: docker-smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'feature/**']
+    paths: ['src/**', 'deployment/**', 'tests/deployment/**', 'VERSION', '.github/workflows/docker-smoke.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker versions
+        run: docker version && docker compose version
+      - name: Build, start and check the stack
+        run: bash tests/deployment/compose-smoke.sh

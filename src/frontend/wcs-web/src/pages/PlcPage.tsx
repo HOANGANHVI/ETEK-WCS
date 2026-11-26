@@ -25,7 +25,7 @@ const TABS: { key: string; label: MsgKey; admin: boolean }[] = [
 const EVENTS = ['PlcStatusChanged', 'StationIoChanged', 'HandshakePhaseChanged'] as const
 
 /**
- * PLC monitoring (4 PLC, 16 Station, 23 IO per Station). Operators see status, values and quality and may read a point; Admins additionally see network details, diagnostics and logs and,
+ * PLC monitoring (PLCs, stations and IO points as the backend lists them). Operators see status, values and quality and may read a point; Admins additionally see network details, diagnostics and logs and,
  * on the "I/O monitoring" tab, may write approved points (CR-020; the guards are those of CR-019). Nothing on the overview tab writes. Connections and IO addresses are edited in the "Cấu hình PLC" screens. The real-mode safety state is always shown.
  */
 export function PlcPage() {
@@ -95,7 +95,7 @@ function Overview({ isAdmin }: { isAdmin: boolean }) {
           <div className="plc-cards">
             {o.plcs.map((w) => <PlcCard key={w.plcId} w={w} isAdmin={isAdmin} real={real} />)}
           </div>
-          <Panel title={t('plc.stationsPanel')}>
+          <Panel title={t('plc.stationsPanel', { n: o.stations.length })} subtitle={t('plc.ioMapNotConfirmed')}>
             <div className="station-grid">
               {o.stations.map((s) => {
                 const state = hs.data?.find((h) => h.stationId === s.stationId)

@@ -46,10 +46,11 @@ export function readReadiness(p: Pick<MonitorPoint, 'status'>, pending: boolean)
  * What the Write action of a row does. Only an Admin ever sees it; PLC -> Software points and the safety/permit signals are never writable (shown as a fixed marker, not a disabled button),
  * every other row reuses the CR-016/CR-019 readiness (runtime mode, address, supported type, write approval, PLC connection) and names the first thing missing.
  */
-export type RowWrite = { kind: 'hidden' } | { kind: 'inbound' } | { kind: 'blocked' } | { kind: 'action'; gate: WriteBlock }
+export type RowWrite = { kind: 'hidden' } | { kind: 'inbound' } | { kind: 'blocked' } | { kind: 'notConfirmed' } | { kind: 'action'; gate: WriteBlock }
 export function rowWrite(isAdmin: boolean, runtime: WriteRuntime | null | undefined, plcState: string | undefined, p: MonitorPoint): RowWrite {
   if (!isAdmin) return { kind: 'hidden' }
   if (p.direction === 'PlcToSoftware') return { kind: 'inbound' }
   if (p.writeBlocked) return { kind: 'blocked' }
+  if (p.confirmed === false && runtime?.effectiveMode !== 'Simulator') return { kind: 'notConfirmed' }   // CR-046: no real write of a signal the PLC engineer has not confirmed
   return { kind: 'action', gate: writeReadiness(runtime, plcState, { actualAddress: p.address, writeApproval: p.writeApproval ?? 'NOT_APPROVED', writeSupported: p.writeSupported }) }
 }

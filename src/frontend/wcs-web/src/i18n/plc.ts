@@ -62,13 +62,13 @@ export const CONFIG_STATUS_TONE: Record<string, Tone> = { NEEDS_CONFIGURATION: '
 
 export const PHASE_VI = localizedMap({
   Unknown: 'Chưa có dữ liệu', Offline: 'Trạm mất kết nối', Fault: 'Trạm lỗi', Idle: 'Rảnh', PickupRequested: 'Yêu cầu lấy rack',
-  DeliveryRequested: 'Yêu cầu cấp rack', ConflictingRequests: 'Yêu cầu xung đột', TransferComplete: 'Báo chuyển giao xong',
+  DeliveryRequested: 'Yêu cầu cấp rack', ConflictingRequests: 'Yêu cầu xung đột', TransferComplete: 'Báo chuyển giao xong', NotImplemented: 'Chưa hiện thực handshake',
 }, {
   Unknown: 'No data', Offline: 'Station disconnected', Fault: 'Station fault', Idle: 'Idle', PickupRequested: 'Rack pick-up requested',
-  DeliveryRequested: 'Rack delivery requested', ConflictingRequests: 'Conflicting requests', TransferComplete: 'Transfer complete reported',
+  DeliveryRequested: 'Rack delivery requested', ConflictingRequests: 'Conflicting requests', TransferComplete: 'Transfer complete reported', NotImplemented: 'Handshake not implemented',
 })
 export const PHASE_TONE: Record<string, Tone> = {
-  Unknown: 'muted', Offline: 'warn', Fault: 'bad', Idle: 'ok', PickupRequested: 'info', DeliveryRequested: 'info', ConflictingRequests: 'bad', TransferComplete: 'info',
+  Unknown: 'muted', Offline: 'warn', Fault: 'bad', Idle: 'ok', PickupRequested: 'info', DeliveryRequested: 'info', ConflictingRequests: 'bad', TransferComplete: 'info', NotImplemented: 'muted',
 }
 
 export const APPROVAL_VI = localizedMap(
@@ -110,6 +110,8 @@ export const PLC_ERROR_VI = localizedMap({
   WRITE_DIRECTION: 'Chỉ ghi được tín hiệu chiều Phần mềm → PLC.',
   READ_ONLY: 'Hệ thống đang ở chế độ chỉ đọc: không được ghi.',
   WRITE_NOT_ALLOWED: 'Tín hiệu không nằm trong danh sách được phép ghi.',
+  WRITE_SIGNAL_NOT_CONFIRMED: 'Tín hiệu của IO Map chưa được kỹ sư PLC xác nhận: không duyệt ghi và không ghi ra PLC thật.',
+  IO_POINT_RETIRED: 'Tín hiệu thuộc IO Map cũ, không còn dùng: chỉ được xóa địa chỉ.',
   WRITE_NOT_DECLARED: 'Điểm ghi chưa được khai báo trong cấu hình triển khai (Plc:Write:AllowList): không ghi tới PLC thật.',
   WRITE_ADDRESS_RESERVED: 'Địa chỉ chạm thanh ghi dành riêng của giao diện PLC chưa được xác nhận: bị chặn ghi.',
   WRITE_RESERVED_CONFIG_INVALID: 'Danh sách thanh ghi dành riêng không đọc được: mọi lệnh ghi tới PLC thật bị chặn.',
@@ -206,6 +208,8 @@ export const PLC_ERROR_VI = localizedMap({
   WRITE_DIRECTION: 'Only Software → PLC signals can be written.',
   READ_ONLY: 'The system is in read-only mode: writing is not allowed.',
   WRITE_NOT_ALLOWED: 'The signal is not on the list of signals allowed for writing.',
+  WRITE_SIGNAL_NOT_CONFIRMED: 'The signal of the IO map is not confirmed by the PLC engineer: writing cannot be approved and nothing is written to a real PLC.',
+  IO_POINT_RETIRED: 'The signal belongs to an earlier IO map and is no longer used: only its address can be cleared.',
   WRITE_NOT_DECLARED: 'The point is not declared in the deployment configuration (Plc:Write:AllowList): nothing is written to a real PLC.',
   WRITE_ADDRESS_RESERVED: 'The address reaches a register reserved for the unconfirmed PLC interface: writing is blocked.',
   WRITE_RESERVED_CONFIG_INVALID: 'The list of reserved registers cannot be read: every write to a real PLC is blocked.',

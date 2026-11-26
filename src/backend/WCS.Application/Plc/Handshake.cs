@@ -30,7 +30,7 @@ public sealed class HandshakeDefinition
 /// Purely OBSERVATIONAL phase derived from the PLC -> Software bits of a station. It is a technical readout for monitoring and carries no
 /// business meaning: nothing is triggered by a phase.
 /// </summary>
-public enum HandshakePhase { Unknown = 0, Offline = 1, Fault = 2, Idle = 3, PickupRequested = 4, DeliveryRequested = 5, ConflictingRequests = 6, TransferComplete = 7 }
+public enum HandshakePhase { Unknown = 0, Offline = 1, Fault = 2, Idle = 3, PickupRequested = 4, DeliveryRequested = 5, ConflictingRequests = 6, TransferComplete = 7, NotImplemented = 8 }
 
 public sealed record ActiveHandshake(string Signal, DateTimeOffset Since, bool TimedOut);
 
@@ -53,7 +53,6 @@ public sealed class HandshakeCoordinator(IPlcRuntime runtime, IOptions<PlcRuntim
     }
 
     private readonly ConcurrentDictionary<string, Mem> _mem = new();
-    private const int TemplateSignals = 23;
 
     private static bool Truthy((PointValue? Value, PointQuality Quality)? r, bool expected) =>
         r is { Quality: PointQuality.Good or PointQuality.Simulated, Value: { Type: PlcDataType.Bool } v } && (bool)v.Value == expected;
@@ -63,6 +62,8 @@ public sealed class HandshakeCoordinator(IPlcRuntime runtime, IOptions<PlcRuntim
     /// <summary>Observational phase of a station from its inbound bits (needs live data for every bit it looks at).</summary>
     public static (HandshakePhase Phase, string? Reason) Observe(StationIoHandler h)
     {
+        if (new[] { "Station_Online", "Station_Fault", "Pickup_Request", "Delivery_Request", "Transfer_Complete" }.All(n => h.Find(n) is null))
+            return (HandshakePhase.NotImplemented, "[HANDSHAKE_NOT_IMPLEMENTED] No handshake is implemented for the signals of this station (IO map not confirmed).");   // CR-046
         var online = h.Read("Station_Online"); var fault = h.Read("Station_Fault"); var pick = h.Read("Pickup_Request");
         var del = h.Read("Delivery_Request"); var done = h.Read("Transfer_Complete");
         var missing = new[] { ("Station_Online", online), ("Station_Fault", fault), ("Pickup_Request", pick), ("Delivery_Request", del), ("Transfer_Complete", done) }
@@ -88,9 +89,10 @@ public sealed class HandshakeCoordinator(IPlcRuntime runtime, IOptions<PlcRuntim
     {
         var m = _mem.GetOrAdd(stationId, _ => new Mem { Since = clock.UtcNow });
         var rules = RulesFor(stationId).Count();
+        var signals = runtime.Handler(stationId)?.Points.Count ?? 0;
         lock (m)
             return new StationHandshakeState(plcId, stationId, rules == 0 ? "NEEDS_CONFIRMATION" : "PARTIALLY_APPROVED", m.Phase.ToString(), m.Since, m.Reason, rules,
-                Math.Max(0, TemplateSignals - rules), m.Active.Select(a => new ActiveHandshake(a.Key, a.Value, m.TimedOut.Contains(a.Key))).ToList(), m.LastAction, m.LastError);
+                Math.Max(0, signals - rules), m.Active.Select(a => new ActiveHandshake(a.Key, a.Value, m.TimedOut.Contains(a.Key))).ToList(), m.LastAction, m.LastError);
     }
 
     /// <summary>One coordination pass over every station. Returns the number of writes that were requested.</summary>

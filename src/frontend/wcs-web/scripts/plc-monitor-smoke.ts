@@ -2,6 +2,7 @@
 import fs from 'node:fs'
 import type { MonitorPoint } from '../src/api/plcTypes.ts'
 import { filterPoints, readReadiness, rowWrite, sortPoints } from '../src/lib/plcMonitor.ts'
+import { addressedCounts, plcOptions, readState, shownValue, stationOptions, writeState } from '../src/lib/plcIoMap.ts'
 
 const results: string[] = []
 const check = (name: string, ok: boolean, info = '') => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !info ? '' : ' — ' + info}`); if (!ok) process.exitCode = 1 }
@@ -63,5 +64,18 @@ check('IO mapping keeps address configuration and write APPROVAL', /AddressDialo
 const monitor = fs.readFileSync('src/pages/plc/PlcIoMonitor.tsx', 'utf8')
 check('PLC monitoring reuses the CR-019 write dialog and the immediate read API', /TypedWriteDialog/.test(monitor) && /plcReadNow/.test(monitor))
 check('PLC monitoring adds no second write path (no direct plcTestWrite call; only the dialog writes)', !/plcTestWrite/.test(monitor))
+
+// CR-046: the IO map views take their lists from the rows and never offer a write of an unconfirmed or retired signal
+const cfg = (o: Partial<Parameters<typeof writeState>[0]>) => ({ inIoMap: true, direction: 'SoftwareToPlc' as const, confirmed: true, writeApproval: 'APPROVED' as const, signalName: 'Mission_Feedback', ...o })
+const mapRows = [{ plcId: 'PLC-03', stationId: 'X4' }, { plcId: 'PLC-04', stationId: 'G2' }, { plcId: 'PLC-04', stationId: 'G1' }, { plcId: 'PLC-03', stationId: 'X4' }]
+check('PLC and station options come from the rows, per PLC, without duplicates', plcOptions(mapRows).join() === 'PLC-03,PLC-04' && stationOptions(mapRows, 'PLC-04').join() === 'G1,G2' && stationOptions(mapRows, '').join() === 'G1,G2,X4')
+check('write state: retired, input, not confirmed, protected, approved', [cfg({ inIoMap: false }), cfg({ direction: 'PlcToSoftware' }), cfg({ confirmed: false }), cfg({ writeApproval: 'NOT_APPROVED' }), cfg({})].map((p) => writeState(p, [])).join() === 'retired,input,notConfirmed,protected,approved')
+check('an approval never lifts "not confirmed", and a safety signal stays protected', writeState(cfg({ confirmed: false }), []) === 'notConfirmed' && writeState(cfg({ signalName: 'Transfer_Permit' }), ['Transfer_Permit']) === 'protected')
+check('read state needs a configured, valid address (an IO map address alone reads nothing)', readState({ actualAddress: null, pollable: false }) === 'noAddress' && readState({ actualAddress: 'D1500', pollable: false }) === 'blocked' && readState({ actualAddress: 'D1500', pollable: true }) === 'enabled')
+check('monitor: no write action for an unconfirmed signal on a real PLC; the simulator keeps it', rowWrite(true, writable, 'Connected', row({ confirmed: false })).kind === 'notConfirmed' && rowWrite(true, { ...writable, effectiveMode: 'Simulator' }, 'Connected', row({ confirmed: false })).kind === 'action')
+check('a point without an address never shows a placeholder as a device value; a configured zero and a set simulator value are shown', [shownValue({ hasAddress: false, value: 0 }), shownValue({ hasAddress: false, value: false }), shownValue({ hasAddress: false, value: '' })].every((v) => v === null) && shownValue({ hasAddress: true, value: 0 }) === 0 && shownValue({ hasAddress: false, value: 5 }) === 5 && shownValue({ value: false }) === false)
+check('station counts ignore points without an address', JSON.stringify(addressedCounts([{ hasAddress: true, quality: 'Simulated' }, { hasAddress: false, quality: 'Simulated' }, { hasAddress: true, quality: 'Bad' }])) === '{"configured":2,"good":1}')
+const mappingSrc = fs.readFileSync('src/pages/PlcIoMappingPage.tsx', 'utf8')
+check('IO mapping hard-codes no station or PLC list', !/'(X[0-9]|G[0-9]|E[0-9]|PLC-0[0-9])'/.test(mappingSrc))
 
 console.log(results.join('\n'))

@@ -39,7 +39,7 @@ export interface PlcOverview { runtime: PlcRuntimeInfo; plcs: PlcWorkerStatus[];
 export interface IoPointState {
   id: string; plcId: string; stationId: string; seq: number; group: string; signalName: string
   direction: 'PlcToSoftware' | 'SoftwareToPlc'; dataType: 'Bool' | 'Int' | 'String'; configStatus: string
-  value: boolean | number | string | null; quality: string; lastUpdated: string | null; address: string | null; error: string | null
+  value: boolean | number | string | null; quality: string; lastUpdated: string | null; address: string | null; error: string | null; hasAddress?: boolean
 }
 
 /** CR-020: communication status of one IO value. Good = last read OK and fresh; Stale = Good but not refreshed in time; Bad = last read failed; Offline = PLC link down; Unknown = never read; NotConfigured = no valid address; Simulated = simulator data. */
@@ -49,6 +49,7 @@ export type MonitorStatus = 'Good' | 'Stale' | 'Bad' | 'Offline' | 'Unknown' | '
 export interface MonitorPoint {
   id: string; plcId: string; stationId: string; seq: number; group: string; signalName: string; description: string
   direction: 'PlcToSoftware' | 'SoftwareToPlc'; dataType: 'Bool' | 'Int' | 'String'
+  confirmed?: boolean; ioMapAddress?: string | null; hasAddress?: boolean
   value: boolean | number | string | null; quality: string; status: MonitorStatus; lastUpdated: string | null; address: string | null; error: string | null
   writeApproval: 'NOT_APPROVED' | 'APPROVED' | 'REJECTED' | null; writeSupported: boolean | null; writeBlocked: boolean; wordLength: number | null; encoding: string | null
 }
@@ -99,6 +100,16 @@ export interface IoPointConfig {
   writeApproval: 'NOT_APPROVED' | 'APPROVED' | 'REJECTED'; writeDecidedBy: string | null; writeDecidedAt: string | null; writeDecisionNote: string | null
   /** false when the driver cannot write this data type / encoding. */
   writeSupported: boolean | null
+  /** CR-046: what the IO map in use says. false = a row of an earlier map (kept in the database, never read or written). */
+  inIoMap?: boolean | null; values?: string | null; sharedRegisterWith?: string[] | null; confirmed?: boolean | null
+}
+
+/** CR-046: the IO map in use (reference only: none of its addresses is a configured address). */
+export interface IoMapInfo {
+  sourceFile: string; sourceSha256: string; confirmed: boolean
+  plcs: { plcId: string; documentLabel: string | null; ipAddress: string; stations: string[] }[]
+  plcSignals: { plcId: string; signalName: string; direction: string | null; dataType: string; address: string; values: string; meaning: string; spare: boolean }[]
+  stationsNotInMap: { plcId: string; stationId: string; points: number; withAddress: number }[]
 }
 
 /** Bulk READ approval of a commissioning PLC (Admin). Outcome: ELIGIBLE (preview only) | APPROVED | ALREADY_APPROVED | NOT_ELIGIBLE | FAILED. */

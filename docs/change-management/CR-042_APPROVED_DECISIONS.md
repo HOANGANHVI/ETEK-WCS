@@ -144,7 +144,7 @@ Test `Cr042OpenFindingsTests` (2/2 đạt, ba lần chạy liên tiếp) mô t�
 | OQ-42-08 | FIXED | Chờ review |
 | OQ-45, 49, 57, 58 | PASS | |
 | OQ-54 | BLOCKED | OQ-54a…d |
-| F1, F2 | BLOCKED – chờ phê duyệt sửa | |
+| F1, F2 | Được phê duyệt sửa ngày 2026-11-26 và xử lý ở CR-046 (F2: một phần, xem CR-046 §4) | |
 | OQ-40-01 / 39-08 (BP → PH2) | BLOCKED – chờ xác nhận đợt | |
 | OQ-41-02, 55, 42-05, 42-06 | BLOCKED – chờ kỹ sư PLC / vendor | |
 | OQ-43-01…12 | BLOCKED – chờ trả lời | Chưa sửa source |

@@ -8,15 +8,16 @@ import { APPROVAL_VI, DATATYPE_VI, DIRECTION_VI, localizeDeviceMessage, PHASE_TO
 import { describeCoded } from '../../i18n/logCatalog'
 import { fmtTime } from './plcFormat'
 import { QualityPill, ValueCell } from './plcUi'
+import { addressedCounts } from '../../lib/plcIoMap'
 
 interface Props { stationId: string; isAdmin: boolean; handshake: HandshakeState | undefined; onClose: () => void }
 
-/** CR-004: the 23 IO of one station, strictly READ-ONLY. Addresses are edited in the IO-mapping screen, connections in the PLC-connection screen. */
+/** CR-004: the IO of one station, strictly READ-ONLY. Addresses are edited in the IO-mapping screen, connections in the PLC-connection screen. */
 export function StationPanel({ stationId, isAdmin, handshake, onClose }: Props) {
   const t = useT()
   const io = useApi(useCallback(() => api.plcStationIo(stationId), [stationId]), ['StationIoChanged', 'PlcStatusChanged'])
   return (
-    <Panel title={t('plc.stationTitle', { id: stationId })} subtitle={io.data ? t('plc.qualitySummary', { good: io.data.good, configured: io.data.configured, total: io.data.total }) : undefined}
+    <Panel title={t('plc.stationTitle', { id: stationId, n: io.data?.total ?? '—' })} subtitle={io.data ? t('plc.qualitySummary', { ...addressedCounts(io.data.points), total: io.data.total }) : undefined}
       actions={<Button size="sm" onClick={onClose}>{t('common.close')}</Button>} flush>
       {handshake && (
         <div className="hs-strip">
@@ -31,7 +32,7 @@ export function StationPanel({ stationId, isAdmin, handshake, onClose }: Props) 
             <table className="grid station-io">
               <thead>
                 <tr>
-                  <th>#</th><th>{t('plc.colSignal')}</th><th>{t('plc.colDirection')}</th><th>{t('plc.colType')}</th>
+                  <th>#</th><th>{t('plc.colSignal')}</th><th>{t('plc.colDirection')}</th><th>{t('plc.colType')}</th>{isAdmin && <th>{t('plc.colActualAddress')}</th>}
                   <th>{t('plc.colValue')}</th><th>{t('plc.colQuality')}</th><th>{t('plc.colUpdated')}</th>
                 </tr>
               </thead>
@@ -42,9 +43,10 @@ export function StationPanel({ stationId, isAdmin, handshake, onClose }: Props) 
                       <td><strong>{p.signalName}</strong><br /><small className="muted">{p.group}</small></td>
                       <td className="nowrap">{DIRECTION_VI[p.direction]}</td>
                       <td>{DATATYPE_VI[p.dataType]}</td>
+                      {isAdmin && <td className="mono">{p.address ?? <span className="muted">{t('plc.unassigned')}</span>}</td>}
                       <td><ValueCell p={p} /></td>
-                      <td><QualityPill quality={p.quality} />{isAdmin && p.error && <small className="text-bad" title={p.error}> ⚠</small>}</td>
-                      <td className="nowrap num">{fmtTime(p.lastUpdated)}</td>
+                      <td>{p.hasAddress === false ? <Pill tone="muted" dot={false}>{t('plc.rsNoAddress')}</Pill> : <QualityPill quality={p.quality} />}{isAdmin && p.error && <small className="text-bad" title={p.error}> ⚠</small>}</td>
+                      <td className="nowrap num">{p.hasAddress === false ? '—' : fmtTime(p.lastUpdated)}</td>
                     </tr>
                 ))}
               </tbody>

@@ -6,7 +6,7 @@
 | **SHA-256** | `405586c9e4d2893f1d3a33922259ecfe1c400ca877710877b3b482e049b34da3` |
 | **Quyết định** | Chủ dự án, 2026-11-26 (CR-045) |
 | **Hợp đồng IO** | **Chưa** được kỹ sư PLC xác nhận. Không `APPROVED`, không `READY FOR IMPLEMENTATION` |
-| **Trong hệ thống** | **Chưa hiện thực.** Catalog đang chạy vẫn sinh từ IO Map v2 cũ (23 tín hiệu) và không được đổi chỉ vì đổi tài liệu nguồn |
+| **Trong hệ thống** | **Catalog sinh từ workbook này** (CR-046, `scripts/generate-plc-io-catalog.mjs`): trạm, tín hiệu, chiều, kiểu, địa chỉ **tham chiếu**. Chưa cấu hình địa chỉ, **chưa hiện thực handshake**, mọi tín hiệu bị cấm ghi ra PLC thật. Dòng của catalog cũ giữ trong database, không đọc/ghi |
 
 Không sửa workbook tại chỗ. Mọi thay đổi tín hiệu theo Change Request và cập nhật SHA-256 ở đây.
 

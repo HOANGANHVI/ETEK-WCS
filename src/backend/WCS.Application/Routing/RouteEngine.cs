@@ -392,6 +392,17 @@ public sealed class RouteEngine(
             if (destCode is null) return await NoCandidateAsync(order, step, WaitKind.DestinationUnavailable, "No usable destination", ct);
         }
 
+        // CR-046 (F2): an order that has not started takes no destination while the AGV it needs has (or is about to get) a leg that has no destination yet. Otherwise it would hold the slot
+        // while that AGV may be carrying the very rack that will need it, and neither could move. Nothing is reserved and the order keeps its queue position. Later legs of a running order are
+        // not delayed (waiting there could block a younger order of the same scope that holds a rack).
+        if (destCode is not null && order.Legs.Count == 0 && routeOptions.Value.DeferDestinationWhileAgvNeedsOne && !dispatchOptions.Value.IsRcsManaged && await routing.HasLegWithoutDestinationAsync(kind, ct))
+        {
+            const string why = "AGV_BUSY: the AGV has a leg that still needs a destination; this destination is reserved after it has one.";
+            if (order.State != OrderState.Waiting || order.WaitKind != WaitKind.AgvBusy) Event(order, null, null, "ORDER_WAITING", $"{step.StepKey}: {why}");
+            order.TransitionTo(OrderState.Waiting, why, WaitKind.AgvBusy, now);
+            return LegCreation.Waiting;
+        }
+
         var leg = TransportLeg.Create(order.Id, order.NextLegSequence(), step.StepKey, step.Type, sourceCode, destCode, kind, noBind, now);
         leg.BindRack(rack.Id, now);
         routing.Add(leg);
@@ -672,7 +683,9 @@ public sealed class RouteEngine(
             if (agv is null || !agv.Enabled) { leg.TransitionTo(leg.State, "AGV_UNAVAILABLE", WaitKind.None, clock.UtcNow); return null; }
 
             if (leg.AgvId is null)
-            {   // PER_AGV: busy = a legacy active task, another active leg, or a dispatch hold. The database also refuses two active legs for one AGV.
+            {
+                await routing.LockAgvAsync(agv.Id, t);   // CR-046 (F1)
+                // PER_AGV: busy = a legacy active task, another active leg, or a dispatch hold. The database also refuses two active legs for one AGV.
                 var busy = await legacyTasks.GetActiveForAgvAsync(agv.Id, t) is not null
                            || await routing.GetActiveLegForAgvAsync(agv.Id, t) is not null
                            || await agvs.IsOnDispatchHoldAsync(agv.Id, t);

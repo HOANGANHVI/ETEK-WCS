@@ -8,7 +8,7 @@ import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
 import type { SimFlow, SimStartResult, SimStation, SimStatus } from './simTypes'
 import type { ExecMode, ExecutionModeView, LegacyAdoptionResult, ModeReadiness, ModeTransitionBody, ModeTransitionResult, ModeTransitionView, RcsMessageDetail, RcsMessageSummary } from './modeTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
-import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
+import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoMapInfo, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
 import type { AddPlcBody, QueueAlert, StartableProcess, QueueScopeResult, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
@@ -207,7 +207,8 @@ const realApi = {
     request<ReadNowResult>(`/api/plc/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}/read`, { method: 'POST', body: JSON.stringify({}) }),
   plcStationIo: (stationId: string) => request<StationSnapshot>(`/api/plc/stations/${encodeURIComponent(stationId)}/io`),
   plcHandshake: () => request<HandshakeState[]>('/api/plc/handshake'),
-  plcPoints: (f: { plcId?: string; stationId?: string }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId })}`),
+  plcPoints: (f: { plcId?: string; stationId?: string; includeRetired?: boolean }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId, includeRetired: f.includeRetired ? 'true' : undefined })}`),
+  plcIoMap: () => request<IoMapInfo>('/api/plc/io-map'),
   plcConnections: () => request<PlcConnection[]>('/api/plc/connections'),
   plcSaveConnection: (plcId: string, b: SavePlcConnectionBody) => request<PlcConnection>(`/api/plc/connections/${plcId}`, { method: 'PUT', body: JSON.stringify(b) }),
   plcTestConnection: (plcId: string) => request<ProbeResultView>(`/api/plc/connections/${plcId}/test`, { method: 'POST' }),

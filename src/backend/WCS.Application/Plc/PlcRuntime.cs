@@ -122,7 +122,10 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
         var repo = scope.ServiceProvider.GetRequiredService<IPlcConfigRepository>();
         var o = Options; var mode = WritePolicy.EffectiveMode(o);
         var stations = await repo.ListStationsAsync(ct);
-        var points = await repo.ListPointsAsync(onlyPlc, null, ct);
+        var catalog = scope.ServiceProvider.GetService<IPlcTemplateProvider>();
+        var stored = await repo.ListPointsAsync(onlyPlc, null, ct);
+        var points = stored.Where(p => catalog?.IsCurrent(p.SignalName) ?? true).ToList();   // CR-046: rows of an earlier IO map are neither polled nor writable
+        var retiredStations = stored.Select(p => p.StationId).Except(points.Select(p => p.StationId)).ToHashSet();
         var result = new List<PlcWorker>();
         foreach (var c in (await repo.ListConnectionsAsync(ct)).Where(c => onlyPlc is null || c.Id == onlyPlc))
         {
@@ -133,7 +136,7 @@ public sealed class PlcRuntime(IServiceScopeFactory scopes, IOptions<PlcRuntimeO
             else enabled = true;
 
             var pollable = PlcPollablePolicy.Pollable(points.Where(p => p.PlcId == c.Id).ToList(), new AddressBases(c.XyAddressBase, c.WAddressBase));   // CR-012: valid address = readable
-            var handlers = stations.Where(s => s.PlcId == c.Id && s.Enabled).OrderBy(s => s.Order).Select(s => new StationIoHandler(c.Id, s.Id,
+            var handlers = stations.Where(s => s.PlcId == c.Id && s.Enabled && !retiredStations.Contains(s.Id)).OrderBy(s => s.Order).Select(s => new StationIoHandler(c.Id, s.Id,
                 points.Where(p => p.StationId == s.Id).Select(p => new PointInfo(
                     new IoPointRef(p.Id, p.PlcId, p.StationId, p.SignalName, p.Direction, p.DataType, p.HasConfirmedAddress ? p.ActualAddress : null, p.WordLength, p.Encoding, p.WriteAllowed, p.Group, pollable.Contains(p.Id)),
                     p.Seq, p.Status)))).ToList();

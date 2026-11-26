@@ -155,6 +155,16 @@ public sealed class PlcCatalog
     public List<CatalogSignal> Template { get; set; } = [];
     public List<CatalogHandshakeRow> Handshake { get; set; } = [];
 
+    private static PlcCatalog? _testOverride;
+
+    /// <summary>The catalog in use: the embedded one (the standard IO Map, CR-046).</summary>
+    public static PlcCatalog Current => _testOverride ?? LoadEmbedded();
+
+    /// <summary>Test assembly only: lets the tests of the PLC mechanics run on a fixture catalog. No product code and no setting reaches it.</summary>
+    internal static void UseForTests(PlcCatalog? catalog) => _testOverride = catalog;
+
+    public List<CatalogPlcSignal> PlcSignals { get; set; } = [];
+
     public static PlcCatalog LoadEmbedded()
     {
         var asm = typeof(PlcCatalog).Assembly;
@@ -165,12 +175,24 @@ public sealed class PlcCatalog
 }
 
 public sealed class CatalogSource { public string File { get; set; } = ""; public string Sha256 { get; set; } = ""; }
-public sealed class CatalogPlc { public string PlcId { get; set; } = ""; public string IpAddress { get; set; } = ""; public List<string> Stations { get; set; } = []; }
-public sealed class CatalogStation { public string StationId { get; set; } = ""; public string PlcId { get; set; } = ""; public int Order { get; set; } }
+public sealed class CatalogPlc { public string PlcId { get; set; } = ""; public string? DocumentLabel { get; set; } public string IpAddress { get; set; } = ""; public List<string> Stations { get; set; } = []; }
+public sealed class CatalogStation
+{
+    public string StationId { get; set; } = ""; public string PlcId { get; set; } = ""; public int Order { get; set; }
+    /// <summary>Signal name -> address written in the IO map for THIS station. A reference only: never a configured address.</summary>
+    public Dictionary<string, string> Addresses { get; set; } = [];
+}
+/// <summary>A row of the IO map that belongs to a PLC, not to a station (heartbeat, spare). Shown for reference; not implemented.</summary>
+public sealed class CatalogPlcSignal
+{
+    public string PlcId { get; set; } = ""; public string SignalName { get; set; } = ""; public string? Direction { get; set; } public string DataType { get; set; } = "";
+    public string Address { get; set; } = ""; public string Values { get; set; } = ""; public string Meaning { get; set; } = ""; public bool Spare { get; set; }
+}
 public sealed class CatalogSignal
 {
     public int Seq { get; set; } public string Group { get; set; } = ""; public string SignalName { get; set; } = ""; public string Direction { get; set; } = "";
     public string DataType { get; set; } = ""; public string TemplateAddressReference { get; set; } = ""; public string Description { get; set; } = "";
+    public string? Values { get; set; } public List<string> SharedRegisterWith { get; set; } = [];
 }
 public sealed class CatalogHandshakeRow
 {
@@ -184,9 +206,9 @@ public sealed record SeedResult(int PlcsAdded, int StationsAdded, int PointsAdde
 /// Loads the catalog into the database. Idempotent and additive: existing rows are never modified (so configuration entered by an Admin
 /// is safe), missing rows are created, Actual_PLC_Address is never set.
 /// </summary>
-public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcCatalogSeeder> logger)
+public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcCatalogSeeder> logger, PlcCatalog? current = null)
 {
-    public async Task<SeedResult> SeedAsync(CancellationToken ct = default) => await SeedAsync(PlcCatalog.LoadEmbedded(), ct);
+    public async Task<SeedResult> SeedAsync(CancellationToken ct = default) => await SeedAsync(current ?? PlcCatalog.Current, ct);
 
     public async Task<SeedResult> SeedAsync(PlcCatalog catalog, CancellationToken ct = default)
     {
@@ -200,7 +222,12 @@ public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcC
         foreach (var p in catalog.Plcs.Where(p => !plcs.ContainsKey(p.PlcId)))
         { var e = new PlcConnection(p.PlcId, p.PlcId, p.IpAddress, now); db.PlcConnections.Add(e); plcs[p.PlcId] = e; pa++; }
         foreach (var s in catalog.Stations.Where(s => !stations.ContainsKey(s.StationId)))
-        { var e = new PlcStation(s.StationId, s.PlcId, s.Order, now); db.PlcStations.Add(e); stations[s.StationId] = e; sa++; }
+        {
+            // CR-046: a database of an earlier catalog may already use this position (e.g. X6 holds the place X4 has in the new IO map): rows are never moved, the new station takes the next free one
+            var used = stations.Values.Where(x => x.PlcId == s.PlcId).Select(x => x.Order).ToHashSet();
+            var order = used.Contains(s.Order) ? used.Max() + 1 : s.Order;
+            var e = new PlcStation(s.StationId, s.PlcId, order, now); db.PlcStations.Add(e); stations[s.StationId] = e; sa++;
+        }
         // Parents first so the foreign keys exist when the points are inserted.
         if (pa + sa > 0) await db.SaveChangesAsync(ct);
 
@@ -209,7 +236,7 @@ public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcC
             {
                 if (pointKeys.Contains((st.PlcId, st.StationId, sig.SignalName))) continue;
                 db.StationIoPoints.Add(new StationIoPoint(st.PlcId, st.StationId, sig.Seq, sig.Group, sig.SignalName,
-                    Enum.Parse<PlcSignalDirection>(sig.Direction), Enum.Parse<PlcDataType>(sig.DataType), sig.TemplateAddressReference, sig.Description, now));
+                    Enum.Parse<PlcSignalDirection>(sig.Direction), Enum.Parse<PlcDataType>(sig.DataType), st.Addresses.GetValueOrDefault(sig.SignalName) ?? sig.TemplateAddressReference, sig.Description, now));
                 ia++;
             }
         if (ia > 0) await db.SaveChangesAsync(ct);

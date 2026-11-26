@@ -1,5 +1,12 @@
 # Change Log
 
+## v3.36 – CR-046 IO map catalog, IO screens, F1/F2, Docker (2026-11-26) – version 2026.11.26.2
+
+- The PLC catalog comes from the IO map of 22/11/2026 (16 stations incl. X4, G1, G2; 6 signals per station). Rows of the earlier catalog stay in the database, unused. No migration. The signals are unconfirmed: no write approval, no real write.
+- IO screens: lists from the backend, IO map address apart from the configured one, read / write state, PLC-level signals, no placeholder values for points without an address.
+- F1: PER_AGV counts transport legs. F2: an order that has not started reserves no destination while its AGV has a leg without destination (`RouteEngine:DeferDestinationWhileAgvNeedsOne`).
+- Docker images and Compose checked on Linux by the `docker-smoke` workflow. Not deployed; no real PLC / RCS test.
+
 ## v3.35 – CR-045 Single IO map and test deployment (2026-11-26) – version 2026.11.26.1
 
 - The only PLC IO map is `AGV_PLC Interface_List_22_11_2026.xlsx` (sha256 `405586c9…34da3`); the 20/11 and 10/11 workbooks are removed (IO Map v2 stays removed). Running catalog, database and communication logic unchanged; the IO contract is not confirmed by the PLC engineer. OW-5 and OW-6 closed.
