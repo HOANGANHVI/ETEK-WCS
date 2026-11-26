@@ -22,7 +22,7 @@ public sealed class FakeRuntime : IPlcRuntime
     public FakeRuntime(PlcRuntimeOptions options, params (string Plc, string Station)[] stations)
     {
         Options = options;
-        var template = PlcCatalog.LoadEmbedded().Template;
+        var template = PlcCatalog.Current.Template;
         foreach (var (plc, station) in stations)
             _handlers[station] = new StationIoHandler(plc, station, template.Select(t => new PointInfo(new IoPointRef(Guid.NewGuid(), plc, station, t.SignalName,
                 Enum.Parse<PlcSignalDirection>(t.Direction), Enum.Parse<PlcDataType>(t.DataType), "M" + t.Seq, null, null, true, t.Group), t.Seq, IoConfigStatus.Approved)));   // dummy address: only the write policy looks at it

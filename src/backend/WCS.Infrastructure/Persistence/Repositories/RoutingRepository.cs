@@ -6,7 +6,7 @@ using WCS.Domain.Routing;
 
 namespace WCS.Infrastructure.Persistence.Repositories;
 
-internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
+internal sealed class RoutingRepository(WcsDbContext db, WCS.Application.Plc.IPlcTemplateProvider catalog) : IRoutingRepository
 {
     private static readonly StationTransactionState[] FinalStates = [StationTransactionState.Completed, StationTransactionState.Failed];
 
@@ -58,6 +58,12 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
 
     public Task<TransportLeg?> GetActiveLegForAgvAsync(Guid agvId, CancellationToken ct) =>
         db.TransportLegs.FirstOrDefaultAsync(l => l.AgvId == agvId && (l.State == LegState.InProgress || l.State == LegState.Waiting), ct);
+
+    public async Task LockAgvAsync(Guid agvId, CancellationToken ct) =>
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtext({"wcs-agv:" + agvId}))", ct);
+
+    public Task<bool> HasLegWithoutDestinationAsync(RackKind kind, CancellationToken ct) => db.TransportLegs.AnyAsync(l => l.RackKind == kind && l.DestinationLocationCode == null
+        && (l.State == LegState.Ready || l.State == LegState.InProgress || l.State == LegState.Waiting), ct);
 
     public Task<int> CountInFlightLegsByModeAsync(bool rcsManaged, CancellationToken ct) => rcsManaged
         ? db.TransportLegs.CountAsync(l => l.AgvId == null && (l.AgvTaskCode != null || l.State == LegState.InProgress || l.State == LegState.Waiting)
@@ -149,7 +155,8 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
 
     public async Task<bool> IsPortMappingApprovedAsync(string portId, CancellationToken ct)
     {
-        var statuses = await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == portId).Select(p => p.Status).ToListAsync(ct);
+        var rows = await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == portId).Select(p => new { p.SignalName, p.Status }).ToListAsync(ct);
+        var statuses = rows.Where(r => catalog.IsCurrent(r.SignalName)).Select(r => r.Status).ToList();   // CR-046: rows of a retired IO map neither approve nor block a port
         return statuses.Count > 0 && statuses.All(s => s == IoConfigStatus.Approved);
     }
 
@@ -157,7 +164,8 @@ internal sealed class RoutingRepository(WcsDbContext db) : IRoutingRepository
         await db.PlcStations.AsNoTracking().Where(s => s.Enabled && s.LocationCode != null).OrderBy(s => s.PlcId).ThenBy(s => s.Order).ToListAsync(ct);
 
     public async Task<IReadOnlyList<StationIoPoint>> ListPlcInputPointsAsync(string stationId, CancellationToken ct) =>
-        await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == stationId && p.Direction == PlcSignalDirection.PlcToSoftware).OrderBy(p => p.Seq).ToListAsync(ct);
+        (await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == stationId && p.Direction == PlcSignalDirection.PlcToSoftware).OrderBy(p => p.Seq).ToListAsync(ct))
+            .Where(p => catalog.IsCurrent(p.SignalName)).ToList();
 
     public Task<string?> FindOrderOwningRackAsync(Guid rackId, CancellationToken ct) =>
         db.TransportOrders.AsNoTracking().Where(RackOwnership.Owns(rackId)).OrderBy(o => o.CreatedAt).Select(o => (string?)o.RequestKey).FirstOrDefaultAsync(ct);

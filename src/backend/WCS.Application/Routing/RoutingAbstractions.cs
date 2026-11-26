@@ -28,6 +28,9 @@ public sealed class RouteEngineOptions
 
     /// <summary>CR-042 (OQ-42-04): minutes after which the oldest waiting request of a queue scope is reported as stalled. Nothing is cancelled or overtaken. 0 = no warning.</summary>
     public int QueueStallWarningMinutes { get; set; } = 10;
+
+    /// <summary>CR-046 (F2): the first leg of an order reserves no destination while its AGV has a leg without one (Legacy dispatch). false = the behaviour before CR-046.</summary>
+    public bool DeferDestinationWhileAgvNeedsOne { get; set; } = true;
 }
 
 /// <summary>Persistence of the routing aggregates. Implemented in Infrastructure; every method takes part in the current unit of work.</summary>
@@ -54,6 +57,10 @@ public interface IRoutingRepository
     void Add(TransportLeg leg);
     Task<TransportLeg?> GetLegAsync(Guid id, CancellationToken ct = default);
     Task<TransportLeg?> GetActiveLegForAgvAsync(Guid agvId, CancellationToken ct = default);
+    /// <summary>CR-046 (F1): serialises, until the transaction ends, every decision that gives an AGV a job (Phase 1 task or leg).</summary>
+    Task LockAgvAsync(Guid agvId, CancellationToken ct = default);
+    /// <summary>CR-046 (F2): a leg of this rack kind (so of the same AGV in Legacy dispatch), pending or running, that has no destination yet.</summary>
+    Task<bool> HasLegWithoutDestinationAsync(WCS.Domain.Common.RackKind kind, CancellationToken ct = default);
     /// <summary>CR-028: legs that are on their way (an AGV chosen by WCS, or sent to the RCS) and not finished. Legacy legs carry an AgvId; RcsManaged legs are sent (task code / in progress) with no AgvId.</summary>
     Task<int> CountInFlightLegsByModeAsync(bool rcsManaged, CancellationToken ct = default);
     /// <summary>CR-028: legs of RcsManaged dispatch that were sent to the RCS (task code set, no AgvId) and are not finished: their AMR is asked from the RCS.</summary>

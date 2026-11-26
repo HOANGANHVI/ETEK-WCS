@@ -12,7 +12,7 @@ export interface SimStatus {
 }
 
 /** CR-040: one station with its PLC → WCS signals and their simulated values */
-export interface SimSignal { signal: string; dataType: string; description: string; value: string | null; changedAt: string | null; readByIntake: boolean; address?: string | null }
+export interface SimSignal { signal: string; dataType: string; description: string; value: string | null; changedAt: string | null; readByIntake: boolean; address?: string | null; testOnly?: boolean }
 export interface SimStation {
   engine?: 'Unassigned' | 'Task' | 'TransportOrder' | 'Invalid'
   stationId: string; plcId: string; locationCode: string; plcOnline: boolean | null; portMappingApproved: boolean

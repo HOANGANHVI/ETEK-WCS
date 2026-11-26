@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { IoPointState } from '../../api/plcTypes'
 import { Pill } from '../../components/ui'
+import { shownValue } from '../../lib/plcIoMap'
 import { t } from '../../i18n'
 import {
   CONFIG_STATUS_TONE, CONFIG_STATUS_VI, ENDPOINT_STATE_TONE, ENDPOINT_STATE_VI, QUALITY_TONE, QUALITY_VI,
@@ -12,10 +13,11 @@ export const ConfigPill = ({ status }: { status: string }) => <Pill tone={CONFIG
 
 /** Current value as the operator expects to read it: BOOL as BẬT/TẮT, INT as a number, STRING quoted, nothing as a dash. */
 export function ValueCell({ p }: { p: IoPointState }): ReactNode {
-  if (p.value === null || p.value === undefined) return <span className="muted">—</span>
-  if (typeof p.value === 'boolean') return <Pill tone={p.value ? 'ok' : 'muted'} dot={false}>{p.value ? t('plc.on') : t('plc.off')}</Pill>
-  if (typeof p.value === 'string') return <span className="mono">“{p.value}”</span>
-  return <span className="mono num">{p.value}</span>
+  const value = shownValue(p)
+  if (value === null || value === undefined) return <span className="muted">—</span>
+  if (typeof value === 'boolean') return <Pill tone={value ? 'ok' : 'muted'} dot={false}>{value ? t('plc.on') : t('plc.off')}</Pill>
+  if (typeof value === 'string') return <span className="mono">“{value}”</span>
+  return <span className="mono num">{value}</span>
 }
 
 /** Tiny stacked bar: good (green) vs configured-but-not-good (amber) vs not configured (grey). */

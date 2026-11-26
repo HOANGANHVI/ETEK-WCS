@@ -26,7 +26,7 @@ public static class Topology
 
 public class PlcCatalogTests
 {
-    private readonly PlcCatalog _catalog = PlcCatalog.LoadEmbedded();
+    private readonly PlcCatalog _catalog = PlcCatalog.Current;
 
     [Fact]
     public void Catalog_describes_4_PLCs_16_stations_and_the_approved_assignment()

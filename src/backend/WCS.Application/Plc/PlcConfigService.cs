@@ -38,7 +38,8 @@ public sealed record PlcStationView(string StationId, string PlcId, int Order, s
 public sealed record IoPointView(Guid Id, string PlcId, string StationId, int Seq, string Group, string SignalName, string Direction, string DataType,
     string Description, string ConfigStatus, string? TemplateAddressReference, string? ActualAddress, int? WordLength, string? Encoding,
     bool? WriteAllowed, string? ApprovedBy, DateTimeOffset? ApprovedAt, bool? Pollable = null,
-    string? WriteApproval = null, string? WriteDecidedBy = null, DateTimeOffset? WriteDecidedAt = null, string? WriteDecisionNote = null, bool? WriteSupported = null);
+    string? WriteApproval = null, string? WriteDecidedBy = null, DateTimeOffset? WriteDecidedAt = null, string? WriteDecisionNote = null, bool? WriteSupported = null,
+    bool? InIoMap = null, string? Values = null, IReadOnlyList<string>? SharedRegisterWith = null, bool? Confirmed = null);
 
 public sealed record SetPointAddressCommand(string Address, int? WordLength, string? Encoding);
 
@@ -53,11 +54,23 @@ public static class PlcLabels
 /// Configuration of the 4 PLC connections, 16 Stations and their IO points. It never connects to a device and never invents a value:
 /// addresses exist only when an Admin enters them (and the PLC engineer's approval is recorded separately).
 /// </summary>
-public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow, IClock clock)
+public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow, IClock clock, IPlcTemplateProvider? template = null)
 {
+    /// <summary>CR-046: a row of the IO map in use. Without a catalog (isolated use) every row counts.</summary>
+    private bool Current(StationIoPoint p) => template?.IsCurrent(p.SignalName) ?? true;
+
+    private async Task<List<StationIoPoint>> CurrentPointsAsync(string? plcId, string? stationId, CancellationToken ct) =>
+        (await repo.ListPointsAsync(plcId, stationId, ct)).Where(Current).ToList();
+
+    /// <summary>Stations that carry only rows of an earlier IO map (e.g. X6, G3, G7): kept in the database, listed apart.</summary>
+    private static List<PlcStation> InUse(IReadOnlyList<PlcStation> stations, IReadOnlyList<StationIoPoint> all, Func<StationIoPoint, bool> current)
+    {
+        var retired = all.GroupBy(p => p.StationId).Where(g => !g.Any(current)).Select(g => g.Key).ToHashSet();
+        return stations.Where(s => !retired.Contains(s.Id)).ToList();
+    }
     public async Task<IReadOnlyList<PlcConnectionView>> ListConnectionsAsync(CancellationToken ct = default)
     {
-        var stations = await repo.ListStationsAsync(ct);
+        var stations = InUse(await repo.ListStationsAsync(ct), await repo.ListPointsAsync(null, null, ct), Current);
         return (await repo.ListConnectionsAsync(ct)).Select(c => ToView(c, stations.Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList())).ToList();
     }
 
@@ -100,7 +113,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             // Switching a REAL connection on needs the complete, confirmed parameter set. The simulator never needs them.
             if (cmd.Enabled && options.Mode != PlcRuntimeMode.Simulator && c.MissingParameters() is { Count: > 0 } missing)
                 throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).", "NEEDS_ENGINEER_CONFIRMATION")).ToList());
-            var stations = (await repo.ListStationsAsync(t)).Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList();
+            var stations = InUse(await repo.ListStationsAsync(t), await repo.ListPointsAsync(c.Id, null, t), Current).Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList();
             return ToView(c, stations);
         }, ct);
     }
@@ -112,8 +125,9 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
 
     public async Task<IReadOnlyList<PlcStationView>> ListStationsAsync(CancellationToken ct = default)
     {
-        var points = await repo.ListPointsAsync(null, null, ct);
-        return (await repo.ListStationsAsync(ct)).OrderBy(s => s.PlcId).ThenBy(s => s.Order).Select(s =>
+        var all = await repo.ListPointsAsync(null, null, ct);
+        var points = all.Where(Current).ToList();
+        return InUse(await repo.ListStationsAsync(ct), all, Current).OrderBy(s => s.PlcId).ThenBy(s => s.Order).Select(s =>
         {
             var mine = points.Where(p => p.StationId == s.Id).ToList();
             return new PlcStationView(s.Id, s.PlcId, s.Order, s.LocationCode, s.Enabled, s.Role, mine.Count,
@@ -121,17 +135,30 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         }).ToList();
     }
 
-    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default)
+    /// <param name="includeRetired">CR-046: also return the rows of an earlier IO map (shown apart; only their address can be cleared).</param>
+    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default, bool includeRetired = false)
     {
-        var points = await repo.ListPointsAsync(plcId, stationId, ct);
+        var points = (await repo.ListPointsAsync(plcId, stationId, ct)).Where(p => includeRetired || Current(p)).ToList();
         // CR-012: Pollable = has an address that is valid and does not overlap another point of the same PLC (the other points of that PLC are needed for the overlap check)
         var pollable = new HashSet<Guid>();
         foreach (var group in points.GroupBy(p => p.PlcId))
         {
-            var all = stationId is null ? group.ToList() : (await repo.ListPointsAsync(group.Key, null, ct)).ToList();
+            var all = await CurrentPointsAsync(group.Key, null, ct);
             pollable.UnionWith(PlcPollablePolicy.Pollable(all, await BasesOfAsync(group.Key, ct)));
         }
-        return points.OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).Select(p => ToView(p, includeConfiguration, pollable.Contains(p.Id))).ToList();
+        return points.OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).Select(p => Describe(ToView(p, includeConfiguration, pollable.Contains(p.Id)))).ToList();
+    }
+
+    /// <summary>CR-046: adds what the IO map in use says about the signal (membership, values, shared register, confirmation).</summary>
+    private IoPointView Describe(IoPointView v)
+    {
+        if (template is null) return v;
+        var s = template.Signals.FirstOrDefault(x => x.SignalName == v.SignalName);
+        return v with
+        {
+            InIoMap = s is not null, Values = s?.Values, SharedRegisterWith = s?.SharedRegisterWith is { Count: > 0 } w ? w : null,
+            Confirmed = !UnconfirmedSignals.Contains(v.SignalName),
+        };
     }
 
     public static IoPointView ToView(StationIoPoint p, bool includeConfiguration, bool? pollable = null) => new(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName,
@@ -146,6 +173,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         uow.ExecuteAsync(async t =>
         {
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            RequireCurrent(p);
             // CR-004: X/Y are OUT_OF_SCOPE for IO mapping (radix NEEDS_CONFIRMATION). Only D, W, M may be entered. The driver is unchanged.
             if (!string.IsNullOrWhiteSpace(cmd.Address) && char.ToUpperInvariant(cmd.Address.Trim()[0]) is 'X' or 'Y')
                 throw new ValidationFailedException([new("address", "Thiết bị X/Y chưa được hỗ trợ trong cấu hình địa chỉ IO (OUT_OF_SCOPE, NEEDS_CONFIRMATION: cần xác nhận cơ số với kỹ sư PLC). Chỉ dùng M, D hoặc W.", "ADDRESS_XY_UNSUPPORTED")]);
@@ -162,7 +190,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message, conflict.Code, conflict.Args)]);
 
             p.ConfigureAddress(address!, p.DataType == PlcDataType.String ? cmd.WordLength : null, p.DataType == PlcDataType.String ? cmd.Encoding!.Trim() : null, clock.UtcNow);
-            return ToView(p, true);
+            return Describe(ToView(p, true));
         }, ct);
 
     public Task<IoPointView> ClearAddressAsync(Guid pointId, CancellationToken ct = default) =>
@@ -178,6 +206,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         uow.ExecuteAsync(async t =>
         {
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            RequireCurrent(p);
             if (p.Status == IoConfigStatus.NeedsConfiguration) throw AppException.Rejected("IO_NO_ADDRESS", "Cần nhập địa chỉ trước khi xác nhận.");
             p.Approve(approvedBy, clock.UtcNow);
             return ToView(p, true);
@@ -219,7 +248,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     public async Task<BulkApprovalPreview> PreviewBulkApprovalAsync(string plcId, IReadOnlyList<string> allowedPlcIds, CancellationToken ct = default)
     {
         await RequireBulkAllowedAsync(plcId, allowedPlcIds, ct);
-        return ToPreview(plcId, Classify(await repo.ListPointsAsync(plcId, null, ct), await BasesOfAsync(plcId, ct)));
+        return ToPreview(plcId, Classify(await CurrentPointsAsync(plcId, null, ct), await BasesOfAsync(plcId, ct)));
     }
 
     /// <summary>
@@ -232,7 +261,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         uow.ExecuteAsync(async t =>
         {
             await RequireBulkAllowedAsync(plcId, allowedPlcIds, t);
-            var points = await repo.ListPointsAsync(plcId, null, t);
+            var points = await CurrentPointsAsync(plcId, null, t);
             var items = Classify(points, await BasesOfAsync(plcId, t)).ToList();
             var eligible = items.Count(i => i.Outcome == BulkOutcome.Eligible);
             if (expectedEligible is { } exp && exp != eligible)
@@ -279,6 +308,9 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             if (approve)
             {
+                RequireCurrent(p);
+                if (UnconfirmedSignals.Contains(p.SignalName))
+                    throw AppException.Rejected("WRITE_SIGNAL_NOT_CONFIRMED", "Tín hiệu của IO Map chưa được kỹ sư PLC xác nhận: chưa được duyệt ghi.");
                 if (WritePolicy.IsBlockedSignal(p.SignalName, p.Group))
                     throw AppException.Rejected("WRITE_BLOCKED_SAFETY", "Tín hiệu Safety/Interlock và Transfer/Departure Permit không được cho phép ghi từ chức năng thử.");
                 if (!WriteValueValidator.IsWriteSupported(p.DataType, p.Encoding))
@@ -290,6 +322,11 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             return ToView(p, true);
         }, ct);
 
+    private void RequireCurrent(StationIoPoint p)
+    {
+        if (!Current(p)) throw AppException.Rejected("IO_POINT_RETIRED", "Tín hiệu thuộc IO Map cũ, không còn dùng: chỉ được xóa địa chỉ.");
+    }
+
     /// <summary>Address conflicts currently present on a PLC (empty list = consistent).</summary>
     public async Task<IReadOnlyList<AddressIssue>> CheckPlcAsync(string plcId, CancellationToken ct = default) =>
         AddressValidator.Validate((await repo.ListPointsAsync(plcId, null, ct)).Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction)),
@@ -300,6 +337,20 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
 
     public Task<IReadOnlyList<PlcCommLogEntry>> LogsAsync(string? plcId, string? stationId, PlcLogLevel? minLevel, int skip, int take, CancellationToken ct = default) =>
         repo.QueryLogsAsync(plcId, stationId, minLevel, skip, Math.Clamp(take, 1, 500), ct);
+}
+
+/// <summary>
+/// CR-046: the signals of the IO map of 22/11/2026. None is confirmed by the PLC engineer (value codes, handshake, reset), so none can be approved for writing or written to a real PLC,
+/// whatever address, approval or declaration it has. A name leaves this list only through an approved change.
+/// </summary>
+public static class UnconfirmedSignals
+{
+    private static readonly HashSet<string> Names = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PLC_MissionRequest", "PLC_ReaddyTranfer", "PLC_MissionCompleted", "AGV_RequestTranfer", "AGV_TranferCompleted", "Mission_Feedback", "HeartBit",
+    };
+
+    public static bool Contains(string signalName) => Names.Contains(signalName);
 }
 
 /// <summary>Rules that keep control signals out of reach of test writes (CR-002 safety rules).</summary>
@@ -350,6 +401,7 @@ public static class WritePolicy
             case PlcRuntimeMode.Simulator: return new(true);
             case PlcRuntimeMode.RealReadOnly: return new(false, "READ_ONLY", "Hệ thống đang ở chế độ chỉ đọc (REAL_READ_ONLY).");
             default:
+                if (UnconfirmedSignals.Contains(p.SignalName)) return new(false, "WRITE_SIGNAL_NOT_CONFIRMED", "Tín hiệu của IO Map chưa được kỹ sư PLC xác nhận: không ghi ra PLC thật.");
                 if (!p.WriteAllowed) return new(false, "WRITE_NOT_ALLOWED", "Tín hiệu chưa nằm trong danh sách được phép ghi.");
                 if (string.IsNullOrWhiteSpace(p.Address)) return new(false, "NO_ADDRESS", "Tín hiệu chưa có địa chỉ được xác nhận.");
                 if (!p.Pollable) return new(false, "ADDRESS_NOT_APPROVED", "Địa chỉ của tín hiệu chưa được kỹ sư PLC xác nhận (duyệt).");

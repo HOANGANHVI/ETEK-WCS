@@ -5,7 +5,8 @@ public sealed record ReadResult(bool Success, string? Code = null, string? Messa
 
 /// <summary>One row of the PLC Monitoring screen: configuration facts merged with the live value and a communication status (CR-020).</summary>
 public sealed record MonitorPointView(Guid Id, string PlcId, string StationId, int Seq, string Group, string SignalName, string Description, string Direction, string DataType,
-    object? Value, string Quality, string Status, DateTimeOffset? LastUpdated, string? Address, string? Error, string? WriteApproval, bool? WriteSupported, bool WriteBlocked, int? WordLength = null, string? Encoding = null);
+    object? Value, string Quality, string Status, DateTimeOffset? LastUpdated, string? Address, string? Error, string? WriteApproval, bool? WriteSupported, bool WriteBlocked, int? WordLength = null, string? Encoding = null,
+    bool Confirmed = true, string? IoMapAddress = null, bool HasAddress = true);
 
 /// <summary>Verification of a write by reading the point back (CR-020). A successful write request is NOT proof the PLC holds the value; only VERIFIED is.</summary>
 public sealed record ReadBackResult(string Status, object? Value = null, string? Code = null, string? Message = null);

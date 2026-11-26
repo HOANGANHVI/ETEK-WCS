@@ -6,11 +6,15 @@ using WCS.Domain.Plc;
 namespace WCS.Application.Plc;
 
 /// <summary>One signal of the Default IO Mapping Template (read only; the template itself is never modified by a PLC).</summary>
-public sealed record TemplateSignal(int Seq, string Group, string SignalName, PlcSignalDirection Direction, PlcDataType DataType, string TemplateAddressReference, string Description);
+public sealed record TemplateSignal(int Seq, string Group, string SignalName, PlcSignalDirection Direction, PlcDataType DataType, string TemplateAddressReference, string Description,
+    string? Values = null, IReadOnlyList<string>? SharedRegisterWith = null);
 
 public interface IPlcTemplateProvider
 {
     IReadOnlyList<TemplateSignal> Signals { get; }
+
+    /// <summary>CR-046: true for a signal of the IO map in use. Rows of an earlier IO map stay in the database but are not read, written or counted.</summary>
+    bool IsCurrent(string signalName) => Signals.Any(s => s.SignalName == signalName);
 }
 
 public sealed record AddPlcStationCommand(string StationId, string? LocationCode);
@@ -87,7 +91,7 @@ public sealed partial class PlcProvisioningService(IPlcConfigRepository repo, IL
             if (other is not null) throw AppException.Conflict("LOCATION_ALREADY_LINKED", $"Location {code} is already linked to port {other.Id}.");
         }
         st.Update(code, enabled, clock.UtcNow);
-        var mine = await repo.ListPointsAsync(st.PlcId, st.Id, t);
+        var mine = (await repo.ListPointsAsync(st.PlcId, st.Id, t)).Where(p => template.IsCurrent(p.SignalName)).ToList();
         return new PlcStationView(st.Id, st.PlcId, st.Order, st.LocationCode, st.Enabled, st.Role, mine.Count,
             mine.Count(p => p.Status != IoConfigStatus.NeedsConfiguration), mine.Count(p => p.Status == IoConfigStatus.Approved));
     }, ct);

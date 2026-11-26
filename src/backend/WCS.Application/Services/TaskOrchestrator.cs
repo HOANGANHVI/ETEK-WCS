@@ -172,7 +172,9 @@ public sealed class TaskOrchestrator(
             // CR-008B-5 (D-7): an AGV on dispatch hold takes no new task; the request waits in the queue (never moved to the other AGV)
             // The hold flag is read AFTER the active-task check and with a fresh query: a task that finished (and set the hold) in the same commit as its terminal state can then never look
             // "inactive but not held". The tracked entity read above may be stale (read committed), so it is not used for this decision.
-            var busy = await tasks.GetActiveForAgvAsync(agv.Id, t) is not null || await tasks.AnyQueuedForAgvAsync(agv.Id, t);
+            await routing.LockAgvAsync(agv.Id, t);   // CR-046 (F1): the two engines decide about one AGV one after the other
+            var busy = await tasks.GetActiveForAgvAsync(agv.Id, t) is not null || await tasks.AnyQueuedForAgvAsync(agv.Id, t)
+                       || await routing.GetActiveLegForAgvAsync(agv.Id, t) is not null;   // CR-046 (F1): PER_AGV counts the legs of Transport Orders too
             var held = await agvs.IsOnDispatchHoldAsync(agv.Id, t);
             busy |= held;
             if (busy) task.TransitionTo(TaskState.Queued, held ? "AGV on dispatch hold; request queued" : "AGV busy; request queued", Wcs, clock.UtcNow, HistoryDetail.Of(held ? "QUEUED_AGV_HOLD" : "QUEUED_AGV_BUSY"));
@@ -205,7 +207,8 @@ public sealed class TaskOrchestrator(
         var next = await Tx(async (events, _, t) =>
         {
             waitReason = null;
-            if (await tasks.GetActiveForAgvAsync(agvId, t) is not null) { waitReason = "AGV_BUSY_PER_AGV"; return (Guid?)null; } // PER_AGV
+            await routing.LockAgvAsync(agvId, t);   // CR-046 (F1)
+            if (await tasks.GetActiveForAgvAsync(agvId, t) is not null || await routing.GetActiveLegForAgvAsync(agvId, t) is not null) { waitReason = "AGV_BUSY_PER_AGV"; return (Guid?)null; } // PER_AGV, both engines
             var agv = await agvs.GetAsync(agvId, t);
             agvCode = agv?.Code;
             if (agv is null || !agv.Enabled) { waitReason = "AGV_DISABLED"; return null; }

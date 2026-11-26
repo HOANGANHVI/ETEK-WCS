@@ -105,6 +105,24 @@ public sealed class PhysicalPlcInputAdapter(IPlcInputHandler handler)
     };
 }
 
+/// <summary>
+/// CR-046: the logical signals the request intake reads. The IO map of 22/11/2026 has none of them (how its signals become a request is not approved), so the simulation offers them as
+/// TEST inputs, held in memory only: they are no IO point, have no address and are never read from or written to a PLC.
+/// </summary>
+public static class PlcSimulationTestSignals
+{
+    public static readonly IReadOnlyList<(string Signal, WCS.Domain.Plc.PlcDataType Type)> All =
+    [
+        (PlcRequestAssembler.PickupRequest, WCS.Domain.Plc.PlcDataType.Bool),
+        (PlcRequestAssembler.DeliveryRequest, WCS.Domain.Plc.PlcDataType.Bool),
+        (PlcRequestAssembler.RequestId, WCS.Domain.Plc.PlcDataType.String),
+        (PlcRequestAssembler.RackFull, WCS.Domain.Plc.PlcDataType.Int),
+        (PlcRequestAssembler.RackEmpty, WCS.Domain.Plc.PlcDataType.Int),
+        (PlcRequestAssembler.DestinationAvailable, WCS.Domain.Plc.PlcDataType.Int),
+        (PlcRequestAssembler.RackType, WCS.Domain.Plc.PlcDataType.Int),
+    ];
+}
+
 /// <summary>Simulated input values per station, in memory only: a WCS restart or switching the simulation off clears them. Nothing is written to a PLC.</summary>
 public sealed class PlcSimulatedInputs
 {
@@ -116,6 +134,6 @@ public sealed class PlcSimulatedInputs
     public void Clear(string station) { foreach (var k in _values.Keys.Where(k => k.Station == station)) _values.TryRemove(k, out _); }
 }
 
-public sealed record SimSignalDto(string Signal, string DataType, string Description, string? Value, DateTimeOffset? ChangedAt, bool ReadByIntake, string? Address = null);
+public sealed record SimSignalDto(string Signal, string DataType, string Description, string? Value, DateTimeOffset? ChangedAt, bool ReadByIntake, string? Address = null, bool TestOnly = false);
 public sealed record SimStationDto(string StationId, string PlcId, string LocationCode, bool? PlcOnline, bool PortMappingApproved, StationTransactionDto? ActiveTransaction, IReadOnlyList<SimSignalDto> Signals,
     string Engine = "Unassigned");

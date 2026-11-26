@@ -5,10 +5,11 @@ import { Async, Button, Panel, Pill } from '../../components/ui'
 import { ENGINEERING_TOOLS } from '../../config'
 import { useApi } from '../../hooks/useApi'
 import { useT } from '../../i18n'
-import { DATATYPE_VI, MONITOR_STATUS_TONE, MONITOR_STATUS_VI } from '../../i18n/plc'
+import { DATATYPE_VI, DIRECTION_VI, MONITOR_STATUS_TONE, MONITOR_STATUS_VI } from '../../i18n/plc'
 import { describeError } from '../../i18n/vi'
 import { filterPoints, MONITOR_STATUSES, readReadiness, rowWrite, sortPoints, type MonitorFilter, type SortKey } from '../../lib/plcMonitor'
 import { signalDescription } from '../../lib/plcSignals'
+import { shownValue } from '../../lib/plcIoMap'
 import { runtimeAllowsWrite, writeKeyChecklist, type WriteBlock } from '../../lib/plcWrite'
 import { fmtTime, WRITE_TONE } from './plcFormat'
 import { SimDialog } from './plcDialogs'
@@ -23,10 +24,11 @@ const without = <V,>(m: Record<string, V>, id: string): Record<string, V> => { c
 
 function ValueView({ p }: { p: MonitorPoint }) {
   const t = useT()
-  if (p.value === null || p.value === undefined) return <span className="muted">—</span>
-  if (typeof p.value === 'boolean') return <Pill tone={p.value ? 'ok' : 'muted'} dot={false}>{p.value ? t('plc.on') : t('plc.off')}</Pill>
-  if (typeof p.value === 'string') return <span className="mono">“{p.value}”</span>
-  return <span className="mono num">{p.value}</span>
+  const value = shownValue(p)
+  if (value === null || value === undefined) return <span className="muted">—</span>
+  if (typeof value === 'boolean') return <Pill tone={value ? 'ok' : 'muted'} dot={false}>{value ? t('plc.on') : t('plc.off')}</Pill>
+  if (typeof value === 'string') return <span className="mono">“{value}”</span>
+  return <span className="mono num">{value}</span>
 }
 
 /**
@@ -149,15 +151,15 @@ export function PlcIoMonitor({ isAdmin, overview }: { isAdmin: boolean; overview
                       <tr key={p.id}>
                         <td className="nowrap">{p.plcId}</td>
                         <td className="nowrap"><strong>{p.stationId}</strong></td>
-                        <td><strong>{p.signalName}</strong><br /><small className="muted">{p.group}</small></td>
+                        <td><strong>{p.signalName}</strong><br /><small className="muted">{p.group} · {DIRECTION_VI[p.direction]}</small>{p.confirmed === false && <><br /><Pill tone="warn" dot={false}>{t('plc.ioNotConfirmed')}</Pill></>}</td>
                         <td className="small">{signalDescription(t, p.signalName, p.description)}</td>
-                        {isAdmin && <td className="mono">{p.address ?? <span className="muted">—</span>}</td>}
+                        {isAdmin && <td className="mono">{p.address ?? <span className="muted">—</span>}{p.ioMapAddress && <><br /><small className="muted">{t('plc.ioMapRef', { address: p.ioMapAddress })}</small></>}</td>}
                         <td>{DATATYPE_VI[p.dataType]}</td>
                         <td><ValueView p={p} /></td>
-                        <td><Pill tone={MONITOR_STATUS_TONE[p.status] ?? 'muted'} dot={false}>{MONITOR_STATUS_VI[p.status] ?? p.status}</Pill>{isAdmin && p.error && <small className="text-bad" title={p.error}> ⚠</small>}</td>
-                        <td className="nowrap num">{fmtTime(p.lastUpdated)}</td>
-                        {isAdmin && <td className="nowrap">{w.kind === 'inbound' || w.kind === 'blocked'
-                          ? <span className="muted" title={t('plc.writeNotApplicableTitle')}>{t('plc.writeNotApplicable')}</span>
+                        <td>{p.hasAddress === false ? <Pill tone="muted" dot={false}>{t('plc.rsNoAddress')}</Pill> : <Pill tone={MONITOR_STATUS_TONE[p.status] ?? 'muted'} dot={false}>{MONITOR_STATUS_VI[p.status] ?? p.status}</Pill>}{isAdmin && p.error && <small className="text-bad" title={p.error}> ⚠</small>}</td>
+                        <td className="nowrap num">{p.hasAddress === false ? '—' : fmtTime(p.lastUpdated)}</td>
+                        {isAdmin && <td className="nowrap">{w.kind === 'inbound' || w.kind === 'blocked' || w.kind === 'notConfirmed'
+                          ? <span className="muted" title={t(w.kind === 'notConfirmed' ? 'plc.notConfirmedTitle' : 'plc.writeNotApplicableTitle')}>{t(w.kind === 'notConfirmed' ? 'plc.wsProtected' : 'plc.writeNotApplicable')}</span>
                           : <Pill tone={WRITE_TONE[p.writeApproval ?? 'NOT_APPROVED'] ?? 'warn'} dot={false}>{t(`plc.writeState_${p.writeApproval ?? 'NOT_APPROVED'}` as 'plc.writeState_APPROVED')}</Pill>}</td>}
                         <td className="nowrap">
                           <Button size="sm" disabled={!rb.ok} aria-busy={busy} title={rb.ok ? undefined : rb.reason === 'NO_ADDRESS' ? t('plc.wrNoAddress') : t('plc.monReading')} onClick={() => void read(p)}>{busy ? t('plc.monReading') : t('plc.monRead')}</Button>{' '}

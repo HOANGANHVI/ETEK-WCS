@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react'
 import { api } from '../api/client'
 import type { SimStartResult, SimStation } from '../api/simTypes'
-import { Async, Button } from '../components/ui'
+import { Async, Button, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { formatDateTime } from '../i18n/format'
 import { describeError } from '../i18n/vi'
+import { signalDescription } from '../lib/plcSignals'
 
 /** CR-040: set one PLC → WCS signal at a time (bit ON / OFF or a value), then hand the station's signals to the request intake. The Station Transaction shows the handshake state. */
 export function PlcSimulationSignals({ active, real, onResult }: { active: boolean; real: boolean; onResult: (r: SimStartResult) => void }) {
@@ -89,8 +90,8 @@ function SignalRow({ signal, disabled, onSet }: { signal: SimStation['signals'][
   return (
     <tr>
       <td><strong className="mono">{signal.signal}</strong>{!signal.readByIntake && <div className="muted small">{t('linked.simNotRead')}</div>}</td>
-      <td className="mono">{signal.address ?? <span className="muted">NEEDS_CONFIGURATION</span>}</td>
-      <td className="muted small">{signal.description}</td>
+      <td className="mono">{signal.testOnly ? <Pill tone="warn" dot={false}>{t('linked.simTestOnly')}</Pill> : signal.address ?? <span className="muted">NEEDS_CONFIGURATION</span>}</td>
+      <td className="muted small">{signalDescription(t, signal.signal, signal.description)}</td>
       <td className="mono">{signal.dataType === 'Bool' ? (signal.value === 'true' ? 'ON' : signal.value === 'false' ? 'OFF' : '—') : signal.value ?? '—'}</td>
       <td className="nowrap">
         {signal.dataType === 'Bool'

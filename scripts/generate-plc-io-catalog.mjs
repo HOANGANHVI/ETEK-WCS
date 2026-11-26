@@ -1,8 +1,8 @@
-// RETIRED INPUT (CR-045, 2026-11-26): the project's only IO map is "AGV_PLC Interface_List_22_11_2026.xlsx". The workbook this script reads (IO Map v2) is no longer in the repository
-// (Git history: commit 34c45b2). The catalog it produced stays in use unchanged until the new IO map is implemented under an approved change; do not run this script to create a new one.
-// Generates src/backend/WCS.Infrastructure/Plc/Catalog/plc-io-catalog.json from the controlled IO workbook (CR-002).
-// The workbook stays the source of truth; this file is a derived, versioned copy that the seeder loads. No value is invented:
-// Actual_PLC_Address stays empty, port / MC parameters stay empty, handshake rows stay PENDING.
+// Generates src/backend/WCS.Infrastructure/Plc/Catalog/plc-io-catalog.json from the ONLY IO map of the project (CR-045 / CR-046).
+// The workbook stays the source of truth; this file is a derived copy that the seeder loads. Nothing is invented:
+//  - every address is the address written in the workbook and is a REFERENCE (not a configured address of the running system);
+//  - port / MC parameters, handshake and reset rules are not in the workbook and stay absent;
+//  - nothing is marked confirmed: the PLC engineer has not confirmed the IO contract.
 //
 //   node scripts/generate-plc-io-catalog.mjs            (writes the JSON)
 //   node scripts/generate-plc-io-catalog.mjs --check    (fails if the committed JSON is out of date)
@@ -13,12 +13,10 @@ import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const xlsx = path.join(root, 'docs/02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx')
+const SOURCE = 'docs/02_Interface_Specification/PLC_IO_Map/AGV_PLC Interface_List_22_11_2026.xlsx'
+const SHA256 = '405586c9e4d2893f1d3a33922259ecfe1c400ca877710877b3b482e049b34da3'
 const outFile = path.join(root, 'src/backend/WCS.Infrastructure/Plc/Catalog/plc-io-catalog.json')
-if (!fs.existsSync(xlsx)) {
-  console.error('The input workbook (IO Map v2) is retired and not in the repository; the committed catalog is left unchanged. See docs/02_Interface_Specification/PLC_IO_Map/README.md.')
-  process.exit(2)
-}
+const fail = (m) => { console.error(m); process.exit(1) }
 
 // ---- minimal .xlsx reader (zip central directory + inflate) -------------------------------------------------
 function readZip(buf) {
@@ -39,104 +37,97 @@ function readZip(buf) {
   return files
 }
 const dec = (s) => s.replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
-const text = (files, n) => files.get(n)?.toString('utf8') ?? ''
 
-function readWorkbook(file) {
-  const buf = fs.readFileSync(file)
-  const files = readZip(buf)
-  const shared = [...text(files, 'xl/sharedStrings.xml').matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => dec([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join('')))
-  const wb = text(files, 'xl/workbook.xml'); const rels = text(files, 'xl/_rels/workbook.xml.rels')
-  const sheets = {}
-  for (const m of wb.matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"[^>]*?\/>/g)) {
-    const target = rels.match(new RegExp(`<Relationship\\b[^>]*?Id="${m[2]}"[^>]*?Target="([^"]*)"`))?.[1] ?? rels.match(new RegExp(`<Relationship\\b[^>]*?Target="([^"]*)"[^>]*?Id="${m[2]}"`))?.[1]
-    const xml = text(files, target.startsWith('/') ? target.slice(1) : 'xl/' + target)
-    const rows = []
-    for (const r of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
-      const cells = {}
-      for (const c of r[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-        const ref = c[1].match(/r="([A-Z]+)\d+"/)?.[1]; if (!ref) continue
-        const type = c[1].match(/t="([^"]*)"/)?.[1]; const body = c[2] ?? ''
-        let v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1]
-        if (type === 's' && v !== undefined) v = shared[+v]
-        else if (type === 'inlineStr') v = dec([...body.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join(''))
-        else if (v !== undefined) v = dec(v)
-        if (v !== undefined && v !== '') cells[ref] = String(v)
-      }
-      if (Object.keys(cells).length) rows.push(cells)
-    }
-    sheets[dec(m[1])] = rows
-  }
-  return { sheets, sha256: crypto.createHash('sha256').update(buf).digest('hex') }
+const bytes = fs.readFileSync(path.join(root, SOURCE))
+const sha256 = crypto.createHash('sha256').update(bytes).digest('hex')
+if (sha256 !== SHA256) fail(`The IO map changed (sha256 ${sha256}). A change of the workbook goes through a Change Request; update the hash here and in PLC_IO_Map/README.md only then.`)
+const files = readZip(bytes)
+const text = (n) => files.get(n)?.toString('utf8') ?? ''
+const shared = [...text('xl/sharedStrings.xml').matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => dec([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join('')))
+const rels = text('xl/_rels/workbook.xml.rels')
+const sheet = [...text('xl/workbook.xml').matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"[^>]*?\/>/g)].find((m) => dec(m[1]) === 'IO Matrix') ?? fail('sheet "IO Matrix" is missing')
+const target = rels.match(new RegExp(`<Relationship\\b[^>]*?Id="${sheet[2]}"[^>]*?Target="([^"]*)"`))?.[1] ?? rels.match(new RegExp(`<Relationship\\b[^>]*?Target="([^"]*)"[^>]*?Id="${sheet[2]}"`))[1]
+const xml = text(target.startsWith('/') ? target.slice(1) : 'xl/' + target)
+
+const cells = new Map()   // "A3" -> text
+for (const c of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+  const ref = c[1].match(/r="([A-Z]+\d+)"/)?.[1]; if (!ref) continue
+  const type = c[1].match(/t="([^"]*)"/)?.[1]; const body = c[2] ?? ''
+  let v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1]
+  if (type === 's' && v !== undefined) v = shared[+v]
+  else if (type === 'inlineStr') v = dec([...body.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join(''))
+  else if (v !== undefined) v = dec(v)
+  if (v !== undefined && String(v).trim() !== '') cells.set(ref, String(v).trim().normalize("NFC"))
+}
+// merged cells: every cell of a range reads the value of its first cell; the range is remembered (a merged address = one register shared by those rows)
+const merged = new Map()
+for (const m of xml.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g)) {
+  const [, c1, r1, c2, r2] = m
+  if (c1 !== c2) continue
+  for (let r = +r1; r <= +r2; r++) merged.set(`${c1}${r}`, { first: `${c1}${r1}`, from: +r1, to: +r2 })
+}
+const at = (col, row) => cells.get(merged.get(`${col}${row}`)?.first ?? `${col}${row}`)
+
+const header = ['PLC', 'Station', 'Nhóm', 'Tên tín hiệu', 'Chiều tín hiệu']
+header.forEach((h, i) => { if ((at('ABCDE'[i], 2) ?? '') !== h) fail(`unexpected header in column ${'ABCDE'[i]}: ${at('ABCDE'[i], 2)}`) })
+const directionOf = (t) => t === 'PLC → Software' ? 'PlcToSoftware' : t === 'Phần mềm → PLC' ? 'SoftwareToPlc' : fail('unknown direction ' + t)
+const typeOf = (t) => ({ BOOL: 'Bool', INT: 'Int' })[t] ?? fail('unknown data type ' + t)
+
+const plcs = [], rows = [], plcSignals = []
+for (let r = 3; r <= 200; r++) {
+  const group = at('C', r); if (!group) continue
+  const plcCell = at('A', r) ?? fail(`row ${r}: no PLC`)
+  const [label, ip] = plcCell.split(/\r?\n/).map((s) => s.trim())
+  let plc = plcs.find((p) => p.ipAddress === ip)
+  if (!plc) { plc = { plcId: `PLC-0${plcs.length + 1}`, documentLabel: label, ipAddress: ip, stations: [] }; plcs.push(plc) }
+  const address = at('H', r) ?? fail(`row ${r}: no address`)
+  if (!/^[DM]\d+$/.test(address)) fail(`row ${r}: unexpected address ${address}`)
+  if (group === 'Command') {
+    const stationId = at('B', r)
+    if (!plc.stations.includes(stationId)) plc.stations.push(stationId)
+    const share = merged.get(`H${r}`)
+    rows.push({ row: r, plcId: plc.plcId, stationId, signalName: at('D', r), direction: directionOf(at('E', r)), dataType: typeOf(at('I', r)), values: at('J', r) ?? '', meaning: at('K', r) ?? '', address,
+      shareKey: share && share.to > share.from ? `${plc.plcId}:${share.first}` : null })
+  } else if (group === 'Status') {
+    plcSignals.push({ plcId: plc.plcId, signalName: at('D', r), direction: directionOf(at('E', r)), dataType: typeOf(at('I', r)), address, values: at('J', r) ?? '', meaning: at('K', r) ?? '', spare: false })
+  } else if (group === 'Spair') {
+    plcSignals.push({ plcId: plc.plcId, signalName: 'Spare', direction: null, dataType: typeOf(at('I', r)), address, values: '', meaning: 'dự phòng', spare: true })
+  } else fail(`row ${r}: unknown group ${group}`)
 }
 
-const { sheets, sha256 } = readWorkbook(xlsx)
-const need = (n) => sheets[n] ?? (() => { throw new Error('missing sheet ' + n) })()
-const directionOf = (t) => t === 'PLC → Software' ? 'PlcToSoftware' : t === 'Phần mềm → PLC' ? 'SoftwareToPlc' : (() => { throw new Error('unknown direction ' + t) })()
-const typeOf = (t) => ({ BOOL: 'Bool', INT: 'Int', STRING: 'String' })[t] ?? (() => { throw new Error('unknown data type ' + t) })()
-
-// PLC configuration (IP, station list). Port / protocol parameters are deliberately NOT carried over (NEEDS_CONFIRMATION).
-const plcs = need('PLC Configuration').slice(1).map((r) => ({
-  plcId: r.A, ipAddress: r.B, stations: r.D.split(',').map((s) => s.trim()), connectionCount: +r.J,
-}))
-const mapping = need('Station Mapping').slice(1).map((r) => ({ stationId: r.A, plcId: r.B, plcIp: r.C, ioSet: r.D }))
-const sheetByPlc = { 'PLC-01': 'PLC1_IO', 'PLC-02': 'PLC2_IO', 'PLC-03': 'PLC3_IO', 'PLC-04': 'PLC4_IO' }
-
-const pointsByStation = new Map()
-for (const [plcId, sheet] of Object.entries(sheetByPlc)) {
-  for (const r of need(sheet)) {
-    if (!r.A || !r.D || r.A === 'Station_ID' || !/^\d+$/.test(r.B ?? '')) continue
-    const key = `${plcId}/${r.A}`
-    if (!pointsByStation.has(key)) pointsByStation.set(key, [])
-    pointsByStation.get(key).push({
-      seq: +r.B, group: r.C, signalName: r.D, direction: directionOf(r.E), source: r.F, destination: r.G,
-      templateAddressReference: r.H, dataType: typeOf(r.I), description: (r.K ?? '').trim(),
-      actualAddress: r.J ?? null,
-    })
-  }
+// ---- consistency checks (fail loudly instead of guessing) ----
+if (plcs.length !== 4) fail('expected 4 PLCs, got ' + plcs.length)
+for (const p of plcs) if (p.stations.length !== 4) fail(`${p.plcId} must have 4 stations`)
+const stations = plcs.flatMap((p) => p.stations.map((s) => ({ stationId: s, plcId: p.plcId }))).map((s, i) => ({ ...s, order: i + 1 }))
+if (new Set(stations.map((s) => s.stationId)).size !== 16) fail('station ids must be 16 unique names')
+const byStation = (id) => rows.filter((x) => x.stationId === id)
+const first = byStation(stations[0].stationId)
+if (first.length !== 6) fail('expected 6 signals per station, got ' + first.length)
+for (const s of stations) {
+  const own = byStation(s.stationId)
+  if (own.length !== 6) fail(`station ${s.stationId} must have 6 signals`)
+  own.forEach((x, i) => { const t = first[i]; for (const k of ['signalName', 'direction', 'dataType', 'values', 'meaning']) if (x[k] !== t[k]) fail(`station ${s.stationId} differs from the common signal set at ${x.signalName} (${k})`) })
 }
+for (const p of plcs) if (plcSignals.filter((x) => x.plcId === p.plcId).length !== 6) fail(`${p.plcId} must have the heartbeat and 5 spare rows`)
 
-// ---- consistency checks against the approved architecture (fail loudly instead of guessing) ----
-if (plcs.length !== 4) throw new Error('expected 4 PLCs, got ' + plcs.length)
-if (mapping.length !== 16) throw new Error('expected 16 stations, got ' + mapping.length)
-for (const p of plcs) {
-  const listed = mapping.filter((m) => m.plcId === p.plcId).map((m) => m.stationId)
-  if (JSON.stringify(listed) !== JSON.stringify(p.stations)) throw new Error(`station list mismatch for ${p.plcId}`)
-  for (const m of mapping.filter((x) => x.plcId === p.plcId)) if (m.plcIp !== p.ipAddress) throw new Error(`IP mismatch ${m.stationId}`)
-}
-const first = pointsByStation.get('PLC-01/A1')
-if (first.length !== 23) throw new Error('template must have 23 signals, got ' + first.length)
-for (const m of mapping) {
-  const pts = pointsByStation.get(`${m.plcId}/${m.stationId}`)
-  if (!pts || pts.length !== 23) throw new Error(`station ${m.stationId} must have 23 signals`)
-  pts.forEach((p, i) => {
-    const t = first[i]
-    if (p.signalName !== t.signalName || p.dataType !== t.dataType || p.direction !== t.direction || p.templateAddressReference !== t.templateAddressReference || p.group !== t.group)
-      throw new Error(`station ${m.stationId} differs from the common template at signal ${i + 1}`)
-    if (p.actualAddress) throw new Error(`workbook already contains an actual address for ${m.stationId}/${p.signalName}: review before importing`)
-  })
-}
-
-const handshake = need('Handshake Definition').slice(1).map((r) => ({
-  stationId: r.A, signalName: r.B, owner: r.J ?? null, approvalStatus: r.K ?? null,
-  trigger: r.C ?? null, wcsAction: r.D ?? null, plcAction: r.E ?? null, setCondition: r.F ?? null, resetCondition: r.G ?? null, timeout: r.H ?? null, retryPolicy: r.I ?? null,
-}))
-
+const sharedWith = (x) => x.shareKey ? first.map((t) => t.signalName).filter((n) => n !== x.signalName && byStation(x.stationId).some((y) => y.signalName === n && y.shareKey === x.shareKey)) : []
 const catalog = {
-  schemaVersion: 1,
-  source: { file: 'docs/02_Interface_Specification/PLC_IO_Map/ETEK_WCS_IO_Map_4PLC_16Stations_v2_Separate_IO_Sets.xlsx', sha256 },
-  note: 'Derived from the controlled workbook. Actual_PLC_Address, TCP port and MC Protocol parameters are intentionally absent (NEEDS_CONFIGURATION).',
-  plcs: plcs.map((p) => ({ plcId: p.plcId, ipAddress: p.ipAddress, stations: p.stations })),
-  stations: mapping.map((m, i) => ({ stationId: m.stationId, plcId: m.plcId, order: i + 1 })),
-  template: first.map(({ seq, group, signalName, direction, source, destination, templateAddressReference, dataType, description }) =>
-    ({ seq, group, signalName, direction, source, destination, templateAddressReference, dataType, description })),
-  handshake,
+  schemaVersion: 2,
+  source: { file: SOURCE, sha256 },
+  note: 'Derived from the only IO map of the project (22/11/2026). Addresses are references written in the workbook, not configured addresses. The IO contract is NOT confirmed by the PLC engineer.',
+  confirmation: 'NotConfirmed',
+  plcs,
+  stations: stations.map((s) => ({ ...s, addresses: Object.fromEntries(byStation(s.stationId).map((x) => [x.signalName, x.address])) })),
+  template: first.map((x, i) => ({ seq: i + 1, group: 'Command', signalName: x.signalName, direction: x.direction, dataType: x.dataType, templateAddressReference: '',
+    description: `${x.meaning} (${x.values})`, values: x.values, sharedRegisterWith: sharedWith(x) })),
+  plcSignals,
+  handshake: [],
 }
 const json = JSON.stringify(catalog, null, 2) + '\n'
 if (process.argv.includes('--check')) {
   const current = fs.existsSync(outFile) ? fs.readFileSync(outFile, 'utf8') : ''
-  if (current.replace(/\r\n/g, '\n') !== json) { console.error('plc-io-catalog.json is out of date; run the generator'); process.exit(1) }
+  if (current.replace(/\r\n/g, '\n') !== json) fail('plc-io-catalog.json is out of date; run the generator')
   console.log('catalog is up to date'); process.exit(0)
 }
-fs.mkdirSync(path.dirname(outFile), { recursive: true })
 fs.writeFileSync(outFile, json)
-console.log(`written ${path.relative(root, outFile)}: ${catalog.plcs.length} PLC, ${catalog.stations.length} stations, ${catalog.template.length} signals/station = ${catalog.stations.length * catalog.template.length} IO points, ${handshake.length} handshake rows, sha256 ${sha256.slice(0, 12)}…`)
+console.log(`written ${path.relative(root, outFile)}: ${plcs.length} PLC, ${stations.length} stations, ${first.length} signals/station = ${stations.length * first.length} station points, ${plcSignals.length} PLC-level rows`)

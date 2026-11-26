@@ -113,6 +113,7 @@ public static class DependencyInjection
         services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.RoutingEventSource>();
         services.AddScoped<WCS.Application.Diagnostics.IDiagnosticEventSource, WCS.Infrastructure.Diagnostics.InventoryTransactionSource>();
         services.AddScoped<WCS.Application.Diagnostics.IDiagnosticHealthSource, WCS.Infrastructure.Diagnostics.DiagnosticHealthSource>();
+        services.AddSingleton(_ => WCS.Infrastructure.Plc.PlcCatalog.Current);   // CR-046: one catalog for the seeder, the signal template and the IO map view
         services.AddSingleton<WCS.Application.Plc.IPlcTemplateProvider, WCS.Infrastructure.Plc.PlcTemplateProvider>();   // CR-010 Default IO Mapping Template
         services.AddSingleton<WCS.Infrastructure.Plc.SimulatedPlcNetwork>();
         services.AddSingleton<WCS.Application.Plc.ISimulatorControl>(sp => sp.GetRequiredService<WCS.Infrastructure.Plc.SimulatedPlcNetwork>());

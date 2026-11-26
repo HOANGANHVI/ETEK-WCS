@@ -97,6 +97,12 @@ Chạy `deploy.ps1`, rồi `status.ps1`; đăng nhập, đổi mật khẩu; ch�
 
 Bản này có các migration chỉ-tiến (gồm CR-041 và CR-042); `deploy.ps1` tự sao lưu rồi áp dụng. Không chạy trên database vận hành khi chưa được phê duyệt.
 
+**Nâng cấp từ bản dùng catalog PLC cũ (CR-046):** địa chỉ đã nhập cho 23 tín hiệu cũ và trạm X6, G3, G7 được giữ trong database nhưng không còn được đọc/ghi. Đọc `docs/change-management/CR-046_IO_MAP_CATALOG_UI_F1_F2_DOCKER.md` mục 1 trước khi nâng cấp.
+
+**Ở bước A:** trang *Giám sát PLC* hiện 96 điểm IO ở trạng thái "chưa thiết lập" cho tới khi Admin nhập địa chỉ; giá trị khi đó là dữ liệu mô phỏng. API bơm giá trị giả vào IO (`/api/plc/simulator/*`) bị khóa trong Production; mô phỏng yêu cầu dùng trang *Mô phỏng PLC*.
+
+**Kiểm tra tự động** (máy kiểm thử có Docker và `jq`, không đụng bản cài đặt khác): `bash tests/deployment/compose-smoke.sh`.
+
 ## 4. Cấu hình `.env`
 
 | Biến | Ý nghĩa | Mặc định |

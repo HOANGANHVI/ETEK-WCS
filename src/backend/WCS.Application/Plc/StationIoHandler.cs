@@ -4,14 +4,15 @@ namespace WCS.Application.Plc;
 
 /// <summary>One IO point as shown to the UI. Address and error text are filled only for Admin snapshots.</summary>
 public sealed record IoPointState(Guid Id, string PlcId, string StationId, int Seq, string Group, string SignalName, string Direction, string DataType,
-    string ConfigStatus, object? Value, string Quality, DateTimeOffset? LastUpdated, string? Address, string? Error);
+    string ConfigStatus, object? Value, string Quality, DateTimeOffset? LastUpdated, string? Address, string? Error,
+    bool HasAddress = true);   // CR-046: false = nothing is configured for the point (the simulator still answers with a placeholder value); the address itself stays Admin only
 
 public sealed record StationSnapshot(string PlcId, string StationId, int Total, int Configured, int Good, IReadOnlyList<IoPointState> Points);
 
 public sealed record PointInfo(IoPointRef Ref, int Seq, IoConfigStatus Status);
 
 /// <summary>
-/// The reusable per-Station IO handler (one instance per Station): holds the current value, quality and timestamp of the 23 points and
+/// The reusable per-Station IO handler (one instance per Station): holds the current value, quality and timestamp of its points and
 /// nothing else. It never touches another station's data; thread-safe because the worker writes while the API reads.
 /// </summary>
 public sealed class StationIoHandler
@@ -84,7 +85,7 @@ public sealed class StationIoHandler
             var all = _order.Select(id => _entries[id]).ToList();
             var points = all.Where(e => only is null || only.Contains(e.Info.Ref.Id)).Select(e => new IoPointState(e.Info.Ref.Id, PlcId, StationId, e.Info.Seq, e.Info.Ref.Group,
                 e.Info.Ref.SignalName, e.Info.Ref.Direction.ToString(), e.Info.Ref.DataType.ToString(), PlcLabels.Status(e.Info.Status), e.Value?.Value, e.Quality.ToString(),
-                e.Updated, admin ? e.Info.Ref.Address : null, admin ? e.Error : null)).ToList();
+                e.Updated, admin ? e.Info.Ref.Address : null, admin ? e.Error : null, e.Info.Ref.Address is not null)).ToList();
             return new StationSnapshot(PlcId, StationId, all.Count, all.Count(e => e.Quality != PointQuality.NotConfigured),
                 all.Count(e => e.Quality is PointQuality.Good or PointQuality.Simulated), points);
         }
