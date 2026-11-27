@@ -13,7 +13,7 @@ import { WriteApprovalDialog } from './plc/writeDialogs'
 import { BLOCKED_SIGNALS } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
 import { IoMapSequence, IoMapSheetTable } from './plc/IoMapSheet'
-import { canRestore, filterSheetRows, plcOptions, readState, sheetRows, stationOptions, writeState } from '../lib/plcIoMap'
+import { canRestore, filterSheetRows, plcOptions, readState, rowBreakdown, sheetRows, stationOptions, writeState } from '../lib/plcIoMap'
 import { AddressOriginPill } from './plc/AddressOriginPill'
 
 const STATUSES = ['NEEDS_CONFIGURATION', 'CONFIGURED', 'APPROVED'] as const
@@ -88,7 +88,7 @@ export function PlcIoMappingPage() {
         <div className="btn-row">
           <Button disabled={!plc} onClick={() => void check()}>{t('plc.checkConflicts', { plc: plc || t('plc.choosePlc') })}</Button>
           <Button onClick={() => { setPlc(''); setStation(''); setStatus(''); setSearch('') }}>{t('plc.clearFilters')}</Button>
-          <span className="muted">{t('plc.showing', { shown: rows.length, total: mapRows.length })}</span>
+          <span className="muted">{t('plc.showingRows', { shown: rows.length, total: mapRows.length, ...rowBreakdown(mapRows) })}</span>
         </div>
         {checkError && <div className="notice notice-bad" role="alert">{checkError}</div>}
         {issues && (issues.length === 0

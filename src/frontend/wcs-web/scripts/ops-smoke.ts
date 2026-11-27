@@ -18,6 +18,7 @@ import {
 } from '../src/lib/opsConsole.ts'
 import { readFileSync } from 'node:fs'
 import { requestRows } from '../src/lib/requestRows.ts'
+import { waitCause } from '../src/lib/waitReason.ts'
 import { blockerAction, blockerLink, orderInMotion, orderIsOpen, type RackBlocker } from '../src/lib/rackBlock.ts'
 import { RequestTable } from '../src/components/RequestTable.tsx'
 import { QueueAlertList } from '../src/components/QueueAlertList.tsx'
@@ -253,6 +254,8 @@ check('no request form writes a process code', ['pages/TaskDialogs.tsx', 'pages/
 check('a task row leads to the RCS monitor and an order row to its legs', renderToStaticMarkup(createElement(MemoryRouter, null, createElement(RequestTable, { rows: requestRows([task({ id: 't-9', requestKey: 'K9' })], []) }))).includes('/operations?task=t-9'))
 i18n.setLang('vi')
 for (const r of results) console.log(r)
+check('QA-001: a held port is not shown as a missing rack', waitCause({ waitKind: 'SourceUnavailable', stateReason: 'PORT_HELD: port A1 is held' }) === 'portHeld'
+  && waitCause({ waitKind: 'SourceUnavailable', stateReason: 'No usable rack at the request location' }) === 'kind' && waitCause({ waitKind: 'AgvBusy', stateReason: 'PORT_HELD: x' }) === 'kind')
 // CR-047: a rack that cannot be removed says who holds it and where to go; nothing is cancelled from the rack screen
 const held = (o: Partial<RackBlocker>): RackBlocker => ({ kind: 'Order', id: 'a b', reference: 'R1', state: 'Waiting', process: 'BP-05', canCancel: true, racksHeld: false, ...o })
 check('next step of a held rack: cancel, finish, release, task', [held({}), held({ canCancel: false }), held({ canCancel: false, racksHeld: true }), held({ kind: 'Task' })].map(blockerAction).join() === 'cancelOrder,finishOrder,releaseRacks,openTask')

@@ -67,6 +67,13 @@ export function addressState(p: Pick<IoPointConfig, 'actualAddress' | 'addressOr
 /** Restoring makes sense when the IO map has an address and the point does not hold it as the default. */
 export const canRestore = (p: Pick<IoPointConfig, 'actualAddress' | 'addressOrigin' | 'defaultAddress'>): boolean => !!p.defaultAddress && addressState(p) !== 'default'
 
+/** QA-003: what the rows of the sheet are: station signals (one IO point each), PLC heartbeat rows and spare rows (no IO point). */
+export function rowBreakdown(rows: Pick<ShownSheetRow, 'stationId' | 'signalName'>[]): { signals: number; heartbeat: number; spare: number } {
+  const signals = rows.filter((r) => r.stationId).length
+  const heartbeat = rows.filter((r) => !r.stationId && r.signalName === 'HeartBit').length
+  return { signals, heartbeat, spare: rows.length - signals - heartbeat }
+}
+
 /** The PLC filter options: the PLCs that actually have rows. */
 export const plcOptions = (rows: Pick<IoPointConfig, 'plcId'>[]): string[] => [...new Set(rows.map((p) => p.plcId))].sort()
 

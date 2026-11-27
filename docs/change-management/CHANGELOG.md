@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-049 QA fixes (2026-11-27) – not merged
+
+- A waiting order names the real cause when its station port is held; the IO address page says what 96 and 120 count. No migration, no rule change.
+
 ## CI of CR-048 and documentation cleanup (2026-11-27) – no version change
 
 - The Compose smoke checks the default IO addresses (CR-048) instead of "no configured address"; green on main `5916d05` (https://github.com/HOANGANHVI/ETEK-WCS/actions/runs/45933643008). No product code change.
