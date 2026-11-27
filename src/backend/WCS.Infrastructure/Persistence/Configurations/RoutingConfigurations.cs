@@ -106,8 +106,9 @@ internal sealed class TransportOrderConfiguration : IEntityTypeConfiguration<Tra
         b.Property(x => x.Version).IsRowVersion();
         b.Ignore(x => x.IsTerminal);
         b.Ignore(x => x.Snapshot);
-        b.HasOne<BusinessProcess>().WithMany().HasForeignKey(x => x.ProcessId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<BusinessProcessVersion>().WithMany().HasForeignKey(x => x.ProcessVersionId).OnDelete(DeleteBehavior.Restrict);
+        // CR-056: no foreign key to the process or its version: an order carries its own copy of the definition (SnapshotJson) and outlives a removed process
+        b.HasIndex(x => x.ProcessId);
+        b.HasIndex(x => x.ProcessVersionId);
         b.HasMany(x => x.Legs).WithOne().HasForeignKey(l => l.OrderId).OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(x => x.RequestKey).IsUnique();   // request idempotency
         b.HasIndex(x => x.State);

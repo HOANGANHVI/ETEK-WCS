@@ -702,6 +702,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<bool>("ReconciliationRequired")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTimeOffset?>("RemovedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("RequiresPlcPermission")
                         .HasColumnType("boolean");
 
@@ -723,7 +726,8 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"RemovedAt\" IS NULL");
 
                     b.HasIndex("ProductModelId");
 
@@ -2788,21 +2792,6 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .WithMany("Legs")
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("WCS.Domain.Routing.TransportOrder", b =>
-                {
-                    b.HasOne("WCS.Domain.Routing.BusinessProcess", null)
-                        .WithMany()
-                        .HasForeignKey("ProcessId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("WCS.Domain.Routing.BusinessProcessVersion", null)
-                        .WithMany()
-                        .HasForeignKey("ProcessVersionId")
-                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

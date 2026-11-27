@@ -144,6 +144,7 @@ public static class Endpoints
         // ---- Location
         var loc = api.MapGroup("/locations").WithTags("Location");
         loc.MapGet("", async (HttpContext c, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.ListLocationsAsync(ct)));
+        loc.MapGet("removed", async (HttpContext c, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.ListRemovedLocationsAsync(ct)));   // CR-057
         loc.MapGet("{code}", async (HttpContext c, string code, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.GetLocationAsync(code, ct)));
 
         // ---- Inventory (owned by WCS). CR-001 (approved 2026-11-06): both roles may read AND use the existing stock operations; every change is audited.
@@ -298,6 +299,11 @@ public static class Endpoints
             ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_LOCATION_CREATE", "Location", r.Code, null,
                 () => s.SaveLocationAsync(new SaveLocationCommand(r.Code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission, r.ProductModelId, r.StationRole), true, ct),
                 res => res), StatusCodes.Status201Created));
+        // CR-057: removal of a location nothing depends on ("removal" says beforehand what stops it)
+        cfg.MapGet("locations/{code}/removal", async (HttpContext c, string code, OperationalConfigService s, CancellationToken ct) => ApiResults.Ok(c, await s.RemovalAsync(code, ct)));
+        cfg.MapDelete("locations/{code}", async (HttpContext c, string code, string? reason, string? confirmCode, OperationalConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_LOCATION_DELETE", "Location", code, null,
+                () => s.DeleteLocationAsync(code, reason, confirmCode, ct), res => new { code = res }, reason)));
         cfg.MapPut("locations/{code}", async (HttpContext c, string code, LocationConfigRequest r, OperationalConfigService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "CONFIG_LOCATION_UPDATE", "Location", code, null,
                 () => s.SaveLocationAsync(new SaveLocationCommand(code, r.Name, r.Type, r.RackCapacity, r.AllowedRackKind, r.Enabled, r.RequiresPlcPermission, r.ProductModelId, r.StationRole), false, ct),

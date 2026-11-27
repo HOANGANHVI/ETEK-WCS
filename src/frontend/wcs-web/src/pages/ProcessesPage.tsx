@@ -70,7 +70,7 @@ export function ProcessesPage() {
         </Async>
       </Panel>
       {selected && <ProcessDetail key={selected} id={selected} onChanged={list.reload}
-        onRemoved={(code, outcome) => { setSelected(null); setError(null); setMessage(t(outcome === 'Deleted' ? 'routing.removedDeleted' : 'routing.removedDisabled', { code })); list.reload() }} />}
+        onRemoved={(code, orders) => { setSelected(null); setError(null); setMessage(t(orders ? 'routing.removedKept' : 'routing.removedDeleted', { code, n: orders })); list.reload() }} />}
       {creating && <NewProcessDialog onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); list.reload(); setSelected(p.id) }} />}
     </>
   )
@@ -118,7 +118,7 @@ function HeaderFields({ body, setBody, triggers, setTriggers, codeEditable }: {
 }
 
 // ====================================================================================================================== one process
-function ProcessDetail({ id, onChanged, onRemoved }: { id: string; onChanged: () => void; onRemoved: (code: string, outcome: 'Deleted' | 'Disabled') => void }) {
+function ProcessDetail({ id, onChanged, onRemoved }: { id: string; onChanged: () => void; onRemoved: (code: string, orders: number) => void }) {
   const t = useT()
   const process = useApi(useCallback(() => api.process(id), [id]))
   const [tab, setTab] = useState<'config' | 'audit'>('config')
@@ -182,23 +182,24 @@ function ProcessDetail({ id, onChanged, onRemoved }: { id: string; onChanged: ()
   )
 }
 
-/** CR-055: removing a process. The server says what is possible; nothing is shown when it cannot be asked (for example an older backend). */
-function RemovalPanel({ p, onRemoved }: { p: Process; onRemoved: (code: string, outcome: 'Deleted' | 'Disabled') => void }) {
+/** CR-055 / CR-056: removing a process. The server says what is possible; nothing is shown when it cannot be asked (for example an older backend). */
+function RemovalPanel({ p, onRemoved }: { p: Process; onRemoved: (code: string, orders: number) => void }) {
   const t = useT()
   const plan = useApi(useCallback(() => api.processRemoval(p.id), [p.id]))
   const [asking, setAsking] = useState(false)
   const d = plan.data
   if (!d) return null
-  const remove = d.action === 'Delete'
-  const text = d.action === 'None' ? describeError(new ApiRequestError(422, { code: d.blockCode ?? '', message: d.blockMessage ?? '' }))
-    : t(remove ? 'routing.removeDeleteBody' : 'routing.removeDisableBody', { code: p.code, n: d.orders })
+  const allowed = d.action === 'Delete'
+  const text = !allowed ? describeError(new ApiRequestError(422, { code: d.blockCode ?? '', message: d.blockMessage ?? '' }))
+    : t(d.orders ? 'routing.removeKeepBody' : 'routing.removeDeleteBody', { code: p.code, n: d.orders })
   return (
     <section className="detail-sec">
       <h3>{t('routing.removeTitle')}</h3>
       <p className="muted">{text}</p>
-      {d.action !== 'None' && <Button variant="danger" onClick={() => setAsking(true)}>{t(remove ? 'routing.removeDelete' : 'routing.removeDisable')}</Button>}
-      {asking && <RemovalDialog title={t(remove ? 'routing.removeDelete' : 'routing.removeDisable')} body={text} confirm={t(remove ? 'routing.removeConfirmDelete' : 'routing.removeConfirmDisable')}
-        onClose={() => setAsking(false)} onConfirm={async (reason) => { const r = await api.processRemove(p.id, reason); setAsking(false); onRemoved(r.code, r.outcome) }} />}
+      {!allowed && d.heldPorts?.length > 0 && <p className="muted">{t('routing.removeHeldPorts', { ports: d.heldPorts.join(', ') })}</p>}
+      {allowed && <Button variant="danger" onClick={() => setAsking(true)}>{t('routing.removeDelete')}</Button>}
+      {asking && <RemovalDialog title={t('routing.removeDelete')} body={text} confirm={t('routing.removeConfirmDelete')} typeToConfirm={p.code}
+        onClose={() => setAsking(false)} onConfirm={async (reason, typed) => { const r = await api.processRemove(p.id, reason, typed); setAsking(false); onRemoved(r.code, r.orders) }} />}
     </section>
   )
 }

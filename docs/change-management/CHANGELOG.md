@@ -1,5 +1,13 @@
 # Change Log
 
+## CR-057 Location removal (2026-11-27) – branch feature/cr-056-delete-process-keep-history, NOT MERGED
+
+- An Admin can remove a location nothing depends on any more; past records keep showing its code and the code can be used again. Migration AddLocationRemovedAt.
+
+## CR-056 Process deletion keeping history (2026-11-27) – branch feature/cr-056-delete-process-keep-history, NOT MERGED
+
+- A process with finished orders can be deleted; orders and history stay. BP-04 is the only protected process. Migration DropOrderProcessForeignKeys (two foreign keys).
+
 ## CR-055 Process removal (2026-11-27) – merged into main (e3a8aae)
 
 - An Admin can delete a process that never had an order, retire one with finished orders and delete an unpublished version; BP-01..06 are protected. Reason and audit required. No migration.

@@ -13,13 +13,15 @@ namespace WCS.Tests.Integration;
 [Collection("Database")]
 public class Cr055ProcessRemovalTests(DatabaseFixture fixture)
 {
+    private readonly Dictionary<Guid, string> codes = [];
     private static Task<T> Admin<T>(RoutingKit kit, Func<ProcessAdminService, Task<T>> call) => kit.With(sp => call(sp.GetRequiredService<ProcessAdminService>()));
     private static VersionDefinition Simple => OneLeg("Request", Dest(1, "B1"));
 
-    private static async Task<(Guid Process, Guid Version)> MakeAsync(RoutingKit kit, string code, bool publish = false)
+    private async Task<(Guid Process, Guid Version)> MakeAsync(RoutingKit kit, string code, bool publish = false)
     {
         var (p, v) = await kit.CreateProcessAsync(code, RequestType.PickupRequest, RackKind.Full, ["A1"], Simple);
         if (publish) await kit.PublishAsync(v);
+        codes[p] = code;
         return (p, v);
     }
 
@@ -43,8 +45,8 @@ public class Cr055ProcessRemovalTests(DatabaseFixture fixture)
         var (process, _) = await MakeAsync(kit, "T-DRAFT");
         var allSteps = await kit.H.Db(d => d.RouteSteps.CountAsync());
         Assert.Equal(ProcessRemovalActions.Delete, (await Admin(kit, s => s.RemovalAsync(process))).Action);
-        Assert.Equal("REASON_REQUIRED", await RefusedAsync(kit, s => s.RemoveAsync(process, " ")));
-        var result = await Admin(kit, s => s.RemoveAsync(process, "no longer used"));
+        Assert.Equal("REASON_REQUIRED", await RefusedAsync(kit, s => s.RemoveAsync(process, " ", codes[process])));
+        var result = await Admin(kit, s => s.RemoveAsync(process, "no longer used", codes[process]));
         Assert.Equal(("T-DRAFT", "Deleted", 1), (result.Code, result.Outcome, result.Versions));
         Assert.Equal((0, 0, 0, 0), await Count(kit, process));
         Assert.Equal(allSteps - 2, await kit.H.Db(d => d.RouteSteps.CountAsync()));          // only its own steps are gone
@@ -58,14 +60,14 @@ public class Cr055ProcessRemovalTests(DatabaseFixture fixture)
         var (process, _) = await MakeAsync(kit, "T-PUB", publish: true);
         var plan = await Admin(kit, s => s.RemovalAsync(process));
         Assert.Equal((ProcessRemovalActions.None, "PROCESS_DISABLE_FIRST"), (plan.Action, plan.BlockCode));
-        Assert.Equal("PROCESS_DISABLE_FIRST", await RefusedAsync(kit, s => s.RemoveAsync(process, "x")));
+        Assert.Equal("PROCESS_DISABLE_FIRST", await RefusedAsync(kit, s => s.RemoveAsync(process, "x", codes[process])));
         await SwitchOffAsync(kit, process);
-        Assert.Equal("Deleted", (await Admin(kit, s => s.RemoveAsync(process, "retired"))).Outcome);
+        Assert.Equal("Deleted", (await Admin(kit, s => s.RemoveAsync(process, "retired", codes[process]))).Outcome);
         Assert.Equal((0, 0, 0, 0), await Count(kit, process));
     }
 
     [Fact]
-    public async Task A_process_with_orders_is_never_deleted_open_work_blocks_and_finished_work_only_switches_it_off()
+    public async Task A_process_with_finished_orders_is_deleted_and_the_orders_with_their_whole_history_stay()
     {
         await using var kit = await RoutingKit.CreateAsync(fixture);
         var (process, _) = await MakeAsync(kit, "T-USED", publish: true);
@@ -73,44 +75,48 @@ public class Cr055ProcessRemovalTests(DatabaseFixture fixture)
         var order = (await kit.StartAsync("R-1", "A1", RequestType.PickupRequest, RackKind.Full)).Order.Id;
         var plan = await Admin(kit, s => s.RemovalAsync(process));
         Assert.Equal((ProcessRemovalActions.None, "PROCESS_HAS_OPEN_ORDERS", 1, 1), (plan.Action, plan.BlockCode, plan.Orders, plan.OpenOrders));
-        Assert.Equal("PROCESS_HAS_OPEN_ORDERS", await RefusedAsync(kit, s => s.RemoveAsync(process, "x")));
+        Assert.Equal("PROCESS_HAS_OPEN_ORDERS", await RefusedAsync(kit, s => s.RemoveAsync(process, "x", "T-USED")));
 
         await kit.TickAsync();
         var leg = (await kit.OrderAsync(order)).Legs.Single();
         await kit.PickAsync(leg.Id); await kit.DropAsync(leg.Id); await kit.TickAsync();
         Assert.Equal(OrderState.Completed, (await kit.OrderAsync(order)).State);
-        var before = await Count(kit, process);
-        Assert.Equal(ProcessRemovalActions.Disable, (await Admin(kit, s => s.RemovalAsync(process))).Action);
-        var result = await Admin(kit, s => s.RemoveAsync(process, "replaced"));
-        Assert.Equal(("Disabled", 1), (result.Outcome, result.Orders));
-        Assert.False((await Admin(kit, s => s.GetAsync(process))).Enabled);
-        Assert.Equal(before, await Count(kit, process));                                      // nothing of the history is gone
-        Assert.Equal(OrderState.Completed, (await kit.OrderAsync(order)).State);
-        Assert.Equal("PROCESS_ALREADY_DISABLED", await RefusedAsync(kit, s => s.RemoveAsync(process, "again")));
-    }
-
-    [Theory]
-    [InlineData("BP-01")]
-    [InlineData("BP-04")]
-    public async Task The_approved_reference_processes_are_not_removed(string code)
-    {
-        await using var kit = await RoutingKit.CreateAsync(fixture);
-        var existing = await kit.H.Db(d => d.BusinessProcesses.Where(p => p.Code == code).Select(p => (Guid?)p.Id).SingleOrDefaultAsync());
-        var process = existing ?? (await MakeAsync(kit, code)).Process;
-        var plan = await Admin(kit, s => s.RemovalAsync(process));
-        Assert.Equal((ProcessRemovalActions.None, "PROCESS_PROTECTED"), (plan.Action, plan.BlockCode));
+        // the order is finished but the AMR has not left: its ports are still held
+        plan = await Admin(kit, s => s.RemovalAsync(process));
+        Assert.Equal("PROCESS_HOLDS_PORT", plan.BlockCode);
+        Assert.Contains("A1", plan.HeldPorts);
+        foreach (var x in (await kit.TransactionsAsync()).Where(x => x.IsActive).ToList())
+            await kit.With(sp => sp.GetRequiredService<StationTransactionService>().ConfirmAgvExitedAsync(x.Id));
+        Assert.Equal("PROCESS_DISABLE_FIRST", (await Admin(kit, s => s.RemovalAsync(process))).BlockCode);
         await SwitchOffAsync(kit, process);
-        Assert.Equal("PROCESS_PROTECTED", await RefusedAsync(kit, s => s.RemoveAsync(process, "x")));
-        Assert.Equal(1, (await Count(kit, process)).Processes);
+
+        Task<(int, int, int, int, int, int)> History() => kit.H.Db(async d => (await d.TransportOrders.CountAsync(), await d.TransportLegs.CountAsync(), await d.RoutingEvents.CountAsync(),
+            await d.StationTransactions.CountAsync(), await d.InventoryTransactions.CountAsync(), await d.Racks.CountAsync()));
+        var before = await History();
+        Assert.Equal((ProcessRemovalActions.Delete, 1), ((await Admin(kit, s => s.RemovalAsync(process))).Action, (await Admin(kit, s => s.RemovalAsync(process))).Orders));
+        Assert.Equal("PROCESS_CODE_CONFIRMATION", await RefusedAsync(kit, s => s.RemoveAsync(process, "x", "T-OTHER")));
+        var result = await Admin(kit, s => s.RemoveAsync(process, "replaced", "t-used"));
+        Assert.Equal(("Deleted", 1, 1), (result.Outcome, result.Orders, result.Versions));
+        Assert.Equal((0, 0, 0, 0), await Count(kit, process));
+        Assert.Equal(before, await History());                                                // nothing of the history is gone
+        var kept = await kit.OrderAsync(order);                                               // and the order still reads on its own
+        Assert.Equal(("T-USED", OrderState.Completed, 1), (kept.ProcessCode, kept.State, kept.Legs.Count));
+        await kit.TickAsync();                                                                // the engine is not disturbed by an order whose process is gone
+        var (again, _) = await MakeAsync(kit, "T-USED", publish: true);                       // the code is free; the old order stays with the old process
+        Assert.Equal(0, (await Admin(kit, s => s.RemovalAsync(again))).Orders);
     }
 
     [Fact]
-    public async Task The_phase_two_reference_processes_are_not_protected()
+    public async Task BP_04_under_review_is_the_only_protected_reference_process()
     {
         await using var kit = await RoutingKit.CreateAsync(fixture);
-        var all = ReferenceProcessCatalog.Load();
-        Assert.Equal(["BP-01", "BP-02", "BP-03", "BP-04", "BP-05", "BP-06"], all.Where(r => r.Protected).Select(r => r.Code).Order(StringComparer.Ordinal));
-        Assert.All(all.Where(r => r.Code.StartsWith("PH2", StringComparison.Ordinal)), r => Assert.False(r.Protected));
+        var existing = await kit.H.Db(d => d.BusinessProcesses.Where(p => p.Code == "BP-04").Select(p => (Guid?)p.Id).SingleOrDefaultAsync());
+        var process = existing ?? (await MakeAsync(kit, "BP-04")).Process;
+        var plan = await Admin(kit, s => s.RemovalAsync(process));
+        Assert.Equal((ProcessRemovalActions.None, "PROCESS_PROTECTED"), (plan.Action, plan.BlockCode));
+        Assert.Equal("PROCESS_PROTECTED", await RefusedAsync(kit, s => s.RemoveAsync(process, "x", "BP-04")));
+        Assert.Equal(1, (await Count(kit, process)).Processes);
+        Assert.Equal(["BP-04"], ReferenceProcessCatalog.Load().Where(r => r.Protected).Select(r => r.Code));
     }
 
     [Fact]

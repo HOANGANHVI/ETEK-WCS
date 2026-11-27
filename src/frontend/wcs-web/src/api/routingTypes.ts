@@ -116,7 +116,7 @@ export interface VersionSummary {
   readiness?: string | null
 }
 /** CR-055: what removing a process would do now (decided by the server). */
-export interface ProcessRemoval { action: 'Delete' | 'Disable' | 'None'; blockCode: string | null; blockMessage: string | null; orders: number; openOrders: number }
+export interface ProcessRemoval { action: 'Delete' | 'None'; blockCode: string | null; blockMessage: string | null; orders: number; openOrders: number; heldPorts: string[] }
 
 export interface Process {
   id: string; code: string; name: string; description: string | null; requestType: string; rackKind: string; triggerLocationCodes: string[]

@@ -1,3 +1,4 @@
+import type { LocationRemoval } from './types'
 import type { ProcessRemoval } from './routingTypes'
 import { DEMO_MODE } from '../config'
 import { demoDataApi } from '../demo/demoApi'
@@ -248,7 +249,7 @@ const realApi = {
   processUpdate: (id: string, b: ProcessHeaderBody) => request<Process>(`/api/processes/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
   // CR-055: what removing would do, the removal itself, and the deletion of an unpublished version
   processRemoval: (id: string) => request<ProcessRemoval>(`/api/processes/${id}/removal`),
-  processRemove: (id: string, reason: string) => request<{ code: string; outcome: 'Deleted' | 'Disabled' }>(`/api/processes/${id}${qs({ reason })}`, { method: 'DELETE' }),
+  processRemove: (id: string, reason: string, confirmCode: string) => request<{ code: string; orders: number }>(`/api/processes/${id}${qs({ reason, confirmCode })}`, { method: 'DELETE' }),
   processVersionDelete: (id: string, reason: string) => request<{ number: number }>(`/api/process-versions/${id}${qs({ reason })}`, { method: 'DELETE' }),
   processNewVersion: (id: string, fromVersionId?: string) => request<ProcessVersion>(`/api/processes/${id}/versions`, { method: 'POST', body: JSON.stringify({ fromVersionId }) }),
   processImportReference: () => request<ImportResult>('/api/processes/import-reference', { method: 'POST' }),
@@ -300,6 +301,10 @@ const realApi = {
   operations: () => request<OperationsView>('/api/config/operations'),
   saveAgv: (id: string, b: { rcsRobotCode: string | null; enabled: boolean }) =>
     request<Agv>(`/api/config/agvs/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  removedLocations: () => request<{ id: string; code: string }[]>('/api/locations/removed'),
+  // CR-057: what stops a location from being deleted, and the deletion itself
+  locationRemoval: (code: string) => request<LocationRemoval>(`/api/config/locations/${encodeURIComponent(code)}/removal`),
+  deleteLocation: (code: string, reason: string, confirmCode: string) => request<{ code: string }>(`/api/config/locations/${encodeURIComponent(code)}${qs({ reason, confirmCode })}`, { method: 'DELETE' }),
   createLocation: (b: SaveLocationBody) => request<Location>('/api/config/locations', { method: 'POST', body: JSON.stringify(b) }),
   saveLocation: (b: SaveLocationBody) => request<Location>(`/api/config/locations/${encodeURIComponent(b.code)}`, { method: 'PUT', body: JSON.stringify(b) }),
 
@@ -364,6 +369,7 @@ export { ApiRequestError }
 const demoApi: typeof realApi = {
   ...realApi,
   ...demoDataApi,
+  removedLocations: () => Promise.resolve([]),   // CR-057: the demo data has no removed location
   login: async (u, p) => { const me = await realApi.login(u, p); setDemoSessionRole(me.role); return me },
   me: async () => { try { const me = await realApi.me(); setDemoSessionRole(me.role); return me } catch (e) { setDemoSessionRole(null); throw e } },
   logout: async () => { try { return await realApi.logout() } finally { setDemoSessionRole(null) } },

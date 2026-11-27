@@ -54,7 +54,13 @@ public interface ILocationRepository
     Task<Location?> GetByCodeAsync(string code, CancellationToken ct = default);
     Task<IReadOnlyList<Location>> ListAsync(CancellationToken ct = default);
     void Add(Location location);
+    // CR-057: a removed location is not listed and not found by code; GetAsync(id) still returns it, for past records
+    Task<LocationUsage> UsageAsync(Location location, CancellationToken ct = default);
+    Task<IReadOnlyList<Location>> ListRemovedAsync(CancellationToken ct = default);
 }
+
+/// <summary>CR-057: what still depends on a location: racks on it, PLC ports linked to it, the processes whose definition names it, and work that is not finished.</summary>
+public sealed record LocationUsage(int Racks, IReadOnlyList<string> Ports, IReadOnlyList<string> Processes, int OpenWork);
 
 public interface IRackRepository
 {

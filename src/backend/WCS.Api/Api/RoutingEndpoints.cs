@@ -172,9 +172,9 @@ public static class RoutingEndpoints
 
         // CR-055: removal. "removal" says beforehand what DELETE would do; both deletes need a reason and are audited
         proc.MapGet("{id:guid}/removal", async (HttpContext c, Guid id, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.RemovalAsync(id, ct)));
-        proc.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? reason, ProcessAdminService s, CancellationToken ct) =>
+        proc.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? reason, string? confirmCode, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_REMOVE", "BusinessProcess", id.ToString(), null,
-                () => s.RemoveAsync(id, reason, ct), x => new { x.Code, x.Outcome, x.Versions, x.Orders }, reason)));
+                () => s.RemoveAsync(id, reason, confirmCode, ct), x => new { x.Code, x.Outcome, x.Versions, x.Orders }, reason)));
 
         var ver = api.MapGroup("/process-versions").WithTags("Processes").RequireAuthorization(admin);
         ver.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? reason, ProcessAdminService s, CancellationToken ct) =>
