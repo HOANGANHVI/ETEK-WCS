@@ -148,8 +148,19 @@ internal sealed class RoutingRepository(WcsDbContext db, WCS.Application.Plc.IPl
     public void Add(StationTransaction tx) => db.StationTransactions.Add(tx);
 
     // ---------------------------------------------------------------- ports
-    public Task<PlcStation?> FindPortByLocationAsync(string locationCode, CancellationToken ct) =>
-        db.PlcStations.FirstOrDefaultAsync(s => s.LocationCode == locationCode && s.Enabled, ct);
+    public async Task<PlcStation?> FindPortByLocationAsync(string locationCode, CancellationToken ct)
+    {
+        foreach (var s in await db.PlcStations.Where(s => s.LocationCode == locationCode && s.Enabled).ToListAsync(ct))
+            if (!await IsRetiredPortAsync(s.Id, ct)) return s;
+        return null;
+    }
+
+    /// <summary>CR-047: a station that has IO rows and none of the IO map in use (e.g. X6 of the earlier map). It is not a port any more: it serves no location.</summary>
+    private async Task<bool> IsRetiredPortAsync(string stationId, CancellationToken ct)
+    {
+        var names = await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == stationId).Select(p => p.SignalName).ToListAsync(ct);
+        return names.Count > 0 && !names.Any(catalog.IsCurrent);
+    }
 
     public Task<PlcStation?> GetPortAsync(string portId, CancellationToken ct) => db.PlcStations.FirstOrDefaultAsync(s => s.Id == portId, ct);
 
@@ -160,8 +171,13 @@ internal sealed class RoutingRepository(WcsDbContext db, WCS.Application.Plc.IPl
         return statuses.Count > 0 && statuses.All(s => s == IoConfigStatus.Approved);
     }
 
-    public async Task<IReadOnlyList<PlcStation>> ListLinkedPortsAsync(CancellationToken ct) =>
-        await db.PlcStations.AsNoTracking().Where(s => s.Enabled && s.LocationCode != null).OrderBy(s => s.PlcId).ThenBy(s => s.Order).ToListAsync(ct);
+    public async Task<IReadOnlyList<PlcStation>> ListLinkedPortsAsync(CancellationToken ct)
+    {
+        var linked = new List<PlcStation>();
+        foreach (var s in await db.PlcStations.AsNoTracking().Where(s => s.Enabled && s.LocationCode != null).OrderBy(s => s.PlcId).ThenBy(s => s.Order).ToListAsync(ct))
+            if (!await IsRetiredPortAsync(s.Id, ct)) linked.Add(s);
+        return linked;
+    }
 
     public async Task<IReadOnlyList<StationIoPoint>> ListPlcInputPointsAsync(string stationId, CancellationToken ct) =>
         (await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == stationId && p.Direction == PlcSignalDirection.PlcToSoftware).OrderBy(p => p.Seq).ToListAsync(ct))

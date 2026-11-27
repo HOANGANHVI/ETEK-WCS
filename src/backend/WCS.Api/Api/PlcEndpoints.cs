@@ -110,14 +110,13 @@ public static partial class PlcEndpoints
         // CR-046: what the IO map in use says (source, PLC-level rows, stations the database still has from an earlier map). Read only; nothing here is a configured address.
         plc.MapGet("io-map", async (HttpContext c, PlcConfigService s, WCS.Infrastructure.Plc.PlcCatalog cat, CancellationToken ct) =>
         {
-            var retired = (await s.ListPointsAsync(null, null, true, ct, includeRetired: true)).GroupBy(p => (p.PlcId, p.StationId)).Where(g => g.All(p => p.InIoMap == false))
-                .Select(g => new { g.Key.PlcId, g.Key.StationId, points = g.Count(), withAddress = g.Count(p => p.ActualAddress is not null) }).OrderBy(x => x.PlcId).ThenBy(x => x.StationId).ToList();
+            // addresses an Admin entered for rows of an earlier map: they still occupy the address, so they can be found and cleared. Nothing else of an earlier map is reported.
+            var leftover = (await s.ListPointsAsync(null, null, true, ct, includeRetired: true)).Count(p => p.InIoMap == false && p.ActualAddress is not null);
             return ApiResults.Ok(c, new
             {
                 sourceFile = Path.GetFileName(cat.Source.File), sourceSha256 = cat.Source.Sha256, confirmed = false,
                 plcs = cat.Plcs.Select(p => new { p.PlcId, p.DocumentLabel, p.IpAddress, p.Stations }),
-                plcSignals = cat.PlcSignals.Select(x => new { x.PlcId, x.SignalName, x.Direction, x.DataType, x.Address, x.Values, x.Meaning, x.Spare }),
-                stationsNotInMap = retired,
+                sheet = cat.Sheet, sequence = cat.Sequence, leftoverAddresses = leftover,
             });
         }).RequireAuthorization(admin);
         plc.MapPut("points/{id:guid}/address", async (HttpContext c, Guid id, SetPointAddressRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>

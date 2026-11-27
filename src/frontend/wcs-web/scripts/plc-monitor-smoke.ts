@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import type { MonitorPoint } from '../src/api/plcTypes.ts'
 import { filterPoints, readReadiness, rowWrite, sortPoints } from '../src/lib/plcMonitor.ts'
-import { addressedCounts, plcOptions, readState, shownValue, stationOptions, writeState } from '../src/lib/plcIoMap.ts'
+import { addressedCounts, filterSheetRows, mergeSpans, plcOptions, readState, sheetRows, shownValue, stationOptions, writeState } from '../src/lib/plcIoMap.ts'
 
 const results: string[] = []
 const check = (name: string, ok: boolean, info = '') => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !info ? '' : ' — ' + info}`); if (!ok) process.exitCode = 1 }
@@ -75,6 +75,18 @@ check('read state needs a configured, valid address (an IO map address alone rea
 check('monitor: no write action for an unconfirmed signal on a real PLC; the simulator keeps it', rowWrite(true, writable, 'Connected', row({ confirmed: false })).kind === 'notConfirmed' && rowWrite(true, { ...writable, effectiveMode: 'Simulator' }, 'Connected', row({ confirmed: false })).kind === 'action')
 check('a point without an address never shows a placeholder as a device value; a configured zero and a set simulator value are shown', [shownValue({ hasAddress: false, value: 0 }), shownValue({ hasAddress: false, value: false }), shownValue({ hasAddress: false, value: '' })].every((v) => v === null) && shownValue({ hasAddress: true, value: 0 }) === 0 && shownValue({ hasAddress: false, value: 5 }) === 5 && shownValue({ value: false }) === false)
 check('station counts ignore points without an address', JSON.stringify(addressedCounts([{ hasAddress: true, quality: 'Simulated' }, { hasAddress: false, quality: 'Simulated' }, { hasAddress: true, quality: 'Bad' }])) === '{"configured":2,"good":1}')
+// CR-047: the IO map table is the workbook sheet - checked on the catalog the product ships
+const catalog = JSON.parse(fs.readFileSync('../../backend/WCS.Infrastructure/Plc/Catalog/plc-io-catalog.json', 'utf8'))
+const shown = sheetRows({ plcs: catalog.plcs, sheet: catalog.sheet })
+check('the sheet keeps its 11 columns and 120 rows in workbook order', catalog.sheet.columns.length === 11 && shown.length === 120 && shown.every((r, i) => i === 0 || r.row > shown[i - 1].row))
+check('every row belongs to a PLC; 96 rows are station signals, 24 are PLC rows without a station', shown.every((r) => r.plcId) && shown.filter((r) => r.stationId).length === 96 && shown.filter((r) => !r.stationId).length === 24)
+const spans = mergeSpans(shown)
+check('merged cells span as in the workbook: PLC over 30 rows, station over 6, the shared register over 2', spans[0][0] === 30 && spans[0][1] === 6 && spans[3][7] === 2 && spans[4][7] === 0 && shown[3].signalName === 'AGV_RequestTranfer' && shown[4].signalName === 'AGV_TranferCompleted')
+const x4 = filterSheetRows(shown, { plc: 'PLC-03', station: 'X4', text: '' })
+check('a station filter shows its 6 rows and keeps the shared register merged', x4.length === 6 && mergeSpans(x4)[3][7] === 2 && mergeSpans(x4)[0][1] === 6)
+const one = filterSheetRows(shown, { plc: '', station: '', text: 'AGV_TranferCompleted' })
+check('a search that cuts a merged range never leaves a hole', one.length === 16 && mergeSpans(one).every((row) => row[3] === 1 && row[7] === 1))
+
 const mappingSrc = fs.readFileSync('src/pages/PlcIoMappingPage.tsx', 'utf8')
 check('IO mapping hard-codes no station or PLC list', !/'(X[0-9]|G[0-9]|E[0-9]|PLC-0[0-9])'/.test(mappingSrc))
 

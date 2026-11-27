@@ -45,20 +45,25 @@ const files = readZip(bytes)
 const text = (n) => files.get(n)?.toString('utf8') ?? ''
 const shared = [...text('xl/sharedStrings.xml').matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => dec([...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join('')))
 const rels = text('xl/_rels/workbook.xml.rels')
-const sheet = [...text('xl/workbook.xml').matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"[^>]*?\/>/g)].find((m) => dec(m[1]) === 'IO Matrix') ?? fail('sheet "IO Matrix" is missing')
-const target = rels.match(new RegExp(`<Relationship\\b[^>]*?Id="${sheet[2]}"[^>]*?Target="([^"]*)"`))?.[1] ?? rels.match(new RegExp(`<Relationship\\b[^>]*?Target="([^"]*)"[^>]*?Id="${sheet[2]}"`))[1]
-const xml = text(target.startsWith('/') ? target.slice(1) : 'xl/' + target)
-
-const cells = new Map()   // "A3" -> text
-for (const c of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-  const ref = c[1].match(/r="([A-Z]+\d+)"/)?.[1]; if (!ref) continue
-  const type = c[1].match(/t="([^"]*)"/)?.[1]; const body = c[2] ?? ''
-  let v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1]
-  if (type === 's' && v !== undefined) v = shared[+v]
-  else if (type === 'inlineStr') v = dec([...body.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join(''))
-  else if (v !== undefined) v = dec(v)
-  if (v !== undefined && String(v).trim() !== '') cells.set(ref, String(v).trim().normalize("NFC"))
+const sheetsInBook = [...text('xl/workbook.xml').matchAll(/<sheet\b[^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"[^>]*?\/>/g)].map((m) => ({ name: dec(m[1]), rid: m[2] }))
+if (sheetsInBook.map((s) => s.name.normalize('NFC')).join('|') !== ['IO Matrix', 'Trang_tính1'].join('|').normalize('NFC')) fail('unexpected sheets: ' + sheetsInBook.map((s) => s.name).join(', '))
+function readSheet({ rid }) {
+  const target = rels.match(new RegExp(`<Relationship\\b[^>]*?Id="${rid}"[^>]*?Target="([^"]*)"`))?.[1] ?? rels.match(new RegExp(`<Relationship\\b[^>]*?Target="([^"]*)"[^>]*?Id="${rid}"`))[1]
+  const part = target.startsWith('/') ? target.slice(1) : 'xl/' + target
+  const xml = text(part)
+  const cells = new Map()   // "A3" -> text
+  for (const c of xml.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    const ref = c[1].match(/r="([A-Z]+\d+)"/)?.[1]; if (!ref) continue
+    const type = c[1].match(/t="([^"]*)"/)?.[1]; const body = c[2] ?? ''
+    let v = body.match(/<v>([\s\S]*?)<\/v>/)?.[1]
+    if (type === 's' && v !== undefined) v = shared[+v]
+    else if (type === 'inlineStr') v = dec([...body.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join(''))
+    else if (v !== undefined) v = dec(v)
+    if (v !== undefined && String(v).trim() !== '') cells.set(ref, String(v).trim().normalize('NFC'))
+  }
+  return { xml, cells, part }
 }
+const { xml, cells } = readSheet(sheetsInBook[0])
 // merged cells: every cell of a range reads the value of its first cell; the range is remembered (a merged address = one register shared by those rows)
 const merged = new Map()
 for (const m of xml.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g)) {
@@ -72,6 +77,26 @@ const header = ['PLC', 'Station', 'Nhóm', 'Tên tín hiệu', 'Chiều tín hi�
 header.forEach((h, i) => { if ((at('ABCDE'[i], 2) ?? '') !== h) fail(`unexpected header in column ${'ABCDE'[i]}: ${at('ABCDE'[i], 2)}`) })
 const directionOf = (t) => t === 'PLC → Software' ? 'PlcToSoftware' : t === 'Phần mềm → PLC' ? 'SoftwareToPlc' : fail('unknown direction ' + t)
 const typeOf = (t) => ({ BOOL: 'Bool', INT: 'Int' })[t] ?? fail('unknown data type ' + t)
+
+// ---- the sheet as it is: every row with every column, in workbook order. A merged cell is carried once with the rows it spans.
+const COLUMNS = [...'ABCDEFGHIJK']
+const columns = COLUMNS.map((c) => at(c, 2) ?? fail('missing header ' + c))
+const ioRows = []
+for (let r = 3; r <= 200; r++) {
+  if (!COLUMNS.some((c) => at(c, r) !== undefined)) continue
+  ioRows.push({ row: r, cells: COLUMNS.map((c) => at(c, r) ?? ''), merged: Object.fromEntries(COLUMNS.map((c) => [c, merged.get(`${c}${r}`)]).filter(([, m]) => m && m.to > m.from).map(([c, m]) => [c, m.first])) })
+}
+// the second sheet (the sequence): its cells and the direction of each arrow of its drawing (an arrow flipped horizontally points from the PLC to the AGV side)
+const seq = readSheet(sheetsInBook[1])
+const arrows = new Map()
+for (const a of text('xl/drawings/drawing1.xml').matchAll(/<xdr:twoCellAnchor[\s\S]*?<\/xdr:twoCellAnchor>/g)) {
+  const row = +a[0].match(/<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/)[1] + 1
+  if (a[0].includes('<xdr:cxnSp')) arrows.set(row, /flipH="1"/.test(a[0]) ? 'toAgv' : 'toPlc')
+}
+const seqColumns = [...'BCDEFGHIJK']
+const sequenceRows = [...new Set([...seq.cells.keys()].map((k) => +k.replace(/^[A-Z]+/, '')))].sort((a, b) => a - b)
+  .map((r) => ({ row: r, cells: Object.fromEntries(seqColumns.map((c) => [c, seq.cells.get(`${c}${r}`)]).filter(([, v]) => v)), arrow: arrows.get(r) ?? null }))
+if (arrows.size !== 6) fail('expected 6 arrows in the sequence sheet, got ' + arrows.size)
 
 const plcs = [], rows = [], plcSignals = []
 for (let r = 3; r <= 200; r++) {
@@ -121,6 +146,8 @@ const catalog = {
   template: first.map((x, i) => ({ seq: i + 1, group: 'Command', signalName: x.signalName, direction: x.direction, dataType: x.dataType, templateAddressReference: '',
     description: `${x.meaning} (${x.values})`, values: x.values, sharedRegisterWith: sharedWith(x) })),
   plcSignals,
+  sheet: { name: sheetsInBook[0].name, title: at('A', 1) ?? '', columns, rows: ioRows },
+  sequence: { name: sheetsInBook[1].name.normalize('NFC'), rows: sequenceRows },
   handshake: [],
 }
 const json = JSON.stringify(catalog, null, 2) + '\n'

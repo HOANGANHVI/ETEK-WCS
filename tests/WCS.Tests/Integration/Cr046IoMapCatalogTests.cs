@@ -123,8 +123,8 @@ public class Cr046IoMapCatalogTests(DatabaseFixture fixture)
         var map = await Data(admin, "/api/plc/io-map");
         Assert.Equal("AGV_PLC Interface_List_22_11_2026.xlsx", S(map, "sourceFile"));
         Assert.False(map.GetProperty("confirmed").GetBoolean());
-        Assert.Equal(24, map.GetProperty("plcSignals").GetArrayLength());
-        Assert.Empty(map.GetProperty("stationsNotInMap").EnumerateArray());
+        Assert.Equal(120, map.GetProperty("sheet").GetProperty("rows").GetArrayLength());
+        Assert.Equal(0, map.GetProperty("leftoverAddresses").GetInt32());
 
         // an address may be entered; approving a write stays refused
         var id = S(x4, "id");
@@ -156,8 +156,23 @@ public class Cr046IoMapCatalogTests(DatabaseFixture fixture)
         Assert.Equal(16, stations.Count);
         Assert.DoesNotContain("X6", stations);
         Assert.Contains("X4", stations);
-        var retired = (await Data(admin, "/api/plc/io-map")).GetProperty("stationsNotInMap").EnumerateArray().Select(s => S(s, "stationId")).ToList();
-        Assert.Equal(["X6", "G3", "G7"], retired);
+        // nothing of the earlier map is reported, except how many addresses are still entered on it
+        var map = await Data(admin, "/api/plc/io-map");
+        Assert.Equal(2, map.GetProperty("leftoverAddresses").GetInt32());
+        var raw = map.GetRawText();
+        foreach (var gone in new[] { "Pickup_Request", "Request_Ack", "X6\"", "G3\"", "G7\"" }) Assert.DoesNotContain(gone, raw);
+
+        // CR-047: a location still linked to a station of the earlier map: that station is no port any more, and the location can be given to the station of the map
+        await h.SeedStandardAsync();
+        await h.Db(async db => { (await db.PlcStations.SingleAsync(s => s.Id == "X6")).Update("A2", true, DateTimeOffset.UtcNow); await db.SaveChangesAsync(); return 0; });
+        using (var scope = f.Services.CreateScope())
+        {
+            var routing = scope.ServiceProvider.GetRequiredService<WCS.Application.Routing.IRoutingRepository>();
+            Assert.Null(await routing.FindPortByLocationAsync("A2"));
+            Assert.DoesNotContain(await routing.ListLinkedPortsAsync(), s => s.Id == "X6");
+            await scope.ServiceProvider.GetRequiredService<PlcProvisioningService>().SetPortLinkAsync("X4", "A2", true);
+        }
+        Assert.Equal(["X4:A2"], await h.Db(db => db.PlcStations.Where(s => s.LocationCode == "A2").Select(s => s.Id + ":" + s.LocationCode).ToListAsync()));
 
         await f.Services.GetRequiredService<IPlcRuntime>().StartAsync();
         var rt = f.Services.GetRequiredService<IPlcRuntime>();

@@ -37,7 +37,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
     PlcSimulationState state, PlcSimulatedInputs inputs, WCS.Application.Plc.IStationEngineRouter engines, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock, IPlcLinkStatus? link = null)
 {
     public const string Banner = "PLC SIMULATION";
-    public const string MappingSource = "TEST CONFIGURATION: logical test inputs (Pickup_Request / Delivery_Request / Request_ID / Rack_Full / Rack_Empty, PlcLocationCodes 1-4) held in memory. They are not part of the IO Map of 22/11/2026, whose request rules are not confirmed by the PLC engineer; no PLC address is read or written.";
+    public const string MappingSource = "IO Map of 22/11/2026 (not confirmed by the PLC engineer). Setting a signal starts nothing: how these signals become a request is not approved. A request is simulated by choosing a flow and a location; no PLC address is read or written.";
 
     public SimulationStatusDto Status()
     {
@@ -78,11 +78,6 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
                 return new SimSignalDto(p.SignalName, p.DataType.ToString(), p.Description, v?.Value, v?.At, PlcRequestAssembler.IntakeSignals.Contains(p.SignalName),
                     string.IsNullOrWhiteSpace(p.ActualAddress) ? null : p.ActualAddress);
             }).ToList();
-            signals.AddRange(PlcSimulationTestSignals.All.Where(x => signals.All(s => s.Signal != x.Signal)).Select(x =>
-            {
-                var v = inputs.Get(port.Id, x.Signal);
-                return new SimSignalDto(x.Signal, x.Type.ToString(), "", v?.Value, v?.At, true, null, TestOnly: true);
-            }));
             var active = await routing.GetActiveTransactionForPortAsync(port.Id, t);
             list.Add(new(port.Id, port.PlcId, port.LocationCode!, link?.IsOnline(port.PlcId), await routing.IsPortMappingApprovedAsync(port.Id, t), active?.ToDto(), signals, engines.EngineFor(port.Id).ToString()));
         }
@@ -96,10 +91,9 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
         await uow.ExecuteAsync(async t =>
         {
             var port = await SimulatablePortAsync(stationId, t);
-            var point = (await routing.ListPlcInputPointsAsync(port.Id, t)).FirstOrDefault(p => p.SignalName == signal);
-            var test = PlcSimulationTestSignals.All.FirstOrDefault(x => x.Signal == signal);
-            if (point is null && test.Signal is null) throw AppException.Rejected("SIGNAL_NOT_A_PLC_INPUT", $"{signal} is not a PLC to WCS signal of station {port.Id}; only those can be simulated.");
-            inputs.Set(port.Id, point?.SignalName ?? test.Signal!, Normalize(point?.DataType ?? test.Type, value), clock.UtcNow);
+            var point = (await routing.ListPlcInputPointsAsync(port.Id, t)).FirstOrDefault(p => p.SignalName == signal)
+                        ?? throw AppException.Rejected("SIGNAL_NOT_A_PLC_INPUT", $"{signal} is not a PLC to WCS signal of station {port.Id}; only those can be simulated.");
+            inputs.Set(port.Id, point.SignalName, Normalize(point.DataType, value), clock.UtcNow);
             return 0;
         }, ct);
         return (await ListStationsAsync(ct)).First(s => s.StationId == stationId);

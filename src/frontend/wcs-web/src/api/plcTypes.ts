@@ -108,8 +108,11 @@ export interface IoPointConfig {
 export interface IoMapInfo {
   sourceFile: string; sourceSha256: string; confirmed: boolean
   plcs: { plcId: string; documentLabel: string | null; ipAddress: string; stations: string[] }[]
-  plcSignals: { plcId: string; signalName: string; direction: string | null; dataType: string; address: string; values: string; meaning: string; spare: boolean }[]
-  stationsNotInMap: { plcId: string; stationId: string; points: number; withAddress: number }[]
+  /** The IO Matrix sheet as written: columns A..K, one entry per row, merged = column letter -> first cell of its merged range. */
+  sheet: { name: string; title: string; columns: string[]; rows: { row: number; cells: string[]; merged: Record<string, string> }[] } | null
+  sequence: { name: string; rows: { row: number; cells: Record<string, string>; arrow: 'toPlc' | 'toAgv' | null }[] } | null
+  /** Addresses still entered on rows of an earlier map (they occupy the address and can only be cleared). */
+  leftoverAddresses: number
 }
 
 /** Bulk READ approval of a commissioning PLC (Admin). Outcome: ELIGIBLE (preview only) | APPROVED | ALREADY_APPROVED | NOT_ELIGIBLE | FAILED. */

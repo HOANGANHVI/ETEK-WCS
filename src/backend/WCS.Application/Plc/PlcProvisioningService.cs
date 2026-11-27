@@ -87,8 +87,13 @@ public sealed partial class PlcProvisioningService(IPlcConfigRepository repo, IL
         if (code is not null)
         {
             if (await locations.GetByCodeAsync(code, t) is null) throw AppException.NotFound("LOCATION_NOT_FOUND", $"Location {code} not found.");
-            var other = (await repo.ListStationsAsync(t)).FirstOrDefault(s => s.Id != stationId && s.LocationCode == code);
-            if (other is not null) throw AppException.Conflict("LOCATION_ALREADY_LINKED", $"Location {code} is already linked to port {other.Id}.");
+            foreach (var other in (await repo.ListStationsAsync(t)).Where(s => s.Id != stationId && s.LocationCode == code).ToList())
+            {
+                var rows = await repo.ListPointsAsync(other.PlcId, other.Id, t);
+                // CR-047: a station of an earlier IO map is not shown any more, so its link could never be removed by hand: linking the location to a station of the map releases it
+                if (rows.Count == 0 || rows.Any(p => template.IsCurrent(p.SignalName))) throw AppException.Conflict("LOCATION_ALREADY_LINKED", $"Location {code} is already linked to port {other.Id}.");
+                other.Update(null, other.Enabled, clock.UtcNow);
+            }
         }
         st.Update(code, enabled, clock.UtcNow);
         var mine = (await repo.ListPointsAsync(st.PlcId, st.Id, t)).Where(p => template.IsCurrent(p.SignalName)).ToList();

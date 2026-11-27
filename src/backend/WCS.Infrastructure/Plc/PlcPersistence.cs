@@ -164,6 +164,9 @@ public sealed class PlcCatalog
     internal static void UseForTests(PlcCatalog? catalog) => _testOverride = catalog;
 
     public List<CatalogPlcSignal> PlcSignals { get; set; } = [];
+    /// <summary>CR-047: the IO Matrix sheet as it is (every column and row, merged cells) and the sequence sheet, for display. Null in a catalog without them.</summary>
+    public CatalogSheet? Sheet { get; set; }
+    public CatalogSequence? Sequence { get; set; }
 
     public static PlcCatalog LoadEmbedded()
     {
@@ -182,6 +185,11 @@ public sealed class CatalogStation
     /// <summary>Signal name -> address written in the IO map for THIS station. A reference only: never a configured address.</summary>
     public Dictionary<string, string> Addresses { get; set; } = [];
 }
+public sealed class CatalogSheet { public string Name { get; set; } = ""; public string Title { get; set; } = ""; public List<string> Columns { get; set; } = []; public List<CatalogSheetRow> Rows { get; set; } = []; }
+/// <summary><see cref="Cells"/>: the eleven columns A..K as written (a merged cell repeats its value). <see cref="Merged"/>: column letter -> first cell of the merged range the row belongs to.</summary>
+public sealed class CatalogSheetRow { public int Row { get; set; } public List<string> Cells { get; set; } = []; public Dictionary<string, string> Merged { get; set; } = []; }
+public sealed class CatalogSequence { public string Name { get; set; } = ""; public List<CatalogSequenceRow> Rows { get; set; } = []; }
+public sealed class CatalogSequenceRow { public int Row { get; set; } public Dictionary<string, string> Cells { get; set; } = []; public string? Arrow { get; set; } }
 /// <summary>A row of the IO map that belongs to a PLC, not to a station (heartbeat, spare). Shown for reference; not implemented.</summary>
 public sealed class CatalogPlcSignal
 {

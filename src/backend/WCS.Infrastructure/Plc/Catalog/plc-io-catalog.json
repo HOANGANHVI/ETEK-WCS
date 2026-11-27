@@ -576,5 +576,2520 @@
       "spare": true
     }
   ],
+  "sheet": {
+    "name": "IO Matrix",
+    "title": "AGV – PLC Interface",
+    "columns": [
+      "PLC",
+      "Station",
+      "Nhóm",
+      "Tên tín hiệu",
+      "Chiều tín hiệu",
+      "Nguồn",
+      "Đích",
+      "Địa chỉ",
+      "Kiểu dữ liệu",
+      "Nội dung",
+      "Ý nghĩa"
+    ],
+    "rows": [
+      {
+        "row": 3,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A1",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1500",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B3"
+        }
+      },
+      {
+        "row": 4,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A1",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1501",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B3"
+        }
+      },
+      {
+        "row": 5,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A1",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1502",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B3"
+        }
+      },
+      {
+        "row": 6,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A1",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B3",
+          "H": "H6"
+        }
+      },
+      {
+        "row": 7,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A1",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B3",
+          "H": "H6"
+        }
+      },
+      {
+        "row": 8,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A1",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1601",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B3"
+        }
+      },
+      {
+        "row": 9,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A2",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1510",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B9"
+        }
+      },
+      {
+        "row": 10,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A2",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1511",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B9"
+        }
+      },
+      {
+        "row": 11,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A2",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1512",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B9"
+        }
+      },
+      {
+        "row": 12,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A2",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B9",
+          "H": "H12"
+        }
+      },
+      {
+        "row": 13,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A2",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B9",
+          "H": "H12"
+        }
+      },
+      {
+        "row": 14,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A2",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1611",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B9"
+        }
+      },
+      {
+        "row": 15,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A3",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1520",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B15"
+        }
+      },
+      {
+        "row": 16,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A3",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1521",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B15"
+        }
+      },
+      {
+        "row": 17,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A3",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1522",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B15"
+        }
+      },
+      {
+        "row": 18,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A3",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B15",
+          "H": "H18"
+        }
+      },
+      {
+        "row": 19,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A3",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B15",
+          "H": "H18"
+        }
+      },
+      {
+        "row": 20,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A3",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1621",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B15"
+        }
+      },
+      {
+        "row": 21,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A4",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1530",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B21"
+        }
+      },
+      {
+        "row": 22,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A4",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1531",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B21"
+        }
+      },
+      {
+        "row": 23,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A4",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1532",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B21"
+        }
+      },
+      {
+        "row": 24,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A4",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B21",
+          "H": "H24"
+        }
+      },
+      {
+        "row": 25,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A4",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B21",
+          "H": "H24"
+        }
+      },
+      {
+        "row": 26,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "A4",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1631",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B21"
+        }
+      },
+      {
+        "row": 27,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "dùng chung cho PLC 1",
+          "Status",
+          "HeartBit",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "M9200",
+          "BOOL",
+          "on/off chu kì 1s",
+          "Heart bit từ phần mềm xác nhận đã kết nối,timeout 10s"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B27"
+        }
+      },
+      {
+        "row": 28,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "dùng chung cho PLC 1",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9201",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B27"
+        }
+      },
+      {
+        "row": 29,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "dùng chung cho PLC 1",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9202",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B27"
+        }
+      },
+      {
+        "row": 30,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "dùng chung cho PLC 1",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9203",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B27"
+        }
+      },
+      {
+        "row": 31,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "dùng chung cho PLC 1",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9204",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B27"
+        }
+      },
+      {
+        "row": 32,
+        "cells": [
+          "A1\r\n192.168.10.101",
+          "dùng chung cho PLC 1",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9205",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A3",
+          "B": "B27"
+        }
+      },
+      {
+        "row": 33,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B1",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1500",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B33"
+        }
+      },
+      {
+        "row": 34,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B1",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1501",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B33"
+        }
+      },
+      {
+        "row": 35,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B1",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1502",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B33"
+        }
+      },
+      {
+        "row": 36,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B1",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B33",
+          "H": "H36"
+        }
+      },
+      {
+        "row": 37,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B1",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B33",
+          "H": "H36"
+        }
+      },
+      {
+        "row": 38,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B1",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1601",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B33"
+        }
+      },
+      {
+        "row": 39,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B2",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1510",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B39"
+        }
+      },
+      {
+        "row": 40,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B2",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1511",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B39"
+        }
+      },
+      {
+        "row": 41,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B2",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1512",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B39"
+        }
+      },
+      {
+        "row": 42,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B2",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B39",
+          "H": "H42"
+        }
+      },
+      {
+        "row": 43,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B2",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B39",
+          "H": "H42"
+        }
+      },
+      {
+        "row": 44,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "B2",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1611",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B39"
+        }
+      },
+      {
+        "row": 45,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D1",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1520",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B45"
+        }
+      },
+      {
+        "row": 46,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D1",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1521",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B45"
+        }
+      },
+      {
+        "row": 47,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D1",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1522",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B45"
+        }
+      },
+      {
+        "row": 48,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D1",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B45",
+          "H": "H48"
+        }
+      },
+      {
+        "row": 49,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D1",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B45",
+          "H": "H48"
+        }
+      },
+      {
+        "row": 50,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D1",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1621",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B45"
+        }
+      },
+      {
+        "row": 51,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D2",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1530",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B51"
+        }
+      },
+      {
+        "row": 52,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D2",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1531",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B51"
+        }
+      },
+      {
+        "row": 53,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D2",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1532",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B51"
+        }
+      },
+      {
+        "row": 54,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D2",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B51",
+          "H": "H54"
+        }
+      },
+      {
+        "row": 55,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D2",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B51",
+          "H": "H54"
+        }
+      },
+      {
+        "row": 56,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "D2",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1631",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B51"
+        }
+      },
+      {
+        "row": 57,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "dùng chung cho PLC 2",
+          "Status",
+          "HeartBit",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "M9200",
+          "BOOL",
+          "on/off chu kì 1s",
+          "Heart bit từ phần mềm xác nhận đã kết nối,timeout 10s"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B57"
+        }
+      },
+      {
+        "row": 58,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "dùng chung cho PLC 2",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9201",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B57"
+        }
+      },
+      {
+        "row": 59,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "dùng chung cho PLC 2",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9202",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B57"
+        }
+      },
+      {
+        "row": 60,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "dùng chung cho PLC 2",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9203",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B57"
+        }
+      },
+      {
+        "row": 61,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "dùng chung cho PLC 2",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9204",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B57"
+        }
+      },
+      {
+        "row": 62,
+        "cells": [
+          "BCD\r\n192.168.10.111",
+          "dùng chung cho PLC 2",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9205",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A33",
+          "B": "B57"
+        }
+      },
+      {
+        "row": 63,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X1",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1500",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B63"
+        }
+      },
+      {
+        "row": 64,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X1",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1501",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B63"
+        }
+      },
+      {
+        "row": 65,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X1",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1502",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B63"
+        }
+      },
+      {
+        "row": 66,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X1",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B63",
+          "H": "H66"
+        }
+      },
+      {
+        "row": 67,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X1",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B63",
+          "H": "H66"
+        }
+      },
+      {
+        "row": 68,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X1",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1601",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B63"
+        }
+      },
+      {
+        "row": 69,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X2",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1510",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B69"
+        }
+      },
+      {
+        "row": 70,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X2",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1511",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B69"
+        }
+      },
+      {
+        "row": 71,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X2",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1512",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B69"
+        }
+      },
+      {
+        "row": 72,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X2",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B69",
+          "H": "H72"
+        }
+      },
+      {
+        "row": 73,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X2",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B69",
+          "H": "H72"
+        }
+      },
+      {
+        "row": 74,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X2",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1611",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B69"
+        }
+      },
+      {
+        "row": 75,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X3",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1520",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B75"
+        }
+      },
+      {
+        "row": 76,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X3",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1521",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B75"
+        }
+      },
+      {
+        "row": 77,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X3",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1522",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B75"
+        }
+      },
+      {
+        "row": 78,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X3",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B75",
+          "H": "H78"
+        }
+      },
+      {
+        "row": 79,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X3",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B75",
+          "H": "H78"
+        }
+      },
+      {
+        "row": 80,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X3",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1621",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B75"
+        }
+      },
+      {
+        "row": 81,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X4",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1530",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B81"
+        }
+      },
+      {
+        "row": 82,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X4",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1531",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B81"
+        }
+      },
+      {
+        "row": 83,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X4",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1532",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B81"
+        }
+      },
+      {
+        "row": 84,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X4",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B81",
+          "H": "H84"
+        }
+      },
+      {
+        "row": 85,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X4",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B81",
+          "H": "H84"
+        }
+      },
+      {
+        "row": 86,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "X4",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1631",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B81"
+        }
+      },
+      {
+        "row": 87,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "dùng chung cho PLC 3",
+          "Status",
+          "HeartBit",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "M9200",
+          "BOOL",
+          "on/off chu kì 1s",
+          "Heart bit từ phần mềm xác nhận đã kết nối,timeout 10s"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B87"
+        }
+      },
+      {
+        "row": 88,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "dùng chung cho PLC 3",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9201",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B87"
+        }
+      },
+      {
+        "row": 89,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "dùng chung cho PLC 3",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9202",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B87"
+        }
+      },
+      {
+        "row": 90,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "dùng chung cho PLC 3",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9203",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B87"
+        }
+      },
+      {
+        "row": 91,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "dùng chung cho PLC 3",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9204",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B87"
+        }
+      },
+      {
+        "row": 92,
+        "cells": [
+          "A2\r\n192.168.10.121",
+          "dùng chung cho PLC 3",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9205",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A63",
+          "B": "B87"
+        }
+      },
+      {
+        "row": 93,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E1",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1500",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B93"
+        }
+      },
+      {
+        "row": 94,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E1",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1501",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B93"
+        }
+      },
+      {
+        "row": 95,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E1",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1502",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B93"
+        }
+      },
+      {
+        "row": 96,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E1",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B93",
+          "H": "H96"
+        }
+      },
+      {
+        "row": 97,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E1",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1600",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B93",
+          "H": "H96"
+        }
+      },
+      {
+        "row": 98,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E1",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1601",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B93"
+        }
+      },
+      {
+        "row": 99,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E2",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1510",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B99"
+        }
+      },
+      {
+        "row": 100,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E2",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1511",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B99"
+        }
+      },
+      {
+        "row": 101,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E2",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1512",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B99"
+        }
+      },
+      {
+        "row": 102,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E2",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B99",
+          "H": "H102"
+        }
+      },
+      {
+        "row": 103,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E2",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1610",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B99",
+          "H": "H102"
+        }
+      },
+      {
+        "row": 104,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "E2",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1611",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B99"
+        }
+      },
+      {
+        "row": 105,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G1",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1520",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B105"
+        }
+      },
+      {
+        "row": 106,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G1",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1521",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B105"
+        }
+      },
+      {
+        "row": 107,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G1",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1522",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B105"
+        }
+      },
+      {
+        "row": 108,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G1",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B105",
+          "H": "H108"
+        }
+      },
+      {
+        "row": 109,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G1",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1620",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B105",
+          "H": "H108"
+        }
+      },
+      {
+        "row": 110,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G1",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1621",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B105"
+        }
+      },
+      {
+        "row": 111,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G2",
+          "Command",
+          "PLC_MissionRequest",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1530",
+          "INT",
+          "0: Không nhiệm vụ, 1: Pick, 2:Drop, 10: lỗi",
+          "PLC gửi yêu cầu"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B111"
+        }
+      },
+      {
+        "row": 112,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G2",
+          "Command",
+          "PLC_ReaddyTranfer",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1531",
+          "INT",
+          "1:Cho phép Pick, 2: Cho phép Drop, 10: Lỗi",
+          "Xác nhận đã mở cửa Rack, mở Kẹp"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B111"
+        }
+      },
+      {
+        "row": 113,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G2",
+          "Command",
+          "PLC_MissionCompleted",
+          "PLC → Software",
+          "PLC máy/trạm",
+          "Phần mềm AGV Interface",
+          "D1532",
+          "INT",
+          "1: Thất Bại, 2:Thành Công",
+          "Xác nhận Giao/Nhận thành công"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B111"
+        }
+      },
+      {
+        "row": 114,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G2",
+          "Command",
+          "AGV_RequestTranfer",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "1: Mở cửa- kẹp để Pick, 4:Mở cửa-kẹp để Drop",
+          "Yêu cầu mở cửa mở kẹp ,AGV ở vị trí trước cửa"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B111",
+          "H": "H114"
+        }
+      },
+      {
+        "row": 115,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G2",
+          "Command",
+          "AGV_TranferCompleted",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1630",
+          "INT",
+          "3: Hoàn thànhPick, 6: Hoàn thành Drop",
+          "AGV đã lấy Rack và ra ngoài"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B111",
+          "H": "H114"
+        }
+      },
+      {
+        "row": 116,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "G2",
+          "Command",
+          "Mission_Feedback",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "D1631",
+          "INT",
+          "0:Chưa có AGV nhận, 1:AGV1, 2:AGV2, 3:AGV3, 10 Lỗi",
+          "Trạng thái nhiệm vụ của AGV"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B111"
+        }
+      },
+      {
+        "row": 117,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "dùng chung cho PLC 4",
+          "Status",
+          "HeartBit",
+          "Phần mềm → PLC",
+          "Phần mềm AGV Interface",
+          "PLC máy/trạm",
+          "M9200",
+          "BOOL",
+          "on/off chu kì 1s",
+          "Heart bit từ phần mềm xác nhận đã kết nối,timeout 10s"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B117"
+        }
+      },
+      {
+        "row": 118,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "dùng chung cho PLC 4",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9201",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B117"
+        }
+      },
+      {
+        "row": 119,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "dùng chung cho PLC 4",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9202",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B117"
+        }
+      },
+      {
+        "row": 120,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "dùng chung cho PLC 4",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9203",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B117"
+        }
+      },
+      {
+        "row": 121,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "dùng chung cho PLC 4",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9204",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B117"
+        }
+      },
+      {
+        "row": 122,
+        "cells": [
+          "EF-G\r\n192.168.10.131",
+          "dùng chung cho PLC 4",
+          "Spair",
+          "",
+          "",
+          "",
+          "",
+          "M9205",
+          "BOOL",
+          "",
+          "dự phòng"
+        ],
+        "merged": {
+          "A": "A93",
+          "B": "B117"
+        }
+      }
+    ]
+  },
+  "sequence": {
+    "name": "Trang_tính1",
+    "rows": [
+      {
+        "row": 4,
+        "cells": {
+          "D": "AGV",
+          "G": "PLC"
+        },
+        "arrow": null
+      },
+      {
+        "row": 9,
+        "cells": {
+          "G": "Gửi yêu cầu Lấy/ Cấp Rack",
+          "J": "PLC_MissionRequest",
+          "K": "thay đổi theo PLC_MissionCompleted"
+        },
+        "arrow": "toAgv"
+      },
+      {
+        "row": 11,
+        "cells": {
+          "B": "PLC quan sát AGV đã nhận hay gặp lỗi",
+          "C": "Mission_Feedback",
+          "D": "Phần mềm nhận nhiệm vụ"
+        },
+        "arrow": "toPlc"
+      },
+      {
+        "row": 16,
+        "cells": {
+          "C": "AGV_RequestTranfer",
+          "D": "AGV đã đến vị trí trước cửa trạm"
+        },
+        "arrow": "toPlc"
+      },
+      {
+        "row": 18,
+        "cells": {
+          "G": "Xác nhận đã mở cửa, mở kẹp",
+          "J": "PLC_ReaddyTranfer"
+        },
+        "arrow": "toAgv"
+      },
+      {
+        "row": 20,
+        "cells": {
+          "C": "AGV_TranferCompleted",
+          "D": "AGV đã lấy và ra vị trí ngoài"
+        },
+        "arrow": "toPlc"
+      },
+      {
+        "row": 22,
+        "cells": {
+          "G": "Xác nhận AGV đã hoàn thành nhiệm vụ",
+          "J": "PLC_MissionCompleted",
+          "K": "thay đổi theo Mission_Feedback và AGV_TranferCompleted"
+        },
+        "arrow": "toAgv"
+      }
+    ]
+  },
   "handshake": []
 }

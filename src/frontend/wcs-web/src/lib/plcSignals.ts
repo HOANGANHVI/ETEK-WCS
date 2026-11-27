@@ -7,9 +7,7 @@ import type { MsgKey } from '../i18n'
 type Translate = (key: MsgKey) => string
 
 export const TEMPLATE_SIGNALS = [
-  // IO map of 22/11/2026 (CR-046)
-  'PLC_MissionRequest', 'PLC_ReaddyTranfer', 'PLC_MissionCompleted', 'AGV_RequestTranfer', 'AGV_TranferCompleted', 'Mission_Feedback',
-  // signals of earlier maps: rows an existing database or a test configuration may still show
+  // signals of earlier maps only (an existing database or a test configuration may still show them). The signals of the IO map in use show the workbook's own text, untranslated (CR-047).
   'Safety_Ready',
   'Pickup_Request',
   'Delivery_Request',

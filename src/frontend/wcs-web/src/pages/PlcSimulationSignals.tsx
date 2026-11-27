@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { api } from '../api/client'
 import type { SimStartResult, SimStation } from '../api/simTypes'
-import { Async, Button, Pill } from '../components/ui'
+import { Async, Button } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { formatDateTime } from '../i18n/format'
@@ -90,7 +90,7 @@ function SignalRow({ signal, disabled, onSet }: { signal: SimStation['signals'][
   return (
     <tr>
       <td><strong className="mono">{signal.signal}</strong>{!signal.readByIntake && <div className="muted small">{t('linked.simNotRead')}</div>}</td>
-      <td className="mono">{signal.testOnly ? <Pill tone="warn" dot={false}>{t('linked.simTestOnly')}</Pill> : signal.address ?? <span className="muted">NEEDS_CONFIGURATION</span>}</td>
+      <td className="mono">{signal.address ?? <span className="muted">NEEDS_CONFIGURATION</span>}</td>
       <td className="muted small">{signalDescription(t, signal.signal, signal.description)}</td>
       <td className="mono">{signal.dataType === 'Bool' ? (signal.value === 'true' ? 'ON' : signal.value === 'false' ? 'OFF' : '—') : signal.value ?? '—'}</td>
       <td className="nowrap">

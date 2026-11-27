@@ -1,18 +1,18 @@
 import { useCallback, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { AddressIssue, IoPointConfig } from '../api/plcTypes'
-import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
+import { Button, PageHeader, Panel, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { localizeFieldError } from '../i18n/logCatalog'
-import { CONFIG_STATUS_VI, DATATYPE_VI, DIRECTION_VI } from '../i18n/plc'
+import { CONFIG_STATUS_VI } from '../i18n/plc'
 import { describeError } from '../i18n/vi'
 import { AddressDialog, type DialogPoint } from './plc/plcDialogs'
 import { WriteApprovalDialog } from './plc/writeDialogs'
 import { BLOCKED_SIGNALS } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
-import { signalDescription } from '../lib/plcSignals'
-import { plcOptions, readState, stationOptions, writeState } from '../lib/plcIoMap'
+import { IoMapSequence, IoMapSheetTable } from './plc/IoMapSheet'
+import { filterSheetRows, plcOptions, readState, sheetRows, stationOptions, writeState } from '../lib/plcIoMap'
 
 const STATUSES = ['NEEDS_CONFIGURATION', 'CONFIGURED', 'APPROVED'] as const
 
@@ -22,6 +22,32 @@ const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
   id: p.id, plcId: p.plcId, stationId: p.stationId, signalName: p.signalName, dataType: p.dataType, address: p.actualAddress, configStatus: p.configStatus,
 })
 
+/** Addresses still entered on rows of an earlier map: closed by default; their only action is to clear them (they would otherwise keep the address occupied). */
+function LeftoverAddresses({ count, onCleared }: { count: number; onCleared: (message: string) => void }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const rows = useApi(useCallback(() => (open ? api.plcPoints({ includeRetired: true }) : Promise.resolve([] as IoPointConfig[])), [open]))
+  const left = (rows.data ?? []).filter((p) => p.inIoMap === false && p.actualAddress)
+  const clear = async (p: IoPointConfig) => {
+    setError(null)
+    try { await api.plcClearAddress(p.id); rows.reload(); onCleared(t('plc.clearOldDone', { signal: `${p.stationId}/${p.signalName}` })) } catch (e) { setError(describeError(e)) }
+  }
+  return (
+    <details className="card pad" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>{t('plc.leftoverTitle', { n: count })}</summary>
+      <p className="muted small">{t('plc.leftoverHint')}</p>
+      {error && <div className="notice notice-bad" role="alert">{error}</div>}
+      <div className="table-wrap capped">
+        <table className="grid">
+          <thead><tr><th>{t('plc.colPlc')}</th><th>{t('plc.station')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colActualAddress')}</th><th /></tr></thead>
+          <tbody>{left.map((p) => <tr key={p.id}><td>{p.plcId}</td><td>{p.stationId}</td><td>{p.signalName}</td><td className="mono">{p.actualAddress}</td><td><Button size="sm" onClick={() => void clear(p)}>{t('plc.btnClearOld')}</Button></td></tr>)}</tbody>
+        </table>
+      </div>
+    </details>
+  )
+}
+
 /**
  * CR-020: configuration ONLY. Reading, watching values and writing I/O are done on the PLC Monitoring screen ("I/O monitoring" tab); the write approval of a point is still decided here.
  * CR-004: IO mapping - the actual PLC address of each IO point (key PLC_ID + Station_ID + Signal_Name). CR-046: PLCs, stations and signals come from the backend (IO map in use); nothing is hard-coded.
@@ -30,8 +56,7 @@ const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
  */
 export function PlcIoMappingPage() {
   const t = useT()
-  const [showRetired, setShowRetired] = useState(false)
-  const points = useApi(useCallback(() => api.plcPoints({ includeRetired: showRetired }), [showRetired]))
+  const points = useApi(useCallback(() => api.plcPoints({}), []))
   const ioMap = useApi(useCallback(() => api.plcIoMap(), []))
   const [plc, setPlc] = useState('')
   const [station, setStation] = useState('')
@@ -42,21 +67,15 @@ export function PlcIoMappingPage() {
   const [issues, setIssues] = useState<AddressIssue[] | null>(null)
   const [checkError, setCheckError] = useState<string | null>(null)
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (points.data ?? []).filter((p) =>
-      (!plc || p.plcId === plc) && (!station || p.stationId === station) && (!status || p.configStatus === status) && (!q || p.signalName.toLowerCase().includes(q)))
-  }, [points.data, plc, station, status, search])
-
   const all = points.data ?? []
   const counts = { total: all.length, configured: all.filter((p) => p.configStatus !== 'NEEDS_CONFIGURATION').length, pollable: all.filter((p) => p.pollable).length }
+  const pointOf = useMemo(() => new Map((points.data ?? []).map((p) => [`${p.plcId}|${p.stationId}|${p.signalName}`, p])), [points.data])
+  const mapRows = useMemo(() => (ioMap.data ? sheetRows(ioMap.data) : []), [ioMap.data])
+  const rows = useMemo(() => filterSheetRows(mapRows, { plc, station, text: search },
+    (r) => !status || pointOf.get(`${r.plcId}|${r.stationId}|${r.signalName}`)?.configStatus === status), [mapRows, plc, station, search, status, pointOf])
   const plcs = plcOptions(all)
   const stations = stationOptions(all, plc)
-  const clearOld = async (p: IoPointConfig) => {
-    setCheckError(null)
-    try { await api.plcClearAddress(p.id); done(t('plc.clearOldDone', { signal: `${p.stationId}/${p.signalName}` })) } catch (e) { setCheckError(describeError(e)) }
-  }
-  const done = (msg: string) => { setDialog(null); setNotice(msg); setIssues(null); points.reload() }   // the approval is re-read at once: no page reload needed
+  const done = (msg: string) => { setDialog(null); setNotice(msg); setIssues(null); points.reload(); ioMap.reload() }   // the approval is re-read at once: no page reload needed
   const check = async () => {
     setCheckError(null)
     try { setIssues(await api.plcAddressCheck(plc)) } catch (e) { setCheckError(describeError(e)) }
@@ -86,8 +105,7 @@ export function PlcIoMappingPage() {
         <div className="btn-row">
           <Button disabled={!plc} onClick={() => void check()}>{t('plc.checkConflicts', { plc: plc || t('plc.choosePlc') })}</Button>
           <Button onClick={() => { setPlc(''); setStation(''); setStatus(''); setSearch('') }}>{t('plc.clearFilters')}</Button>
-          <span className="muted">{t('plc.showing', { shown: rows.length, total: counts.total })}</span>
-          <label><input type="checkbox" checked={showRetired} onChange={(e) => { setShowRetired(e.target.checked); setPlc(''); setStation('') }} /> {t('plc.showRetired')}</label>
+          <span className="muted">{t('plc.showing', { shown: rows.length, total: mapRows.length })}</span>
         </div>
         {checkError && <div className="notice notice-bad" role="alert">{checkError}</div>}
         {issues && (issues.length === 0
@@ -95,74 +113,44 @@ export function PlcIoMappingPage() {
           : <div className="notice notice-bad"><strong>{t('plc.conflicts')}</strong><ul>{issues.map((i) => <li key={i.pointId + i.code}>{i.stationId}/{i.signal}: {localizeFieldError({ field: 'address', message: i.message, code: i.code, args: i.args })}</li>)}</ul></div>)}
       </Panel>
 
-      {ioMap.data && (
-        <Panel title={t('plc.mapTitle')} subtitle={t('plc.mapSource', { file: ioMap.data.sourceFile, sha: ioMap.data.sourceSha256.slice(0, 12) + '…' })}>
+      {ioMap.error && <div className="notice notice-bad" role="alert">{t('plc.mapUnavailable')} {ioMap.error}</div>}
+      {points.error && <div className="notice notice-bad" role="alert">{points.error}</div>}
+      {points.data?.length === 0 && <div className="notice notice-warn" role="status">{t('plc.noIo')}. {t('plc.noIoHint')}</div>}
+      {ioMap.data?.sheet && (
+        <Panel title={t('plc.mapTitle')} subtitle={t('plc.mapSource', { file: ioMap.data.sourceFile, sheet: ioMap.data.sheet.name, sha: ioMap.data.sourceSha256.slice(0, 12) + '…' })} flush>
           <div className="notice notice-warn" role="note">{t('plc.mapWarning')}</div>
-          {ioMap.data.stationsNotInMap.length > 0 && <div className="notice notice-warn" role="note">{t('plc.mapRetiredStations', { list: ioMap.data.stationsNotInMap.map((s) => `${s.stationId} (${s.plcId})`).join(', ') })}</div>}
-          <details>
-            <summary>{t('plc.mapPlcSignals')}</summary>
-            <div className="table-wrap capped">
-              <table className="grid" aria-label={t('plc.mapPlcSignals')}>
-                <thead><tr><th>{t('plc.colPlc')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colDataType')}</th><th>{t('plc.colIoMapAddress')}</th><th>{t('plc.colDescription')}</th></tr></thead>
-                <tbody>
-                  {ioMap.data.plcSignals.filter((s) => !plc || s.plcId === plc).map((s) => (
-                    <tr key={s.plcId + s.address}><td>{s.plcId}</td><td><strong>{s.signalName}</strong></td><td>{DATATYPE_VI[s.dataType] ?? s.dataType}</td><td className="mono">{s.address}</td><td className="small">{[s.meaning, s.values].filter(Boolean).join(' · ')}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
+          <IoMapSheetTable sheet={ioMap.data.sheet} rows={rows}
+            systemHeaders={[t('plc.colActualAddress'), t('plc.colRead'), t('plc.colApproval'), t('plc.colWriteState'), t('plc.colActions')]}
+            system={(r) => {
+              const p = pointOf.get(`${r.plcId}|${r.stationId}|${r.signalName}`)
+              if (!p) return <td colSpan={5} className="iomap-sys muted">{t('plc.mapNotAPoint')}</td>
+              const inbound = p.direction === 'PlcToSoftware'
+              const blocked = BLOCKED_SIGNALS.includes(p.signalName)
+              const rs = readState(p)
+              const ws = writeState(p, BLOCKED_SIGNALS)
+              return (
+                <>
+                  <td className="iomap-sys mono">{p.actualAddress ?? <span className="muted">{t('plc.unassigned')}</span>}</td>
+                  <td className="iomap-sys"><Pill tone={rs === 'enabled' ? 'ok' : rs === 'blocked' ? 'bad' : 'muted'} dot={false}>{t(rs === 'enabled' ? 'plc.rsEnabled' : rs === 'blocked' ? 'plc.rsBlocked' : 'plc.rsNoAddress')}</Pill></td>
+                  <td className="iomap-sys"><ConfigPill status={p.configStatus} />{p.approvedBy && <small className="muted"> {p.approvedBy}</small>}</td>
+                  <td className="iomap-sys">
+                    {ws === 'input' ? <span className="muted">{t('plc.wsInput')}</span>
+                      : <Pill tone={ws === 'approved' ? 'ok' : 'warn'} dot={false}>{t(ws === 'approved' ? 'plc.wsApproved' : ws === 'notConfirmed' ? 'plc.wsNotConfirmed' : 'plc.wsProtected')}</Pill>}
+                  </td>
+                  <td className="iomap-sys iomap-actions">
+                    <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
+                    {(ws === 'protected' || ws === 'approved') && !blocked && <Button size="sm" disabled={!p.actualAddress} title={p.actualAddress ? undefined : t('plc.writeNoAddressTitle')} onClick={() => setDialog({ kind: 'writeApproval', point: p })}>{t('plc.btnWriteApproval')}</Button>}
+                    {!inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
+                  </td>
+                </>
+              )
+            }} />
         </Panel>
       )}
-
-      <Panel title={t('plc.mappingTable')} flush>
-        <Async state={points} isEmpty={(d) => d.length === 0} empty={{ title: t('plc.noIo'), hint: t('plc.noIoHint') }}>
-          {() => (
-            <div className="table-wrap">
-              <table className="grid" aria-label={t('plc.mappingTable')}>
-                <thead>
-                  <tr><th>{t('plc.colPlc')}</th><th>{t('plc.station')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colDescription')}</th><th>{t('plc.colDataType')}</th><th>{t('plc.colIoMapAddress')}</th><th>{t('plc.colActualAddress')}</th><th>{t('plc.colRead')}</th><th>{t('plc.colApproval')}</th><th>{t('plc.colWriteState')}</th><th>{t('plc.colActions')}</th></tr>
-                </thead>
-                <tbody>
-                  {rows.map((p) => {
-                    const inbound = p.direction === 'PlcToSoftware'
-                    const blocked = BLOCKED_SIGNALS.includes(p.signalName)
-                    const rs = readState(p)
-                    const ws = writeState(p, BLOCKED_SIGNALS)
-                    const retired = ws === 'retired'
-                    return (
-                      <tr key={p.id}>
-                        <td className="nowrap">{p.plcId}</td>
-                        <td className="nowrap"><strong>{p.stationId}</strong></td>
-                        <td><strong>{p.signalName}</strong><br /><small className="muted">{p.group} · {DIRECTION_VI[p.direction]}</small></td>
-                        <td className="small">{signalDescription(t, p.signalName, p.description)}</td>
-                        <td>{DATATYPE_VI[p.dataType]}</td>
-                        <td className="mono">{retired ? <span className="muted">—</span> : p.templateAddressReference || <span className="muted">—</span>}{p.sharedRegisterWith && <><br /><small className="muted">{t('plc.sharedRegister', { signals: p.sharedRegisterWith.join(', ') })}</small></>}</td>
-                        <td className="mono">{p.actualAddress ?? <span className="muted">{t('plc.unassigned')}</span>}</td>
-                        <td>{retired ? <span className="muted">—</span> : <Pill tone={rs === 'enabled' ? 'ok' : rs === 'blocked' ? 'bad' : 'muted'} dot={false}>{t(rs === 'enabled' ? 'plc.rsEnabled' : rs === 'blocked' ? 'plc.rsBlocked' : 'plc.rsNoAddress')}</Pill>}</td>
-                        <td><ConfigPill status={p.configStatus} />{p.approvedBy && <small className="muted"> {p.approvedBy}</small>}</td>
-                        <td className="nowrap">
-                          {ws === 'input' || ws === 'retired' ? <span className="muted">{t(ws === 'input' ? 'plc.wsInput' : 'plc.wsRetired')}</span>
-                            : <><Pill tone={ws === 'approved' ? 'ok' : 'warn'} dot={false}>{t(ws === 'approved' ? 'plc.wsApproved' : ws === 'notConfirmed' ? 'plc.wsNotConfirmed' : 'plc.wsProtected')}</Pill>
-                              {ws === 'protected' && !blocked && <small className="muted"> {t(`plc.writeState_${p.writeApproval}` as 'plc.writeState_APPROVED')}</small>}{p.writeDecidedBy && <small className="muted"> {p.writeDecidedBy}</small>}</>}
-                        </td>
-                        <td className="nowrap">
-                          {retired ? <Button size="sm" disabled={!p.actualAddress} onClick={() => void clearOld(p)}>{t('plc.btnClearOld')}</Button> : <>
-                            <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
-                            {(ws === 'protected' || ws === 'approved') && !blocked && <Button size="sm" disabled={!p.actualAddress} title={p.actualAddress ? undefined : t('plc.writeNoAddressTitle')} onClick={() => setDialog({ kind: 'writeApproval', point: p })}>{t('plc.btnWriteApproval')}</Button>}
-                            {!inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
-                          </>}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {rows.length === 0 && <tr><td colSpan={11} className="muted">{t('plc.noMatch')}</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Async>
-      </Panel>
+      {ioMap.data?.sequence && (
+        <Panel title={t('plc.mapSequence', { sheet: ioMap.data.sequence.name })} flush><IoMapSequence sequence={ioMap.data.sequence} /></Panel>
+      )}
+      {(ioMap.data?.leftoverAddresses ?? 0) > 0 && <LeftoverAddresses count={ioMap.data!.leftoverAddresses} onCleared={done} />}
       {dialog?.kind === 'address' && <AddressDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'writeApproval' && <WriteApprovalDialog point={dialog.point} onClose={() => setDialog(null)} onDone={done} />}
     </>
