@@ -8,10 +8,11 @@ import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
 import { describeError } from '../i18n/vi'
 import { PlcSimulationSignals as SignalPanel } from './PlcSimulationSignals'
+import { AmrSimulatorPanel } from './AmrSimulatorPanel'
 
 /**
  * CR-035 / CR-040 – Admin manual PLC simulation, opened by an explicit confirmation. Only PLC → WCS signals are simulated: requests go through the same WCS intake a PLC would use.
- * Nothing answers for the RCS; where an order is sent is decided by the operating mode. Every state shown here is read from the backend; pressing a button never changes a state by
+ * The AMR simulation panel (CR-050) is separate; where an order is sent is decided by the operating mode. Every state shown here is read from the backend; pressing a button never changes a state by
  * itself (the server decides and may refuse). Hiding this page for other roles is a convenience: the server enforces Admin on every call.
  */
 export function PlcSimulationPage() {
@@ -95,7 +96,7 @@ function Screen() {
                     <select value={location} aria-label={t('linked.psChooseLocation')} onChange={(e) => setLocation(e.target.value)}>
                       <option value="">{t('linked.psChooseLocation')}</option>
                       {sel.triggers.map((x) => (
-                        <option key={x.locationCode} value={x.locationCode}>{x.locationCode} · {x.plcId ?? t('linked.psNoPlc')} · {t(x.portBusy ? 'linked.psBusy' : 'linked.psFree')}{x.plcOnline ? ` · ${t('linked.psOnlineBlocked')}` : ''}</option>
+                        <option key={x.locationCode} value={x.locationCode}>{x.locationCode} · {x.plcId ?? t('linked.psNoPlc')} · {t(x.portBusy ? 'linked.psBusy' : 'linked.psFree')}{x.blocked ? ` · ${t('linked.psOnlineBlocked')}` : ''}</option>
                       ))}
                     </select>
                     <label><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> {t('linked.psAck')}</label>
@@ -110,6 +111,8 @@ function Screen() {
             )
           }}
         </Async>
+
+        <AmrSimulatorPanel />
 
         <SignalPanel active={!!status.data?.active} real={status.data?.executionMode === 'Real'} onResult={(r) => { setLast(r); orders.reload() }} />
 

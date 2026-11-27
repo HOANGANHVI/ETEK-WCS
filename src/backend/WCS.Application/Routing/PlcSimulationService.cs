@@ -23,19 +23,24 @@ public sealed record SimulationStatusDto(bool Active, string? ActivatedBy, DateT
 public sealed record SimulationFlowDto(string Code, string Name, string RequestType, string RackKind, string PublicationState, string? Readiness, int? PublishedVersion,
     IReadOnlyList<SimulationTriggerDto> Triggers, bool StartableNow, string? NotStartableReason);
 
-public sealed record SimulationTriggerDto(string LocationCode, string? PortId, string? PlcId, bool PortMappingApproved, bool? PlcOnline, bool PortBusy);
+/// <param name="Blocked">CR-050: a physical PLC of this port is connected, so it is not simulated.</param>
+public sealed record SimulationTriggerDto(string LocationCode, string? PortId, string? PlcId, bool PortMappingApproved, bool? PlcOnline, bool PortBusy, bool Blocked = false);
 
 public sealed record SimulationStartResult(string Outcome, string Code, string Message, OrderDto? Order, StationTransactionDto? Transaction, string RequestId, Guid? TaskId = null);
 
 /// <summary>
 /// CR-035 / CR-040. Admin-only manual PLC simulation, opened by an explicit confirmation. It replaces ONLY the physical PLC as the source of PLC → WCS signals: the request goes through the
-/// SAME <see cref="IPlcRequestService"/> a PLC runtime calls (same validation, Station Transaction, Process Engine, queue). It never answers for the RCS or an AMR, never writes a PLC address
+/// SAME <see cref="IPlcRequestService"/> a PLC runtime calls (same validation, Station Transaction, Process Engine, queue). It never answers for the RCS or an AMR (that is the separate AMR simulation of CR-050), never writes a PLC address
 /// and never touches inventory itself. It grants nothing on the RCS side: where an order is sent is decided by the operating mode and its own conditions (CR-038). Refused for a port whose
 /// PLC is online (no mixing of a physical PLC and the simulation on the same resources).
 /// </summary>
 public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository routing, IPlcRequestService plcRequests, IPlcInputHandler inputHandler, IRouteEngine engine, ILegDispatcher dispatcher,
-    PlcSimulationState state, PlcSimulatedInputs inputs, WCS.Application.Plc.IStationEngineRouter engines, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock, IPlcLinkStatus? link = null)
+    PlcSimulationState state, PlcSimulatedInputs inputs, WCS.Application.Plc.IStationEngineRouter engines, IOptions<RealDispatchOptions> realRcs, IOptions<RouteEngineOptions> routeOptions, IExecutionModeProvider mode, IClock clock,
+    IOptions<WCS.Application.Plc.PlcRuntimeOptions> plcRuntime, IPlcLinkStatus? link = null)
 {
+    /// <summary>CR-050 (D-01): the refusal protects a PHYSICAL PLC. In the simulator PLC runtime there is none, so a connected (simulated) PLC does not block; both real modes still do.</summary>
+    private bool PhysicalPlcOnline(bool? online) => online == true && WCS.Application.Plc.WritePolicy.EffectiveMode(plcRuntime.Value) != WCS.Domain.Plc.PlcRuntimeMode.Simulator;
+
     public const string Banner = "PLC SIMULATION";
     public const string MappingSource = "IO Map of 22/11/2026 (not confirmed by the PLC engineer). Setting a signal starts nothing: how these signals become a request is not approved. A request is simulated by choosing a flow and a location; no PLC address is read or written.";
 
@@ -47,7 +52,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
             current == WCS.Domain.Rcs.ExecutionMode.Real
                 ? "Operating mode REAL: signals can be set and read, but a simulated request creates no work and nothing is sent to the RCS."
                 : "Operating mode Simulator: requests accepted from this simulation are not sent to a real RCS.",
-            "Only PLC to WCS signals are simulated. Nothing answers for the RCS or an AMR, and nothing is written to a PLC.",
+            "The PLC simulation produces PLC to WCS signals only and writes nothing to a PLC. AMRs of the simulated RCS act only while the AMR simulation is switched on (CR-050).",
         };
         return new(state.Active, state.ActivatedBy, state.ActivatedAt, current.ToString(), realRcs.Value.Enabled, routeOptions.Value.EnforceReadiness, Banner, MappingSource, notes);
     }
@@ -79,7 +84,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
                     string.IsNullOrWhiteSpace(p.ActualAddress) ? null : p.ActualAddress);
             }).ToList();
             var active = await routing.GetActiveTransactionForPortAsync(port.Id, t);
-            list.Add(new(port.Id, port.PlcId, port.LocationCode!, link?.IsOnline(port.PlcId), await routing.IsPortMappingApprovedAsync(port.Id, t), active?.ToDto(), signals, engines.EngineFor(port.Id).ToString()));
+            list.Add(new(port.Id, port.PlcId, port.LocationCode!, link?.IsOnline(port.PlcId), await routing.IsPortMappingApprovedAsync(port.Id, t), active?.ToDto(), signals, engines.EngineFor(port.Id).ToString(), PhysicalPlcOnline(link?.IsOnline(port.PlcId))));
         }
         return list;
     }, ct);
@@ -122,7 +127,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
     {
         var port = await routing.GetPortAsync(stationId, ct) ?? throw AppException.NotFound("PORT_NOT_FOUND", $"Station {stationId} not found.");
         if (port.LocationCode is null || !port.Enabled) throw AppException.Rejected("PORT_NOT_LINKED", $"Station {port.Id} is disabled or not linked to a location.");
-        if (link?.IsOnline(port.PlcId) == true) throw AppException.Conflict("SIMULATION_PLC_ONLINE", $"PLC {port.PlcId} is online: the simulation never shares a PLC/port with a real PLC.");
+        if (PhysicalPlcOnline(link?.IsOnline(port.PlcId))) throw AppException.Conflict("SIMULATION_PLC_ONLINE", $"PLC {port.PlcId} is online: the simulation never shares a PLC/port with a real PLC.");
         return port;
     }
 
@@ -147,7 +152,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
             {
                 var port = await routing.FindPortByLocationAsync(loc, t);
                 triggers.Add(new(loc, port?.Id, port?.PlcId, port is not null && await routing.IsPortMappingApprovedAsync(port.Id, t), port is null ? null : link?.IsOnline(port.PlcId),
-                    port is not null && await routing.GetActiveTransactionForPortAsync(port.Id, t) is not null));
+                    port is not null && await routing.GetActiveTransactionForPortAsync(port.Id, t) is not null, port is not null && PhysicalPlcOnline(link?.IsOnline(port.PlcId))));
             }
             string? why = null;
             if (!p.Enabled) why = "Process is disabled.";
@@ -171,7 +176,7 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
         var trig = flow.Triggers.FirstOrDefault(x => string.Equals(x.LocationCode, locationCode?.Trim(), StringComparison.OrdinalIgnoreCase))
                    ?? throw AppException.Rejected("LOCATION_NOT_ALLOWED", $"{locationCode} is not a trigger location of {flow.Code}; the location is not free text.");
         if (trig.PortId is null || trig.PlcId is null) throw AppException.Rejected("PORT_NOT_FOUND", $"No enabled port serves {trig.LocationCode}.");
-        if (trig.PlcOnline == true) throw AppException.Conflict("SIMULATION_PLC_ONLINE", $"PLC {trig.PlcId} is online: the simulation never shares a PLC/port with a real PLC.");
+        if (trig.Blocked) throw AppException.Conflict("SIMULATION_PLC_ONLINE", $"PLC {trig.PlcId} is online: the simulation never shares a PLC/port with a real PLC.");
         if (trig.PortBusy) throw AppException.Conflict("PORT_BUSY", $"Port {trig.PortId} already has an active Station Transaction.");
 
         var requestId = $"SIM-{clock.UtcNow:yyyyMMddHHmmssfff}";

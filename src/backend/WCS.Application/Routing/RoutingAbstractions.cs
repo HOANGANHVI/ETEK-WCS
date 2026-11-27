@@ -116,7 +116,7 @@ public interface IPlcLinkStatus
 
 public enum LegDispatchOutcome { Accepted = 1, Blocked = 2, Rejected = 3, Unknown = 4 }
 
-public sealed record LegDispatchRequest(Guid LegId, string RequestCode, string? RobotCode, RackKind RackKind, string SourceLocationCode, string? DestinationLocationCode);
+public sealed record LegDispatchRequest(Guid LegId, string RequestCode, string? RobotCode, RackKind RackKind, string SourceLocationCode, string? DestinationLocationCode, DateTimeOffset? OrderCreatedAt = null);
 
 public sealed record LegDispatchResult(LegDispatchOutcome Outcome, string? AgvTaskCode, string? Reason);
 

@@ -376,6 +376,23 @@ public static class Endpoints
             ApiResults.Ok(c, await Audited.RunAsync(c, "SIMULATOR_ADVANCE", "Task", id.ToString(), null, () => d.AdvanceAsync(id, ct), res => new { res.Signal, res.Message })));
         sim.MapPost("tasks/{id:guid}/run", async (HttpContext c, Guid id, SimulationDriver d, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "SIMULATOR_RUN", "Task", id.ToString(), null, () => d.RunAsync(id, 20, ct), res => new { steps = res.Count })));
+        // CR-050: the AMR simulation behind the simulated RCS (Admin; audited)
+        var amr = sim.MapGroup("/amr");
+        amr.MapGet("", (HttpContext c, AmrExecutionSimulator a) => ApiResults.Ok(c, a.View()));
+        amr.MapPost("config", async (HttpContext c, AmrConfigRequest r, AmrExecutionSimulator a) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "AMR_SIM_CONFIG", "AmrSimulation", null, null, () => { a.Configure(r.Enabled, r.SpeedMultiplier); return Task.FromResult(a.View()); }, v => new { v.Enabled, v.SpeedMultiplier })));
+        amr.MapPost("faults", async (HttpContext c, AmrFaultRequest r, AmrExecutionSimulator a) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "AMR_SIM_FAULT", "AmrSimulation", r.Fault, null, () =>
+            {
+                if (!Enum.TryParse<AmrFault>(r.Fault, true, out var f)) throw AppException.Validation("AMR_SIMULATION_FAULT", "Unknown fault.");
+                a.Arm(f, r.Count ?? 1, r.DelaySeconds); return Task.FromResult(a.View());
+            }, _ => new { r.Fault, r.Count, r.DelaySeconds })));
+        amr.MapDelete("faults", async (HttpContext c, AmrExecutionSimulator a) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "AMR_SIM_FAULT", "AmrSimulation", "clear", null, () => { a.ClearFaults(); return Task.FromResult(a.View()); }, _ => new { cleared = true })));
+        amr.MapPost("connection", async (HttpContext c, AmrConnectionRequest r, AmrExecutionSimulator a) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "AMR_SIM_FAULT", "AmrSimulation", r.Connected ? "connected" : "disconnected", null, () => { a.SetConnected(r.Connected); return Task.FromResult(a.View()); }, _ => new { r.Connected })));
+        amr.MapPost("runs/{requestCode}/recover", async (HttpContext c, string requestCode, AmrExecutionSimulator a, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "AMR_SIM_RECOVER", "AmrSimulation", requestCode, null, async () => { await a.RecoverAsync(requestCode, ct); return a.View(); }, _ => new { requestCode })));
         sim.MapPost("station-requests", async (HttpContext c, SimulatedStationRequest r, StationSignalSimulator s) =>
         {
             await Audited.RunAsync(c, "SIMULATOR_STATION_REQUEST", "Location", r.StationCode, null, () =>

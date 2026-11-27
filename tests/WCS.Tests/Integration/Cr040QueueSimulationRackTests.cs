@@ -296,7 +296,8 @@ public class Cr040QueueSimulationRackTests(DatabaseFixture fixture)
         Assert.Equal(PlcRequestOutcome.Duplicate, physical.Outcome);
 
         kit.Link.Offline.Remove("PLC-T1");
-        Assert.Equal("SIMULATION_PLC_ONLINE", (await Assert.ThrowsAsync<AppException>(() => Sim(s => s.SetSignalAsync("A1", "Pickup_Request", "off")))).Code);
+        // CR-050 (D-01): in the simulator PLC runtime a connected PLC is a simulated one and does not block (the refusal for a physical PLC: Cr050SimulatorTests)
+        await Sim(s => s.SetSignalAsync("A1", "Pickup_Request", "off"));
         service.Deactivate();
         Assert.All((await Sim(s => s.ListStationsAsync())).Single(x => x.StationId == "A1").Signals, s => Assert.Null(s.Value));
     }

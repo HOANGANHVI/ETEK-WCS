@@ -144,7 +144,12 @@ public static class DependencyInjection
 
         services.AddSingleton<PlcSimulator>();
         // CR-027: Rcs:Fleet:SimulatorSize (default 0 = an empty simulated fleet) fills the RCS SIMULATOR with that many AMRs (SIM-001..) for a demo / test. Real AMRs are never simulated by default.
-        services.AddSingleton(_ => { var sim = new RcsSimulator(); sim.SetFleetSize(configuration.GetValue("Rcs:Fleet:SimulatorSize", 0)); return sim; });
+        // CR-050: Rcs:Fleet:SimulatorRobotCodes (optional) names them, e.g. with the AGV robot codes of the Legacy dispatch, so that no second set of AMRs appears when work is sent
+        services.AddSingleton(_ => { var sim = new RcsSimulator(); sim.SetFleetSize(configuration.GetValue("Rcs:Fleet:SimulatorSize", 0), configuration.GetSection("Rcs:Fleet:SimulatorRobotCodes").Get<string[]>()); return sim; });
+        // CR-050: AMR execution behind the simulated RCS. Off unless configured or switched on by an Admin.
+        services.Configure<WCS.Infrastructure.Simulation.AmrSimulationOptions>(configuration.GetSection(WCS.Infrastructure.Simulation.AmrSimulationOptions.SectionName));
+        services.AddSingleton<WCS.Infrastructure.Simulation.AmrExecutionSimulator>();
+        services.AddHostedService<WCS.Infrastructure.Simulation.AmrSimulationHostedService>();
         services.AddSingleton<StationSignalSimulator>();
         services.AddSingleton<IPlcAdapter>(sp => sp.GetRequiredService<PlcSimulator>());
         // CR-021: every RCS call is logged (operation, request code, outcome, duration, adapter); the Production guard looks through the wrapper (IRcsClientDecorator.Unwrap)
