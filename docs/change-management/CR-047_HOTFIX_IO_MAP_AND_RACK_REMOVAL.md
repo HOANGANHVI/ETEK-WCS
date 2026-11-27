@@ -10,6 +10,8 @@
 
 ## A. IO Map
 
+> CR-048 thay thế các mục "địa chỉ chỉ để tham chiếu", "liên kết trạm cũ – Location" và "dữ liệu cũ trong database" dưới đây.
+
 ### Nguyên nhân
 
 1. Backend đang chạy trên máy phát triển là bản `2026.11.23.1` (commit `581fbad`), khởi động trước khi catalog được thay: API trả 368 tín hiệu v2, trạm X6, G3, G7.

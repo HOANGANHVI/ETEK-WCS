@@ -15,7 +15,7 @@ public sealed class Cr047WorkbookSheetTests
     private static readonly XNamespace X = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly PlcCatalog Product = PlcCatalog.LoadEmbedded();
 
-    private static (Dictionary<string, string> Cells, List<(string Col, int From, int To)> Merged) Read(int sheet)
+    internal static (Dictionary<string, string> Cells, List<(string Col, int From, int To)> Merged) Read(int sheet)
     {
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         while (d is not null && !File.Exists(Path.Combine(d.FullName, "CLAUDE.md"))) d = d.Parent;

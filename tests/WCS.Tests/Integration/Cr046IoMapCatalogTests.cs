@@ -103,7 +103,7 @@ public class Cr046IoMapCatalogTests(DatabaseFixture fixture)
     private static string S(JsonElement e, string name) => e.GetProperty(name).GetString()!;
 
     [Fact]
-    public async Task A_fresh_database_shows_exactly_the_IO_map_with_reference_addresses_and_nothing_writable()
+    public async Task A_fresh_database_shows_exactly_the_IO_map_with_its_default_addresses_and_nothing_writable()
     {
         var (h, f, admin) = await BootAsync(legacyFirst: false);
         await using var _ = h; await using var __ = f;
@@ -112,7 +112,11 @@ public class Cr046IoMapCatalogTests(DatabaseFixture fixture)
         Assert.Equal(Signals.Order(), points.Select(p => S(p, "signalName")).Distinct().Order());
         Assert.All(points, p =>
         {
-            Assert.Equal(JsonValueKind.Null, p.GetProperty("actualAddress").ValueKind);   // a document address is never a configured address
+            Assert.Equal(S(p, "templateAddressReference"), S(p, "actualAddress"));          // CR-048: the address of the IO map is the default address
+            Assert.Equal(S(p, "actualAddress"), S(p, "defaultAddress"));
+            Assert.Equal("WorkbookDefault", S(p, "addressOrigin"));
+            Assert.Equal("CONFIGURED", S(p, "configStatus"));                                // readable, not approved
+            Assert.True(p.GetProperty("pollable").GetBoolean());                             // the two signals of one register included
             Assert.False(p.GetProperty("confirmed").GetBoolean());
             Assert.True(p.GetProperty("inIoMap").GetBoolean());
             Assert.NotEqual(true, p.GetProperty("writeAllowed").GetBoolean());
@@ -124,17 +128,14 @@ public class Cr046IoMapCatalogTests(DatabaseFixture fixture)
         Assert.Equal("AGV_PLC Interface_List_22_11_2026.xlsx", S(map, "sourceFile"));
         Assert.False(map.GetProperty("confirmed").GetBoolean());
         Assert.Equal(120, map.GetProperty("sheet").GetProperty("rows").GetArrayLength());
-        Assert.Equal(0, map.GetProperty("leftoverAddresses").GetInt32());
 
-        // an address may be entered; approving a write stays refused
+        // approving a write stays refused, default address or not
         var id = S(x4, "id");
-        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{id}/address", new { address = "D1630" })).Status);
         var approve = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{id}/write-allowed", new { allowed = true });
         Assert.Contains("WRITE_SIGNAL_NOT_CONFIRMED", approve.Raw);
-        // the shared register: the second signal cannot take the same configured address (not implemented), and says why
-        var request = S(points.Single(p => S(p, "stationId") == "X4" && S(p, "signalName") == "AGV_RequestTranfer"), "id");
-        var second = await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{request}/address", new { address = "D1630" });
-        Assert.Contains("ADDRESS_CONFLICT", second.Raw);
+        // another signal cannot take the register the IO map gives to this pair
+        var other = S(points.Single(p => S(p, "stationId") == "X4" && S(p, "signalName") == "Mission_Feedback"), "id");
+        Assert.Contains("ADDRESS_CONFLICT", (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{other}/address", new { address = "D1630" })).Raw);
 
         var handshake = (await Data(admin, "/api/plc/overview")).GetProperty("stations").EnumerateArray().ToList();
         Assert.Equal(16, handshake.Count);
@@ -142,35 +143,34 @@ public class Cr046IoMapCatalogTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task An_existing_database_keeps_its_rows_but_only_the_IO_map_is_shown_read_and_written()
+    public async Task An_existing_database_is_upgraded_to_the_IO_map_and_the_old_rows_are_kept_apart()
     {
         var (h, f, admin) = await BootAsync(legacyFirst: true);
         await using var _ = h; await using var __ = f;
-        Assert.Equal(16 * 23 + 16 * 6, await h.Db(db => db.StationIoPoints.CountAsync()));                       // nothing deleted
-        Assert.Equal(2, await h.Db(db => db.StationIoPoints.CountAsync(p => p.ActualAddress != null)));          // entered addresses kept
-        Assert.Equal(19, await h.Db(db => db.PlcStations.CountAsync()));                                           // X4, G1, G2 added; X6, G3, G7 kept
+        // CR-048: only the signals of the IO map remain; the earlier rows are in the archive with what had been entered on them
+        Assert.Equal(96, await h.Db(db => db.StationIoPoints.CountAsync()));
+        Assert.Equal(96, await h.Db(db => db.StationIoPoints.CountAsync(p => p.ActualAddress != null)));
+        Assert.Equal(16 * 23, await h.Db(db => db.Set<RetiredIoPoint>().CountAsync()));
+        Assert.Equal(["Request_Ack=M101", "AGV_ID=D1700"], await h.Db(db => db.Set<RetiredIoPoint>().Where(p => p.ActualAddress != null).OrderByDescending(p => p.SignalName == "Request_Ack")
+            .Select(p => p.SignalName + "=" + p.ActualAddress).ToListAsync()));
+        Assert.Equal(19, await h.Db(db => db.PlcStations.CountAsync()));                                            // X4, G1, G2 added; X6, G3, G7 kept as retired
+        Assert.Equal(["G3", "G7", "X6"], await h.Db(db => db.PlcStations.Where(s => s.RetiredAt != null).OrderBy(s => s.Id).Select(s => s.Id).ToListAsync()));
 
         Assert.Equal(96, (await Data(admin, "/api/plc/points")).GetArrayLength());
-        Assert.Equal(16 * 23 + 96, (await Data(admin, "/api/plc/points?includeRetired=true")).GetArrayLength());
         var stations = (await Data(admin, "/api/plc/stations")).EnumerateArray().Select(s => S(s, "stationId")).ToList();
         Assert.Equal(16, stations.Count);
         Assert.DoesNotContain("X6", stations);
         Assert.Contains("X4", stations);
-        // nothing of the earlier map is reported, except how many addresses are still entered on it
-        var map = await Data(admin, "/api/plc/io-map");
-        Assert.Equal(2, map.GetProperty("leftoverAddresses").GetInt32());
-        var raw = map.GetRawText();
+        var raw = (await Data(admin, "/api/plc/io-map")).GetRawText() + (await Data(admin, "/api/plc/overview")).GetRawText();
         foreach (var gone in new[] { "Pickup_Request", "Request_Ack", "X6\"", "G3\"", "G7\"" }) Assert.DoesNotContain(gone, raw);
 
-        // CR-047: a location still linked to a station of the earlier map: that station is no port any more, and the location can be given to the station of the map
+        // a retired station is not a port: it cannot be linked and serves no location
         await h.SeedStandardAsync();
-        await h.Db(async db => { (await db.PlcStations.SingleAsync(s => s.Id == "X6")).Update("A2", true, DateTimeOffset.UtcNow); await db.SaveChangesAsync(); return 0; });
         using (var scope = f.Services.CreateScope())
         {
-            var routing = scope.ServiceProvider.GetRequiredService<WCS.Application.Routing.IRoutingRepository>();
-            Assert.Null(await routing.FindPortByLocationAsync("A2"));
-            Assert.DoesNotContain(await routing.ListLinkedPortsAsync(), s => s.Id == "X6");
-            await scope.ServiceProvider.GetRequiredService<PlcProvisioningService>().SetPortLinkAsync("X4", "A2", true);
+            var provisioning = scope.ServiceProvider.GetRequiredService<PlcProvisioningService>();
+            await Assert.ThrowsAsync<WCS.Application.Common.AppException>(() => provisioning.SetPortLinkAsync("X6", "A2", true));
+            await provisioning.SetPortLinkAsync("X4", "A2", true);
         }
         Assert.Equal(["X4:A2"], await h.Db(db => db.PlcStations.Where(s => s.LocationCode == "A2").Select(s => s.Id + ":" + s.LocationCode).ToListAsync()));
 
@@ -185,13 +185,7 @@ public class Cr046IoMapCatalogTests(DatabaseFixture fixture)
         // the point says whether an address exists (the address itself stays Admin only); the screens count and show values by it
         var snap = (await Data(admin, "/api/plc/stations/X1/io"));
         Assert.Equal(6, snap.GetProperty("total").GetInt32());
-        Assert.All(snap.GetProperty("points").EnumerateArray(), p => Assert.False(p.GetProperty("hasAddress").GetBoolean()));
-
-        // a retired row: its address can be cleared, nothing else
-        var old = await h.Db(db => db.StationIoPoints.Where(p => p.StationId == "A1" && p.SignalName == "Request_Ack").Select(p => p.Id).SingleAsync());
-        Assert.Contains("IO_POINT_RETIRED", (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{old}/address", new { address = "M102" })).Raw);
-        Assert.Contains("IO_POINT_RETIRED", (await admin.SendJsonAsync(HttpMethod.Put, $"/api/plc/points/{old}/write-allowed", new { allowed = true })).Raw);
-        Assert.Equal(200, (await admin.SendJsonAsync(HttpMethod.Delete, $"/api/plc/points/{old}/address")).Status);
+        Assert.All(snap.GetProperty("points").EnumerateArray(), p => Assert.True(p.GetProperty("hasAddress").GetBoolean()));
         await rt.StopAsync();
     }
 }

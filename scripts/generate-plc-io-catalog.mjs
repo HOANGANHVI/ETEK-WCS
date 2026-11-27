@@ -1,6 +1,6 @@
 // Generates src/backend/WCS.Infrastructure/Plc/Catalog/plc-io-catalog.json from the ONLY IO map of the project (CR-045 / CR-046).
 // The workbook stays the source of truth; this file is a derived copy that the seeder loads. Nothing is invented:
-//  - every address is the address written in the workbook and is a REFERENCE (not a configured address of the running system);
+//  - every address is the address written in the workbook: the DEFAULT address of its point (CR-048); it confirms nothing and permits no write;
 //  - port / MC parameters, handshake and reset rules are not in the workbook and stay absent;
 //  - nothing is marked confirmed: the PLC engineer has not confirmed the IO contract.
 //
@@ -139,7 +139,7 @@ const sharedWith = (x) => x.shareKey ? first.map((t) => t.signalName).filter((n)
 const catalog = {
   schemaVersion: 2,
   source: { file: SOURCE, sha256 },
-  note: 'Derived from the only IO map of the project (22/11/2026). Addresses are references written in the workbook, not configured addresses. The IO contract is NOT confirmed by the PLC engineer.',
+  note: 'Derived from the only IO map of the project (22/11/2026). Station addresses are the default addresses of the IO points. The IO contract is NOT confirmed by the PLC engineer.',
   confirmation: 'NotConfirmed',
   plcs,
   stations: stations.map((s) => ({ ...s, addresses: Object.fromEntries(byStation(s.stationId).map((x) => [x.signalName, x.address])) })),

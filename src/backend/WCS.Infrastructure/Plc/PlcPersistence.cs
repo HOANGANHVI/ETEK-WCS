@@ -35,6 +35,7 @@ internal sealed class PlcStationConfiguration : IEntityTypeConfiguration<PlcStat
         b.Property(x => x.PlcId).HasMaxLength(20).IsRequired();
         b.Property(x => x.LocationCode).HasMaxLength(50);
         b.Property(x => x.Role).HasMaxLength(30).IsRequired();
+        b.Property(x => x.RetiredAt);
         b.HasOne<PlcConnection>().WithMany().HasForeignKey(x => x.PlcId).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(x => new { x.PlcId, x.Order }).IsUnique();
     }
@@ -54,6 +55,8 @@ internal sealed class StationIoPointConfiguration : IEntityTypeConfiguration<Sta
         b.Property(x => x.TemplateAddressReference).HasMaxLength(20).IsRequired();
         b.Property(x => x.Description).HasMaxLength(500);
         b.Property(x => x.ActualAddress).HasMaxLength(20);
+        b.Property(x => x.AddressOrigin).HasConversion<string>().HasMaxLength(20).HasDefaultValue(IoAddressOrigin.None);
+        b.Property(x => x.SharedWith).HasMaxLength(200);
         b.Property(x => x.Encoding).HasMaxLength(40);
         b.Property(x => x.ApprovedBy).HasMaxLength(100);
         b.Property(x => x.WriteApproval).HasConversion<string>().HasMaxLength(20).HasDefaultValue(WriteApprovalStatus.NotApproved);
@@ -65,7 +68,26 @@ internal sealed class StationIoPointConfiguration : IEntityTypeConfiguration<Sta
         // Identity of a signal: PLC_ID + Station_ID + Signal_Name.
         b.HasIndex(x => new { x.PlcId, x.StationId, x.SignalName }).IsUnique();
         // Address namespace is per PLC: the same confirmed address may not be given twice on one PLC (but may repeat on another PLC).
-        b.HasIndex(x => new { x.PlcId, x.ActualAddress }).IsUnique().HasFilter("\"ActualAddress\" IS NOT NULL");
+        // CR-048: except for the signals the IO map puts in one register; for those the same signal still may not be given one address twice.
+        b.HasIndex(x => new { x.PlcId, x.ActualAddress }).IsUnique().HasFilter("\"ActualAddress\" IS NOT NULL AND \"SharedWith\" IS NULL");
+        b.HasIndex(x => new { x.PlcId, x.ActualAddress, x.SignalName }).IsUnique().HasFilter("\"ActualAddress\" IS NOT NULL AND \"SharedWith\" IS NOT NULL");
+    }
+}
+
+internal sealed class RetiredIoPointConfiguration : IEntityTypeConfiguration<RetiredIoPoint>
+{
+    public void Configure(EntityTypeBuilder<RetiredIoPoint> b)
+    {
+        b.ToTable("retired_io_points");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedNever();
+        b.Property(x => x.CatalogSha256).HasMaxLength(64).IsRequired();
+        b.Property(x => x.PlcId).HasMaxLength(20).IsRequired();
+        b.Property(x => x.StationId).HasMaxLength(20).IsRequired();
+        b.Property(x => x.SignalName).HasMaxLength(60).IsRequired();
+        b.Property(x => x.ActualAddress).HasMaxLength(20);
+        b.Property(x => x.SnapshotJson).IsRequired();
+        b.HasIndex(x => new { x.PlcId, x.StationId });
     }
 }
 
@@ -112,7 +134,7 @@ internal sealed class PlcConfigRepository(WcsDbContext db) : IPlcConfigRepositor
     public async Task<IReadOnlyList<PlcConnection>> ListConnectionsAsync(CancellationToken ct) => await db.PlcConnections.OrderBy(x => x.Id).ToListAsync(ct);
     public Task<PlcConnection?> GetConnectionAsync(string plcId, CancellationToken ct) => db.PlcConnections.FirstOrDefaultAsync(x => x.Id == plcId, ct);
     public void AddConnection(PlcConnection c) => db.PlcConnections.Add(c);
-    public async Task<IReadOnlyList<PlcStation>> ListStationsAsync(CancellationToken ct) => await db.PlcStations.OrderBy(x => x.PlcId).ThenBy(x => x.Order).ToListAsync(ct);
+    public async Task<IReadOnlyList<PlcStation>> ListStationsAsync(CancellationToken ct) => await db.PlcStations.Where(x => x.RetiredAt == null).OrderBy(x => x.PlcId).ThenBy(x => x.Order).ToListAsync(ct);
     public Task<PlcStation?> GetStationAsync(string stationId, CancellationToken ct) => db.PlcStations.FirstOrDefaultAsync(x => x.Id == stationId, ct);
     public void AddStation(PlcStation s) => db.PlcStations.Add(s);
 
@@ -182,7 +204,7 @@ public sealed class CatalogPlc { public string PlcId { get; set; } = ""; public 
 public sealed class CatalogStation
 {
     public string StationId { get; set; } = ""; public string PlcId { get; set; } = ""; public int Order { get; set; }
-    /// <summary>Signal name -> address written in the IO map for THIS station. A reference only: never a configured address.</summary>
+    /// <summary>Signal name -> address written in the IO map for THIS station: the default address of the point (CR-048).</summary>
     public Dictionary<string, string> Addresses { get; set; } = [];
 }
 public sealed class CatalogSheet { public string Name { get; set; } = ""; public string Title { get; set; } = ""; public List<string> Columns { get; set; } = []; public List<CatalogSheetRow> Rows { get; set; } = []; }
@@ -208,11 +230,16 @@ public sealed class CatalogHandshakeRow
     public string? ApprovalStatus { get; set; } public string? Trigger { get; set; } public string? SetCondition { get; set; } public string? ResetCondition { get; set; }
 }
 
-public sealed record SeedResult(int PlcsAdded, int StationsAdded, int PointsAdded, int PlcsTotal, int StationsTotal, int PointsTotal);
+public sealed record SeedResult(int PlcsAdded, int StationsAdded, int PointsAdded, int PlcsTotal, int StationsTotal, int PointsTotal,
+    int DefaultsAssigned = 0, int DefaultsBlocked = 0, int PointsRetired = 0, int StationsRetired = 0);
 
 /// <summary>
-/// Loads the catalog into the database. Idempotent and additive: existing rows are never modified (so configuration entered by an Admin
-/// is safe), missing rows are created, Actual_PLC_Address is never set.
+/// Brings the database in line with the catalog (CR-048). Idempotent:
+///  - missing PLC, station and point rows are created;
+///  - rows of signals that are not in the catalog are moved to <c>retired_io_points</c>, and a station that only had such rows is retired (kept, hidden, location link released);
+///  - every point of the catalog that was never configured gets the address written in the IO map for it; a default follows the catalog;
+///  - an address an Admin entered or removed is never changed.
+/// An address never makes a point approved or writable.
 /// </summary>
 public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcCatalogSeeder> logger, PlcCatalog? current = null)
 {
@@ -220,9 +247,19 @@ public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcC
 
     public async Task<SeedResult> SeedAsync(PlcCatalog catalog, CancellationToken ct = default)
     {
+        // one transaction: an upgrade that fails half way leaves the database as it was
+        await using var tx = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct) : null;
+        var result = await ApplyAsync(catalog, ct);
+        if (tx is not null) await tx.CommitAsync(ct);
+        return result;
+    }
+
+    private async Task<SeedResult> ApplyAsync(PlcCatalog catalog, CancellationToken ct)
+    {
         var now = clock.UtcNow;
         var plcs = await db.PlcConnections.ToDictionaryAsync(x => x.Id, ct);
         var stations = await db.PlcStations.ToDictionaryAsync(x => x.Id, ct);
+        var retired = await RetireAsync(catalog, stations, now, ct);
         var pointKeys = (await db.StationIoPoints.Select(x => new { x.PlcId, x.StationId, x.SignalName }).ToListAsync(ct))
             .Select(x => (x.PlcId, x.StationId, x.SignalName)).ToHashSet();
 
@@ -237,7 +274,9 @@ public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcC
             var e = new PlcStation(s.StationId, s.PlcId, order, now); db.PlcStations.Add(e); stations[s.StationId] = e; sa++;
         }
         // Parents first so the foreign keys exist when the points are inserted.
-        if (pa + sa > 0) await db.SaveChangesAsync(ct);
+        foreach (var s in catalog.Stations)
+            if (stations[s.StationId] is { RetiredAt: not null } back) back.Restore(now);
+        await db.SaveChangesAsync(ct);
 
         foreach (var st in catalog.Stations)
             foreach (var sig in catalog.Template)
@@ -248,7 +287,73 @@ public sealed class PlcCatalogSeeder(WcsDbContext db, IClock clock, ILogger<PlcC
                 ia++;
             }
         if (ia > 0) await db.SaveChangesAsync(ct);
-        if (pa + sa + ia > 0) logger.LogInformation("PLC catalog seeded: +{Plcs} PLC, +{Stations} stations, +{Points} IO points", pa, sa, ia);
-        return new SeedResult(pa, sa, ia, plcs.Count, stations.Count, await db.StationIoPoints.CountAsync(ct));
+        var (assigned, blocked) = await AssignDefaultsAsync(catalog, now, ct);
+        if (pa + sa + ia + retired.Points + retired.Stations + assigned + blocked > 0)
+            logger.LogInformation("PLC catalog seeded: +{Plcs} PLC, +{Stations} stations, +{Points} IO points, {Assigned} default addresses assigned, {Blocked} blocked, {RetiredPoints} old points and {RetiredStations} old stations retired",
+                pa, sa, ia, assigned, blocked, retired.Points, retired.Stations);
+        return new SeedResult(pa, sa, ia, plcs.Count, stations.Count, await db.StationIoPoints.CountAsync(ct), assigned, blocked, retired.Points, retired.Stations);
+    }
+
+    private async Task<(int Points, int Stations)> RetireAsync(PlcCatalog catalog, Dictionary<string, PlcStation> stations, DateTimeOffset now, CancellationToken ct)
+    {
+        var names = catalog.Template.Select(t => t.SignalName).ToList();
+        if (names.Count == 0) return (0, 0);   // a catalog without signals retires nothing
+        var old = await db.StationIoPoints.Where(p => !names.Contains(p.SignalName)).ToListAsync(ct);
+        if (old.Count == 0) return (0, 0);
+        var oldIds = old.Select(p => p.Id).ToList();
+        var oldStations = old.Select(p => p.StationId).Distinct().ToList();
+        var stillUsed = (await db.StationIoPoints.Where(p => oldStations.Contains(p.StationId) && !oldIds.Contains(p.Id)).Select(p => p.StationId).Distinct().ToListAsync(ct)).ToHashSet();
+        var inCatalog = catalog.Stations.Select(s => s.StationId).ToHashSet();
+        var retiredStations = 0;
+        foreach (var p in old)
+            db.Set<RetiredIoPoint>().Add(new RetiredIoPoint(p.Id, now, catalog.Source.Sha256, p.PlcId, p.StationId, p.SignalName, p.ActualAddress, JsonSerializer.Serialize(new
+            {
+                p.Id, p.PlcId, p.StationId, p.Seq, p.SignalName, p.UpdatedAt, AddressOrigin = p.AddressOrigin.ToString(), p.SharedWith,   // every column of the row
+                p.Group, Direction = p.Direction.ToString(), DataType = p.DataType.ToString(), p.Description, p.TemplateAddressReference, p.ActualAddress, p.WordLength, p.Encoding,
+                Status = p.Status.ToString(), p.ApprovedBy, p.ApprovedAt, p.WriteAllowed, WriteApproval = p.WriteApproval.ToString(), p.WriteDecidedBy, p.WriteDecidedAt, p.WriteDecisionNote,
+                StationLocation = stations.GetValueOrDefault(p.StationId)?.LocationCode,
+            })));
+        foreach (var id in oldStations.Where(id => !stillUsed.Contains(id) && !inCatalog.Contains(id)))
+            if (stations.GetValueOrDefault(id) is { RetiredAt: null } s)
+            {
+                if (s.LocationCode is not null) logger.LogWarning("PLC station {Station} left the IO map: its link to location {Location} is released", s.Id, s.LocationCode);
+                s.Retire(now); retiredStations++;
+            }
+        db.StationIoPoints.RemoveRange(old);
+        await db.SaveChangesAsync(ct);   // the addresses of the old rows are free before the defaults are assigned
+        return (old.Count, retiredStations);
+    }
+
+    private async Task<(int Assigned, int Blocked)> AssignDefaultsAsync(PlcCatalog catalog, DateTimeOffset now, CancellationToken ct)
+    {
+        var shared = catalog.Template.ToDictionary(t => t.SignalName, t => t.SharedRegisterWith.Count == 0 ? null : string.Join(',', t.SharedRegisterWith));
+        var defaults = catalog.Stations.SelectMany(s => s.Addresses.Select(a => (Key: (s.PlcId, s.StationId, a.Key), Address: DeviceAddress.Normalize(a.Value))))
+            .ToDictionary(x => x.Key, x => x.Address);
+        var points = await db.StationIoPoints.OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).ToListAsync(ct);
+        foreach (var p in points) if (shared.TryGetValue(p.SignalName, out var with)) p.ShareRegisterWith(with);
+        // a default that changed in the catalog is released first, so that addresses may move between points
+        var todo = new List<(StationIoPoint Point, string Address)>();
+        foreach (var p in points)
+        {
+            if (!defaults.TryGetValue((p.PlcId, p.StationId, p.SignalName), out var address)) continue;
+            if (p.AddressOrigin == IoAddressOrigin.Custom || (p.AddressOrigin == IoAddressOrigin.None && p.ActualAddress is not null)) continue;
+            if (p.AddressOrigin == IoAddressOrigin.WorkbookDefault && p.ActualAddress == address) continue;
+            todo.Add((p, address));
+        }
+        int assigned = 0, blocked = 0;
+        foreach (var (p, address) in todo)
+        {
+            var holder = points.FirstOrDefault(x => x.Id != p.Id && x.PlcId == p.PlcId && x.ActualAddress == address && !todo.Any(t => t.Point.Id == x.Id && t.Address != address)
+                && !(x.StationId == p.StationId && AddressValidator.MayShare(x.SignalName, x.SharedWith, p.SignalName, p.SharedWith)));
+            if (holder is not null)
+            {
+                blocked++;
+                logger.LogWarning("Default address {Address} of {Plc} {Station}/{Signal} is not assigned: {HolderStation}/{HolderSignal} holds it", address, p.PlcId, p.StationId, p.SignalName, holder.StationId, holder.SignalName);
+                continue;
+            }
+            p.ApplyDefaultAddress(address, now); assigned++;
+        }
+        await db.SaveChangesAsync(ct);
+        return (assigned, blocked);
     }
 }

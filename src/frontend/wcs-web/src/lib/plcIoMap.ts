@@ -54,6 +54,19 @@ export function addressedCounts(points: { hasAddress?: boolean; quality: string 
   return { configured: mine.length, good: mine.filter((p) => p.quality === 'Good' || p.quality === 'Simulated').length }
 }
 
+/**
+ * CR-048: where the address of a point stands. default = the IO map's; custom = entered by an Admin; removed = removed by an Admin; blocked = the IO map has an address that another point holds
+ * (so it was not assigned); none = the IO map has no address for the point and nothing is entered.
+ */
+export type AddressState = 'default' | 'custom' | 'removed' | 'blocked' | 'none'
+export function addressState(p: Pick<IoPointConfig, 'actualAddress' | 'addressOrigin' | 'defaultAddress'>): AddressState {
+  if (p.actualAddress) return p.addressOrigin === 'WorkbookDefault' ? 'default' : 'custom'
+  if (p.addressOrigin === 'Custom') return 'removed'
+  return p.defaultAddress ? 'blocked' : 'none'
+}
+/** Restoring makes sense when the IO map has an address and the point does not hold it as the default. */
+export const canRestore = (p: Pick<IoPointConfig, 'actualAddress' | 'addressOrigin' | 'defaultAddress'>): boolean => !!p.defaultAddress && addressState(p) !== 'default'
+
 /** The PLC filter options: the PLCs that actually have rows. */
 export const plcOptions = (rows: Pick<IoPointConfig, 'plcId'>[]): string[] => [...new Set(rows.map((p) => p.plcId))].sort()
 

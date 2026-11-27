@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { api } from '../api/client'
+import { ApiRequestError } from '../api/errors'
 import type { AddressIssue, IoPointConfig } from '../api/plcTypes'
 import { Button, PageHeader, Panel, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
@@ -12,7 +13,8 @@ import { WriteApprovalDialog } from './plc/writeDialogs'
 import { BLOCKED_SIGNALS } from './plc/plcFormat'
 import { ConfigPill } from './plc/plcUi'
 import { IoMapSequence, IoMapSheetTable } from './plc/IoMapSheet'
-import { filterSheetRows, plcOptions, readState, sheetRows, stationOptions, writeState } from '../lib/plcIoMap'
+import { canRestore, filterSheetRows, plcOptions, readState, sheetRows, stationOptions, writeState } from '../lib/plcIoMap'
+import { AddressOriginPill } from './plc/AddressOriginPill'
 
 const STATUSES = ['NEEDS_CONFIGURATION', 'CONFIGURED', 'APPROVED'] as const
 
@@ -22,36 +24,10 @@ const asDialogPoint = (p: IoPointConfig): DialogPoint => ({
   id: p.id, plcId: p.plcId, stationId: p.stationId, signalName: p.signalName, dataType: p.dataType, address: p.actualAddress, configStatus: p.configStatus,
 })
 
-/** Addresses still entered on rows of an earlier map: closed by default; their only action is to clear them (they would otherwise keep the address occupied). */
-function LeftoverAddresses({ count, onCleared }: { count: number; onCleared: (message: string) => void }) {
-  const t = useT()
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const rows = useApi(useCallback(() => (open ? api.plcPoints({ includeRetired: true }) : Promise.resolve([] as IoPointConfig[])), [open]))
-  const left = (rows.data ?? []).filter((p) => p.inIoMap === false && p.actualAddress)
-  const clear = async (p: IoPointConfig) => {
-    setError(null)
-    try { await api.plcClearAddress(p.id); rows.reload(); onCleared(t('plc.clearOldDone', { signal: `${p.stationId}/${p.signalName}` })) } catch (e) { setError(describeError(e)) }
-  }
-  return (
-    <details className="card pad" onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary>{t('plc.leftoverTitle', { n: count })}</summary>
-      <p className="muted small">{t('plc.leftoverHint')}</p>
-      {error && <div className="notice notice-bad" role="alert">{error}</div>}
-      <div className="table-wrap capped">
-        <table className="grid">
-          <thead><tr><th>{t('plc.colPlc')}</th><th>{t('plc.station')}</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colActualAddress')}</th><th /></tr></thead>
-          <tbody>{left.map((p) => <tr key={p.id}><td>{p.plcId}</td><td>{p.stationId}</td><td>{p.signalName}</td><td className="mono">{p.actualAddress}</td><td><Button size="sm" onClick={() => void clear(p)}>{t('plc.btnClearOld')}</Button></td></tr>)}</tbody>
-        </table>
-      </div>
-    </details>
-  )
-}
-
 /**
  * CR-020: configuration ONLY. Reading, watching values and writing I/O are done on the PLC Monitoring screen ("I/O monitoring" tab); the write approval of a point is still decided here.
  * CR-004: IO mapping - the actual PLC address of each IO point (key PLC_ID + Station_ID + Signal_Name). CR-046: PLCs, stations and signals come from the backend (IO map in use); nothing is hard-coded.
- * Admin only (also enforced by the API). Addresses are NEVER generated or derived; a valid address makes the point pollable at once (CR-012);
+ * Admin only (also enforced by the API). CR-048: each point starts with the address written in the IO map (never calculated); an Admin may change or remove it and restore the default. A valid address makes the point pollable at once (CR-012);
  * the approval step now only concerns write permission and the port mapping of a process. Supported devices: D, W (word) and M (bit). X/Y are OUT_OF_SCOPE / NEEDS_CONFIRMATION.
  */
 export function PlcIoMappingPage() {
@@ -76,6 +52,12 @@ export function PlcIoMappingPage() {
   const plcs = plcOptions(all)
   const stations = stationOptions(all, plc)
   const done = (msg: string) => { setDialog(null); setNotice(msg); setIssues(null); points.reload(); ioMap.reload() }   // the approval is re-read at once: no page reload needed
+  const [actionError, setActionError] = useState<string | null>(null)
+  const restore = async (p: IoPointConfig) => {
+    setActionError(null)
+    try { const v = await api.plcRestoreAddress(p.id); done(t('plc.addressRestored', { signal: `${p.stationId}/${p.signalName}`, address: v.actualAddress ?? '' })) }
+    catch (e) { setNotice(null); setActionError(`${p.stationId}/${p.signalName}: ${e instanceof ApiRequestError && Array.isArray(e.details) && e.details.length ? (e.details as Parameters<typeof localizeFieldError>[0][]).map(localizeFieldError).join(' ') : describeError(e)}`) }
+  }
   const check = async () => {
     setCheckError(null)
     try { setIssues(await api.plcAddressCheck(plc)) } catch (e) { setCheckError(describeError(e)) }
@@ -85,6 +67,7 @@ export function PlcIoMappingPage() {
     <>
       <PageHeader title={t('plc.ioTitle')} />
       {notice && <div className="notice notice-ok" role="status">{notice}</div>}
+      {actionError && <div className="notice notice-bad" role="alert">{actionError}</div>}
       <Panel title={t('plc.filters')} subtitle={t('plc.filterSummary', { total: counts.total, configured: counts.configured, pollable: counts.pollable })}>
         <div className="form-grid">
           <label className="field"><span className="field-label">PLC</span>
@@ -130,7 +113,7 @@ export function PlcIoMappingPage() {
               const ws = writeState(p, BLOCKED_SIGNALS)
               return (
                 <>
-                  <td className="iomap-sys mono">{p.actualAddress ?? <span className="muted">{t('plc.unassigned')}</span>}</td>
+                  <td className="iomap-sys"><span className="mono">{p.actualAddress ?? <span className="muted">{t('plc.unassigned')}</span>}</span> <AddressOriginPill point={p} /></td>
                   <td className="iomap-sys"><Pill tone={rs === 'enabled' ? 'ok' : rs === 'blocked' ? 'bad' : 'muted'} dot={false}>{t(rs === 'enabled' ? 'plc.rsEnabled' : rs === 'blocked' ? 'plc.rsBlocked' : 'plc.rsNoAddress')}</Pill></td>
                   <td className="iomap-sys"><ConfigPill status={p.configStatus} />{p.approvedBy && <small className="muted"> {p.approvedBy}</small>}</td>
                   <td className="iomap-sys">
@@ -139,6 +122,7 @@ export function PlcIoMappingPage() {
                   </td>
                   <td className="iomap-sys iomap-actions">
                     <Button size="sm" onClick={() => setDialog({ kind: 'address', point: p })}>{t('plc.btnAddress')}</Button>{' '}
+                    {canRestore(p) && <><Button size="sm" onClick={() => void restore(p)}>{t('plc.btnRestoreDefault')}</Button>{' '}</>}
                     {(ws === 'protected' || ws === 'approved') && !blocked && <Button size="sm" disabled={!p.actualAddress} title={p.actualAddress ? undefined : t('plc.writeNoAddressTitle')} onClick={() => setDialog({ kind: 'writeApproval', point: p })}>{t('plc.btnWriteApproval')}</Button>}
                     {!inbound && blocked && <small className="muted" title={t('plc.writeBlockedTitle')}>{t('plc.writeBlocked')}</small>}
                   </td>
@@ -150,7 +134,6 @@ export function PlcIoMappingPage() {
       {ioMap.data?.sequence && (
         <Panel title={t('plc.mapSequence', { sheet: ioMap.data.sequence.name })} flush><IoMapSequence sequence={ioMap.data.sequence} /></Panel>
       )}
-      {(ioMap.data?.leftoverAddresses ?? 0) > 0 && <LeftoverAddresses count={ioMap.data!.leftoverAddresses} onCleared={done} />}
       {dialog?.kind === 'address' && <AddressDialog point={asDialogPoint(dialog.point)} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'writeApproval' && <WriteApprovalDialog point={dialog.point} onClose={() => setDialog(null)} onDone={done} />}
     </>

@@ -11,4 +11,7 @@ internal sealed class PlcTemplateProvider(PlcCatalog catalog) : IPlcTemplateProv
             s.TemplateAddressReference, s.Description, s.Values, s.SharedRegisterWith)).ToList());
 
     public IReadOnlyList<TemplateSignal> Signals => _signals.Value;
+
+    public string? DefaultAddress(string plcId, string stationId, string signalName) =>
+        catalog.Stations.FirstOrDefault(s => s.PlcId == plcId && s.StationId == stationId)?.Addresses.GetValueOrDefault(signalName) is { } a ? DeviceAddress.Normalize(a) : null;
 }

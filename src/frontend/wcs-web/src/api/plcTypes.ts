@@ -50,6 +50,8 @@ export interface MonitorPoint {
   id: string; plcId: string; stationId: string; seq: number; group: string; signalName: string; description: string
   direction: 'PlcToSoftware' | 'SoftwareToPlc'; dataType: 'Bool' | 'Int' | 'String'
   confirmed?: boolean; ioMapAddress?: string | null; hasAddress?: boolean
+  /** CR-048, Admin only: ioMapAddress is the default address of the IO map; addressOrigin says where `address` comes from. */
+  addressOrigin?: AddressOrigin | null
   value: boolean | number | string | null; quality: string; status: MonitorStatus; lastUpdated: string | null; address: string | null; error: string | null
   writeApproval: 'NOT_APPROVED' | 'APPROVED' | 'REJECTED' | null; writeSupported: boolean | null; writeBlocked: boolean; wordLength: number | null; encoding: string | null
 }
@@ -102,17 +104,18 @@ export interface IoPointConfig {
   writeSupported: boolean | null
   /** CR-046: what the IO map in use says. false = a row of an earlier map (kept in the database, never read or written). */
   inIoMap?: boolean | null; values?: string | null; sharedRegisterWith?: string[] | null; confirmed?: boolean | null
+  /** CR-048: the address written in the IO map for this point, and where actualAddress comes from. */
+  defaultAddress?: string | null; addressOrigin?: AddressOrigin | null
 }
+export type AddressOrigin = 'None' | 'WorkbookDefault' | 'Custom'
 
-/** CR-046: the IO map in use (reference only: none of its addresses is a configured address). */
+/** CR-046: the IO map in use, as written. The addresses in use are those of the IO points. */
 export interface IoMapInfo {
   sourceFile: string; sourceSha256: string; confirmed: boolean
   plcs: { plcId: string; documentLabel: string | null; ipAddress: string; stations: string[] }[]
   /** The IO Matrix sheet as written: columns A..K, one entry per row, merged = column letter -> first cell of its merged range. */
   sheet: { name: string; title: string; columns: string[]; rows: { row: number; cells: string[]; merged: Record<string, string> }[] } | null
   sequence: { name: string; rows: { row: number; cells: Record<string, string>; arrow: 'toPlc' | 'toAgv' | null }[] } | null
-  /** Addresses still entered on rows of an earlier map (they occupy the address and can only be cleared). */
-  leftoverAddresses: number
 }
 
 /** Bulk READ approval of a commissioning PLC (Admin). Outcome: ELIGIBLE (preview only) | APPROVED | ALREADY_APPROVED | NOT_ELIGIBLE | FAILED. */

@@ -208,7 +208,7 @@ const realApi = {
     request<ReadNowResult>(`/api/plc/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}/read`, { method: 'POST', body: JSON.stringify({}) }),
   plcStationIo: (stationId: string) => request<StationSnapshot>(`/api/plc/stations/${encodeURIComponent(stationId)}/io`),
   plcHandshake: () => request<HandshakeState[]>('/api/plc/handshake'),
-  plcPoints: (f: { plcId?: string; stationId?: string; includeRetired?: boolean }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId, includeRetired: f.includeRetired ? 'true' : undefined })}`),
+  plcPoints: (f: { plcId?: string; stationId?: string }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId })}`),
   plcIoMap: () => request<IoMapInfo>('/api/plc/io-map'),
   plcConnections: () => request<PlcConnection[]>('/api/plc/connections'),
   plcSaveConnection: (plcId: string, b: SavePlcConnectionBody) => request<PlcConnection>(`/api/plc/connections/${plcId}`, { method: 'PUT', body: JSON.stringify(b) }),
@@ -220,6 +220,7 @@ const realApi = {
   plcSetAddress: (id: string, b: { address: string; wordLength?: number | null; encoding?: string | null }) =>
     request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'PUT', body: JSON.stringify(b) }),
   plcClearAddress: (id: string) => request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'DELETE' }),
+  plcRestoreAddress: (id: string) => request<IoPointConfig>(`/api/plc/points/${id}/address/restore-default`, { method: 'POST' }),
   plcApprovePoint: (id: string) => request<IoPointState>(`/api/plc/points/${id}/approve`, { method: 'POST' }),
   plcWriteApproval: (id: string, decision: 'Approve' | 'Reject', note?: string) =>
     request<IoPointConfig>(`/api/plc/points/${id}/write-approval`, { method: 'POST', body: JSON.stringify({ decision, note }) }),

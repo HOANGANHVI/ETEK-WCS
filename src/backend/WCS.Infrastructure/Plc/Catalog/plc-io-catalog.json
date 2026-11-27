@@ -4,7 +4,7 @@
     "file": "docs/02_Interface_Specification/PLC_IO_Map/AGV_PLC Interface_List_22_11_2026.xlsx",
     "sha256": "405586c9e4d2893f1d3a33922259ecfe1c400ca877710877b3b482e049b34da3"
   },
-  "note": "Derived from the only IO map of the project (22/11/2026). Addresses are references written in the workbook, not configured addresses. The IO contract is NOT confirmed by the PLC engineer.",
+  "note": "Derived from the only IO map of the project (22/11/2026). Station addresses are the default addresses of the IO points. The IO contract is NOT confirmed by the PLC engineer.",
   "confirmation": "NotConfirmed",
   "plcs": [
     {

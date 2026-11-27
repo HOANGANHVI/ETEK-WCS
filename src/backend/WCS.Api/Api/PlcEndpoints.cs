@@ -105,20 +105,15 @@ public static partial class PlcEndpoints
             return ApiResults.Ok(c, await Audited.RunAsync(c, "PLC_CONNECTION_TEST", "PlcConnection", plcId, null, () => Task.FromResult(result), res => new { res.Outcome, res.Mode }));
         }).RequireAuthorization(admin);
 
-        plc.MapGet("points", async (HttpContext c, string? plcId, string? stationId, bool? includeRetired, PlcConfigService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await s.ListPointsAsync(plcId, stationId, includeConfiguration: true, ct, includeRetired == true))).RequireAuthorization(admin);
-        // CR-046: what the IO map in use says (source, PLC-level rows, stations the database still has from an earlier map). Read only; nothing here is a configured address.
-        plc.MapGet("io-map", async (HttpContext c, PlcConfigService s, WCS.Infrastructure.Plc.PlcCatalog cat, CancellationToken ct) =>
+        plc.MapGet("points", async (HttpContext c, string? plcId, string? stationId, PlcConfigService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await s.ListPointsAsync(plcId, stationId, includeConfiguration: true, ct))).RequireAuthorization(admin);
+        // CR-046/047: what the IO map in use says (source, the sheets as written). Read only; the addresses in use are those of the points.
+        plc.MapGet("io-map", (HttpContext c, WCS.Infrastructure.Plc.PlcCatalog cat) => ApiResults.Ok(c, new
         {
-            // addresses an Admin entered for rows of an earlier map: they still occupy the address, so they can be found and cleared. Nothing else of an earlier map is reported.
-            var leftover = (await s.ListPointsAsync(null, null, true, ct, includeRetired: true)).Count(p => p.InIoMap == false && p.ActualAddress is not null);
-            return ApiResults.Ok(c, new
-            {
-                sourceFile = Path.GetFileName(cat.Source.File), sourceSha256 = cat.Source.Sha256, confirmed = false,
-                plcs = cat.Plcs.Select(p => new { p.PlcId, p.DocumentLabel, p.IpAddress, p.Stations }),
-                sheet = cat.Sheet, sequence = cat.Sequence, leftoverAddresses = leftover,
-            });
-        }).RequireAuthorization(admin);
+            sourceFile = Path.GetFileName(cat.Source.File), sourceSha256 = cat.Source.Sha256, confirmed = false,
+            plcs = cat.Plcs.Select(p => new { p.PlcId, p.DocumentLabel, p.IpAddress, p.Stations }),
+            sheet = cat.Sheet, sequence = cat.Sequence,
+        })).RequireAuthorization(admin);
         plc.MapPut("points/{id:guid}/address", async (HttpContext c, Guid id, SetPointAddressRequest r, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
         {
             var view = await Audited.RunAsync(c, "PLC_IO_ADDRESS_SET", "StationIoPoint", id.ToString(), null,
@@ -131,6 +126,14 @@ public static partial class PlcEndpoints
         {
             var view = await Audited.RunAsync(c, "PLC_IO_ADDRESS_CLEAR", "StationIoPoint", id.ToString(), null, () => s.ClearAddressAsync(id, ct),
                 res => new { res.PlcId, res.StationId, res.SignalName, res.ConfigStatus });
+            await rt.ReloadPlcAsync(view.PlcId, ct);
+            return ApiResults.Ok(c, view);
+        }).RequireAuthorization(admin);
+        // CR-048: the address written in the IO map, again. Like any address change it withdraws approvals; nothing is sent to a PLC.
+        plc.MapPost("points/{id:guid}/address/restore-default", async (HttpContext c, Guid id, PlcConfigService s, IPlcRuntime rt, CancellationToken ct) =>
+        {
+            var view = await Audited.RunAsync(c, "PLC_IO_ADDRESS_RESTORE", "StationIoPoint", id.ToString(), null, () => s.RestoreDefaultAddressAsync(id, ct),
+                res => new { res.PlcId, res.StationId, res.SignalName, res.ActualAddress, res.ConfigStatus });
             await rt.ReloadPlcAsync(view.PlcId, ct);
             return ApiResults.Ok(c, view);
         }).RequireAuthorization(admin);
@@ -200,7 +203,7 @@ public static partial class PlcEndpoints
                     return new MonitorPointView(p.Id, p.PlcId, p.StationId, p.Seq, p.Group, p.SignalName, cfg.Description, p.Direction, p.DataType, p.Value, p.Quality,
                         PlcMonitor.StatusOf(p.Quality, p.LastUpdated, now, staleAfter), p.LastUpdated, p.Address, p.Error,
                         adm ? cfg.WriteApproval : null, adm ? cfg.WriteSupported : null, WritePolicy.IsBlockedSignal(p.SignalName, p.Group), cfg.WordLength, cfg.Encoding,
-                        !UnconfirmedSignals.Contains(p.SignalName), adm ? cfg.TemplateAddressReference : null, p.HasAddress);   // CR-046
+                        !UnconfirmedSignals.Contains(p.SignalName), adm ? cfg.DefaultAddress : null, p.HasAddress, adm ? cfg.AddressOrigin : null);   // CR-046/048
                 }).OrderBy(p => p.PlcId).ThenBy(p => p.StationId).ThenBy(p => p.Seq).ToList();
             return ApiResults.Ok(c, new { serverTime = now, staleAfterSeconds = (int)staleAfter.TotalSeconds, points = rows });
         });

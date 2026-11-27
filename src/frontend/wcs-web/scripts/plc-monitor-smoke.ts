@@ -2,7 +2,7 @@
 import fs from 'node:fs'
 import type { MonitorPoint } from '../src/api/plcTypes.ts'
 import { filterPoints, readReadiness, rowWrite, sortPoints } from '../src/lib/plcMonitor.ts'
-import { addressedCounts, filterSheetRows, mergeSpans, plcOptions, readState, sheetRows, shownValue, stationOptions, writeState } from '../src/lib/plcIoMap.ts'
+import { addressState, canRestore, addressedCounts, filterSheetRows, mergeSpans, plcOptions, readState, sheetRows, shownValue, stationOptions, writeState } from '../src/lib/plcIoMap.ts'
 
 const results: string[] = []
 const check = (name: string, ok: boolean, info = '') => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !info ? '' : ' — ' + info}`); if (!ok) process.exitCode = 1 }
@@ -66,6 +66,10 @@ check('PLC monitoring reuses the CR-019 write dialog and the immediate read API'
 check('PLC monitoring adds no second write path (no direct plcTestWrite call; only the dialog writes)', !/plcTestWrite/.test(monitor))
 
 // CR-046: the IO map views take their lists from the rows and never offer a write of an unconfirmed or retired signal
+const pt = (actualAddress: string | null, addressOrigin: 'None' | 'WorkbookDefault' | 'Custom', defaultAddress: string | null) => ({ actualAddress, addressOrigin, defaultAddress })
+const states = [pt('D1500', 'WorkbookDefault', 'D1500'), pt('D1700', 'Custom', 'D1500'), pt(null, 'Custom', 'D1500'), pt(null, 'None', 'D1500'), pt(null, 'None', null)]
+check('address state: default, edited, removed, blocked, none', states.map(addressState).join() === 'default,custom,removed,blocked,none')
+check('restore is offered whenever the map has an address that the point does not hold as its default', states.map(canRestore).join() === 'false,true,true,true,false')
 const cfg = (o: Partial<Parameters<typeof writeState>[0]>) => ({ inIoMap: true, direction: 'SoftwareToPlc' as const, confirmed: true, writeApproval: 'APPROVED' as const, signalName: 'Mission_Feedback', ...o })
 const mapRows = [{ plcId: 'PLC-03', stationId: 'X4' }, { plcId: 'PLC-04', stationId: 'G2' }, { plcId: 'PLC-04', stationId: 'G1' }, { plcId: 'PLC-03', stationId: 'X4' }]
 check('PLC and station options come from the rows, per PLC, without duplicates', plcOptions(mapRows).join() === 'PLC-03,PLC-04' && stationOptions(mapRows, 'PLC-04').join() === 'G1,G2' && stationOptions(mapRows, '').join() === 'G1,G2,X4')
