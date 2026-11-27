@@ -273,6 +273,8 @@ check('CR-050: recovery is offered for a stalled run and a failed or waiting leg
   check('CR-051: a sent leg shows its order, RCS task, AMR and state and leads to task management', html.includes(orderCode('abcd1234-0000')) && html.includes('SIM-LEG-1') && html.includes('2048') && html.includes(T('linked.rcsState_Executing')) && html.includes('/tasks?order=abcd1234-0000') && workLink(w({ kind: 'Task', id: 't2' })) === '/tasks?id=t2')
   check('CR-051: task management lists orders and the AGV page reads the RCS work of both engines', readFileSync('src/pages/TasksPage.tsx', 'utf8').includes('api.routingOrders(') && readFileSync('src/pages/AgvPage.tsx', 'utf8').includes('api.rcsWork('))
 }
+check('CR-052: a held destination port is named before and after the pick; other causes keep their own wording', ['DestinationUnavailable', 'DestinationUnavailable_AgvHoldingRack'].every((k) => waitCause({ waitKind: k, stateReason: 'PORT_HELD: No usable destination - A1: port A1 is held' }) === 'portHeld')
+  && waitCause({ waitKind: 'DestinationUnavailable', stateReason: 'No usable destination - B1: no free slot' }) === 'kind')
 // CR-047: a rack that cannot be removed says who holds it and where to go; nothing is cancelled from the rack screen
 const held = (o: Partial<RackBlocker>): RackBlocker => ({ kind: 'Order', id: 'a b', reference: 'R1', state: 'Waiting', process: 'BP-05', canCancel: true, racksHeld: false, ...o })
 check('next step of a held rack: cancel, finish, release, task', [held({}), held({ canCancel: false }), held({ canCancel: false, racksHeld: true }), held({ kind: 'Task' })].map(blockerAction).join() === 'cancelOrder,finishOrder,releaseRacks,openTask')

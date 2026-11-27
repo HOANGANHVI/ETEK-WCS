@@ -391,7 +391,7 @@ public sealed class RouteEngine(
         if (step.Resolution == DestinationResolution.BeforePick)
         {
             (destCode, noBind) = await ChooseDestinationAsync(order, step, kind, ct);
-            if (destCode is null) return await NoCandidateAsync(order, step, WaitKind.DestinationUnavailable, "No usable destination", ct);
+            if (destCode is null) return await NoCandidateAsync(order, step, WaitKind.DestinationUnavailable, await DestinationBlockedAsync(order, step, kind, "No usable destination", ct), ct);
         }
 
         // CR-046 (F2): an order that has not started takes no destination while the AGV it needs has (or is about to get) a leg that has no destination yet. Otherwise it would hold the slot
@@ -426,6 +426,20 @@ public sealed class RouteEngine(
         foreach (var c in step.Destinations)   // already ordered by priority then order; ONLY declared candidates are ever considered
             if (await eval.DestinationUsableAsync(c.LocationCode, kind, c.Conditions, order.Id, ct, new ModelContext(order.Snapshot.ProductModelId))) return (c.LocationCode, c.NoBind);
         return (null, false);
+    }
+
+    /// <summary>CR-052: the waiting reason when no destination is usable: the headline plus the cause of every candidate. The PORT_HELD prefix only when held ports are the only cause.</summary>
+    private async Task<string> DestinationBlockedAsync(TransportOrder order, StepSnapshot step, RackKind kind, string headline, CancellationToken ct)
+    {
+        var candidates = step.DestinationMode == DestinationMode.Request
+            ? [(Code: order.RequestLocationCode, Conditions: (IEnumerable<ConditionSpec>)[])]
+            : step.Destinations.Select(c => (Code: c.LocationCode, Conditions: (IEnumerable<ConditionSpec>)c.Conditions)).ToList();
+        var blockers = new List<(bool PortHeld, string Reason)>();
+        foreach (var c in candidates) blockers.Add(await eval.DestinationBlockerAsync(c.Code, kind, c.Conditions, order.Id, ct, new ModelContext(order.Snapshot.ProductModelId)));
+        if (blockers.Count == 0) return $"{headline} - no destination is configured";
+        var prefix = blockers.All(b => b.PortHeld) ? RouteConditionEvaluator.PortHeld + " " : "";
+        var text = $"{prefix}{headline} - {string.Join("; ", blockers.Select(b => b.Reason))}";
+        return text.Length <= 800 ? text : text[..800];
     }
 
     private async Task ReserveDestinationAsync(TransportLeg leg, string destCode, CancellationToken ct)
@@ -466,7 +480,7 @@ public sealed class RouteEngine(
         {
             if (await QueueBlockAsync(order, ct) is { } queued) { HoldWithRack(order, leg, step, queued.Detail); return true; }
             var (code, noBind) = await ChooseDestinationAsync(order, step, leg.RackKind, ct);
-            if (code is null) { HoldWithRack(order, leg, step); return false; }
+            if (code is null) { HoldWithRack(order, leg, step, blocked: await DestinationBlockedAsync(order, step, leg.RackKind, WithRackHeadline(step), ct)); return false; }
             leg.SetDestination(code, noBind, clock.UtcNow);
             await ReserveDestinationAsync(leg, code, ct);
             await stations.OpenForLegAsync(order, leg, code, StationOperation.Delivery, ct);
@@ -479,10 +493,12 @@ public sealed class RouteEngine(
     }
 
     /// <summary>The AMR holds the rack and no destination is usable: nothing is stored anywhere, the AGV stays committed, inventory keeps the rack IN_TRANSIT.</summary>
-    private void HoldWithRack(TransportOrder order, TransportLeg leg, StepSnapshot step, string? queueDetail = null)
+    private static string WithRackHeadline(StepSnapshot step) => step.WaitingPositionCode is { } wp ? $"No destination; AMR waits at {wp} holding the rack" : "No destination; AMR holds the rack";
+
+    private void HoldWithRack(TransportOrder order, TransportLeg leg, StepSnapshot step, string? queueDetail = null, string? blocked = null)
     {
         var now = clock.UtcNow;
-        var detail = step.WaitingPositionCode is { } wp ? $"No destination; AMR waits at {wp} holding the rack" : "No destination; AMR holds the rack";
+        var detail = blocked ?? WithRackHeadline(step);
         if (queueDetail is not null) detail = $"{detail}. {queueDetail}";
         if (leg.State != LegState.Waiting || leg.WaitKind != WaitKind.DestinationUnavailable_AgvHoldingRack) Event(order, leg, null, "WAITING_FOR_DESTINATION", detail);
         leg.TransitionTo(LegState.Waiting, detail, WaitKind.DestinationUnavailable_AgvHoldingRack, now);
