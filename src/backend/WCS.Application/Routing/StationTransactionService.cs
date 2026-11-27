@@ -74,6 +74,18 @@ public sealed class StationTransactionService(IUnitOfWork uow, IRoutingRepositor
             if (tx.LegId == legId) tx.Fail(reason, clock.UtcNow);
     }
 
+    /// <summary>CR-050: the AGV system REFUSED a leg. Only a transaction on which nothing has happened (no confirmed pick, not beyond AgvAssigned) is failed, which frees its port.
+    /// Anything further is a physical fact WCS cannot undo: the port stays occupied and the transaction goes to a person (ReconciliationRequired).</summary>
+    public async Task CloseForRejectedLegAsync(TransportLeg leg, CancellationToken ct)
+    {
+        foreach (var tx in await routing.ListTransactionsAsync(true, null, null, 200, ct))
+        {
+            if (tx.LegId != leg.Id || tx.State == StationTransactionState.ReconciliationRequired) continue;
+            if (leg.PickConfirmedAt is null && tx.State <= StationTransactionState.AgvAssigned) tx.Fail("LEG_REJECTED_BY_AGV_SYSTEM", clock.UtcNow);
+            else tx.RequireReconciliation("LEG_REJECTED_AFTER_PHYSICAL_PROGRESS", clock.UtcNow);
+        }
+    }
+
     // ------------------------------------------------------------------ own unit of work
 
     /// <summary>AGV / PLC events that move the transaction forward without completing it (approaching, at the port, handling).</summary>

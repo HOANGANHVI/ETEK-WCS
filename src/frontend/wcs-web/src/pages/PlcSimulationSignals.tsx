@@ -33,7 +33,7 @@ export function PlcSimulationSignals({ active, real, onResult }: { active: boole
             <>
               <select value={id} aria-label={t('linked.simStation')} onChange={(e) => { setId(e.target.value); setAck(false) }}>
                 <option value="">{t('linked.simStation')}</option>
-                {list.map((x) => <option key={x.stationId} value={x.stationId}>{x.stationId} · {x.locationCode} · {x.plcId}{x.plcOnline ? ` · ${t('linked.simPlcOnline')}` : ''}</option>)}
+                {list.map((x) => <option key={x.stationId} value={x.stationId}>{x.stationId} · {x.locationCode} · {x.plcId}{x.blocked ? ` · ${t('linked.simPlcOnline')}` : ''}</option>)}
               </select>
               {s && (
                 <>
@@ -43,14 +43,14 @@ export function PlcSimulationSignals({ active, real, onResult }: { active: boole
                     <table className="grid">
                       <thead><tr><th>{t('linked.simSignal')}</th><th>{t('linked.simAddress')}</th><th>{t('linked.simDescription')}</th><th>{t('linked.simValue')}</th><th /></tr></thead>
                       <tbody>
-                        {s.signals.map((x) => <SignalRow key={`${s.stationId}:${x.signal}:${x.value ?? ''}`} signal={x} disabled={!active || busy || !!s.plcOnline} onSet={(v) => void run(async () => { await api.simSetSignal(s.stationId, x.signal, v); setMessage(t('linked.simStored', { signal: x.signal })) })} />)}
+                        {s.signals.map((x) => <SignalRow key={`${s.stationId}:${x.signal}:${x.value ?? ''}`} signal={x} disabled={!active || busy || !!s.blocked} onSet={(v) => void run(async () => { await api.simSetSignal(s.stationId, x.signal, v); setMessage(t('linked.simStored', { signal: x.signal })) })} />)}
                       </tbody>
                     </table>
                   </div>
                   <label><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> {t('linked.simAck')}</label>
                   <div className="btn-row">
-                    <Button variant="primary" disabled={!active || real || busy || !ack || !!s.plcOnline} onClick={() => void run(async () => { const r = await api.simEvaluate(s.stationId, ack); onResult(r); setMessage(`${r.outcome} / ${r.code} – ${r.message}`) })}>{t('linked.simEvaluate')}</Button>
-                    <Button disabled={!active || busy || !!s.plcOnline} onClick={() => void run(async () => { await api.simReset(s.stationId); setMessage(t('linked.simResetDone')) })}>{t('linked.simReset')}</Button>
+                    <Button variant="primary" disabled={!active || real || busy || !ack || !!s.blocked} onClick={() => void run(async () => { const r = await api.simEvaluate(s.stationId, ack); onResult(r); setMessage(`${r.outcome} / ${r.code} – ${r.message}`) })}>{t('linked.simEvaluate')}</Button>
+                    <Button disabled={!active || busy || !!s.blocked} onClick={() => void run(async () => { await api.simReset(s.stationId); setMessage(t('linked.simResetDone')) })}>{t('linked.simReset')}</Button>
                   </div>
                 </>
               )}

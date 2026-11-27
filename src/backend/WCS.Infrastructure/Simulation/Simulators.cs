@@ -88,8 +88,14 @@ public sealed class RcsSimulator : IRcsClient
 
     public RcsTaskStatus? StatusOf(string requestCode) { lock (_gate) return _tasks.TryGetValue(requestCode, out var t) ? t.Status : null; }
 
+    /// <summary>CR-050: lets the AMR simulation answer a creation with an armed fault. Called outside the lock of this class.</summary>
+    public Func<RcsCallResult?>? CreateInterceptor { get; set; }
+    /// <summary>CR-050: the simulated fleet as it is now.</summary>
+    public IReadOnlyList<WCS.Application.Fleet.RcsFleetAmr> Fleet { get { lock (_gate) return [.. _fleet]; } }
+
     public Task<RcsCallResult> CreateTaskAsync(RcsCreateTaskRequest request, CancellationToken ct = default)
     {
+        if (!Unreachable && CreateInterceptor?.Invoke() is { } armed) { lock (_gate) CreateCalls++; return Task.FromResult(armed); }
         lock (_gate)
         {
             CreateCalls++;

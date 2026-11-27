@@ -1,5 +1,10 @@
 # Change Log
 
+## CR-050 Simulator execution (2026-11-27) – branch feature/cr-050-simulator, not merged
+
+- PLC simulation usable with the simulator PLC runtime (real modes unchanged). AMR simulation behind the simulated RCS, off by default and limited to work created after it is switched on: travel, pick, drop, port exit, faults, panel on the PLC simulation page.
+- Fix (business behaviour, also in real mode): a leg rejected by the AGV system frees its station ports only when nothing has happened on them; a port with a confirmed pick or a further advanced transaction stays held and needs reconciliation. No migration.
+
 ## CR-049 QA fixes (2026-11-27) – merged into main (0db229a), not deployed
 
 - A waiting order names the real cause when its station port is held; the IO address page says what 96 and 120 count. No migration, no rule change.

@@ -5,7 +5,7 @@ import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
-import type { SimFlow, SimStartResult, SimStation, SimStatus } from './simTypes'
+import type { AmrFault, AmrSimulation, SimFlow, SimStartResult, SimStation, SimStatus } from './simTypes'
 import type { ExecMode, ExecutionModeView, LegacyAdoptionResult, ModeReadiness, ModeTransitionBody, ModeTransitionResult, ModeTransitionView, RcsMessageDetail, RcsMessageSummary } from './modeTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoMapInfo, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
@@ -309,6 +309,12 @@ const realApi = {
   transferPreview: (id: string, selection: Selection) => request<ImportPlan>(`/api/config-transfer/imports/${id}/preview`, { method: 'POST', body: JSON.stringify(selection) }),
   // CR-035 Admin manual PLC simulation (PLC only; RCS is real). The server enforces Admin and the safety acknowledgement.
   queueAlerts: () => request<QueueAlert[]>('/api/routing/queue-alerts'),
+  amrStatus: () => request<AmrSimulation>('/api/simulator/amr'),
+  amrConfig: (enabled: boolean, speedMultiplier: number) => request<AmrSimulation>('/api/simulator/amr/config', { method: 'POST', body: JSON.stringify({ enabled, speedMultiplier }) }),
+  amrFault: (fault: AmrFault, delaySeconds?: number) => request<AmrSimulation>('/api/simulator/amr/faults', { method: 'POST', body: JSON.stringify({ fault, count: 1, delaySeconds }) }),
+  amrClearFaults: () => request<AmrSimulation>('/api/simulator/amr/faults', { method: 'DELETE' }),
+  amrConnection: (connected: boolean) => request<AmrSimulation>('/api/simulator/amr/connection', { method: 'POST', body: JSON.stringify({ connected }) }),
+  amrRecover: (requestCode: string) => request<AmrSimulation>(`/api/simulator/amr/runs/${encodeURIComponent(requestCode)}/recover`, { method: 'POST' }),
   simStatus: () => request<SimStatus>('/api/plc-simulation/status'),
   simActivate: (confirmed: boolean) => request<SimStatus>('/api/plc-simulation/activate', { method: 'POST', body: JSON.stringify({ confirmed }) }),
   simStations: () => request<SimStation[]>('/api/plc-simulation/stations'),

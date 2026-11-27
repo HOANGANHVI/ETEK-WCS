@@ -22,6 +22,8 @@ public interface IRouteEngine
     Task DispatchLegAsync(Guid legId, CancellationToken ct = default);
     Task<EventResult> ConfirmPickAsync(Guid legId, ConfirmationSource source, string? user, string? eventKey = null, CancellationToken ct = default);
     Task<EventResult> ConfirmDropAsync(Guid legId, ConfirmationSource source, string? user, string? externalRackId = null, CancellationToken ct = default);
+    /// <summary>CR-050: the AGV system says it cannot go on with a leg. No approved rule says what follows, so it is only recorded on the order: no state, inventory or reservation changes.</summary>
+    Task ReportLegProblemAsync(Guid legId, string code, string detail, CancellationToken ct = default);
     Task<OrderDto> CancelAsync(Guid orderId, string reason, string? user, CancellationToken ct = default);
     /// <summary>CR-042 (OQ-42-08): an Admin confirms that the racks a FAILED order moved may be used again. Moves nothing and changes no inventory.</summary>
     Task<OrderDto> ReleaseRacksAsync(Guid orderId, string reason, string? user, CancellationToken ct = default);
@@ -676,7 +678,7 @@ public sealed class RouteEngine(
                     if (leg.DestinationLocationCode is { } md) await stations.OpenForLegAsync(order, leg, md, StationOperation.Delivery, t, null, false);
                     Event(order, leg, null, "LEG_DISPATCHING", "RCS");
                 }
-                return new LegDispatchRequest(leg.Id, leg.AgvRequestCode, null, leg.RackKind, leg.SourceLocationCode!, leg.DestinationLocationCode);
+                return new LegDispatchRequest(leg.Id, leg.AgvRequestCode, null, leg.RackKind, leg.SourceLocationCode!, leg.DestinationLocationCode, order.CreatedAt);
             }
 
             var agv = await agvs.GetByRoleAsync(RoleOf(leg.RackKind), t);
@@ -708,7 +710,7 @@ public sealed class RouteEngine(
                 if (leg.DestinationLocationCode is { } d) await stations.OpenForLegAsync(order, leg, d, StationOperation.Delivery, t, agv.Id);
                 Event(order, leg, null, "LEG_DISPATCHING", agv.Code);
             }
-            return new LegDispatchRequest(leg.Id, leg.AgvRequestCode, agv.RcsRobotCode, leg.RackKind, leg.SourceLocationCode!, leg.DestinationLocationCode);
+            return new LegDispatchRequest(leg.Id, leg.AgvRequestCode, agv.RcsRobotCode, leg.RackKind, leg.SourceLocationCode!, leg.DestinationLocationCode, order.CreatedAt);
         }, ct);
         if (plan is null) return;
 
@@ -732,8 +734,9 @@ public sealed class RouteEngine(
                     Event(order, leg, null, "LEG_ACCEPTED", result.AgvTaskCode);
                     break;
                 case LegDispatchOutcome.Rejected:
-                    // nothing was sent: free the AGV and the reservations, fail the leg and the order (never pick another route silently)
+                    // the AGV system created no task: free the AGV and the reservations, fail the leg and the order (never pick another route silently)
                     await ReleaseLegReservationsAsync(leg, t);
+                    await stations.CloseForRejectedLegAsync(leg, t);   // CR-050: its untouched ports too, otherwise nothing could ever release them
                     leg.TransitionTo(LegState.Failed, $"AGV_REJECTED: {result.Reason}", WaitKind.None, clock.UtcNow);
                     FailOrder(order, "LEG_REJECTED_BY_AGV_SYSTEM");
                     break;
@@ -849,6 +852,20 @@ public sealed class RouteEngine(
         foreach (var c in continues) await TryContinueAsync(c.Item1, c.Item2, c.Item3, ct);
         if (result.Outcome == EventOutcome.Applied) { await notifier.PublishAsync([new WcsEvent("OrderChanged", new { legId })], ct); await DispatchPendingAsync(ct); }
         return result with { Order = result.Outcome == EventOutcome.Applied ? await OrderOfLegAsync(legId, ct) : null };
+    }
+
+    public async Task ReportLegProblemAsync(Guid legId, string code, string detail, CancellationToken ct = default)
+    {
+        using var _frame = DiagnosticContext.Begin(await CorrelationOfLegAsync(legId, ct));
+        var recorded = await uow.ExecuteAsync(async t =>
+        {
+            var leg = await routing.GetLegAsync(legId, t);
+            if (leg is null || leg.IsTerminal) return false;
+            var order = (await routing.GetOrderAsync(leg.OrderId, t))!;
+            Event(order, leg, null, code, detail, "RCS");
+            return true;
+        }, ct);
+        if (recorded) await notifier.PublishAsync([new WcsEvent("OrderChanged", new { legId })], ct);
     }
 
     // ================================================================================ cancel

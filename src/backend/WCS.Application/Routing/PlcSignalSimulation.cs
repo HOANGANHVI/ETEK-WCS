@@ -118,4 +118,4 @@ public sealed class PlcSimulatedInputs
 
 public sealed record SimSignalDto(string Signal, string DataType, string Description, string? Value, DateTimeOffset? ChangedAt, bool ReadByIntake, string? Address = null);
 public sealed record SimStationDto(string StationId, string PlcId, string LocationCode, bool? PlcOnline, bool PortMappingApproved, StationTransactionDto? ActiveTransaction, IReadOnlyList<SimSignalDto> Signals,
-    string Engine = "Unassigned");
+    string Engine = "Unassigned", bool Blocked = false);

@@ -9,22 +9,25 @@ namespace WCS.Infrastructure.Simulation;
 /// this adapter refuses to act where <see cref="IRcsDispatchGuard"/> says no AGV link is allowed (Production without the explicit simulator opt-in).
 /// It is idempotent: the same request code always returns the same task code, and it never touches the network.
 /// </summary>
-internal sealed class SimulatedLegDispatcher(IRcsDispatchGuard guard, RcsSimulator rcs) : ILegDispatcher
+internal sealed class SimulatedLegDispatcher(IRcsDispatchGuard guard, RcsSimulator rcs, AmrExecutionSimulator amr) : ILegDispatcher
 {
     public Task<LegDispatchResult> DispatchAsync(LegDispatchRequest request, CancellationToken ct = default)
     {
         var link = guard.Check();
+        if (link.Allowed && amr.Dispatch(request) is { } simulated) return Task.FromResult(simulated);   // CR-050: only while the AMR simulation is on
         // CR-028: a leg sent WITHOUT a robot code (RcsManaged) is registered with the simulated RCS, which chooses the AMR; a Legacy leg (robot code given) is exactly as before
         return Task.FromResult(link.Allowed
             ? new LegDispatchResult(LegDispatchOutcome.Accepted, request.RobotCode is null ? rcs.CreateLegTask(request.RequestCode) : $"SIM-{request.RequestCode}", null)
             : new LegDispatchResult(LegDispatchOutcome.Blocked, null, link.Code));
     }
 
-    public Task<WCS.Application.Abstractions.RcsTaskInfo> QueryAsync(string requestCode, CancellationToken ct = default) => rcs.QueryTaskAsync(requestCode, ct);
+    public Task<WCS.Application.Abstractions.RcsTaskInfo> QueryAsync(string requestCode, CancellationToken ct = default) =>
+        amr.Query(requestCode) is { } info ? Task.FromResult(info) : rcs.QueryTaskAsync(requestCode, ct);
 
     public Task<LegDispatchResult> ContinueAsync(string requestCode, string? agvTaskCode, string destinationLocationCode, CancellationToken ct = default)
     {
         var link = guard.Check();
+        if (link.Allowed && amr.Continue(requestCode, agvTaskCode, destinationLocationCode) is { } simulated) return Task.FromResult(simulated);
         return Task.FromResult(link.Allowed
             ? new LegDispatchResult(LegDispatchOutcome.Accepted, agvTaskCode ?? $"SIM-{requestCode}", null)
             : new LegDispatchResult(LegDispatchOutcome.Blocked, null, link.Code));

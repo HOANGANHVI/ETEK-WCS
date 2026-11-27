@@ -131,4 +131,6 @@ export const SYSTEM_LOG_TEMPLATES: Record<string, Bilingual> = {
   'Database connection restored after {Seconds:0} s. {Device} {EventCode}': { vi: 'Đã khôi phục kết nối cơ sở dữ liệu sau {Seconds} giây. {Device}', en: 'Database connection restored after {Seconds} s. {Device}' },
   'PLC station {Station} left the IO map: its link to location {Location} is released': { vi: 'Trạm PLC {Station} không còn trong IO Map: liên kết với vị trí {Location} đã được gỡ', en: 'PLC station {Station} left the IO map: its link to location {Location} is released' },
   'Default address {Address} of {Plc} {Station}/{Signal} is not assigned: {HolderStation}/{HolderSignal} holds it': { vi: 'Chưa gán địa chỉ mặc định {Address} cho {Plc} {Station}/{Signal}: {HolderStation}/{HolderSignal} đang dùng', en: 'Default address {Address} of {Plc} {Station}/{Signal} is not assigned: {HolderStation}/{HolderSignal} holds it' },
+  'AMR simulation step of {RequestCode} failed; it is tried again. {EventCode}': { vi: 'Bước mô phỏng AMR của {RequestCode} lỗi; sẽ thử lại. {EventCode}', en: 'AMR simulation step of {RequestCode} failed; it is tried again. {EventCode}' },
+  'AMR simulation step failed. {EventCode}': { vi: 'Bước mô phỏng AMR lỗi. {EventCode}', en: 'AMR simulation step failed. {EventCode}' },
 }

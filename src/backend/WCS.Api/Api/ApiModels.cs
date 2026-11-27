@@ -122,3 +122,8 @@ public sealed record TestWriteRequest(System.Text.Json.JsonElement Value);
 public sealed record SimulatorValueRequest([property: Required] string PlcId, [property: Required] string StationId, [property: Required] string Signal, System.Text.Json.JsonElement Value);
 public sealed record SimulatorOnlineRequest([property: Required] string PlcId, bool Online);
 public sealed record SimulatorStationFaultRequest([property: Required] string PlcId, [property: Required] string StationId, bool Failing);
+
+// CR-050: AMR simulation control (Admin)
+public sealed record AmrConfigRequest(bool Enabled, double SpeedMultiplier);
+public sealed record AmrFaultRequest([property: Required, StringLength(40)] string Fault, int? Count, double? DelaySeconds);
+public sealed record AmrConnectionRequest(bool Connected);
