@@ -139,6 +139,33 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
         return noRack;   // a rack is there but a configured condition or model rule excludes it
     }
 
+    /// <summary>
+    /// CR-052: why one destination candidate cannot be used now, for the waiting reason shown to the operator. It repeats the checks of <see cref="DestinationUsableAsync"/> in the same order and
+    /// decides nothing (it is only asked after no candidate was usable). A held port names the state of the Station Transaction and the order that holds it.
+    /// </summary>
+    public async Task<(bool PortHeld, string Reason)> DestinationBlockerAsync(string code, RackKind kind, IEnumerable<ConditionSpec> extra, Guid orderId, CancellationToken ct, ModelContext? mc = null)
+    {
+        (bool, string) Because(string why) => (false, $"{code}: {why}");
+        var loc = await locations.GetByCodeAsync(code, ct);
+        if (loc is not null && mc is not null && modelGuard.Enforcing && ModelGuard.LocationViolation(loc, mc.ProcessModelId, LocationUse.Destination) is { } violation)
+            return Because($"excluded by the product model rule {violation}");
+        if (loc is null || !loc.Enabled) return Because("disabled or unknown");
+        if (!loc.Accepts(kind)) return Because($"does not accept {kind} racks");
+        if (!StoresRacks(loc.Type)) return Because("is a position that stores no rack");
+        if (loc.ReconciliationRequired) return Because("needs inventory reconciliation");
+        var (occupied, reserved) = await CountsAsync(loc, ct);
+        if (!loc.HasFreeSlot(occupied, reserved)) return Because($"no free slot ({occupied} rack(s) and {reserved} reservation(s), capacity {loc.RackCapacity})");
+        if (await routing.FindPortByLocationAsync(code, ct) is { } port)
+        {
+            if (!port.Enabled) return Because($"port {port.Id} is disabled");
+            if (await routing.GetActiveTransactionForPortAsync(port.Id, ct) is { } tx && tx.OrderId != orderId)
+                return (true, $"{code}: port {port.Id} is held by a Station Transaction in {tx.State}{(tx.OrderId is { } by ? $" of order {by.ToString("N")[..8]}" : "")}"
+                    + (tx.State == StationTransactionState.HandoverCompleted ? ": confirm that the AMR has left the port" : ""));
+        }
+        if (!await PlcOnlineAsync(code, ct)) return Because("its PLC is offline or disabled");
+        return await AllAsync(extra, code, kind, ct, null, orderId) ? Because("not usable") : Because("a configured condition excludes it");
+    }
+
     /// <summary>Always-on rules for a DESTINATION candidate: enabled, accepts the rack kind, free slot, port ready and PLC online.</summary>
     public async Task<bool> DestinationUsableAsync(string code, RackKind kind, IEnumerable<ConditionSpec> extra, Guid? orderId, CancellationToken ct = default, ModelContext? mc = null)
     {

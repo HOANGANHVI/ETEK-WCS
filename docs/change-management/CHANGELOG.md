@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-052 Destination waiting reason (2026-11-27) – branch fix/cr-052-destination-reason, not merged
+
+- A waiting order with no usable destination names the cause of every candidate; a held port is shown as such. No change of any rule. No migration.
+
 ## CR-051 Task visibility across modules (2026-11-27) – merged into main (ae48ccd), not deployed
 
 - Task management lists Phase 1 tasks and transport orders together; AGV monitoring shows what both engines sent to the RCS, with the RCS state. Read only; no migration.
