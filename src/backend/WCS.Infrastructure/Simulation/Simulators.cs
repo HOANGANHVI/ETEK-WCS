@@ -213,8 +213,10 @@ public sealed class RcsSimulator : IRcsClient
 
     public void SetFleet(IEnumerable<WCS.Application.Fleet.RcsFleetAmr> amrs) { lock (_gate) _fleet = [.. amrs]; }
 
-    /// <summary>N simulated AMRs with codes SIM-001..SIM-N and plausible, deterministic values (idle, charged, spread on a line). 0 = an empty fleet.</summary>
-    public void SetFleetSize(int n) => SetFleet(Enumerable.Range(1, Math.Max(0, n)).Select(i => new WCS.Application.Fleet.RcsFleetAmr($"SIM-{i:D3}", "90", null, (100 - i % 50).ToString(),
+    /// <summary>N simulated AMRs with plausible, deterministic values (idle, charged, spread on a line). 0 = an empty fleet. CR-050: <paramref name="codes"/> names them in order (so that they can be
+    /// the robot codes the dispatch asks for); an AMR without a configured name is SIM-001..SIM-N.</summary>
+    public void SetFleetSize(int n, IReadOnlyList<string>? codes = null) => SetFleet(Enumerable.Range(1, Math.Max(0, n)).Select(i => new WCS.Application.Fleet.RcsFleetAmr(
+        codes is not null && i <= codes.Count && !string.IsNullOrWhiteSpace(codes[i - 1]) ? codes[i - 1].Trim() : $"SIM-{i:D3}", "90", null, (100 - i % 50).ToString(),
         (i * 1000).ToString(), "2000", "SIM-MAP", "0", "4", "0", "0", null, null, [])));
 
     public Task<WCS.Application.Fleet.RcsFleetResult> QueryFleetAsync(CancellationToken ct = default)

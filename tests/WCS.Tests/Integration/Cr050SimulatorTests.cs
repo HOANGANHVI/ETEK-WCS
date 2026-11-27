@@ -243,6 +243,58 @@ public class Cr050SimulatorTests(DatabaseFixture fixture)
         Assert.True(await RunAsync(kit, Completed(kit, order)), Describe(kit));
     }
 
+    [Fact]
+    public async Task A_named_simulated_fleet_is_the_whole_fleet_and_carries_the_legs()
+    {
+        await using var kit = await KitAsync();
+        var codes = await kit.H.Db(d => d.Agvs.OrderBy(a => a.Code).Select(a => a.RcsRobotCode!).ToListAsync());
+        kit.H.Rcs.SetFleetSize(2, codes);
+        On(kit);
+        Assert.Equal(codes.Order(StringComparer.Ordinal), Sim(kit).View().Robots.Select(r => r.RobotCode));
+        await kit.H.StockAsync("A1", RackKind.Full, 1);
+        var order = await StartAsync(kit);
+        Assert.True(await RunAsync(kit, async () => (await Completed(kit, order)()) && await Released(kit)()), Describe(kit));
+        Assert.Equal(2, Sim(kit).View().Robots.Count);
+        Assert.Contains(Sim(kit).View().Runs.Single().RobotCode, codes);
+    }
+
+    [Fact]
+    public async Task An_AMR_that_does_not_leave_keeps_the_destination_port_until_it_really_leaves()
+    {
+        await using var kit = await KitAsync();
+        On(kit);
+        await kit.H.StockAsync("A1", RackKind.Full, 1);
+        Sim(kit).Arm(AmrFault.ExitStall, 1, null);
+        var order = await StartAsync(kit);
+        Assert.True(await RunAsync(kit, async () => (await Completed(kit, order)()) && Sim(kit).View().Runs.Any(r => r.Stalled)), Describe(kit));
+        await RunAsync(kit, () => Task.FromResult(false), 30);                              // time alone releases nothing
+        var b1 = await kit.H.Db(d => d.PlcStations.Where(p => p.LocationCode == "B1" && p.RetiredAt == null).Select(p => p.Id).SingleAsync());
+        Assert.Equal(StationTransactionState.HandoverCompleted, (await kit.TransactionsAsync(order)).Single(t => t.PortId == b1).State);
+        await Sim(kit).RecoverAsync((await kit.OrderAsync(order)).Legs.Single().AgvRequestCode);
+        Assert.True(await RunAsync(kit, Released(kit)), Describe(kit));
+    }
+
+    [Fact]
+    public async Task Switched_off_in_the_middle_the_work_is_finished_by_hand_and_is_not_taken_over_again()
+    {
+        await using var kit = await KitAsync();
+        On(kit);
+        await kit.H.StockAsync("A1", RackKind.Full, 1);
+        var order = await StartAsync(kit);
+        Assert.True(await RunAsync(kit, async () => (await kit.OrderAsync(order)).Legs.SingleOrDefault()?.PickConfirmedAt is not null), Describe(kit));
+        Sim(kit).Configure(false, 5);                                                       // what a restart does too: the runs are forgotten
+        kit.H.Clock.Advance(TimeSpan.FromSeconds(1));
+        On(kit, 50);
+        Assert.False(await RunAsync(kit, Completed(kit, order), 30));
+        Assert.Empty(Sim(kit).View().Runs);
+        await kit.DropAsync((await kit.OrderAsync(order)).Legs.Single().Id);
+        foreach (var x in (await kit.TransactionsAsync()).Where(x => x.IsActive).ToList())
+            await kit.With(sp => sp.GetRequiredService<StationTransactionService>().ConfirmAgvExitedAsync(x.Id));
+        Assert.True(await RunAsync(kit, async () => (await Completed(kit, order)()) && await Released(kit)()), Describe(kit));
+        Assert.NotNull(await kit.RackAtAsync("B1"));
+        Assert.Equal(0, await ActiveReservations(kit));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData(AmrFault.PickFailure)]

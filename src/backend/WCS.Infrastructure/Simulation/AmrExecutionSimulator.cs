@@ -25,7 +25,7 @@ public sealed class AmrSimulationOptions
 }
 
 /// <summary>Faults an Admin can arm. Each is used up by the next thing it applies to.</summary>
-public enum AmrFault { RejectDispatch = 1, DispatchTimeout = 2, MoveFailure = 3, PickFailure = 4, DropFailure = 5, ExecutionStall = 6, ResponseDelay = 7, DuplicateResponse = 8 }
+public enum AmrFault { RejectDispatch = 1, DispatchTimeout = 2, MoveFailure = 3, PickFailure = 4, DropFailure = 5, ExecutionStall = 6, ResponseDelay = 7, DuplicateResponse = 8, ExitStall = 9 }
 
 public enum AmrRunPhase { Queued = 1, ToSource = 2, Picking = 3, WaitingForTrigger = 4, ToDestination = 5, Dropping = 6, Leaving = 7, Completed = 8, Failed = 9, Cancelled = 10 }
 
@@ -292,6 +292,8 @@ public sealed class AmrExecutionSimulator
                 run.Dropped = true; run.DestinationExitPending = !run.IsTask; run.Phase = AmrRunPhase.Leaving;
                 break;
             case AmrRunPhase.Leaving:
+                // the AMR stays in the destination port after the drop: nothing releases the port until it really leaves
+                if (Take(AmrFault.ExitStall)) { run.Stalled = true; Note(run, $"stalled in the port of {run.Destination} (not leaving)"); break; }
                 var dest = Place(run.Destination);
                 Move(run.Robot!, (dest.X, dest.Y - PortRadius * 2), seconds);
                 if (run.SourceExitPending) await ExitIfOutsideAsync(run, run.Source!, sp, ct);

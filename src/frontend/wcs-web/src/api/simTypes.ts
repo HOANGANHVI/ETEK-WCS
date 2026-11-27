@@ -53,7 +53,7 @@ export interface SimStartResult {
 }
 
 /** CR-050: the AMR simulation behind the simulated RCS. */
-export type AmrFault = 'RejectDispatch' | 'DispatchTimeout' | 'MoveFailure' | 'PickFailure' | 'DropFailure' | 'ExecutionStall' | 'ResponseDelay' | 'DuplicateResponse'
+export type AmrFault = 'RejectDispatch' | 'DispatchTimeout' | 'MoveFailure' | 'PickFailure' | 'DropFailure' | 'ExecutionStall' | 'ResponseDelay' | 'DuplicateResponse' | 'ExitStall'
 export interface AmrRobot { robotCode: string; x: number; y: number; battery: number; state: string; requestCode: string | null }
 export interface AmrRun { requestCode: string; kind: 'Leg' | 'Task'; parentTask: string; robotCode: string | null; source: string | null; destination: string | null; phase: string; stalled: boolean; failure: string | null; events: string[] }
 export interface AmrSimulation { enabled: boolean; speedMultiplier: number; connected: boolean; responseDelaySeconds: number; armedFaults: Record<string, number>; robots: AmrRobot[]; runs: AmrRun[] }

@@ -98,6 +98,11 @@ Giới hạn của Simulator: một chặng là một nhiệm vụ RCS; nhiệm 
 
 Bằng chứng: [lỗi Pick](../reports/cr-050/1-pick-failure.png) · [hoàn tất](../reports/cr-050/2-completed.png) · [AMR đang chạy](../reports/cr-050/3-amr-monitoring-moving.png) · [lệnh](../reports/cr-050/4-orders.png).
 
+## 8. Hoàn thiện và nghiệm thu theo chỉ thị 2026-11-27
+
+- Thêm `Rcs:Fleet:SimulatorRobotCodes` và lỗi `ExitStall` (AMR không rời cổng).
+- Kết quả: Simulation vận hành chạy được; Simulation qua IO bị chặn do thiếu contract; chưa FULL PASS. Chi tiết và khoảng trống GAP-1, GAP-2: [báo cáo nghiệm thu](../reports/cr-050/ACCEPTANCE_2026-11-27.md).
+
 ## 6. Rollback
 
 Hoàn tác thay đổi; không đổi schema hay dữ liệu. Tắt cấu hình là trở về hành vi cũ.
