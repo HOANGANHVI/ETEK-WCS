@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { CandidateDef, ConditionDef, Process, ProcessHeaderBody, ProcessIssue, ProcessVersion, StepDef, VersionDefinition } from '../api/routingTypes'
 import { Modal } from '../components/Modal'
+import { RemovalDialog } from '../components/RemovalDialog'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useT } from '../i18n'
@@ -13,6 +14,7 @@ import {
 import { describeError } from '../i18n/vi'
 import { ApiRequestError } from '../api/errors'
 import { Field, Switch } from './config/FormKit'
+import { processName } from '../i18n/processNames'
 
 const MOVEMENT = ['Pickup', 'Delivery', 'BufferStorage', 'BufferRetrieval']
 const isMovement = (type: string) => MOVEMENT.includes(type)
@@ -28,6 +30,7 @@ export function ProcessesPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [showOff, setShowOff] = useState(false)   // CR-055: switched-off processes are hidden by default
   const [busy, setBusy] = useState(false)
 
   const importReference = async () => {
@@ -42,17 +45,17 @@ export function ProcessesPage() {
         actions={<><Button disabled={busy} onClick={importReference}>{t('routing.procImport')}</Button> <Button variant="primary" onClick={() => setCreating(true)}>{t('routing.procNew')}</Button></>} />
       {message && <div className="notice notice-ok" role="status">{message}</div>}
       {error && <div className="notice notice-error" role="alert">{error}</div>}
-      <Panel flush>
+      <Panel flush actions={<label className="inline-check"><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} /> {t('routing.showDisabled', { n: (list.data ?? []).filter((p) => !p.enabled).length })}</label>}>
         <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: t('routing.procNone'), hint: t('routing.procNoneHint') }}>
           {(rows) => (
             <div className="table-wrap">
               <table className="grid clickable">
                 <thead><tr><th>{t('routing.procColCode')}</th><th>{t('routing.procColName')}</th><th>{t('routing.procColRequest')}</th><th>{t('routing.procColRack')}</th><th>{t('routing.procColTriggers')}</th><th>{t('routing.procColPublished')}</th><th>{t('routing.procColStatus')}</th></tr></thead>
                 <tbody>
-                  {rows.map((p) => (
+                  {rows.filter((p) => showOff || p.enabled || p.id === selected).map((p) => (
                     <tr key={p.id} className={p.id === selected ? 'selected' : ''} onClick={() => setSelected(p.id)}>
                       <td className="mono nowrap"><strong>{p.code}</strong></td>
-                      <td>{p.name}</td>
+                      <td>{processName(p.code, p.name)}</td>
                       <td>{REQUEST_TYPE_LABEL[p.requestType] ?? p.requestType}</td>
                       <td>{RACK_KIND_LABEL[p.rackKind] ?? p.rackKind}</td>
                       <td className="mono">{p.triggerLocationCodes.join(', ')}</td>
@@ -66,7 +69,8 @@ export function ProcessesPage() {
           )}
         </Async>
       </Panel>
-      {selected && <ProcessDetail key={selected} id={selected} onChanged={list.reload} />}
+      {selected && <ProcessDetail key={selected} id={selected} onChanged={list.reload}
+        onRemoved={(code, outcome) => { setSelected(null); setError(null); setMessage(t(outcome === 'Deleted' ? 'routing.removedDeleted' : 'routing.removedDisabled', { code })); list.reload() }} />}
       {creating && <NewProcessDialog onClose={() => setCreating(false)} onCreated={(p) => { setCreating(false); list.reload(); setSelected(p.id) }} />}
     </>
   )
@@ -114,7 +118,7 @@ function HeaderFields({ body, setBody, triggers, setTriggers, codeEditable }: {
 }
 
 // ====================================================================================================================== one process
-function ProcessDetail({ id, onChanged }: { id: string; onChanged: () => void }) {
+function ProcessDetail({ id, onChanged, onRemoved }: { id: string; onChanged: () => void; onRemoved: (code: string, outcome: 'Deleted' | 'Disabled') => void }) {
   const t = useT()
   const process = useApi(useCallback(() => api.process(id), [id]))
   const [tab, setTab] = useState<'config' | 'audit'>('config')
@@ -122,7 +126,9 @@ function ProcessDetail({ id, onChanged }: { id: string; onChanged: () => void })
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const reload = () => { process.reload(); onChanged() }
+  const [revision, setRevision] = useState(0)   // CR-055: the removal plan is asked again after every change
+  const [dropVersion, setDropVersion] = useState<{ id: string; number: number } | null>(null)
+  const reload = () => { process.reload(); setRevision((n) => n + 1); onChanged() }
   const newVersion = async (p: Process) => {
     setError(null); setMessage(null)
     try { const v = await api.processNewVersion(p.id, p.versions[0]?.id); setMessage(t('routing.procVersionNewDone', { n: v.number })); setVersionId(v.id); reload() } catch (e) { setError(describeError(e)) }
@@ -143,7 +149,9 @@ function ProcessDetail({ id, onChanged }: { id: string; onChanged: () => void })
               <HeaderPanel p={p} onSaved={(msg) => { setMessage(msg); reload() }} onError={setError} />
               <OperationPanel key={p.queueScope ?? ''} p={p} onSaved={(msg) => { setError(null); setMessage(msg); reload() }} onError={setError} />
               <section className="detail-sec">
-                <h3>{t('routing.procVersions')} <Button size="sm" onClick={() => newVersion(p)}>{t('routing.procVersionNew')}</Button></h3>
+                <h3>{t('routing.procVersions')} <Button size="sm" onClick={() => newVersion(p)}>{t('routing.procVersionNew')}</Button>
+                  {(() => { const v = p.versions.find((x) => x.id === (versionId ?? p.versions[0]?.id)); return v && p.versions.length > 1 && (v.state === 'Draft' || v.state === 'Validated')
+                    ? <> <Button size="sm" variant="danger" onClick={() => setDropVersion({ id: v.id, number: v.number })}>{t('routing.versionDelete', { n: v.number })}</Button></> : null })()}</h3>
                 <div className="table-wrap">
                   <table className="grid clickable">
                     <thead><tr><th>{t('routing.procVersionColNumber')}</th><th>{t('routing.procVersionColState')}</th><th>{t('routing.procVersionColSteps')}</th><th>{t('routing.procVersionColBy')}</th><th>{t('routing.procVersionColPublished')}</th><th>{t('routing.procVersionNote')}</th></tr></thead>
@@ -163,11 +171,35 @@ function ProcessDetail({ id, onChanged }: { id: string; onChanged: () => void })
                 </div>
               </section>
               {(versionId ?? p.versions[0]?.id) && <VersionEditor key={versionId ?? p.versions[0]?.id} versionId={(versionId ?? p.versions[0]?.id)!} onChanged={reload} />}
+              <RemovalPanel key={revision} p={p} onRemoved={onRemoved} />
+              {dropVersion && <RemovalDialog title={t('routing.versionDelete', { n: dropVersion.number })} body={t('routing.versionDeleteBody', { n: dropVersion.number, code: p.code })} confirm={t('routing.removeConfirmDelete')}
+                onClose={() => setDropVersion(null)} onConfirm={async (reason) => { await api.processVersionDelete(dropVersion.id, reason); setDropVersion(null); setVersionId(null); setMessage(t('routing.versionDeleted', { n: dropVersion.number })); reload() }} />}
             </>
           )}
         </Async>
       )}
     </Panel>
+  )
+}
+
+/** CR-055: removing a process. The server says what is possible; nothing is shown when it cannot be asked (for example an older backend). */
+function RemovalPanel({ p, onRemoved }: { p: Process; onRemoved: (code: string, outcome: 'Deleted' | 'Disabled') => void }) {
+  const t = useT()
+  const plan = useApi(useCallback(() => api.processRemoval(p.id), [p.id]))
+  const [asking, setAsking] = useState(false)
+  const d = plan.data
+  if (!d) return null
+  const remove = d.action === 'Delete'
+  const text = d.action === 'None' ? describeError(new ApiRequestError(422, { code: d.blockCode ?? '', message: d.blockMessage ?? '' }))
+    : t(remove ? 'routing.removeDeleteBody' : 'routing.removeDisableBody', { code: p.code, n: d.orders })
+  return (
+    <section className="detail-sec">
+      <h3>{t('routing.removeTitle')}</h3>
+      <p className="muted">{text}</p>
+      {d.action !== 'None' && <Button variant="danger" onClick={() => setAsking(true)}>{t(remove ? 'routing.removeDelete' : 'routing.removeDisable')}</Button>}
+      {asking && <RemovalDialog title={t(remove ? 'routing.removeDelete' : 'routing.removeDisable')} body={text} confirm={t(remove ? 'routing.removeConfirmDelete' : 'routing.removeConfirmDisable')}
+        onClose={() => setAsking(false)} onConfirm={async (reason) => { const r = await api.processRemove(p.id, reason); setAsking(false); onRemoved(r.code, r.outcome) }} />}
+    </section>
   )
 }
 

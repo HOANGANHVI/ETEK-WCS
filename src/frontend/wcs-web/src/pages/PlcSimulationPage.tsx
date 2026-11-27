@@ -9,6 +9,7 @@ import { useT } from '../i18n'
 import { describeError } from '../i18n/vi'
 import { PlcSimulationSignals as SignalPanel } from './PlcSimulationSignals'
 import { AmrSimulatorPanel } from './AmrSimulatorPanel'
+import { processName } from '../i18n/processNames'
 
 /**
  * CR-035 / CR-040 – Admin manual PLC simulation, opened by an explicit confirmation. Only PLC → WCS signals are simulated: requests go through the same WCS intake a PLC would use.
@@ -85,7 +86,7 @@ function Screen() {
                 <strong>{t('linked.psStep1')}</strong>
                 <select value={flowCode} aria-label={t('linked.psStep1')} onChange={(e) => { setFlowCode(e.target.value); setLocation('') }}>
                   <option value="">{t('linked.psChooseFlow')}</option>
-                  {list.map((f) => <option key={f.code} value={f.code}>{f.code} – {f.name}{f.startableNow ? '' : ` (${t('linked.psNotRunnable')})`}</option>)}
+                  {list.map((f) => <option key={f.code} value={f.code}>{f.code} – {processName(f.code, f.name)}{f.startableNow ? '' : ` (${t('linked.psNotRunnable')})`}</option>)}
                 </select>
                 {sel && (
                   <>

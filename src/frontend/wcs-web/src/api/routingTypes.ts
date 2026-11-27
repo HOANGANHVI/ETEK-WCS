@@ -115,6 +115,9 @@ export interface VersionSummary {
   validatedAt: string | null; publishedAt: string | null; publishedBy: string | null; disabledAt: string | null; note: string | null; stepCount: number
   readiness?: string | null
 }
+/** CR-055: what removing a process would do now (decided by the server). */
+export interface ProcessRemoval { action: 'Delete' | 'Disable' | 'None'; blockCode: string | null; blockMessage: string | null; orders: number; openOrders: number }
+
 export interface Process {
   id: string; code: string; name: string; description: string | null; requestType: string; rackKind: string; triggerLocationCodes: string[]
   enabled: boolean; reviewBlocked: boolean; reviewReason: string | null; sourceReference: string | null

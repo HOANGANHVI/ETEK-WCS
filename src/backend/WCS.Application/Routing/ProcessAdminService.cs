@@ -209,6 +209,65 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         return ToVersionDto(p, nv);
     }, ct);
 
+    // ------------------------------------------------------------------ CR-055: removal (owner decisions of 2026-11-27)
+
+    /// <summary>What "remove" would do now. A protected reference process is never removed; a process with open orders is left alone; one with finished orders is never deleted (its history
+    /// stays) and can only be switched off; one that never had an order is deleted, after it was switched off if it is published.</summary>
+    public Task<ProcessRemovalDto> RemovalAsync(Guid id, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+        await PlanRemovalAsync(await routing.GetProcessAsync(id, t) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found."), await routing.ListVersionsAsync(id, t), t), ct);
+
+    public Task<ProcessRemovalResult> RemoveAsync(Guid id, string? reason, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        RequireReason(reason);
+        var p = await routing.GetProcessAsync(id, t) ?? throw AppException.NotFound("PROCESS_NOT_FOUND", "Process not found.");
+        var versions = await routing.ListVersionsAsync(p.Id, t);
+        var plan = await PlanRemovalAsync(p, versions, t);
+        if (plan.Action == ProcessRemovalActions.None) throw AppException.Rejected(plan.BlockCode!, plan.BlockMessage!);
+        if (plan.Action == ProcessRemovalActions.Disable)
+            p.Update(p.Name, p.Description, p.RequestType, p.RackKind, p.TriggerLocationCodes, false, clock.UtcNow);
+        else
+        {   // steps and candidates go with their version (database cascade); the database also refuses the delete if an order appeared meanwhile
+            foreach (var v in versions) routing.Remove(v);
+            routing.Remove(p);
+        }
+        return new ProcessRemovalResult(p.Id, p.Code, plan.Action == ProcessRemovalActions.Disable ? "Disabled" : "Deleted", versions.Count, plan.Orders);
+    }, ct);
+
+    /// <summary>Deletes ONE version that was never published and that no order uses. The only version of a process is not deleted (remove the process instead).</summary>
+    public Task<VersionRemovalResult> DeleteVersionAsync(Guid versionId, string? reason, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        RequireReason(reason);
+        var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
+        var p = await ProcessOf(v, t);
+        if (!v.IsEditable) throw AppException.Rejected("VERSION_NOT_DELETABLE", "Only a draft or validated version can be deleted; a published or disabled version is kept.");
+        if (await routing.IsVersionUsedByOrderAsync(v.Id, t)) throw AppException.Rejected("VERSION_IN_USE", "A transport order uses this version; it is kept.");
+        if ((await routing.ListVersionsAsync(p.Id, t)).Count <= 1) throw AppException.Rejected("VERSION_ONLY_ONE", "This is the only version of the process; remove the process instead.");
+        routing.Remove(v);
+        return new VersionRemovalResult(p.Id, p.Code, v.Number);
+    }, ct);
+
+    private static void RequireReason(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) throw AppException.Validation("REASON_REQUIRED", "A reason is required.");
+        if (reason.Length > 500) throw AppException.Validation("REASON_TOO_LONG", "The reason has at most 500 characters.");
+    }
+
+    private async Task<ProcessRemovalDto> PlanRemovalAsync(BusinessProcess p, IReadOnlyList<BusinessProcessVersion> versions, CancellationToken ct)
+    {
+        var orders = await routing.CountOrdersOfProcessAsync(p.Id, false, ct);
+        var open = orders == 0 ? 0 : await routing.CountOrdersOfProcessAsync(p.Id, true, ct);
+        ProcessRemovalDto Blocked(string code, string message) => new(ProcessRemovalActions.None, code, message, orders, open);
+        if (ReferenceProcessCatalog.Load().Any(r => r.Protected && string.Equals(r.Code, p.Code, StringComparison.OrdinalIgnoreCase)))
+            return Blocked("PROCESS_PROTECTED", $"{p.Code} is an approved reference process: it is not removed. It can be switched off.");
+        if (open > 0) return Blocked("PROCESS_HAS_OPEN_ORDERS", $"{p.Code} has {open} unfinished transport order(s): finish or cancel them first.");
+        if (orders > 0)
+            return p.Enabled ? new(ProcessRemovalActions.Disable, null, null, orders, 0)
+                : Blocked("PROCESS_ALREADY_DISABLED", $"{p.Code} has {orders} transport order(s), so it is kept; it is already switched off.");
+        if (p.Enabled && versions.Any(v => v.State == ProcessConfigState.Published))
+            return Blocked("PROCESS_DISABLE_FIRST", $"{p.Code} is published and switched on: switch it off first, then remove it.");
+        return new(ProcessRemovalActions.Delete, null, null, 0, 0);
+    }
+
     /// <summary>
     /// Loads the reference processes derived from the working matrix (Process in detail, Phase 2) as DRAFT versions. Idempotent by process code; never publishes.
     /// A REVIEW flow (BP-04) is marked review-blocked so it can never be published (PH2-04 was approved by D-09).

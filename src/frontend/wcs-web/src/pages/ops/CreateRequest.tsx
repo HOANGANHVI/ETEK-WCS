@@ -10,6 +10,7 @@ import { describeError, flowInfo, RACK_KIND_VI, TASK_STATE_VI, taskCode } from '
 import { applyCreate, checkOrderOutcome, checkOutcome, newRequestKey, sendCreate, sendProcessCreate, type CreateApi, type CreateEvent, type CreateState, type Gate, type ProcessCreateApi } from '../../lib/opsConsole'
 import { processOf } from '../../lib/requestOptions'
 import { RequestOptions } from '../../components/RequestOptions'
+import { processName } from '../../i18n/processNames'
 
 
 interface Props {
@@ -57,7 +58,7 @@ export function CreateRequest({ flows, gate, api, onCreated, processes = [], pro
   }
   const again = () => { setTask(null); setOrder(null); setFoundOrder(null); setError(null); setFound(null); apply('reset') }
   const phase = state.phase
-  const info = process ? { code: process.code, label: process.name } : flow ? flowInfo(flow) : null
+  const info = process ? { code: process.code, label: processName(process.code, process.name) } : flow ? flowInfo(flow) : null
   const rackKind = process?.rackKind ?? option?.rackKind
 
   return (

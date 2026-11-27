@@ -29,7 +29,7 @@ public sealed record ReferenceProcess(string Code, string Name, string? Descript
     /// <summary>CR-039: set = this process belongs to the default catalog of that version and is published once per database. NULL = reference only (import as Draft).</summary>
     int? DefaultSinceVersion = null,
     /// <summary>CR-039: false = the default catalog creates it as a Draft with <see cref="DraftReason"/> and never publishes it.</summary>
-    bool DefaultPublish = true, string? DraftReason = null);
+    bool DefaultPublish = true, string? DraftReason = null, bool Protected = false);
 
 public sealed record VersionSummaryDto(Guid Id, int Number, string State, DateTimeOffset CreatedAt, string? CreatedBy, DateTimeOffset? ValidatedAt, DateTimeOffset? PublishedAt, string? PublishedBy,
     DateTimeOffset? DisabledAt, string? Note, int StepCount, string? Readiness = null);

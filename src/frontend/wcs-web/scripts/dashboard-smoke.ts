@@ -1,11 +1,13 @@
 // Dashboard figures: formulas checked on hand-made tasks (no backend). Run: npm run dashboard:test
-import { buildBuckets, completedPerAgv, completedPerRobot, countByBucket, failureRate, meanCycle, meanCycleByBucket, rangeStart, type FinishedTask } from '../src/lib/dashboardStats.ts'
+import { buildBuckets, completedPerAgv, completedPerRobot, countByBucket, failureRate, finishedFromOrder, isRunningOrder, meanCycle, meanCycleByBucket, rangeStart, type FinishedTask } from '../src/lib/dashboardStats.ts'
+import { readFileSync } from 'node:fs'
 
 const results: string[] = []
 const check = (name: string, ok: boolean, info = '') => { results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${ok || !info ? '' : ' — ' + info}`); if (!ok) process.exitCode = 1 }
 const at = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min).toISOString()
 const task = (state: string, created: string, finished: string | null, agvId = 'A'): FinishedTask => ({ state, createdAt: created, finishedAt: finished, agvId })
 
+const NOWISH = () => at(2026, 11, 17, 12)
 const now = new Date(2026, 10, 17, 14, 30)   // 17 Nov 2026 14:30 local
 check('today starts at local midnight', rangeStart('today', now).getTime() === new Date(2026, 10, 17).getTime())
 check('7 days = 7 calendar days including today', rangeStart('7d', now).getTime() === new Date(2026, 10, 11).getTime())
@@ -47,4 +49,12 @@ const perMixed = completedPerAgv(mixed)
 check('per AGV: tasks without an AGV are not counted for any AGV', perMixed.get('A') === 2 && perMixed.get('B') === 2 && perMixed.size === 2)
 const perRobot = completedPerRobot(mixed)
 check('per robot: by robotCode, tasks without a robot reported separately', perRobot.byRobot.get('1001') === 2 && perRobot.withoutRobot === 5 && perRobot.byRobot.size === 1, JSON.stringify([...perRobot.byRobot]) + perRobot.withoutRobot)
+// CR-053: transport orders are counted with the tasks
+const order = finishedFromOrder({ state: 'Completed', waitKind: 'None', createdAt: at(2026, 11, 17, 11), finishedAt: at(2026, 11, 17, 11, 20), legs: [{ sequence: 2, agvId: 'B', robotCode: null }, { sequence: 1, agvId: 'A', robotCode: '1001' }] })
+const both = [...completed, order]
+check('CR-053: a completed order counts once, in its day, in the cycle time and for the AGV of its last leg', countByBucket(both, b7)[6] === 4 && completedPerAgv(both).get('B') === 3 && completedPerAgv(both).get('A') === 2 && meanCycle([order]) === 20 * 60_000 && order.robotCode === '1001')
+check('CR-053: an order without a leg is counted but attributed to no AGV', finishedFromOrder({ state: 'Failed', waitKind: 'None', createdAt: NOWISH(), finishedAt: NOWISH(), legs: [] }).agvId === null)
+check('CR-053: running = accepted, in progress or holding a rack; a waiting order that has not started is not', [['Accepted', 'None'], ['InProgress', 'None'], ['Waiting', 'DestinationUnavailable_AgvHoldingRack'], ['Waiting', 'DestinationUnavailable'], ['Completed', 'None'], ['Cancelled', 'None']].map(([state, waitKind]) => isRunningOrder({ state, waitKind })).join() === 'true,true,true,false,false,false')
+const loader = readFileSync('src/hooks/useFinishedTasks.ts', 'utf8')
+check('CR-053: the dashboard reads finished orders and refreshes on their changes', loader.includes('api.routingOrders(state') && loader.includes("'OrderChanged'") && readFileSync('src/pages/DashboardPage.tsx', 'utf8').includes('isRunningOrder'))
 console.log(results.join(String.fromCharCode(10)))

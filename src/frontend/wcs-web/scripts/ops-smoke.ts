@@ -19,6 +19,9 @@ import {
 import { readFileSync } from 'node:fs'
 import { requestRows } from '../src/lib/requestRows.ts'
 import { waitCause } from '../src/lib/waitReason.ts'
+import { processName } from '../src/i18n/processNames.ts'
+import { RemovalDialog } from '../src/components/RemovalDialog.tsx'
+import { RequestOptions } from '../src/components/RequestOptions.tsx'
 import { filterWork, isWaitingToBeSent, isWithRcs, orderCode, orderRoute, workLink, workOfAgv, workRows } from '../src/lib/work.ts'
 import { RcsWorkTable } from '../src/components/RcsWorkTable.tsx'
 import { canRecover } from '../src/lib/amrSim.ts'
@@ -275,6 +278,20 @@ check('CR-050: recovery is offered for a stalled run and a failed or waiting leg
 }
 check('CR-052: a held destination port is named before and after the pick; other causes keep their own wording', ['DestinationUnavailable', 'DestinationUnavailable_AgvHoldingRack'].every((k) => waitCause({ waitKind: k, stateReason: 'PORT_HELD: No usable destination - A1: port A1 is held' }) === 'portHeld')
   && waitCause({ waitKind: 'DestinationUnavailable', stateReason: 'No usable destination - B1: no free slot' }) === 'kind')
+{ // CR-054: reference process names follow the language; an operator's own name is left as it is
+  const opts = (lang: 'vi' | 'en') => { i18n.setLang(lang); return renderToStaticMarkup(createElement(RequestOptions, { flows: [], processes: [{ code: 'BP-01', name: 'A1/A2 has a full rack', acceptsRequests: true }, { code: 'PH2-08', name: 'X1/X2 cần rack rỗng từ buffer', acceptsRequests: true }, { code: 'BP-02', name: 'Tên do người dùng đặt', acceptsRequests: true }] as never })) }
+  const vi = opts('vi'), en = opts('en'); i18n.setLang('vi')
+  check('CR-054: Vietnamese shows no English reference name', vi.includes('BP-01 · A1/A2 có rack đầy') && !vi.includes('has a full rack') && vi.includes('X1/X2 cần rack rỗng từ buffer'))
+  check('CR-054: English shows the English names', en.includes('A1/A2 has a full rack') && en.includes('X1/X2 needs an empty rack from the buffer'))
+  check('CR-054: a name the operator chose is shown as stored', vi.includes('Tên do người dùng đặt') && en.includes('Tên do người dùng đặt') && processName('X-9', 'A1/A2 has a full rack') === 'A1/A2 has a full rack')
+  check('CR-054: every delivered reference process is covered', (() => { const delivered = JSON.parse(readFileSync('../../backend/WCS.Application/Routing/reference-processes.json', 'utf8').slice(readFileSync('../../backend/WCS.Application/Routing/reference-processes.json', 'utf8').charCodeAt(0) === 0xfeff ? 1 : 0)) as { code: string; name: string }[]; i18n.setLang('vi'); return delivered.length >= 18 && delivered.every((p) => { const inVi = processName(p.code, p.name); i18n.setLang('en'); const inEn = processName(p.code, p.name); i18n.setLang('vi'); return inVi !== inEn }) })())
+}
+{ // CR-055: removal of process configuration
+  const page = readFileSync('src/pages/ProcessesPage.tsx', 'utf8')
+  check('CR-055: the page asks the server what removing does, requires a reason and hides switched-off processes', page.includes('api.processRemoval(') && page.includes('api.processRemove(') && page.includes('api.processVersionDelete(') && page.includes('showOff || p.enabled') && readFileSync('src/components/RemovalDialog.tsx', 'utf8').includes('!reason.trim()'))
+  const html = renderToStaticMarkup(createElement(RemovalDialog, { title: 'T', body: 'B', confirm: 'XOA', onClose: () => {}, onConfirm: async () => {} }))
+  check('CR-055: the confirmation starts with the action disabled until a reason is given', /disabled=""[^>]*>XOA|<button[^>]*disabled[^>]*>XOA/.test(html), html)
+}
 // CR-047: a rack that cannot be removed says who holds it and where to go; nothing is cancelled from the rack screen
 const held = (o: Partial<RackBlocker>): RackBlocker => ({ kind: 'Order', id: 'a b', reference: 'R1', state: 'Waiting', process: 'BP-05', canCancel: true, racksHeld: false, ...o })
 check('next step of a held rack: cancel, finish, release, task', [held({}), held({ canCancel: false }), held({ canCancel: false, racksHeld: true }), held({ kind: 'Task' })].map(blockerAction).join() === 'cancelOrder,finishOrder,releaseRacks,openTask')

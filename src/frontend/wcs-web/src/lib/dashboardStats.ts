@@ -12,6 +12,20 @@ export interface FinishedTask { state: string; createdAt: string; finishedAt: st
 
 const HOUR = 3_600_000
 
+/** CR-053: what of a transport order the figures need. */
+export interface OrderFigure { state: string; waitKind: string; createdAt: string; finishedAt: string | null; legs: { sequence: number; agvId: string | null; robotCode?: string | null }[] }
+
+/** CR-053: a transport order counted like a task: once, for the AGV / robot of its last leg that has one. */
+export function finishedFromOrder(o: OrderFigure): FinishedTask {
+  const legs = [...o.legs].sort((a, b) => b.sequence - a.sequence)
+  return { state: o.state, createdAt: o.createdAt, finishedAt: o.finishedAt, agvId: legs.find((l) => l.agvId)?.agvId ?? null, robotCode: legs.find((l) => l.robotCode)?.robotCode ?? null }
+}
+
+/** CR-053: an order is being executed: accepted / in progress, or waiting for a destination while the AMR holds the rack. Other waiting orders have not started. */
+export function isRunningOrder(o: { state: string; waitKind: string }): boolean {
+  return o.state === 'Accepted' || o.state === 'InProgress' || (o.state === 'Waiting' && o.waitKind === 'DestinationUnavailable_AgvHoldingRack')
+}
+
 /** Start of the period: local midnight today / 6 days ago / 29 days ago (so the period covers 1 / 7 / 30 calendar days including today). */
 export function rangeStart(range: RangeKey, now: Date): Date {
   const back = range === 'today' ? 0 : range === '7d' ? 6 : 29

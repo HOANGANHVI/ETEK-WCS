@@ -47,6 +47,11 @@ public interface IRoutingRepository
     /// <summary>Enabled processes with a Published version whose request type / rack kind / trigger location match. Used to select the process of a request.</summary>
     Task<IReadOnlyList<(BusinessProcess Process, BusinessProcessVersion Version)>> FindPublishedAsync(RequestType type, RackKind? kind, string locationCode, CancellationToken ct = default);
     void Add(BusinessProcessVersion version);
+    // CR-055: removal of process configuration that no transport order depends on
+    Task<int> CountOrdersOfProcessAsync(Guid processId, bool openOnly, CancellationToken ct = default);
+    Task<bool> IsVersionUsedByOrderAsync(Guid versionId, CancellationToken ct = default);
+    void Remove(BusinessProcess process);
+    void Remove(BusinessProcessVersion version);
     /// <summary>CR-036 (A.1): true when a Published version uses the location as trigger, candidate, waiting position or in a condition (the condition test is a conservative text match).</summary>
     Task<bool> IsLocationReferencedByPublishedAsync(string locationCode, CancellationToken ct = default);
 

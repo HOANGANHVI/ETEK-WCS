@@ -10,7 +10,7 @@ import { IconAgv, IconClock, IconTasks, IconWarehouse } from '../components/icon
 import { linkText, plcView, rcsView } from '../components/linkStatus'
 import { useFleet } from '../fleet/fleetState'
 import { useAuth } from '../auth/AuthContext'
-import { Async, EmptyState, Kpi, PageHeader, Panel, SectionHeader, TaskStatePill } from '../components/ui'
+import { Async, EmptyState, Kpi, PageHeader, Panel, Pill, SectionHeader, TaskStatePill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
 import { useClock } from '../hooks/useClock'
 import { useFinishedTasks } from '../hooks/useFinishedTasks'
@@ -21,10 +21,14 @@ import { useLang, useT } from '../i18n'
 import { describeHistory } from '../i18n/logCatalog'
 import { flowInfo, INVENTORY_EVENT_VI, reasonVi, TASK_STATE_VI, taskCode, type Tone } from '../i18n/vi'
 import { formatUptime } from '../lib/resourceMonitor'
-import { buildBuckets, completedPerAgv, completedPerRobot, countByBucket, failureRate, meanCycle, meanCycleByBucket, RANGES, type RangeKey } from '../lib/dashboardStats'
+import { buildBuckets, completedPerAgv, completedPerRobot, countByBucket, failureRate, isRunningOrder, meanCycle, meanCycleByBucket, RANGES, type RangeKey } from '../lib/dashboardStats'
+import { isWithRcs, orderCode, workOfAgv } from '../lib/work'
+import { ORDER_STATE_LABEL, ORDER_STATE_TONE } from '../i18n/routing'
 
 const EVENTS_TASK = ['TaskCreated', 'TaskStateChanged'] as const
 const EVENTS_INV = ['InventoryChanged', 'TaskStateChanged'] as const
+const EVENTS_ORDER = ['OrderChanged'] as const
+const EVENTS_WORK = ['TaskStateChanged', 'OrderChanged', 'RcsMessageRecorded'] as const
 const RANGE_KEY = 'wcs.dashboard.range'
 
 interface Activity { id: string; at: string; tone: Tone; text: string; detail?: string }
@@ -50,12 +54,16 @@ export function DashboardPage() {
   const locations = useApi(useCallback(() => api.locations(), []), [...EVENTS_INV])
   const racks = useApi(useCallback(() => api.racks(), []), [...EVENTS_INV])
   const tasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS_TASK])
+  const orders = useApi(useCallback(() => api.routingOrders(undefined, 200), []), [...EVENTS_ORDER])   // CR-053
+  const work = useApi(useCallback(() => api.rcsWork(true, undefined, 500), []), [...EVENTS_WORK])        // CR-053: what the AGVs have with the RCS (as on AGV monitoring)
   const health = useApi(useCallback(() => api.health(), []), ['TaskStateChanged'])
   const tx = useApi(useCallback(() => api.transactions(), []), [...EVENTS_INV])
   const finished = useFinishedTasks(range)
   const codes = useCodeMaps(locations.data, agvs.data)
 
   const taskItems = tasks.data?.items
+  const orderItems = orders.data?.items
+  const sent = useMemo(() => work.data ?? [], [work.data])
   const agvList = agvs.data
   const locList = locations.data
   const rackList = racks.data
@@ -69,6 +77,7 @@ export function DashboardPage() {
     return {
       buckets,
       completed: completed.length,
+      completedOrders: data.completedOrders,
       failed: failed.length,
       completedByBucket: countByBucket(completed, buckets),
       failedByBucket: countByBucket(failed, buckets),
@@ -84,14 +93,15 @@ export function DashboardPage() {
 
   const kpi = useMemo(() => {
     const online = agvList?.filter((a) => a.connectionStatus === 'Online') ?? []
+    const busy = (a: NonNullable<typeof agvList>[number]) => a.busy || workOfAgv(sent, a).some(isWithRcs)
     return {
       totalAgv: agvList?.length ?? 0,
-      working: agvList?.filter((a) => a.busy).length ?? 0,
-      waiting: online.filter((a) => !a.busy).length,
-      running: taskItems?.filter(isActive).length ?? 0,
+      working: agvList?.filter(busy).length ?? 0,
+      waiting: online.filter((a) => !busy(a)).length,
+      running: (taskItems?.filter(isActive).length ?? 0) + (orderItems?.filter(isRunningOrder).length ?? 0),
       racks: rackList?.length ?? 0,
     }
-  }, [agvList, taskItems, rackList])
+  }, [agvList, taskItems, orderItems, sent, rackList])
 
   const stock = useMemo(() => {
     const l = locList ?? []
@@ -116,6 +126,13 @@ export function DashboardPage() {
         detail: describeHistory(tk.stateReasonCode, tk.stateReasonArgs, tk.stateReason),
       })
     }
+    for (const o of orderItems ?? []) {
+      list.push({
+        id: `o-${o.id}-${o.updatedAt}`, at: o.updatedAt, tone: ORDER_STATE_TONE[o.state] ?? 'muted',
+        text: `${orderCode(o.id)} · ${o.processCode}: ${ORDER_STATE_LABEL[o.state] ?? o.state}`,
+        detail: o.stateReason ?? undefined,
+      })
+    }
     for (const x of (tx.data ?? []) as InventoryTransaction[]) {
       list.push({
         id: `x-${x.id}`, at: x.occurredAt, tone: 'info',
@@ -124,7 +141,7 @@ export function DashboardPage() {
       })
     }
     return list.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 14)
-  }, [taskItems, tx.data, codes, t])
+  }, [taskItems, orderItems, tx.data, codes, t])
 
   const tasksByAgv = (agvId: string) => {
     const mine = (taskItems ?? []).filter((tk: TransportTask) => tk.agvId === agvId)
@@ -157,6 +174,7 @@ export function DashboardPage() {
   const dbText = !hd ? t('nav.disconnected') : hd.database.connected ? (hd.database.latencyMs != null ? t('monitor.dbUp', { ms: formatNumber(Math.round(hd.database.latencyMs)) }) : t('nav.connected')) : t('nav.disconnected')
   const simulator = health.data?.integration.mode === 'Simulator' || health.data?.integration.plcRuntime?.mode === 'Simulator'
   const running = (taskItems ?? []).filter(isActive)
+  const runningOrders = (orderItems ?? []).filter(isRunningOrder)
   const maxPerAgv = Math.max(1, ...(agvList ?? []).map((a) => stats?.perAgv.get(a.id) ?? 0))
 
   return (
@@ -179,11 +197,11 @@ export function DashboardPage() {
         <Kpi label={t('dashboard.kpiTotalAgv')} value={agvList ? kpi.totalAgv : '—'} hint="AGV1 · AGV2" icon={<IconAgv />} />
         <Kpi label={t('dashboard.kpiWorking')} value={agvList ? kpi.working : '—'} hint={t('dashboard.kpiWorkingHint')} tone="ok" icon={<IconAgv />} />
         <Kpi label={t('dashboard.kpiWaiting')} value={agvList ? kpi.waiting : '—'} hint={t('dashboard.kpiWaitingHint')} tone="warn" icon={<IconClock />} />
-        <Kpi label={t('dashboard.kpiRunning')} value={taskItems ? kpi.running : '—'} hint={t('dashboard.kpiRunningHint')} tone="info" icon={<IconTasks />} />
+        <Kpi label={t('dashboard.kpiRunning')} value={taskItems && orderItems ? kpi.running : '—'} hint={t('dashboard.kpiRunningHint')} tone="info" icon={<IconTasks />} />
       </div>
       <SectionHeader title={t('dashboard.secPerformance')} hint={periodText} />
       <div className="kpi-row dash-kpis">
-        <Kpi label={t('dashboard.kpiCompleted')} value={stats ? formatNumber(stats.completed) : '—'} hint={periodText} tone="ok" icon={<IconTasks />} />
+        <Kpi label={t('dashboard.kpiCompleted')} value={stats ? formatNumber(stats.completed) : '—'} hint={stats ? t('dashboard.kpiCompletedHint', { period: periodText, tasks: stats.completed - stats.completedOrders, orders: stats.completedOrders }) : periodText} tone="ok" icon={<IconTasks />} />
         <Kpi label={t('dashboard.kpiFailureRate')} value={stats ? (rate === null ? '—' : `${formatNumber(Math.round(rate * 10) / 10)}%`) : '—'}
           hint={stats ? (rate === null ? t('dashboard.noData') : t('dashboard.kpiFailureRateHint', { failed: stats.failed, total: stats.completed + stats.failed })) : undefined} tone="info" icon={<IconTasks />} />
         <Kpi label={t('dashboard.kpiCycle')} value={stats ? (stats.cycle === null ? '—' : duration(stats.cycle)) : '—'}
@@ -275,15 +293,18 @@ export function DashboardPage() {
           {managed ? <p className="muted">{t('dashboard.liveFleet', { n: fleet.data?.count ?? 0, w: fleet.data?.tasksAwaitingAssignment ?? 0 })}</p> : <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
             {(list) => (
               <div className="live-agvs">
-                {list.map((a) => { const cur = tasksByAgv(a.id); return <AgvCard key={a.id} agv={a} task={cur.current} lastTask={cur.last} code={codes.loc} now={now} compact /> })}
+                {list.map((a) => { const cur = tasksByAgv(a.id); const own = workOfAgv(sent, a); return <AgvCard key={a.id} agv={a} task={cur.current} lastTask={cur.last} code={codes.loc} now={now} compact leg={own.find((w) => w.kind === 'OrderLeg' && isWithRcs(w)) ?? null} lastWorkAt={own[0]?.updatedAt ?? null} /> })}
               </div>
             )}
           </Async>}
           <h3 className="mini-title" style={{ marginTop: 16 }}>{t('dashboard.liveInProgress')}</h3>
-          {running.length === 0 ? <p className="muted">{t('dashboard.liveNone')}</p> : (
+          {running.length + runningOrders.length === 0 ? <p className="muted">{t('dashboard.liveNone')}</p> : (
             <ul className="live-tasks">
               {running.map((tk) => (
                 <li key={tk.id}><Link to={`/tasks?id=${tk.id}`} className="mono">{taskCode(tk.id)}</Link><span>{flowInfo(tk.flow).code}</span><span>{t('dashboard.liveAgv', { agv: codes.agv(tk.agvId) })}</span><TaskStatePill state={tk.state} /></li>
+              ))}
+              {runningOrders.map((o) => (
+                <li key={o.id}><Link to={`/tasks?order=${o.id}`} className="mono">{orderCode(o.id)}</Link><span>{o.processCode}</span><span>{t('dashboard.liveAgv', { agv: codes.agv(o.legs.at(-1)?.agvId ?? null) })}</span><Pill tone={ORDER_STATE_TONE[o.state] ?? 'muted'}>{ORDER_STATE_LABEL[o.state] ?? o.state}</Pill></li>
               ))}
             </ul>
           )}

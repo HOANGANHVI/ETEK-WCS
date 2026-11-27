@@ -1,3 +1,4 @@
+import type { ProcessRemoval } from './routingTypes'
 import { DEMO_MODE } from '../config'
 import { demoDataApi } from '../demo/demoApi'
 import type { RcsWork } from './workTypes'
@@ -227,7 +228,7 @@ const realApi = {
     request<IoPointConfig>(`/api/plc/points/${id}/write-approval`, { method: 'POST', body: JSON.stringify({ decision, note }) }),
   plcWriteAllowed: (id: string, allowed: boolean) => request<IoPointState>(`/api/plc/points/${id}/write-allowed`, { method: 'PUT', body: JSON.stringify({ allowed }) }),
   // CR-010 multi-leg Transport Tasks, Station Transactions and configurable Business Processes
-  routingOrders: (state?: string, take = 100) => request<OrderPage>(`/api/routing/orders${qs({ state, take })}`),
+  routingOrders: (state?: string, take = 100, skip = 0) => request<OrderPage>(`/api/routing/orders${qs({ state, take, skip: skip || undefined })}`),
   routingOrder: (id: string) => request<OrderDetail>(`/api/routing/orders/${id}`),
   // CR-051: what was created / sent to the RCS by both engines (task and order leg)
   rcsWork: (sentOnly = true, orderId?: string, take = 200) => request<RcsWork[]>(`/api/routing/rcs-work${qs({ sentOnly: String(sentOnly), orderId, take })}`),
@@ -245,6 +246,10 @@ const realApi = {
   process: (id: string) => request<Process>(`/api/processes/${id}`),
   processCreate: (b: ProcessHeaderBody) => request<Process>('/api/processes', { method: 'POST', body: JSON.stringify(b) }),
   processUpdate: (id: string, b: ProcessHeaderBody) => request<Process>(`/api/processes/${id}`, { method: 'PUT', body: JSON.stringify(b) }),
+  // CR-055: what removing would do, the removal itself, and the deletion of an unpublished version
+  processRemoval: (id: string) => request<ProcessRemoval>(`/api/processes/${id}/removal`),
+  processRemove: (id: string, reason: string) => request<{ code: string; outcome: 'Deleted' | 'Disabled' }>(`/api/processes/${id}${qs({ reason })}`, { method: 'DELETE' }),
+  processVersionDelete: (id: string, reason: string) => request<{ number: number }>(`/api/process-versions/${id}${qs({ reason })}`, { method: 'DELETE' }),
   processNewVersion: (id: string, fromVersionId?: string) => request<ProcessVersion>(`/api/processes/${id}/versions`, { method: 'POST', body: JSON.stringify({ fromVersionId }) }),
   processImportReference: () => request<ImportResult>('/api/processes/import-reference', { method: 'POST' }),
   processAudit: () => request<AuditRow[]>('/api/processes/audit?take=200'),
