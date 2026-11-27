@@ -7,6 +7,7 @@
 | **Nền** | CR-047 (chưa commit) trên `main` `b07a6d9` |
 | **Migration** | `AddIoDefaultAddress` (2026-11-27: đã chạy trên database phát triển cục bộ theo quyết định của chủ dự án, có sao lưu; chưa chạy trên database vận hành) |
 | **Version** | `2026.11.26.4` |
+| **CI docker-smoke** | Đạt ngày 2026-11-27 trên `main` `5916d05` ([workflow](https://github.com/HOANGANHVI/ETEK-WCS/actions/runs/45933643008)). Lần đầu trên `49b9afc` lỗi do script còn kiểm tra theo CR-046; sửa ở `b2d2699` |
 
 ## 1. Quyết định được ghi nhận
 
@@ -65,7 +66,7 @@ Không chạy Full Backend Regression.
 | Database từng chạy CR-046 | Địa chỉ đã nhập được giữ qua nâng cấp và hai lần khởi động |
 | Trình duyệt (Edge, 2026-11-26, trước hai sửa đổi ở bảng lưu và Down) | 96/96 địa chỉ khớp; sửa/xóa → restart → giữ; khôi phục → restart |
 
-Database gốc chỉ được đọc. Chưa kiểm tra: PLC thật, Docker, bản mới chạy khi chưa migration, bản cũ chạy trên database đã nâng cấp.
+Database gốc chỉ được đọc. Chưa kiểm tra: PLC thật, bản mới chạy khi chưa migration, bản cũ chạy trên database đã nâng cấp. Docker: CI `docker-smoke` đạt ngày 2026-11-27 trên database mới (33 migration, 96 địa chỉ đúng theo từng trạm và tín hiệu, sửa/xóa giữ qua restart, yêu cầu ghi bị từ chối, không có khung tin tới PLC); chưa chạy Docker trên database nâng cấp từ bản cũ.
 
 Bằng chứng: [bảng đối chiếu](../reports/cr-048/IO_ADDRESS_COMPARISON.md) · [trạm A1](../reports/cr-048/monitor-station-A1.png) · [giám sát I/O A1](../reports/cr-048/monitor-list-A1.png) · [cấu hình sau sửa và restart](../reports/cr-048/config-A1-edited-after-restart.png) · [sau khôi phục](../reports/cr-048/config-A1-restored.png).
 

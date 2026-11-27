@@ -7,6 +7,7 @@
 | **Nền** | `main` `b07a6d9` |
 | **Migration** | Không (database chưa nâng cấp cần các migration đã có từ trước) |
 | **Version** | `2026.11.26.3` |
+| **CI docker-smoke** | Đạt ngày 2026-11-27 trên `main` `5916d05` ([workflow](https://github.com/HOANGANHVI/ETEK-WCS/actions/runs/45933643008)). Lần đầu trên `49b9afc` lỗi do script còn kiểm tra theo CR-046; sửa ở `b2d2699` |
 
 ## A. IO Map
 

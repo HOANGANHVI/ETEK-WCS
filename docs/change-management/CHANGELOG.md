@@ -1,5 +1,10 @@
 # Change Log
 
+## CI of CR-048 and documentation cleanup (2026-11-27) – no version change
+
+- The Compose smoke checks the default IO addresses (CR-048) instead of "no configured address"; green on main `5916d05` (https://github.com/HOANGANHVI/ETEK-WCS/actions/runs/45933643008). No product code change.
+- Documentation: historical reports moved to `docs/archive/`, two unreferenced screenshot sets deleted, index rewritten. See `docs/DOCUMENTATION_CLEANUP_REPORT.md`.
+
 ## v3.38 – CR-048 Default IO addresses from the IO map (2026-11-26) – version 2026.11.26.4
 
 - Every IO point starts with the address written in the workbook; an address an Admin enters or removes is never overwritten; "restore default" brings the workbook address back. No write permission follows from an address.
@@ -287,12 +292,12 @@
 - Change Request: CR-008B (sub-CR B-1). Documentation only; no source, schema or configuration change.
 - Corrected (history kept, corrections marked): CR-008A dispatch retry time (about 62 s, not 30 s) and continue/cancel limit (about 25 minutes); the false statement that an unacknowledged PLC station request is presented again by the PLC (`PlcStationSignalService` is edge-based, acknowledgement only logs); the unapproved "two NotFound = Cancelled" rule (decision D-9, withdrawn by B-3).
 - Added: CR-008B entry with the owner's decisions (D-1 taken; D-7, D-9, REV-005 open).
-- Files: CHANGE_REQUESTS.md, CHANGELOG.md, ADR-0007, CR-008A report, `docs/reviews/CR008B-1_DOCUMENTATION_CORRECTION.md`.
+- Files: CHANGE_REQUESTS.md, CHANGELOG.md, ADR-0007, CR-008A report, `docs/archive/reviews/CR008B-1_DOCUMENTATION_CORRECTION.md`.
 - Approved by: project owner (2026-11-17).
 
 ## v2.2 – CR-008A WCS dispatch and scheduler reliability (2026-11-16)
 
-- Change Request: CR-008A (AUDIT-001, 002, 003, 004, 006 of `report/ETEK_WCS_FULL_CODE_REVIEW_2026-11-16.md`). Status: IMPLEMENTED on `develop`; not merged.
+- Change Request: CR-008A (AUDIT-001, 002, 003, 004, 006 of `docs/archive/audits-2026-11-16/ETEK_WCS_FULL_CODE_REVIEW_2026-11-16.md`). Status: IMPLEMENTED on `develop`; not merged.
 - Added: `IRcsDispatchGuard` / `RcsDispatchGuard` (Production + simulator => `RCS_NOT_CONNECTED`); `RcsRetryPolicy` (spaced retries); `TransportTask.RcsRetryCount/RcsLastAttemptAt/NoteIfChanged/HasHistory`; options `RcsRetryInitialDelayMs`, `RcsRetryMaxDelayMs`, `RcsMaxAttempts`; `Rcs:AllowSimulatorInProduction`; RCS simulator switches (`Unreachable`, `SetStatus`, `Forget`); migration `AddRcsRetryTracking`; health field `integration.rcs`.
 - Changed: scheduler hosted service runs station intake and scheduler pass in separate exception scopes; station intake isolates each request; dispatch / continue / cancel follow-up is spaced and bounded; cancel reconciliation handles every RCS status explicitly; AGV status is Unknown (`RCS_NOT_CONNECTED`) instead of the simulator's Online when Production has no RCS adapter.
 - Unchanged by design: TaskStateMachine, InventoryService rules, PER_AGV, FlowOptions, priority, PLC handshake/polling/timeout/retry, MC protocol, AGV Offline policy, `StateTimeoutsSeconds`.
@@ -357,7 +362,7 @@
 - Modes SIMULATOR (default) / REAL_READ_ONLY / REAL_READ_WRITE; no automatic switch; Safety and Transfer Permit never written for testing.
 - New tables plc_connections, plc_stations, station_io_points, plc_comm_log (migration AddPlcTopology, not auto-applied). Actual addresses stay NULL.
 - No change to PER_AGV, BP-01/02/03/05/06, BP-04 (REVIEW), A3/A4, D1/D2, inventory rules or roles.
-- See decisions/ADR/ADR-0004 and TESTING_REPORT_CR-002.md.
+- See decisions/ADR/ADR-0004 and archive/status/TESTING_REPORT_CR-002.md.
 
 ## v1.5 – CR-001 final business rules (approved 2026-11-06)
 

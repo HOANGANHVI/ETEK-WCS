@@ -4,7 +4,7 @@
 |---|---|
 | **Trạng thái** | `MERGED – NOT DEPLOYED` (chủ dự án cho phép đưa vào `main` ngày 2026-11-26). Đã kiểm thử trên Simulator / mock. Chưa đóng: còn F1, F2 và các OQ ở §8 |
 | **Commit** | `3811180` (nhánh `feature/cr-042-approved-decisions`) |
-| **Nguồn phê duyệt** | Chủ dự án, 2026-11-26, trả lời [INITIAL REVIEW](../reviews/INITIAL_REVIEW_2026-11-26.md) |
+| **Nguồn phê duyệt** | Chủ dự án, 2026-11-26, trả lời [INITIAL REVIEW](../archive/reviews/INITIAL_REVIEW_2026-11-26.md) |
 | **Migration** | `AddVersionWithdrawnByAdmin`, `AddOrderRacksHeld` ([up](CR-042_migration_up.sql), [down](CR-042_migration_down.sql)). Chỉ mới chạy trên database test |
 | **Review** | Chủ dự án, 2026-11-26: HOLD trong lúc xác minh, sau đó cho phép commit, merge và push |
 

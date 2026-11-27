@@ -100,7 +100,7 @@ Configuration (all optional): `Rcs:Diagnostics:MaxConcurrent` (2), `DefaultTimeo
 
 - **Classification:** `syncMapDatas` moved from read-only to **Unverified / potentially mutating** (the document only says "Synchronize map information with that in RCS-2000"); it is not in the safe query group until Hikrobot confirms. Only `queryAgvStatus`, `queryTaskStatus`, `queryPodBerthAndMat` are Read-only. The old two classes became Mutating (7: lockPosition, blockStgBin, bindPodAndBerth, bindCtnrAndBin, bindPodAndMat, bindMaterialTypCodeAndBerth, setTaskPriority) and Critical (12: genAgvSchedulingTask, continueTask, cancelTask, genPreScheduleTask, genCtuGroupTaskBatch, stopRobot, resumeRobot, blockArea, clearRoadWay, getOutPod, returnPod, boxApplyPass).
 - **Warnings:** the risk class and a per-API consequence line are shown in the API header **and directly above the Execute button**; `stopRobot` / `resumeRobot` with `robotCount = -1` add an "ALL AMRs on the map" line. No second step was added: Execute still sends at once.
-- **Browser walkthrough** (real Chrome, real backend on a throw-away database, mock RCS, 43 checks): see `docs/reviews/CR-032_UI_WALKTHROUGH_2026-11-23.md`.
+- **Browser walkthrough** (real Chrome, real backend on a throw-away database, mock RCS, 43 checks): see `docs/archive/reviews/CR-032_UI_WALKTHROUGH_2026-11-23.md`.
 
 ## 10. MAP ID and configuration parameters (2026-11-23)
 

@@ -8,15 +8,62 @@
 
 This package defines the approved business baseline and the controlled process for evolving the ETEK WCS specification without unintentionally changing unrelated behavior.
 
-## Directory structure
+## Mục lục (cập nhật 2026-11-27)
 
-- `specification/`: current business and integration specification.
-- `change-management/CHANGELOG.md`: released specification versions.
-- `change-management/CHANGE_REQUESTS.md`: change request register and template.
-- `change-management/IMPACT_MATRIX.md`: requirement-to-component impact matrix.
-- `change-management/REQUIREMENT_TRACEABILITY.md`: traceability from requirements to flows, components and tests.
-- `CLAUDE.md`: mandatory working rules for Claude Code.
-- `decisions/ADR/`: architecture decision records.
+Quy tắc làm việc bắt buộc: [CLAUDE.md](../CLAUDE.md). Triển khai: [deployment/README.md](../deployment/README.md).
+
+### Baseline và quyết định
+
+| Nhóm | Nội dung |
+|---|---|
+| [specification/](specification/) | Đặc tả nghiệp vụ và tích hợp đã duyệt |
+| [specification/agv-phase2/](specification/agv-phase2/) | Đặc tả AGV Phase 2 (xem trạng thái trong từng file) |
+| [decisions/ADR/](decisions/ADR/) | Quyết định kiến trúc |
+
+### Quản lý thay đổi
+
+| Tài liệu | Nội dung |
+|---|---|
+| [CHANGE_REQUESTS.md](change-management/CHANGE_REQUESTS.md) | Sổ Change Request và trạng thái |
+| [CHANGELOG.md](change-management/CHANGELOG.md) | Lịch sử phiên bản |
+| [IMPACT_MATRIX.md](change-management/IMPACT_MATRIX.md) | Ma trận ảnh hưởng |
+| [REQUIREMENT_TRACEABILITY.md](change-management/REQUIREMENT_TRACEABILITY.md) | Truy vết yêu cầu |
+| [change-management/](change-management/) | Hồ sơ từng CR (CR-026 …), gồm [CR-047](change-management/CR-047_HOTFIX_IO_MAP_AND_RACK_REMOVAL.md) và [CR-048](change-management/CR-048_IO_DEFAULT_ADDRESSES.md) |
+
+### Giao diện (interface contract)
+
+| Tài liệu | Nội dung |
+|---|---|
+| [IO Map 22/11/2026](02_Interface_Specification/PLC_IO_Map/AGV_PLC%20Interface_List_22_11_2026.xlsx) và [trạng thái](02_Interface_Specification/PLC_IO_Map/README.md) | IO Map duy nhất của dự án; chưa được kỹ sư PLC xác nhận |
+| [02_Interface_Specification/](02_Interface_Specification/) | Đặc tả PLC, định dạng gói cấu hình; bộ 20/11 và các bản nháp 10/11 giữ để đối chiếu lịch sử (xem ghi chú đầu file) |
+| [03_RCS_Interface/](03_RCS_Interface/) | API RCS-2000 của nhà cung cấp và câu hỏi |
+| [01_Transport_Process_description/](01_Transport_Process_description/) | Tài liệu quy trình nguồn |
+
+### Đang mở: câu hỏi, đề xuất, kế hoạch
+
+| Tài liệu | Nội dung |
+|---|---|
+| [BP_PH2_CUTOVER_PLAN_2026-11-26.md](reviews/BP_PH2_CUTOVER_PLAN_2026-11-26.md) | Chuyển đổi BP → PH2: mapping, thứ tự, điều kiện, rollback |
+| [CR-043_SIMULATION_MODULE_INITIAL_REVIEW.md](reviews/CR-043_SIMULATION_MODULE_INITIAL_REVIEW.md) | CR-043 – Module mô phỏng PLC & RCS dùng lại được: INITIAL REVIEW |
+| [CR008B-REV005_RCS_VENDOR_QUESTIONS.md](reviews/CR008B-REV005_RCS_VENDOR_QUESTIONS.md) | REV-005 – Câu hỏi cần nhà cung cấp RCS-2000 xác nhận |
+| [ENGINEER_QUESTIONS_PLC_RCS_2026-11-26.md](reviews/ENGINEER_QUESTIONS_PLC_RCS_2026-11-26.md) | Câu hỏi cho kỹ sư PLC và nhà cung cấp RCS |
+| [OQ-54_QUEUE_SCOPE_ANALYSIS_2026-11-26.md](reviews/OQ-54_QUEUE_SCOPE_ANALYSIS_2026-11-26.md) | OQ-54 – Phân tích lại Queue Ordering Scope và phương án A2 |
+| [REAL_DEVICE_COMMISSIONING_PLAN_2026-11-21.md](reviews/REAL_DEVICE_COMMISSIONING_PLAN_2026-11-21.md) | Kế hoạch triển khai và commissioning với thiết bị thật – 2026-11-21 |
+| [STATION_ENGINE_MANUAL_REQUEST_2026-11-26.md](reviews/STATION_ENGINE_MANUAL_REQUEST_2026-11-26.md) | Engine theo trạm và form tạo yêu cầu thủ công |
+| [OPEN_QUESTIONS.md](reports/agv-phase2-assessment/OPEN_QUESTIONS.md) | AGV Phase 2 – Câu hỏi cần người dùng xác nhận |
+
+### Triển khai và nghiệm thu
+
+| Tài liệu | Nội dung |
+|---|---|
+| [DEPLOYMENT_TEST_CHECKLIST.md](DEPLOYMENT_TEST_CHECKLIST.md) | Checklist nghiệm thu triển khai |
+| [docker-acceptance/](docker-acceptance/) | Bộ script và mẫu báo cáo nghiệm thu Docker |
+| [reports/cr-046-ui/](reports/cr-046-ui/), [reports/cr-047/](reports/cr-047/), [reports/cr-048/](reports/cr-048/) | Bằng chứng nghiệm thu của CR-046 đến CR-048 |
+| [reports/phase2/](reports/phase2/) | Thiết kế và truy vết của CR-036 |
+
+### Lịch sử
+
+[archive/](archive/README.md): báo cáo triển khai, rà soát, audit và hiện trạng đã cũ. Không dùng làm cơ sở thiết kế mới.
 
 ## Approved baseline rules carried forward
 
