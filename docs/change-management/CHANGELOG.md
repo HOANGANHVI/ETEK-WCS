@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-049 QA fixes (2026-11-27) – not merged
+## CR-049 QA fixes (2026-11-27) – merged into main (0db229a), not deployed
 
 - A waiting order names the real cause when its station port is held; the IO address page says what 96 and 120 count. No migration, no rule change.
 

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `IMPLEMENTED – nhánh feature/cr-049-qa-fixes, CHƯA MERGE, CHƯA DEPLOY` |
+| **Trạng thái** | `IMPLEMENTED – ĐÃ MERGE vào main (0db229a), CHƯA DEPLOY` |
 | **Nguồn phê duyệt** | Chỉ thị QA của chủ dự án, 2026-11-27 ("sửa code nếu phát hiện lỗi và phạm vi đã rõ") |
 | **Nền** | `main` `9f57903` |
 | **Migration** | Không |
