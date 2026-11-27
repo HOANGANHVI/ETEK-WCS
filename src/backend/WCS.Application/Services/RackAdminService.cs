@@ -4,6 +4,7 @@ using WCS.Application.Routing;
 using WCS.Domain.Common;
 using WCS.Domain.Inventory;
 using WCS.Domain.Locations;
+using WCS.Domain.Routing;
 
 namespace WCS.Application.Services;
 
@@ -13,7 +14,13 @@ public sealed record RackCreateCommand(string LocationCode, RackKind RackKind, s
 public sealed record RackUpdateCommand(string? LocationCode, RackKind? RackKind, string? ExternalRackId, string Reason, string? RackType = null, Guid? ProductModelId = null);
 
 /// <summary>CR-041: whether a person may correct or remove a rack now, and if not, why (the same guard the change itself runs).</summary>
-public sealed record RackEditabilityDto(bool Editable, string? Code, string? Message);
+public sealed record RackEditabilityDto(bool Editable, string? Code, string? Message, IReadOnlyList<RackBlockerDto>? Blockers = null);
+
+/// <summary>
+/// CR-047: the job that holds a rack, so the screen can name it and lead to it. <see cref="Kind"/> is "Order" (transport order) or "Task" (Phase 1 task). <see cref="CanCancel"/> is the rule of the
+/// order cancellation itself (nothing is cancelled here): false while a leg is in motion or the rack is on the AMR. <see cref="RacksHeld"/>: a failed order whose racks an Admin must release.
+/// </summary>
+public sealed record RackBlockerDto(string Kind, Guid Id, string Reference, string State, string? Process, bool CanCancel, bool RacksHeld);
 
 /// <summary>
 /// CR-040: create, correct, move and remove ONE rack record. These are corrections of what WCS believes about the physical world, confirmed by a person with a reason; they never move a rack.
@@ -21,7 +28,7 @@ public sealed record RackEditabilityDto(bool Editable, string? Code, string? Mes
 /// transaction in the same unit of work; removing a rack record never removes its history.
 /// </summary>
 public sealed class RackAdminService(IUnitOfWork uow, IRackRepository racks, ILocationRepository locations, IReservationRepository reservations, IRoutingRepository routing,
-    IInventoryTransactionRepository transactions, IProductModelRepository models, RackPlacement placement, IWcsNotifier notifier, IClock clock)
+    IInventoryTransactionRepository transactions, IProductModelRepository models, RackPlacement placement, IWcsNotifier notifier, IClock clock, ITransportTaskRepository tasks)
 {
     public async Task<RackDto> CreateAsync(RackCreateCommand cmd, string user, CancellationToken ct = default)
     {
@@ -96,8 +103,29 @@ public sealed class RackAdminService(IUnitOfWork uow, IRackRepository racks, ILo
     public Task<RackEditabilityDto> CheckEditableAsync(Guid id, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
     {
         try { await EditableAsync(id, t); return new RackEditabilityDto(true, null, null); }
-        catch (AppException e) when (e.Kind != ErrorKind.NotFound) { return new RackEditabilityDto(false, e.Code, e.Message); }
+        catch (AppException e) when (e.Kind != ErrorKind.NotFound) { return new RackEditabilityDto(false, e.Code, e.Message, await BlockersAsync(id, t)); }
     }, ct);
+
+    /// <summary>Everything that holds the rack: its active reservations, the task it travels with and the order that owns it. Read only.</summary>
+    private async Task<IReadOnlyList<RackBlockerDto>> BlockersAsync(Guid rackId, CancellationToken ct)
+    {
+        var jobs = (await reservations.ListActiveForRackAsync(rackId, ct)).Select(r => r.TaskId).ToList();
+        if (await racks.GetAsync(rackId, ct) is { CurrentTaskId: { } current }) jobs.Add(current);
+        var found = new List<RackBlockerDto>();
+        foreach (var job in jobs.Distinct())
+        {
+            if (await tasks.GetAsync(job, ct) is { } task)   // a Phase 1 task
+                found.Add(new("Task", task.Id, $"NV-{task.Id.ToString("N")[..8].ToUpperInvariant()}", task.State.ToString(), task.Flow.ToString(), false, false));
+            else if (await routing.GetLegAsync(job, ct) is { } leg && await routing.GetOrderAsync(leg.OrderId, ct) is { } order)
+                found.Add(Describe(order));
+        }
+        if (await routing.FindOrderOwningRackAsync(rackId, ct) is { } key && await routing.GetOrderByRequestKeyAsync(key, ct) is { } owner && found.All(b => b.Id != owner.Id))
+            found.Add(Describe(owner));
+        return found;
+    }
+
+    private static RackBlockerDto Describe(TransportOrder order) => new("Order", order.Id, order.RequestKey, order.State.ToString(), order.ProcessCode,
+        !order.IsTerminal && !order.Legs.Any(l => l.RackOnAgv || (l.State == LegState.InProgress && l.AgvTaskCode is not null)), order.RacksHeld);
 
     private async Task AssignModelAsync(Rack rack, Guid modelId, CancellationToken ct)
     {

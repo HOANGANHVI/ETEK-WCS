@@ -13,6 +13,7 @@ import type { AddPlcBody, QueueAlert, StartableProcess, QueueScopeResult, Import
 import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
+import type { RackBlocker } from '../lib/rackBlock'
 import type { FleetView } from './fleetTypes'
 import type { RcsParameter, RcsParameters, RcsCallbacks, RcsCatalog, RcsCheckState, RcsExecution, RcsHistoryFilter, RcsHistoryItem, RcsHistoryPage, RcsOverview, RcsPreview } from './rcsDiagTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
@@ -254,7 +255,7 @@ const realApi = {
   processQueueScope: (processId: string, scope: string | null, reason: string) =>
     request<QueueScopeResult>(`/api/processes/${processId}/queue-scope`, { method: 'PUT', body: JSON.stringify({ scope, reason }) }),
   // CR-040: one rack record (Admin)
-  rackEditability: (id: string) => request<{ editable: boolean; code: string | null; message: string | null }>(`/api/inventory/racks/${id}/editability`),
+  rackEditability: (id: string) => request<{ editable: boolean; code: string | null; message: string | null; blockers?: RackBlocker[] | null }>(`/api/inventory/racks/${id}/editability`),
   processApplyCatalog: (processId: string, reason: string) => request<ProcessVersion>(`/api/processes/${processId}/apply-catalog`, { method: 'POST', body: JSON.stringify({ reason }) }),
   rackCreate: (b: { locationCode: string; rackKind: 'Full' | 'Empty'; externalRackId: string | null; reason: string; rackType?: string; productModelId?: string }) =>
     request<Rack>('/api/inventory/racks', { method: 'POST', body: JSON.stringify(b) }),

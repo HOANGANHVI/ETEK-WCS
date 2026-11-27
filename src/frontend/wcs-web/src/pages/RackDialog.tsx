@@ -1,18 +1,23 @@
 import { useCallback, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { blockerAction, blockerLink } from '../lib/rackBlock'
 import { useApi } from '../hooks/useApi'
 import { api } from '../api/client'
-import type { Location, Rack } from '../api/types'
+import type { Location, Rack, TaskState } from '../api/types'
 import { Modal } from '../components/Modal'
 import { Button } from '../components/ui'
 import { useT } from '../i18n'
-import { describeError, RACK_STATUS_VI } from '../i18n/vi'
+import { describeCode, describeError, RACK_STATUS_VI, TASK_STATE_VI } from '../i18n/vi'
+import { ORDER_STATE_LABEL } from '../i18n/routing'
 import { Field } from './config/FormKit'
+
+const NEXT_STEP = { cancelOrder: 'linked.rackDo_cancelOrder', finishOrder: 'linked.rackDo_finishOrder', releaseRacks: 'linked.rackDo_releaseRacks', openTask: 'linked.rackDo_openTask' } as const
 
 export type RackDialogState = { kind: 'create' } | { kind: 'edit'; rack: Rack } | { kind: 'delete'; rack: Rack }
 
 /** CR-040: add, correct or remove one rack record. The server refuses reserved or moving racks and says why; nothing is decided here. */
 export function RackDialog({ state, locations, defaultLocation, codeOf, onClose, onDone }: {
-  state: RackDialogState; locations: Location[]; defaultLocation: string; codeOf: (id: string | null) => string; onClose: () => void; onDone: () => void
+  state: RackDialogState; locations: Location[]; defaultLocation: string; codeOf: (id: string | null) => string; onClose: () => void; onDone: (notice: string) => void
 }) {
   const t = useT()
   const rack = state.kind === 'create' ? null : state.rack
@@ -34,8 +39,9 @@ export function RackDialog({ state, locations, defaultLocation, codeOf, onClose,
       if (state.kind === 'create') await api.rackCreate({ locationCode: location, rackKind: kind, externalRackId: externalId.trim() || null, reason, rackType: rackType.trim(), productModelId: model || undefined })
       else if (state.kind === 'edit') await api.rackUpdate(state.rack.id, { locationCode: location, rackKind: kind, externalRackId: externalId.trim(), reason, rackType: rackType.trim(), productModelId: !state.rack.productModelId && model ? model : undefined })
       else await api.rackDelete(state.rack.id, reason)
-      onDone()
-    } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
+      const name = rack ? rack.externalRackId ?? rack.id.slice(0, 8) : externalId.trim()
+      onDone(t(state.kind === 'create' ? 'linked.rackCreated' : state.kind === 'edit' ? 'linked.rackUpdated' : 'linked.rackDeleted', { rack: name }))
+    } catch (e) { setError(describeError(e)); editability.reload() } finally { setBusy(false) }   // a refusal here means the rack became locked meanwhile: say by whom
   }
   const title = t(state.kind === 'create' ? 'linked.rackAdd' : state.kind === 'edit' ? 'linked.rackEdit' : 'linked.rackDelete')
   return (
@@ -46,7 +52,21 @@ export function RackDialog({ state, locations, defaultLocation, codeOf, onClose,
       <div className="notice notice-warn" role="note">{t('linked.rackWarning')}</div>
       {error && <div className="notice notice-bad" role="alert">{error}</div>}
       {editability.error && rack && <div className="notice notice-warn" role="status">{t('linked.rackCheckFailed')} {editability.error}</div>}
-      {locked && <div className="notice notice-bad" role="status" data-rack-locked={locked.code}>{t('linked.rackLocked')} {locked.message} <span className="mono">({locked.code})</span></div>}
+      {locked && (
+        <div className="notice notice-bad" role="status" data-rack-locked={locked.code}>
+          <strong>{t('linked.rackLocked')}</strong> {describeCode(locked.code, locked.message)} <span className="mono small">({locked.code})</span>
+          {(locked.blockers ?? []).length > 0 && (
+            <ul>
+              {(locked.blockers ?? []).map((b) => (
+                <li key={b.id}>
+                  {t(b.kind === 'Order' ? 'linked.rackHeldByOrder' : 'linked.rackHeldByTask', { ref: b.reference, process: b.process ?? '—', state: b.kind === 'Order' ? ORDER_STATE_LABEL[b.state] ?? b.state : TASK_STATE_VI[b.state as TaskState] ?? b.state })}
+                  <br />{t(NEXT_STEP[blockerAction(b)])} <Link to={blockerLink(b)} onClick={onClose}>{t(b.kind === 'Order' ? 'linked.rackOpenOrder' : 'linked.rackOpenTask')}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {rack && <p className="mono">{rack.externalRackId ?? rack.id.slice(0, 8)} · {RACK_STATUS_VI[rack.status]} · {codeOf(rack.currentLocationId) || '—'}</p>}
       <div className="form-grid single">
         {state.kind !== 'delete' && (
@@ -75,6 +95,7 @@ export function RackDialog({ state, locations, defaultLocation, codeOf, onClose,
         )}
         <Field label={t('linked.reason')}><input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} /></Field>
       </div>
+      {!locked && reason.trim() === '' && <p className="muted small">{t('linked.rackNeedReason', { action: title })}</p>}
     </Modal>
   )
 }

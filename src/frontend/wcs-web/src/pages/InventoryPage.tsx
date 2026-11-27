@@ -45,6 +45,7 @@ export function InventoryPage() {
   const { user } = useAuth()
   const isAdmin = hasRole(user, 'Admin')
   const [rackDialog, setRackDialog] = useState<RackDialogState | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const locations = useApi(useCallback(() => api.locations(), []), [...EVENTS])
   const racks = useApi(useCallback(() => api.racks(), []), [...EVENTS])
   const tx = useApi(useCallback(() => api.transactions(selected ?? undefined), [selected]), [...EVENTS])
@@ -87,6 +88,7 @@ export function InventoryPage() {
   return (
     <>
       <PageHeader title={t('inventory.title')} />
+      {notice && <div className="notice notice-ok" role="status">{notice}</div>}
       <Panel title={t('inventory.sumTitle')} subtitle={t('inventory.sumSub', { n: racks.data?.length ?? 0 })} className="mb">
         <StackedSummary items={rackSummary} ariaLabel={t('inventory.sumTitle')} emptyTitle={t('inventory.sumEmpty')} />
       </Panel>
@@ -188,7 +190,7 @@ export function InventoryPage() {
       </Panel>
 
       {rackDialog && <RackDialog state={rackDialog} locations={locations.data ?? []} defaultLocation={current?.code ?? ''} codeOf={codes.loc}
-        onClose={() => setRackDialog(null)} onDone={() => { setRackDialog(null); racks.reload(); locations.reload(); tx.reload() }} />}
+        onClose={() => setRackDialog(null)} onDone={(message) => { setRackDialog(null); setNotice(message); racks.reload(); locations.reload(); tx.reload() }} />}
 
       <Panel title={t('inventory.txPanel')} subtitle={current ? t('inventory.locationTitle', { code: current.code }) : t('inventory.txLatest')} flush className="mt">
         <Async state={tx} isEmpty={(d) => d.length === 0} empty={{ title: t('inventory.noTx') }}>

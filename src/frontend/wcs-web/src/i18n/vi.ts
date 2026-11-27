@@ -580,6 +580,9 @@ export function errorTextForCode(code: string): string | undefined {
   return ERROR_VI[code] ?? PLC_ERROR_VI[code]
 }
 
+/** The text of a refusal code received as data (not as a failed request); the server text only when the code is unknown here. */
+export const describeCode = (code: string | null, fallback: string | null): string => (code ? ERROR_VI[code] ?? PLC_ERROR_VI[code] : undefined) ?? fallback ?? code ?? ''
+
 export function describeError(e: unknown): string {
   if (e instanceof ApiRequestError) {
     if (e.status === 0 || e.code === 'NETWORK_ERROR' || [502, 503, 504].includes(e.status)) return t('common.networkError')
