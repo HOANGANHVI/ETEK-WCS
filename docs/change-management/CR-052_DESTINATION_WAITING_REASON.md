@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `IMPLEMENTED – nhánh fix/cr-052-destination-reason, CHƯA MERGE, CHƯA DEPLOY` |
+| **Trạng thái** | `IMPLEMENTED – ĐÃ MERGE vào main (e07bebc), CHƯA DEPLOY PRODUCTION` |
 | **Nguồn phê duyệt** | Chỉ thị của chủ dự án, 2026-11-27 (sửa lỗi kỹ thuật nếu có) |
 | **Nền** | `main` `20fa494` |
 | **Migration** | Không |
