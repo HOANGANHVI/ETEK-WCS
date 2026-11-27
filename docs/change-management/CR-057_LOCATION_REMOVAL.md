@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED (cách A), IMPLEMENTED – nhánh feature/cr-056-delete-process-keep-history, CHƯA MERGE`; migration đã áp lên wcs_db ngày 2026-11-27 |
+| **Trạng thái** | `APPROVED (cách A), IMPLEMENTED – đã MERGE vào main (f27fa1b)`; migration đã áp lên wcs_db ngày 2026-11-27 |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-27: "hãy bổ xung" (chức năng xóa), "xóa cả vị trí đã có lịch sử", chọn "A" |
 | **Migration** | `AddLocationRemovedAt` |
 
