@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `IMPLEMENTED – CHƯA COMMIT, CHƯA DEPLOY` |
+| **Trạng thái** | `ĐÃ MERGE vào main 2026-11-27 (merge 29ad2e6) – CHƯA DEPLOY` |
 | **Nguồn phê duyệt** | Chỉ thị bổ sung của chủ dự án, 2026-11-26 |
 | **Nền** | CR-047 (chưa commit) trên `main` `b07a6d9` |
-| **Migration** | `AddIoDefaultAddress` (chưa chạy trên database thật) |
+| **Migration** | `AddIoDefaultAddress` (2026-11-27: đã chạy trên database phát triển cục bộ theo quyết định của chủ dự án, có sao lưu; chưa chạy trên database vận hành) |
 | **Version** | `2026.11.26.4` |
 
 ## 1. Quyết định được ghi nhận

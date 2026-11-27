@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `IMPLEMENTED – CHƯA COMMIT, CHƯA DEPLOY` |
+| **Trạng thái** | `ĐÃ MERGE vào main 2026-11-27 (merge 29ad2e6) – CHƯA DEPLOY` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-26 (hotfix) |
 | **Nền** | `main` `b07a6d9` |
 | **Migration** | Không (database chưa nâng cấp cần các migration đã có từ trước) |

@@ -3,7 +3,7 @@
 ## v3.38 – CR-048 Default IO addresses from the IO map (2026-11-26) – version 2026.11.26.4
 
 - Every IO point starts with the address written in the workbook; an address an Admin enters or removes is never overwritten; "restore default" brings the workbook address back. No write permission follows from an address.
-- Upgrade at start: rows of signals outside the IO map move to `retired_io_points`, stations X6/G3/G7 are retired and their location links released. Migration `AddIoDefaultAddress` (not run on a real database).
+- Upgrade at start: rows of signals outside the IO map move to `retired_io_points`, stations X6/G3/G7 are retired and their location links released. Migration `AddIoDefaultAddress` (run on the local development database on 2026-11-27 with a backup; not on an operating system's database).
 
 ## v3.37 – CR-047 Hotfix: IO map as the workbook, rack removal (2026-11-26) – version 2026.11.26.3
 
