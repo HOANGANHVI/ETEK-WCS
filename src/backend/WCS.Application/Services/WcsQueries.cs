@@ -35,6 +35,10 @@ public sealed class WcsQueries(
             .Select(l => l.ToDto(occ.GetValueOrDefault(l.Id), res.GetValueOrDefault(l.Id))).ToList();
     }
 
+    /// <summary>CR-057: id and code of the removed locations, so that past records can still show them.</summary>
+    public async Task<IReadOnlyList<RemovedLocationDto>> ListRemovedLocationsAsync(CancellationToken ct = default) =>
+        (await locations.ListRemovedAsync(ct)).Select(l => new RemovedLocationDto(l.Id, l.Code)).ToList();
+
     public async Task<LocationDto> GetLocationAsync(string code, CancellationToken ct = default)
     {
         var l = await locations.GetByCodeAsync(code, ct) ?? throw AppException.NotFound("LOCATION_NOT_FOUND", $"Location '{code}' not found.");
@@ -73,3 +77,6 @@ public sealed class WcsQueries(
         return t.History.OrderBy(h => h.OccurredAt).Select(h => h.ToDto()).ToList();
     }
 }
+
+/// <summary>CR-057: a location that was removed from the system.</summary>
+public sealed record RemovedLocationDto(Guid Id, string Code);

@@ -4,6 +4,7 @@ using WCS.Domain.Agvs;
 using WCS.Domain.Common;
 using WCS.Domain.Inventory;
 using WCS.Domain.Locations;
+using WCS.Domain.Routing;
 using WCS.Domain.Tasks;
 
 namespace WCS.Infrastructure.Persistence.Repositories;
@@ -29,9 +30,34 @@ internal sealed class AgvRepository(WcsDbContext db) : IAgvRepository
 
 internal sealed class LocationRepository(WcsDbContext db) : ILocationRepository
 {
+    public async Task<LocationUsage> UsageAsync(Location location, CancellationToken ct = default)
+    {
+        var id = location.Id; var code = location.Code; var upper = code.ToUpper(); var quoted = "\"" + code + "\"";
+        var racks = await db.Racks.CountAsync(r => r.CurrentLocationId == id, ct);
+        var ports = await db.PlcStations.Where(p => p.LocationCode != null && p.LocationCode.ToUpper() == upper && p.RetiredAt == null).Select(p => p.Id).OrderBy(x => x).ToListAsync(ct);
+        // every version of every process: candidates, waiting positions, conditions and the trigger locations
+        var steps = db.RouteSteps.Where(s => (s.WaitingPositionCode != null && s.WaitingPositionCode.ToUpper() == upper) || (s.ConditionsJson != null && s.ConditionsJson.Contains(quoted))
+            || s.Candidates.Any(c => c.LocationCode.ToUpper() == upper || (c.ConditionsJson != null && c.ConditionsJson.Contains(quoted))));
+        var named = await (from st in steps join v in db.BusinessProcessVersions on st.VersionId equals v.Id join p in db.BusinessProcesses on v.ProcessId equals p.Id select p.Code).ToListAsync(ct);
+        var triggered = (await db.BusinessProcesses.Select(p => new { p.Code, p.TriggerLocationCodesCsv }).ToListAsync(ct))
+            .Where(p => p.TriggerLocationCodesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(code, StringComparer.OrdinalIgnoreCase)).Select(p => p.Code);
+        // unfinished work only: finished records keep referring to the removed row
+        var open = (location.ReconciliationRequired ? 1 : 0)
+            + await db.Reservations.CountAsync(x => x.LocationId == id && x.Status == ReservationStatus.Active, ct)
+            + await db.Tasks.CountAsync(x => (x.RequestLocationId == id || x.SourceLocationId == id || x.DestinationLocationId == id)
+                && (x.RequiresReconciliation || (x.State != TaskState.Completed && x.State != TaskState.Failed && x.State != TaskState.Cancelled)), ct)
+            + await db.TransportOrders.CountAsync(x => x.RequestLocationCode.ToUpper() == upper
+                && x.State != OrderState.Completed && x.State != OrderState.Failed && x.State != OrderState.Cancelled, ct)
+            + await db.TransportLegs.CountAsync(x => ((x.SourceLocationCode != null && x.SourceLocationCode.ToUpper() == upper) || (x.DestinationLocationCode != null && x.DestinationLocationCode.ToUpper() == upper))
+                && x.State != LegState.Completed && x.State != LegState.Failed && x.State != LegState.Cancelled, ct)
+            + await db.StationTransactions.CountAsync(x => x.LocationCode.ToUpper() == upper && x.State != StationTransactionState.Completed && x.State != StationTransactionState.Failed, ct);
+        return new LocationUsage(racks, ports, named.Concat(triggered).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList(), open);
+    }
+
+    public async Task<IReadOnlyList<Location>> ListRemovedAsync(CancellationToken ct) => await db.Locations.AsNoTracking().Where(x => x.RemovedAt != null).OrderBy(x => x.Code).ToListAsync(ct);
     public Task<Location?> GetAsync(Guid id, CancellationToken ct) => db.Locations.FirstOrDefaultAsync(x => x.Id == id, ct);
-    public Task<Location?> GetByCodeAsync(string code, CancellationToken ct) => db.Locations.FirstOrDefaultAsync(x => x.Code == code, ct);
-    public async Task<IReadOnlyList<Location>> ListAsync(CancellationToken ct) => await db.Locations.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+    public Task<Location?> GetByCodeAsync(string code, CancellationToken ct) => db.Locations.FirstOrDefaultAsync(x => x.Code == code && x.RemovedAt == null, ct);
+    public async Task<IReadOnlyList<Location>> ListAsync(CancellationToken ct) => await db.Locations.AsNoTracking().Where(x => x.RemovedAt == null).OrderBy(x => x.Code).ToListAsync(ct);
     public void Add(Location location) => db.Locations.Add(location);
 }
 

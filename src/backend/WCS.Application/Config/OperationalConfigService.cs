@@ -19,6 +19,10 @@ public sealed record FlowView(string Flow, string RackKind, string AgvRole, IRea
 public sealed record OperationsView(PolicyView Policy, SchedulerView Scheduler, IReadOnlyList<FlowView> Flows, IReadOnlyList<AgvDto> Agvs,
     IReadOnlyList<LocationDto> Locations);
 
+/// <summary>CR-057: one reason a location is kept; <see cref="Detail"/> = a count or the ports / processes concerned.</summary>
+public sealed record LocationBlocker(string Code, string Detail);
+public sealed record LocationRemovalDto(string Code, bool CanDelete, IReadOnlyList<LocationBlocker> Blockers);
+
 public sealed record UpdateAgvCommand(string? RcsRobotCode, bool Enabled);
 public sealed record SaveLocationCommand(string Code, string Name, LocationType Type, int RackCapacity, AllowedRackKind AllowedRackKind,
     bool Enabled, bool RequiresPlcPermission, Guid? ProductModelId = null, StationRole? StationRole = null);
@@ -33,6 +37,7 @@ public sealed partial class OperationalConfigService(
     IFlowCatalog flows,
     IOptions<SchedulerOptions> scheduler,
     IOptions<ProcessFlowOptions> flowOptions,
+    IOptions<RouteEngineOptions> routeOptions,
     IUnitOfWork uow,
     IAgvRepository agvs,
     ILocationRepository locations,
@@ -90,6 +95,54 @@ public sealed partial class OperationalConfigService(
         if (modelId is null) return;
         var m = await productModels.GetAsync(modelId.Value, ct) ?? throw AppException.NotFound("MODEL_NOT_FOUND", "Product model not found.");
         if (!m.Enabled) throw AppException.Rejected("MODEL_DISABLED", $"Product model {m.Code} is disabled.");
+    }
+
+    // ------------------------------------------------------------------ CR-057: removal
+
+    /// <summary>
+    /// What stops a location from being removed. It is removed only when nothing depends on it any more: not protected, not named by the deployment configuration, no rack on it, no PLC port
+    /// linked to it, in no process definition and in no unfinished work. Finished records stay: the row is only marked, so history keeps showing the code, and the code can be used again.
+    /// </summary>
+    public Task<LocationRemovalDto> RemovalAsync(string code, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        var location = await locations.GetByCodeAsync(code, t) ?? throw AppException.NotFound("LOCATION_NOT_FOUND", "Không tìm thấy vị trí.");
+        return await PlanRemovalAsync(location, t);
+    }, ct);
+
+    public async Task<string> DeleteLocationAsync(string code, string? reason, string? confirmCode, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason)) throw AppException.Validation("REASON_REQUIRED", "A reason is required.");
+        if (reason.Length > 500) throw AppException.Validation("REASON_TOO_LONG", "The reason has at most 500 characters.");
+        var removed = await uow.ExecuteAsync(async t =>
+        {
+            var location = await locations.GetByCodeAsync(code, t) ?? throw AppException.NotFound("LOCATION_NOT_FOUND", "Không tìm thấy vị trí.");
+            if (!string.Equals(confirmCode?.Trim(), location.Code, StringComparison.OrdinalIgnoreCase))
+                throw AppException.Validation("LOCATION_CODE_CONFIRMATION", "Type the location code to confirm the removal.");
+            var plan = await PlanRemovalAsync(location, t);
+            if (plan.Blockers.Count > 0) throw AppException.Rejected(plan.Blockers[0].Code, $"{location.Code} cannot be deleted: " + string.Join("; ", plan.Blockers.Select(b => $"{b.Code} {b.Detail}".Trim())));
+            location.MarkRemoved(clock.UtcNow);   // the row version makes this conflict with an allocation made meanwhile
+            return location.Code;
+        }, ct);
+        logger.LogInformation("Location {Code} deleted", removed);
+        await notifier.PublishAsync([new WcsEvent("InventoryChanged", new { location = removed })], ct);
+        return removed;
+    }
+
+    private async Task<LocationRemovalDto> PlanRemovalAsync(Location location, CancellationToken ct)
+    {
+        var code = location.Code;
+        bool Names(IEnumerable<string> list) => list.Contains(code, StringComparer.OrdinalIgnoreCase);
+        var blockers = new List<LocationBlocker>();
+        if (Names(routeOptions.Value.ProtectedLocationCodes)) blockers.Add(new("LOCATION_DELETE_PROTECTED", ""));
+        var configured = flowOptions.Value.Flows.Values.Any(f => Names(f.AllowedRequestStations) || f.SourceGroups.Any(Names) || f.DestinationGroups.Any(Names) || Names(f.NoBindDropLocations))
+            || Names(routeOptions.Value.PlcLocationCodes.Values);
+        if (configured) blockers.Add(new("LOCATION_DELETE_CONFIGURED", ""));
+        var usage = await locations.UsageAsync(location, ct);
+        if (usage.Racks > 0) blockers.Add(new("LOCATION_DELETE_RACKS", usage.Racks.ToString()));
+        if (usage.Ports.Count > 0) blockers.Add(new("LOCATION_DELETE_PORT", string.Join(", ", usage.Ports)));
+        if (usage.Processes.Count > 0) blockers.Add(new("LOCATION_DELETE_PROCESS", string.Join(", ", usage.Processes)));
+        if (usage.OpenWork > 0) blockers.Add(new("LOCATION_DELETE_OPEN_WORK", usage.OpenWork.ToString()));
+        return new LocationRemovalDto(code, blockers.Count == 0, blockers);
     }
 
     public async Task<LocationDto> SaveLocationAsync(SaveLocationCommand cmd, bool create, CancellationToken ct = default)

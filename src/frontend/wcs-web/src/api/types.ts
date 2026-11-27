@@ -215,3 +215,6 @@ export interface ResourceSnapshot {
   host: Record<string, ResourceMetric>
   history: ResourceHistoryPoint[]
 }
+
+/** CR-057: why a location is kept (a code and a count or names); canDelete when there is no reason. */
+export interface LocationRemoval { code: string; canDelete: boolean; blockers: { code: string; detail: string }[] }

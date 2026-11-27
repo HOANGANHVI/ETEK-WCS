@@ -21,6 +21,7 @@ import { requestRows } from '../src/lib/requestRows.ts'
 import { waitCause } from '../src/lib/waitReason.ts'
 import { processName } from '../src/i18n/processNames.ts'
 import { RemovalDialog } from '../src/components/RemovalDialog.tsx'
+import { BlockerList } from '../src/pages/config/BlockerList.tsx'
 import { RequestOptions } from '../src/components/RequestOptions.tsx'
 import { filterWork, isWaitingToBeSent, isWithRcs, orderCode, orderRoute, workLink, workOfAgv, workRows } from '../src/lib/work.ts'
 import { RcsWorkTable } from '../src/components/RcsWorkTable.tsx'
@@ -291,6 +292,14 @@ check('CR-052: a held destination port is named before and after the pick; other
   check('CR-055: the page asks the server what removing does, requires a reason and hides switched-off processes', page.includes('api.processRemoval(') && page.includes('api.processRemove(') && page.includes('api.processVersionDelete(') && page.includes('showOff || p.enabled') && readFileSync('src/components/RemovalDialog.tsx', 'utf8').includes('!reason.trim()'))
   const html = renderToStaticMarkup(createElement(RemovalDialog, { title: 'T', body: 'B', confirm: 'XOA', onClose: () => {}, onConfirm: async () => {} }))
   check('CR-055: the confirmation starts with the action disabled until a reason is given', /disabled=""[^>]*>XOA|<button[^>]*disabled[^>]*>XOA/.test(html), html)
+  const typed = renderToStaticMarkup(createElement(RemovalDialog, { title: 'T', body: 'B', confirm: 'XOA', typeToConfirm: 'BP-01', onClose: () => {}, onConfirm: async () => {} }))
+  check('CR-056: deleting a process asks for its code and a reason, and sends both', typed.includes(T('routing.removeTypeCode', { code: 'BP-01' })) && page.includes('typeToConfirm={p.code}') && readFileSync('src/api/client.ts', 'utf8').includes('qs({ reason, confirmCode })'))
+}
+{ // CR-057: removal of a location
+  const html = renderToStaticMarkup(createElement(BlockerList, { blockers: [{ code: 'LOCATION_DELETE_RACKS', detail: '2' }, { code: 'LOCATION_DELETE_PROCESS', detail: 'BP-01, QT001' }] }))
+  check('CR-057: every reason a location is kept is shown in words', html.includes(T('config.blk_LOCATION_DELETE_RACKS', { detail: '2' })) && html.includes('BP-01, QT001') && !html.includes('LOCATION_DELETE'))
+  const dialog = readFileSync('src/pages/config/LocationRemovalDialog.tsx', 'utf8')
+  check('CR-057: the deletion asks the server first and needs the typed code', dialog.includes('api.locationRemoval(') && dialog.includes('typeToConfirm={code}') && readFileSync('src/pages/config/OperationsTab.tsx', 'utf8').includes('<LocationRemovalDialog'))
 }
 // CR-047: a rack that cannot be removed says who holds it and where to go; nothing is cancelled from the rack screen
 const held = (o: Partial<RackBlocker>): RackBlocker => ({ kind: 'Order', id: 'a b', reference: 'R1', state: 'Waiting', process: 'BP-05', canCancel: true, racksHeld: false, ...o })

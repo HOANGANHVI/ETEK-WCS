@@ -50,6 +50,10 @@ internal sealed class RoutingRepository(WcsDbContext db, WCS.Application.Plc.IPl
     public void Add(BusinessProcessVersion version) => db.BusinessProcessVersions.Add(version);
     public Task<int> CountOrdersOfProcessAsync(Guid processId, bool openOnly, CancellationToken ct) => db.TransportOrders.CountAsync(o => o.ProcessId == processId
         && (!openOnly || (o.State != OrderState.Completed && o.State != OrderState.Failed && o.State != OrderState.Cancelled)), ct);
+    public async Task<IReadOnlyList<string>> ListPortsHeldByProcessAsync(Guid processId, CancellationToken ct) =>
+        await (from t in db.StationTransactions join o in db.TransportOrders on t.OrderId equals o.Id
+               where o.ProcessId == processId && t.State != StationTransactionState.Completed && t.State != StationTransactionState.Failed
+               select t.PortId).Distinct().OrderBy(x => x).ToListAsync(ct);
     public Task<bool> IsVersionUsedByOrderAsync(Guid versionId, CancellationToken ct) => db.TransportOrders.AnyAsync(o => o.ProcessVersionId == versionId, ct);
     public void Remove(BusinessProcess process) => db.BusinessProcesses.Remove(process);
     public void Remove(BusinessProcessVersion version) => db.BusinessProcessVersions.Remove(version);

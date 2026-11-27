@@ -48,6 +48,14 @@ public class Location
         ProductModelId = modelId; StationRole = role; LastInventoryChangeAt = now;
     }
 
+    /// <summary>CR-057: when set, the location was removed from the system. The row stays so that past records keep showing its code.</summary>
+    public DateTimeOffset? RemovedAt { get; private set; }
+
+    public void MarkRemoved(DateTimeOffset now)
+    {
+        Enabled = false; RemovedAt = now; LastInventoryChangeAt = now;
+    }
+
     public bool Accepts(RackKind kind) => AllowedRackKind switch
     {
         AllowedRackKind.Any => true,

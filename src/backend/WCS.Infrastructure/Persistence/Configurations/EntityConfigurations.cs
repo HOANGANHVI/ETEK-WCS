@@ -40,7 +40,7 @@ internal sealed class LocationConfiguration : IEntityTypeConfiguration<Location>
         b.Property(x => x.Code).HasMaxLength(50).IsRequired();
         b.Property(x => x.Name).HasMaxLength(200).IsRequired();
         b.Property(x => x.Version).IsRowVersion();
-        b.HasIndex(x => x.Code).IsUnique();
+        b.HasIndex(x => x.Code).IsUnique().HasFilter("\"RemovedAt\" IS NULL");   // CR-057: a removed location frees its code
         // CR-036 (additive, nullable): model and role of a location. NULL for every existing location.
         b.HasOne<ProductModel>().WithMany().HasForeignKey(x => x.ProductModelId).OnDelete(DeleteBehavior.Restrict);
         b.HasIndex(x => x.ProductModelId);

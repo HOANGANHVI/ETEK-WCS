@@ -1,3 +1,5 @@
+import { LocationRemovalDialog } from './LocationRemovalDialog'
+import { DEMO_MODE } from '../../config'
 import { useCallback, useState } from 'react'
 import { api } from '../../api/client'
 import type { Agv, Location } from '../../api/types'
@@ -133,6 +135,7 @@ function AgvRow({ agv, onSaved }: { agv: Agv; onSaved: () => void }) {
 function LocationRow({ loc, onSaved }: { loc: Location; onSaved: () => void }) {
   const tr = useT()
   const [editing, setEditing] = useState(false)
+  const [removing, setRemoving] = useState(false)   // CR-057
   if (editing) return (
     <tr><td colSpan={8}><LocationForm initial={loc} onDone={() => { setEditing(false); onSaved() }} onCancel={() => setEditing(false)} /></td></tr>
   )
@@ -145,7 +148,9 @@ function LocationRow({ loc, onSaved }: { loc: Location; onSaved: () => void }) {
       <td className="right num">{loc.rackCapacity}</td>
       <td>{loc.requiresPlcPermission ? tr('config.required') : '—'}</td>
       <td>{loc.enabled ? <Pill tone="ok">{tr('config.on')}</Pill> : <Pill tone="muted">{tr('config.off')}</Pill>}</td>
-      <td><Button size="sm" onClick={() => setEditing(true)}>{tr('config.edit')}</Button></td>
+      <td><span className="nowrap"><Button size="sm" onClick={() => setEditing(true)}>{tr('config.edit')}</Button>{' '}
+        {!DEMO_MODE && <Button size="sm" variant="danger" onClick={() => setRemoving(true)}>{tr('config.locDelete')}</Button>}</span>
+        {removing && <LocationRemovalDialog code={loc.code} onClose={() => setRemoving(false)} onDeleted={() => { setRemoving(false); onSaved() }} />}</td>
     </tr>
   )
 }
