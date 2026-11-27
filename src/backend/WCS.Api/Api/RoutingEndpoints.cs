@@ -170,7 +170,16 @@ public static class RoutingEndpoints
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_IMPORT", "BusinessProcess", null, null,
                 () => s.ImportReferenceAsync(ReferenceProcessCatalog.Load(), c.Actor().Username, ct), x => new { x.Imported, x.Skipped })));
 
+        // CR-055: removal. "removal" says beforehand what DELETE would do; both deletes need a reason and are audited
+        proc.MapGet("{id:guid}/removal", async (HttpContext c, Guid id, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.RemovalAsync(id, ct)));
+        proc.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? reason, ProcessAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_REMOVE", "BusinessProcess", id.ToString(), null,
+                () => s.RemoveAsync(id, reason, ct), x => new { x.Code, x.Outcome, x.Versions, x.Orders }, reason)));
+
         var ver = api.MapGroup("/process-versions").WithTags("Processes").RequireAuthorization(admin);
+        ver.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? reason, ProcessAdminService s, CancellationToken ct) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_VERSION_DELETE", "BusinessProcessVersion", id.ToString(), null,
+                () => s.DeleteVersionAsync(id, reason, ct), x => new { x.ProcessCode, x.Number }, reason)));
         ver.MapGet("{id:guid}", async (HttpContext c, Guid id, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetVersionAsync(id, ct)));
         ver.MapPut("{id:guid}/definition", async (HttpContext c, Guid id, VersionDefinition def, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_VERSION_SAVE", "BusinessProcessVersion", id.ToString(), null,

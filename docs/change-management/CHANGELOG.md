@@ -1,5 +1,17 @@
 # Change Log
 
+## CR-055 Process removal (2026-11-27) – branch fix/cr-053-dashboard-counts, not merged
+
+- An Admin can delete a process that never had an order, retire one with finished orders and delete an unpublished version; BP-01..06 are protected. Reason and audit required. No migration.
+
+## CR-054 Process names language (2026-11-27) – branch fix/cr-053-dashboard-counts, not merged
+
+- Delivered reference process names are shown in the chosen language. Frontend only; stored names unchanged.
+
+## CR-053 Dashboard counts (2026-11-27) – branch fix/cr-053-dashboard-counts, not merged
+
+- The dashboard counts multi-leg transport orders together with the single tasks. Frontend only.
+
 ## CR-052 Destination waiting reason (2026-11-27) – merged into main (e07bebc), not deployed to production
 
 - A waiting order with no usable destination names the cause of every candidate; a held port is shown as such. No change of any rule. No migration.

@@ -1,6 +1,7 @@
 [
   {
     "code": "BP-01",
+    "protected": true,
     "name": "A1/A2 has a full rack",
     "description": "Pick the full rack at A1/A2; destination B1/B2, else F1/F2, else F5 (process-flows.md BP-01). No bind rack when dropping at B1/B2.",
     "requestType": "PickupRequest",
@@ -72,6 +73,7 @@
   },
   {
     "code": "BP-02",
+    "protected": true,
     "name": "A1/A2 needs an empty rack",
     "description": "Source: empty rack at B1/B2, else F3/F4; destination = the requesting A1/A2.",
     "requestType": "DeliveryRequest",
@@ -135,6 +137,7 @@
   },
   {
     "code": "BP-03",
+    "protected": true,
     "name": "B1/B2 has an empty rack",
     "description": "Pick the empty rack at B1/B2; destination A1/A2 (no bind rack), else F3/F4.",
     "requestType": "PickupRequest",
@@ -200,6 +203,7 @@
   },
   {
     "code": "BP-04",
+    "protected": true,
     "name": "B1/B2 needs a full rack",
     "description": "REVIEW: slide 8 is inconsistent about AGV1/AGV2 (BR-02). Draft kept for traceability only; it can never be published.",
     "requestType": "DeliveryRequest",
@@ -263,6 +267,7 @@
   },
   {
     "code": "BP-05",
+    "protected": true,
     "name": "F5 requests a full rack",
     "description": "Operator call at F5: take a full rack from F1/F2 to F5 (F5 must have a free slot). The branch that may cancel the AGV1 task is NOT modelled (NEEDS_CONFIRMATION).",
     "requestType": "ManualRequest",
@@ -313,6 +318,7 @@
   },
   {
     "code": "BP-06",
+    "protected": true,
     "name": "F5 returns an empty rack",
     "description": "Operator call at F5: take the empty rack to A1/A2 (no bind rack), else F3/F4.",
     "requestType": "ManualRequest",

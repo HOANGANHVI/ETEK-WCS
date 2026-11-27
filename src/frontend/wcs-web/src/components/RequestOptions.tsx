@@ -2,6 +2,7 @@ import type { StartableProcess } from '../api/routingTypes'
 import type { FlowOption } from '../api/types'
 import { useT } from '../i18n'
 import { flowInfo } from '../i18n/vi'
+import { processName } from '../i18n/processNames'
 import { processValue } from '../lib/requestOptions'
 
 /**
@@ -17,7 +18,7 @@ export function RequestOptions({ flows, processes }: { flows: FlowOption[]; proc
       </optgroup>
       {processes.length > 0 && (
         <optgroup label={t('ops.createGroupProcesses')}>
-          {processes.map((p) => <option key={p.code} value={processValue(p.code)}>{p.code} · {p.name}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
+          {processes.map((p) => <option key={p.code} value={processValue(p.code)}>{p.code} · {processName(p.code, p.name)}{p.acceptsRequests ? '' : ` (${t('ops.createNotReadyTag')})`}</option>)}
         </optgroup>
       )}
     </>
