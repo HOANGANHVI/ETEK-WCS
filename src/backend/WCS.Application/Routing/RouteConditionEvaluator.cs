@@ -112,6 +112,33 @@ public sealed class RouteConditionEvaluator(ILocationRepository locations, IRack
         return ok;
     }
 
+    /// <summary>Prefix of a waiting reason whose cause is a held port; the screen shows it as such.</summary>
+    public const string PortHeld = "PORT_HELD:";
+
+    /// <summary>
+    /// Why the location the request came from cannot be used now, for the waiting reason shown to the operator. It repeats the checks of <see cref="SourceUsableAsync"/> in the same order and
+    /// decides nothing. A held port is named with the state of the Station Transaction that holds it: "no rack" is only said when no usable rack is there.
+    /// </summary>
+    public async Task<string> SourceBlockerAsync(string code, RackKind kind, Guid orderId, CancellationToken ct, ModelContext? mc = null)
+    {
+        const string noRack = "No usable rack at the request location";
+        var loc = await locations.GetByCodeAsync(code, ct);
+        if (loc is null || !loc.Enabled) return $"The request location {code} is disabled or unknown";
+        if (loc.ReconciliationRequired) return $"The request location {code} needs inventory reconciliation";
+        var sel = mc is null ? null : modelGuard.SelectionFor(mc.ProcessModelId);
+        if (await FindRackAsync(loc.Id, kind, sel, orderId, ct) is null) return noRack;
+        if (await routing.FindPortByLocationAsync(code, ct) is { } port)
+        {
+            if (!port.Enabled) return $"Port {port.Id} of the request location is disabled";
+            if (await routing.GetActiveTransactionForPortAsync(port.Id, ct) is { } tx && tx.OrderId != orderId)
+                return tx.State == StationTransactionState.HandoverCompleted
+                    ? $"{PortHeld} port {port.Id} is held by a Station Transaction in HandoverCompleted: confirm that the AMR has left the port"
+                    : $"{PortHeld} port {port.Id} is held by a Station Transaction in {tx.State}";
+        }
+        if (!await PlcOnlineAsync(code, ct)) return $"The PLC of {code} is offline or disabled";
+        return noRack;   // a rack is there but a configured condition or model rule excludes it
+    }
+
     /// <summary>Always-on rules for a DESTINATION candidate: enabled, accepts the rack kind, free slot, port ready and PLC online.</summary>
     public async Task<bool> DestinationUsableAsync(string code, RackKind kind, IEnumerable<ConditionSpec> extra, Guid? orderId, CancellationToken ct = default, ModelContext? mc = null)
     {

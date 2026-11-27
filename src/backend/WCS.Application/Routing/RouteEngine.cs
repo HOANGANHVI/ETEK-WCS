@@ -349,7 +349,7 @@ public sealed class RouteEngine(
         {
             case SourceMode.Request:
                 sourceCode = order.RequestLocationCode;
-                if (!await eval.SourceUsableAsync(sourceCode, kind, [], order.Id, ct, mc)) { return await NoCandidateAsync(order, step, WaitKind.SourceUnavailable, "No usable rack at the request location", ct); }
+                if (!await eval.SourceUsableAsync(sourceCode, kind, [], order.Id, ct, mc)) { return await NoCandidateAsync(order, step, WaitKind.SourceUnavailable, await eval.SourceBlockerAsync(sourceCode, kind, order.Id, ct, mc), ct); }
                 break;
             case SourceMode.Candidates:
                 foreach (var c in step.Sources)
@@ -448,7 +448,7 @@ public sealed class RouteEngine(
                 order.MoveToStep(step.AlternativeNextStepKey, now);
                 return Task.FromResult(LegCreation.Continue);
             default:
-                if (order.State != OrderState.Waiting || order.WaitKind != wait) Event(order, null, null, "ORDER_WAITING", $"{step.StepKey}: {detail}");
+                if (order.State != OrderState.Waiting || order.WaitKind != wait || order.StateReason != detail) Event(order, null, null, "ORDER_WAITING", $"{step.StepKey}: {detail}");   // a changed cause is recorded too
                 order.TransitionTo(OrderState.Waiting, detail, wait, now);
                 return Task.FromResult(LegCreation.Waiting);
         }

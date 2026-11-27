@@ -7,6 +7,7 @@ import type { Leg, OrderState, StationTransaction, WaitKind } from '../api/routi
 import { ORDER_STATES } from '../api/routingTypes'
 import { hasRole, useAuth } from '../auth/AuthContext'
 import { orderInMotion, orderIsOpen } from '../lib/rackBlock'
+import { waitCause } from '../lib/waitReason'
 import { Modal } from '../components/Modal'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
@@ -86,7 +87,7 @@ function OrdersTab() {
                       <td>{RACK_KIND_LABEL[o.rackKind] ?? o.rackKind}</td>
                       <td className="mono">{o.requestLocationCode}</td>
                       <td><OrderStatePill state={o.state} /></td>
-                      <td>{o.waitKind !== 'None' ? t(WAIT_KEY[o.waitKind]) : ''}</td>
+                      <td>{o.waitKind !== 'None' ? t(waitCause(o) === 'portHeld' ? 'routing.waitPortHeld' : WAIT_KEY[o.waitKind]) : ''}</td>
                       <td className="num">{o.legs.length}</td>
                       <td className="nowrap num">{formatTime(o.createdAt)}</td>
                     </tr>
@@ -142,7 +143,7 @@ function OrderDetailPanel({ id }: { id: string }) {
               <dl className="kv2">
                 <dt>{t('routing.rowProcess')}</dt><dd><strong>{order.processCode}</strong> {t('routing.versionShort', { n: order.processVersion })}</dd>
                 <dt>{t('routing.colState')}</dt><dd><OrderStatePill state={order.state} /></dd>
-                <dt>{t('routing.colWait')}</dt><dd>{order.waitKind !== 'None' ? t(WAIT_KEY[order.waitKind]) : <span className="muted">—</span>}</dd>
+                <dt>{t('routing.colWait')}</dt><dd>{order.waitKind !== 'None' ? t(waitCause(order) === 'portHeld' ? 'routing.waitPortHeld' : WAIT_KEY[order.waitKind]) : <span className="muted">—</span>}</dd>
                 <dt>{t('routing.colStep')}</dt><dd className="mono">{order.currentStepKey ?? '—'}</dd>
                 <dt>{t('routing.colRack')}</dt><dd>{RACK_KIND_LABEL[order.rackKind] ?? order.rackKind}</dd>
                 <dt>{t('routing.colRequest')}</dt><dd className="mono">{order.requestLocationCode}</dd>

@@ -60,6 +60,7 @@ Quy tắc làm việc bắt buộc: [CLAUDE.md](../CLAUDE.md). Triển khai: [de
 | [docker-acceptance/](docker-acceptance/) | Bộ script và mẫu báo cáo nghiệm thu Docker |
 | [reports/cr-046-ui/](reports/cr-046-ui/), [reports/cr-047/](reports/cr-047/), [reports/cr-048/](reports/cr-048/) | Bằng chứng nghiệm thu của CR-046 đến CR-048 |
 | [reports/phase2/](reports/phase2/) | Thiết kế và truy vết của CR-036 |
+| [Báo cáo QA 27/11](reports/qa-2026-11-27/QA_REPORT.md) | Kiểm thử Simulator, QA findings, danh sách lỗi |
 
 ### Lịch sử
 
