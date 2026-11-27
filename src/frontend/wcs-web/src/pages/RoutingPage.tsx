@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import type { Leg, OrderState, StationTransaction, WaitKind } from '../api/routingTypes'
 import { ORDER_STATES } from '../api/routingTypes'
 import { hasRole, useAuth } from '../auth/AuthContext'
+import { orderInMotion, orderIsOpen } from '../lib/rackBlock'
 import { Modal } from '../components/Modal'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
 import { useApi } from '../hooks/useApi'
@@ -110,10 +111,11 @@ function OrderDetailPanel({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [releaseReason, setReleaseReason] = useState<string | null>(null)   // CR-042: null = dialog closed
+  const [cancelReason, setCancelReason] = useState<string | null>(null)   // CR-047: null = dialog closed
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setError(null)
-    try { await fn(); setDialog(null); setReleaseReason(null); detail.reload() } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
+    try { await fn(); setDialog(null); setReleaseReason(null); setCancelReason(null); detail.reload() } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
   }
 
   return (
@@ -123,6 +125,12 @@ function OrderDetailPanel({ id }: { id: string }) {
           <>
             {order.state === 'ReconciliationRequired' && <div className="notice notice-warn" role="alert">{t('routing.reconNotice')}</div>}
             {error && <div className="notice notice-error" role="alert">{error}</div>}
+            {isAdmin && orderIsOpen(order.state) && (
+              <div className="btn-row">
+                <Button size="sm" variant="danger" disabled={orderInMotion(order.legs)} onClick={() => { setError(null); setCancelReason('') }}>{t('linked.btnCancelOrder')}</Button>
+                {orderInMotion(order.legs) && <span className="muted small">{t('linked.cancelOrderInMotion')}</span>}
+              </div>
+            )}
             {order.racksHeld && (
               <div className="notice notice-warn" role="alert">
                 {t('linked.racksHeldNotice')}{' '}
@@ -217,6 +225,15 @@ function OrderDetailPanel({ id }: { id: string }) {
           </>
         )}
       </Async>
+      {cancelReason !== null && (
+        <Modal title={t('linked.cancelOrderTitle')} onClose={() => setCancelReason(null)}
+          footer={<><Button onClick={() => setCancelReason(null)}>{t('routing.closeDialog')}</Button>
+            <Button variant="danger" disabled={busy || !cancelReason.trim()} onClick={() => run(() => api.routingCancel(id, cancelReason.trim()))}>{t('routing.confirm')}</Button></>}>
+          <p>{t('linked.cancelOrderBody')}</p>
+          {error && <div className="notice notice-error" role="alert">{error}</div>}
+          <label>{t('linked.releaseRacksReason')}<input type="text" value={cancelReason} maxLength={500} onChange={(e) => setCancelReason(e.target.value)} /></label>
+        </Modal>
+      )}
       {releaseReason !== null && (
         <Modal title={t('linked.releaseRacksTitle')} onClose={() => setReleaseReason(null)}
           footer={<><Button onClick={() => setReleaseReason(null)}>{t('routing.closeDialog')}</Button>

@@ -1,5 +1,15 @@
 # Change Log
 
+## v3.38 – CR-048 Default IO addresses from the IO map (2026-11-26) – version 2026.11.26.4
+
+- Every IO point starts with the address written in the workbook; an address an Admin enters or removes is never overwritten; "restore default" brings the workbook address back. No write permission follows from an address.
+- Upgrade at start: rows of signals outside the IO map move to `retired_io_points`, stations X6/G3/G7 are retired and their location links released. Migration `AddIoDefaultAddress` (not run on a real database).
+
+## v3.37 – CR-047 Hotfix: IO map as the workbook, rack removal (2026-11-26) – version 2026.11.26.3
+
+- The IO address page shows the workbook sheets as written (11 columns, 120 rows, merged cells, sequence); no signal or station of an earlier catalog; the 7 simulation test inputs are removed.
+- A rack that cannot be removed says which task or order holds it and leads there; the order screen offers the cancellation that the API already had. Refusal rules unchanged; no migration.
+
 ## v3.36 – CR-046 IO map catalog, IO screens, F1/F2, Docker (2026-11-26) – version 2026.11.26.2
 
 - The PLC catalog comes from the IO map of 22/11/2026 (16 stations incl. X4, G1, G2; 6 signals per station). Rows of the earlier catalog stay in the database, unused. No migration. The signals are unconfirmed: no write approval, no real write.

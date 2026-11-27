@@ -1031,6 +1031,9 @@ namespace WCS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTimeOffset?>("RetiredAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -1047,6 +1050,49 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.ToTable("plc_stations", (string)null);
                 });
 
+            modelBuilder.Entity("WCS.Domain.Plc.RetiredIoPoint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActualAddress")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CatalogSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("PlcId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SignalName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StationId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlcId", "StationId");
+
+                    b.ToTable("retired_io_points", (string)null);
+                });
+
             modelBuilder.Entity("WCS.Domain.Plc.StationIoPoint", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1055,6 +1101,13 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.Property<string>("ActualAddress")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("AddressOrigin")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("None");
 
                     b.Property<DateTimeOffset?>("ApprovedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1094,6 +1147,10 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Seq")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SharedWith")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("SignalName")
                         .IsRequired()
@@ -1154,7 +1211,11 @@ namespace WCS.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PlcId", "ActualAddress")
                         .IsUnique()
-                        .HasFilter("\"ActualAddress\" IS NOT NULL");
+                        .HasFilter("\"ActualAddress\" IS NOT NULL AND \"SharedWith\" IS NULL");
+
+                    b.HasIndex("PlcId", "ActualAddress", "SignalName")
+                        .IsUnique()
+                        .HasFilter("\"ActualAddress\" IS NOT NULL AND \"SharedWith\" IS NOT NULL");
 
                     b.HasIndex("PlcId", "StationId", "SignalName")
                         .IsUnique();

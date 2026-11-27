@@ -128,6 +128,9 @@ internal sealed class ReservationRepository(WcsDbContext db) : IReservationRepos
     public Task<bool> HasActiveForRackAsync(Guid rackId, CancellationToken ct) =>
         db.Reservations.AnyAsync(x => x.RackId == rackId && x.Status == ReservationStatus.Active, ct);
 
+    public async Task<IReadOnlyList<Reservation>> ListActiveForRackAsync(Guid rackId, CancellationToken ct) =>
+        await db.Reservations.AsNoTracking().Where(x => x.RackId == rackId && x.Status == ReservationStatus.Active).OrderBy(x => x.CreatedAt).ToListAsync(ct);
+
     public async Task<int> CountActiveDestinationAsync(Guid locationId, CancellationToken ct)
     {
         var saved = await db.Reservations.CountAsync(x => x.LocationId == locationId &&

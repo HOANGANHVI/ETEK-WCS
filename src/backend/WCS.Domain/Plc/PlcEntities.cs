@@ -111,8 +111,37 @@ public class PlcStation
     /// <summary>Technical role. Only "MonitorOnly" exists: no station may create tasks until a flow mapping is approved.</summary>
     public string Role { get; private set; } = "MonitorOnly";
     public DateTimeOffset UpdatedAt { get; private set; }
+    /// <summary>CR-048: set when the station is no longer in the IO map in use. The row is kept for the records that refer to it; it is not a port any more.</summary>
+    public DateTimeOffset? RetiredAt { get; private set; }
+
+    /// <summary>CR-048: the station left the IO map: its location link is released.</summary>
+    public void Retire(DateTimeOffset now) { RetiredAt = now; LocationCode = null; UpdatedAt = now; }
+    public void Restore(DateTimeOffset now) { RetiredAt = null; UpdatedAt = now; }
 
     public void Update(string? locationCode, bool enabled, DateTimeOffset now) { LocationCode = locationCode; Enabled = enabled; UpdatedAt = now; }
+}
+
+/// <summary>CR-048. None: never set. WorkbookDefault: taken from the IO map. Custom: entered or removed by an Admin.</summary>
+public enum IoAddressOrigin { None, WorkbookDefault, Custom }
+
+/// <summary>CR-048: a row of a signal that left the IO map, kept for the record. Nothing reads it for operation.</summary>
+public class RetiredIoPoint
+{
+    private RetiredIoPoint() { }
+
+    public RetiredIoPoint(Guid id, DateTimeOffset at, string catalogSha256, string plcId, string stationId, string signalName, string? actualAddress, string snapshotJson)
+    {
+        Id = id; ArchivedAt = at; CatalogSha256 = catalogSha256; PlcId = plcId; StationId = stationId; SignalName = signalName; ActualAddress = actualAddress; SnapshotJson = snapshotJson;
+    }
+
+    public Guid Id { get; private set; }
+    public DateTimeOffset ArchivedAt { get; private set; }
+    public string CatalogSha256 { get; private set; } = default!;
+    public string PlcId { get; private set; } = default!;
+    public string StationId { get; private set; } = default!;
+    public string SignalName { get; private set; } = default!;
+    public string? ActualAddress { get; private set; }
+    public string SnapshotJson { get; private set; } = default!;
 }
 
 /// <summary>One IO point of one Station of one PLC. Identity: PLC_ID + Station_ID + Signal_Name.</summary>
@@ -140,8 +169,12 @@ public class StationIoPoint
     public string TemplateAddressReference { get; private set; } = default!;
     public string Description { get; private set; } = "";
 
-    /// <summary>Confirmed device address (e.g. D1500). Null until the PLC engineer allocates it. Never derived from the template.</summary>
+    /// <summary>The device address in use (e.g. D1500): the address written in the IO map (CR-048) or the one an Admin entered. Never calculated. Using it for reading says nothing about confirmation or writing.</summary>
     public string? ActualAddress { get; private set; }
+    /// <summary>CR-048: where <see cref="ActualAddress"/> comes from. A <see cref="IoAddressOrigin.Custom"/> value (an empty one too) is never overwritten by the catalog.</summary>
+    public IoAddressOrigin AddressOrigin { get; private set; }
+    /// <summary>CR-048: signal names of the same station that the IO map puts in the same register (comma separated); they may hold the same address.</summary>
+    public string? SharedWith { get; private set; }
     /// <summary>Length in words (STRING) - required for STRING, ignored otherwise.</summary>
     public int? WordLength { get; private set; }
     /// <summary>STRING encoding (e.g. ASCII) or scaling note. Required for STRING.</summary>
@@ -168,14 +201,27 @@ public class StationIoPoint
     /// </summary>
     public bool IsPollable => HasConfirmedAddress;
 
+    /// <summary>An address an Admin entered.</summary>
     public void ConfigureAddress(string address, int? wordLength, string? encoding, DateTimeOffset now)
     {
+        AddressOrigin = IoAddressOrigin.Custom;
         ActualAddress = address; WordLength = wordLength; Encoding = encoding;
         Status = IoConfigStatus.Configured; ApprovedBy = null; ApprovedAt = null; ResetWriteApproval(); UpdatedAt = now;
     }
 
+    /// <summary>CR-048: the address written in the IO map for this station and signal. Like any new address it is not approved and not writable.</summary>
+    public void ApplyDefaultAddress(string address, DateTimeOffset now)
+    {
+        ConfigureAddress(address, null, null, now);
+        AddressOrigin = IoAddressOrigin.WorkbookDefault;
+    }
+
+    public void ShareRegisterWith(string? signals) => SharedWith = string.IsNullOrWhiteSpace(signals) ? null : signals;
+
+    /// <summary>An Admin removes the address: the point stays empty until an address is entered or the default is restored.</summary>
     public void ClearAddress(DateTimeOffset now)
     {
+        AddressOrigin = IoAddressOrigin.Custom;
         ActualAddress = null; WordLength = null; Encoding = null;
         Status = IoConfigStatus.NeedsConfiguration; ApprovedBy = null; ApprovedAt = null; ResetWriteApproval(); UpdatedAt = now;
     }

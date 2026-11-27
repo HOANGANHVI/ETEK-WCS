@@ -15,6 +15,9 @@ public interface IPlcTemplateProvider
 
     /// <summary>CR-046: true for a signal of the IO map in use. Rows of an earlier IO map stay in the database but are not read, written or counted.</summary>
     bool IsCurrent(string signalName) => Signals.Any(s => s.SignalName == signalName);
+
+    /// <summary>CR-048: the address written in the IO map for this PLC, station and signal; null when the map has none.</summary>
+    string? DefaultAddress(string plcId, string stationId, string signalName) => null;
 }
 
 public sealed record AddPlcStationCommand(string StationId, string? LocationCode);
@@ -75,14 +78,19 @@ public sealed partial class PlcProvisioningService(IPlcConfigRepository repo, IL
         repo.AddStation(station);
         // an independent copy of the whole template for THIS port: editing it never touches another port or the template
         foreach (var sig in template.Signals)
-            repo.AddPoint(new StationIoPoint(plcId, stationId, sig.Seq, sig.Group, sig.SignalName, sig.Direction, sig.DataType, sig.TemplateAddressReference, sig.Description, now));
+        {
+            var point = new StationIoPoint(plcId, stationId, sig.Seq, sig.Group, sig.SignalName, sig.Direction, sig.DataType, sig.TemplateAddressReference, sig.Description, now);
+            point.ShareRegisterWith(sig.SharedRegisterWith is { } with ? string.Join(',', with) : null);
+            repo.AddPoint(point);   // a port that the IO map does not list has no default address
+        }
         return station;
     }
 
     /// <summary>Links (or unlinks) a port to a WCS location and enables/disables it. Link only; this never changes an address or an approval.</summary>
     public Task<PlcStationView> SetPortLinkAsync(string stationId, string? locationCode, bool enabled, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
     {
-        var st = await repo.GetStationAsync(stationId, t) ?? throw AppException.NotFound("STATION_NOT_FOUND", $"Port {stationId} not found.");
+        var st = await repo.GetStationAsync(stationId, t);
+        if (st is null || st.RetiredAt is not null) throw AppException.NotFound("STATION_NOT_FOUND", $"Port {stationId} not found.");
         string? code = string.IsNullOrWhiteSpace(locationCode) ? null : locationCode.Trim();
         if (code is not null)
         {

@@ -13,3 +13,15 @@
 @import './styles/fleet.css';
 @import './styles/hub.css';
 @import './styles/saas.css';
+
+/* CR-047: the IO map sheet - the workbook columns keep their wording and merged cells; the system columns are set apart */
+.grid.iomap td, .grid.iomap th { border: 1px solid var(--line-strong); vertical-align: middle; white-space: pre-line; }
+.grid.iomap td { font-size: 0.8rem; padding: 4px 6px; }
+.grid.iomap th { padding: 4px 6px; }
+.grid.iomap td[rowspan]:not([rowspan="1"]) { vertical-align: top; }
+.grid.iomap td:first-child[rowspan] { white-space: pre-line; font-weight: 600; }
+/* the row actions stay in view while the sheet scrolls sideways */
+.grid.iomap td.iomap-actions, .grid.iomap th.iomap-sys:last-child { position: sticky; right: 0; background: var(--surface-2); z-index: 1; }
+.grid.iomap .iomap-signal { font-weight: 600; }
+.grid.iomap .iomap-sys { background: var(--surface-2); }
+.grid.iomap .iomap-arrow { text-align: center; font-size: 1.4rem; }

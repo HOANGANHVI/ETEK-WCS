@@ -1,3 +1,41 @@
+import type { IoMapInfo } from '../api/plcTypes'
+
+export const SHEET_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'] as const
+type SheetRow = NonNullable<IoMapInfo['sheet']>['rows'][number]
+/** A row of the sheet with what identifies it in the running system. A row of a PLC (heartbeat, spare) has no station. */
+export interface ShownSheetRow extends SheetRow { plcId: string; stationId: string | null; signalName: string }
+
+/** CR-047: the sheet rows, each tied to its PLC (by the IP written in column A) and - for a station row - to its station and signal (columns B and D). Order and texts are untouched. */
+export function sheetRows(map: Pick<IoMapInfo, 'plcs' | 'sheet'>): ShownSheetRow[] {
+  return (map.sheet?.rows ?? []).map((r) => {
+    const plc = map.plcs.find((p) => r.cells[0].includes(p.ipAddress))
+    const station = plc?.stations.includes(r.cells[1]) ? r.cells[1] : null
+    return { ...r, plcId: plc?.plcId ?? '', stationId: station, signalName: r.cells[3] }
+  })
+}
+
+export function filterSheetRows(rows: ShownSheetRow[], f: { plc: string; station: string; text: string }, keep: (r: ShownSheetRow) => boolean = () => true): ShownSheetRow[] {
+  const q = f.text.trim().toLowerCase()
+  return rows.filter((r) => (!f.plc || r.plcId === f.plc) && (!f.station || r.stationId === f.station)
+    && (!q || r.signalName.toLowerCase().includes(q) || r.cells[10].toLowerCase().includes(q) || r.cells[7].toLowerCase().includes(q)) && keep(r))
+}
+
+/** The row span of every cell of the rows shown: a merged cell of the workbook spans its consecutive shown rows (0 = covered by the cell above). */
+export function mergeSpans(rows: Pick<SheetRow, 'merged'>[]): number[][] {
+  const spans = rows.map(() => SHEET_LETTERS.map(() => 1))
+  SHEET_LETTERS.forEach((letter, c) => {
+    for (let i = 0; i < rows.length;) {
+      const key = rows[i].merged[letter]
+      let j = i + 1
+      while (key && j < rows.length && rows[j].merged[letter] === key) j++
+      spans[i][c] = j - i
+      for (let k = i + 1; k < j; k++) spans[k][c] = 0
+      i = j
+    }
+  })
+  return spans
+}
+
 // CR-046: pure helpers of the IO-map views (no DOM, no i18n: testable without a browser). The lists come from the backend; no station or signal is hard-coded here.
 import type { IoPointConfig } from '../api/plcTypes'
 
@@ -15,6 +53,19 @@ export function addressedCounts(points: { hasAddress?: boolean; quality: string 
   const mine = points.filter((p) => p.hasAddress !== false)
   return { configured: mine.length, good: mine.filter((p) => p.quality === 'Good' || p.quality === 'Simulated').length }
 }
+
+/**
+ * CR-048: where the address of a point stands. default = the IO map's; custom = entered by an Admin; removed = removed by an Admin; blocked = the IO map has an address that another point holds
+ * (so it was not assigned); none = the IO map has no address for the point and nothing is entered.
+ */
+export type AddressState = 'default' | 'custom' | 'removed' | 'blocked' | 'none'
+export function addressState(p: Pick<IoPointConfig, 'actualAddress' | 'addressOrigin' | 'defaultAddress'>): AddressState {
+  if (p.actualAddress) return p.addressOrigin === 'WorkbookDefault' ? 'default' : 'custom'
+  if (p.addressOrigin === 'Custom') return 'removed'
+  return p.defaultAddress ? 'blocked' : 'none'
+}
+/** Restoring makes sense when the IO map has an address and the point does not hold it as the default. */
+export const canRestore = (p: Pick<IoPointConfig, 'actualAddress' | 'addressOrigin' | 'defaultAddress'>): boolean => !!p.defaultAddress && addressState(p) !== 'default'
 
 /** The PLC filter options: the PLCs that actually have rows. */
 export const plcOptions = (rows: Pick<IoPointConfig, 'plcId'>[]): string[] => [...new Set(rows.map((p) => p.plcId))].sort()

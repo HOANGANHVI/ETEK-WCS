@@ -169,3 +169,9 @@ Source documents and specification set: `docs/02_Interface_Specification/PLC_IO_
 - It is **not yet an IO contract confirmed by the PLC engineer**: do not implement against it, write to or deploy it to a real PLC until the confirmations and the change approval exist (7.5 and the implementation gate of 7.8 still apply). Keep the status of every signal in `PLC_IO_Map/README.md`: agreed by the owner / not confirmed / waiting for a real test.
 - Changing the source document does not change the running PLC catalog, database or communication logic by itself: that needs an approved change. CR-046 (2026-11-26) generates the catalog from this workbook (reference addresses only, no handshake, rows of the earlier catalog preserved but unused); every signal of this workbook stays unconfirmed and is refused for real writes in code.
 - Real PLC writes are denied by default (CR-044): a write needs the deployment declaration and may not reach a reserved register of the unconfirmed interface.
+
+### 7.10 Default IO addresses (owner decision of 2026-11-26, CR-048)
+
+- The addresses written in the IO map of 7.9 are assigned automatically as the **default** addresses of the IO points. For this assignment only, this prevails over 7.3 (`Actual_PLC_Address` unassigned until the PLC engineer confirms). Never create or calculate an address the workbook does not contain.
+- An address an Admin enters or removes is never overwritten by a start or a catalog update; "restore default" takes the workbook address again.
+- An address is not a confirmation and not a write permission: 7.5, the write guard, the allow list and the read-only modes stay in force.

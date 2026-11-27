@@ -149,7 +149,7 @@ internal sealed class RoutingRepository(WcsDbContext db, WCS.Application.Plc.IPl
 
     // ---------------------------------------------------------------- ports
     public Task<PlcStation?> FindPortByLocationAsync(string locationCode, CancellationToken ct) =>
-        db.PlcStations.FirstOrDefaultAsync(s => s.LocationCode == locationCode && s.Enabled, ct);
+        db.PlcStations.FirstOrDefaultAsync(s => s.LocationCode == locationCode && s.Enabled && s.RetiredAt == null, ct);
 
     public Task<PlcStation?> GetPortAsync(string portId, CancellationToken ct) => db.PlcStations.FirstOrDefaultAsync(s => s.Id == portId, ct);
 
@@ -161,7 +161,7 @@ internal sealed class RoutingRepository(WcsDbContext db, WCS.Application.Plc.IPl
     }
 
     public async Task<IReadOnlyList<PlcStation>> ListLinkedPortsAsync(CancellationToken ct) =>
-        await db.PlcStations.AsNoTracking().Where(s => s.Enabled && s.LocationCode != null).OrderBy(s => s.PlcId).ThenBy(s => s.Order).ToListAsync(ct);
+        await db.PlcStations.AsNoTracking().Where(s => s.Enabled && s.LocationCode != null && s.RetiredAt == null).OrderBy(s => s.PlcId).ThenBy(s => s.Order).ToListAsync(ct);
 
     public async Task<IReadOnlyList<StationIoPoint>> ListPlcInputPointsAsync(string stationId, CancellationToken ct) =>
         (await db.StationIoPoints.AsNoTracking().Where(p => p.StationId == stationId && p.Direction == PlcSignalDirection.PlcToSoftware).OrderBy(p => p.Seq).ToListAsync(ct))

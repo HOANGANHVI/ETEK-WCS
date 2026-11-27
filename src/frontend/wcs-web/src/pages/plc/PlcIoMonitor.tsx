@@ -8,8 +8,8 @@ import { useT } from '../../i18n'
 import { DATATYPE_VI, DIRECTION_VI, MONITOR_STATUS_TONE, MONITOR_STATUS_VI } from '../../i18n/plc'
 import { describeError } from '../../i18n/vi'
 import { filterPoints, MONITOR_STATUSES, readReadiness, rowWrite, sortPoints, type MonitorFilter, type SortKey } from '../../lib/plcMonitor'
-import { signalDescription } from '../../lib/plcSignals'
-import { shownValue } from '../../lib/plcIoMap'
+import { sheetRows, shownValue } from '../../lib/plcIoMap'
+import { AddressOriginPill } from './AddressOriginPill'
 import { runtimeAllowsWrite, writeKeyChecklist, type WriteBlock } from '../../lib/plcWrite'
 import { fmtTime, WRITE_TONE } from './plcFormat'
 import { SimDialog } from './plcDialogs'
@@ -29,6 +29,24 @@ function ValueView({ p }: { p: MonitorPoint }) {
   if (typeof value === 'boolean') return <Pill tone={value ? 'ok' : 'muted'} dot={false}>{value ? t('plc.on') : t('plc.off')}</Pill>
   if (typeof value === 'string') return <span className="mono">“{value}”</span>
   return <span className="mono num">{value}</span>
+}
+
+/** CR-048: the rows of the IO map that belong to a PLC, not to a station (heartbeat; spares are not signals). Shown with the address as written: nothing reads or writes them. */
+function PlcLevelSignals({ plc }: { plc: string }) {
+  const t = useT()
+  const map = useApi(useCallback(() => api.plcIoMap(), []))
+  const rows = map.data ? sheetRows(map.data).filter((r) => !r.stationId && r.signalName === 'HeartBit' && (!plc || r.plcId === plc)) : []
+  if (rows.length === 0) return null
+  return (
+    <Panel title={t('plc.plcLevelTitle')} subtitle={t('plc.plcLevelHint')} flush>
+      <div className="table-wrap">
+        <table className="grid" aria-label={t('plc.plcLevelTitle')}>
+          <thead><tr><th>PLC</th><th>{t('plc.colSignalName')}</th><th>{t('plc.colActualAddress')}</th><th>{t('plc.colDataType')}</th><th>{t('plc.colDescription')}</th></tr></thead>
+          <tbody>{rows.map((r) => <tr key={r.row}><td>{r.plcId}</td><td><strong>{r.signalName}</strong></td><td className="mono">{r.cells[7]}</td><td>{r.cells[8]}</td><td className="small">{r.cells[10]}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </Panel>
+  )
 }
 
 /**
@@ -57,7 +75,7 @@ export function PlcIoMonitor({ isAdmin, overview }: { isAdmin: boolean; overview
   const all = useMemo(() => list.data?.points ?? [], [list.data])
   const plcs = useMemo(() => [...new Set(all.map((p) => p.plcId))].sort(), [all])
   const stations = useMemo(() => [...new Set(all.filter((p) => !filter.plc || p.plcId === filter.plc).map((p) => p.stationId))].sort(), [all, filter.plc])
-  const rows = useMemo(() => sortPoints(filterPoints(all, filter, (p) => signalDescription(t, p.signalName, p.description)), sort.key, sort.dir), [all, filter, sort, t])
+  const rows = useMemo(() => sortPoints(filterPoints(all, filter, (p) => p.description), sort.key, sort.dir), [all, filter, sort])
   const counts = useMemo(() => Object.fromEntries(MONITOR_STATUSES.map((s) => [s, all.filter((p) => p.status === s).length])) as Record<string, number>, [all])
 
   const reasonText = (b: WriteBlock, plcId: string): string => {
@@ -152,8 +170,10 @@ export function PlcIoMonitor({ isAdmin, overview }: { isAdmin: boolean; overview
                         <td className="nowrap">{p.plcId}</td>
                         <td className="nowrap"><strong>{p.stationId}</strong></td>
                         <td><strong>{p.signalName}</strong><br /><small className="muted">{p.group} · {DIRECTION_VI[p.direction]}</small>{p.confirmed === false && <><br /><Pill tone="warn" dot={false}>{t('plc.ioNotConfirmed')}</Pill></>}</td>
-                        <td className="small">{signalDescription(t, p.signalName, p.description)}</td>
-                        {isAdmin && <td className="mono">{p.address ?? <span className="muted">—</span>}{p.ioMapAddress && <><br /><small className="muted">{t('plc.ioMapRef', { address: p.ioMapAddress })}</small></>}</td>}
+                        <td className="small">{p.description}</td>
+                        {isAdmin && <td className="nowrap"><span className="mono">{p.address ?? <span className="muted">—</span>}</span><br />
+                          <AddressOriginPill point={{ actualAddress: p.address, addressOrigin: p.addressOrigin, defaultAddress: p.ioMapAddress }} />
+                          {p.ioMapAddress && p.ioMapAddress !== p.address && <><br /><small className="muted">{t('plc.ioMapRef', { address: p.ioMapAddress })}</small></>}</td>}
                         <td>{DATATYPE_VI[p.dataType]}</td>
                         <td><ValueView p={p} /></td>
                         <td>{p.hasAddress === false ? <Pill tone="muted" dot={false}>{t('plc.rsNoAddress')}</Pill> : <Pill tone={MONITOR_STATUS_TONE[p.status] ?? 'muted'} dot={false}>{MONITOR_STATUS_VI[p.status] ?? p.status}</Pill>}{isAdmin && p.error && <small className="text-bad" title={p.error}> ⚠</small>}</td>
@@ -179,6 +199,7 @@ export function PlcIoMonitor({ isAdmin, overview }: { isAdmin: boolean; overview
           )}
         </Async>
       </Panel>
+      {isAdmin && <PlcLevelSignals plc={filter.plc} />}
       {isAdmin && <p className="muted small">{t('plc.monWriteApprovalHint')}</p>}
       {dialog?.kind === 'write' && <TypedWriteDialog point={asWritePoint(dialog.point)} simulator={simulator} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === 'sim' && <SimDialog point={{ id: dialog.point.id, plcId: dialog.point.plcId, stationId: dialog.point.stationId, signalName: dialog.point.signalName, dataType: dialog.point.dataType, address: dialog.point.address, configStatus: '' }} onClose={() => setDialog(null)} onDone={done} />}

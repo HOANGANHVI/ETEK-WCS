@@ -14,7 +14,7 @@ public static class PlcPollablePolicy
     public static HashSet<Guid> Pollable(IReadOnlyList<StationIoPoint> pointsOfOnePlc, AddressBases bases)
     {
         var withAddress = pointsOfOnePlc.Where(p => p.IsPollable).ToList();
-        var specs = withAddress.Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction)).ToList();
+        var specs = withAddress.Select(PointSpec.Of).ToList();
         var blocked = new HashSet<Guid>();
         foreach (var i in AddressValidator.Validate(specs, bases)) { blocked.Add(i.PointId); if (i.ConflictWith is { } other) blocked.Add(other); }   // both sides of an overlap
         foreach (var p in withAddress.Where(p => p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(p.Encoding))) blocked.Add(p.Id);

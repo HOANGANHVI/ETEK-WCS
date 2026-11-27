@@ -111,6 +111,8 @@ public interface IReservationRepository
     Task<int> CountActiveDestinationAsync(Guid locationId, CancellationToken ct = default);
     /// <summary>CR-036: true when an ACTIVE reservation holds the rack.</summary>
     Task<bool> HasActiveForRackAsync(Guid rackId, CancellationToken ct = default);
+    /// <summary>The ACTIVE reservations that hold the rack, oldest first (to say WHO holds it).</summary>
+    Task<IReadOnlyList<Reservation>> ListActiveForRackAsync(Guid rackId, CancellationToken ct = default);
     Task<IReadOnlyDictionary<Guid, int>> CountActiveDestinationByLocationAsync(CancellationToken ct = default);
 }
 

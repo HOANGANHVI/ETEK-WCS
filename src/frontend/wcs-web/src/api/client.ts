@@ -13,6 +13,7 @@ import type { AddPlcBody, QueueAlert, StartableProcess, QueueScopeResult, Import
 import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
+import type { RackBlocker } from '../lib/rackBlock'
 import type { FleetView } from './fleetTypes'
 import type { RcsParameter, RcsParameters, RcsCallbacks, RcsCatalog, RcsCheckState, RcsExecution, RcsHistoryFilter, RcsHistoryItem, RcsHistoryPage, RcsOverview, RcsPreview } from './rcsDiagTypes'
 import type { LastTest, OperationsView, PlcConfig, RcsConfig, SaveLocationBody, SavePlcBody, SaveRcsBody } from './configTypes'
@@ -207,7 +208,7 @@ const realApi = {
     request<ReadNowResult>(`/api/plc/stations/${encodeURIComponent(stationId)}/signals/${encodeURIComponent(signal)}/read`, { method: 'POST', body: JSON.stringify({}) }),
   plcStationIo: (stationId: string) => request<StationSnapshot>(`/api/plc/stations/${encodeURIComponent(stationId)}/io`),
   plcHandshake: () => request<HandshakeState[]>('/api/plc/handshake'),
-  plcPoints: (f: { plcId?: string; stationId?: string; includeRetired?: boolean }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId, includeRetired: f.includeRetired ? 'true' : undefined })}`),
+  plcPoints: (f: { plcId?: string; stationId?: string }) => request<IoPointConfig[]>(`/api/plc/points${qs({ plcId: f.plcId, stationId: f.stationId })}`),
   plcIoMap: () => request<IoMapInfo>('/api/plc/io-map'),
   plcConnections: () => request<PlcConnection[]>('/api/plc/connections'),
   plcSaveConnection: (plcId: string, b: SavePlcConnectionBody) => request<PlcConnection>(`/api/plc/connections/${plcId}`, { method: 'PUT', body: JSON.stringify(b) }),
@@ -219,6 +220,7 @@ const realApi = {
   plcSetAddress: (id: string, b: { address: string; wordLength?: number | null; encoding?: string | null }) =>
     request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'PUT', body: JSON.stringify(b) }),
   plcClearAddress: (id: string) => request<IoPointState>(`/api/plc/points/${id}/address`, { method: 'DELETE' }),
+  plcRestoreAddress: (id: string) => request<IoPointConfig>(`/api/plc/points/${id}/address/restore-default`, { method: 'POST' }),
   plcApprovePoint: (id: string) => request<IoPointState>(`/api/plc/points/${id}/approve`, { method: 'POST' }),
   plcWriteApproval: (id: string, decision: 'Approve' | 'Reject', note?: string) =>
     request<IoPointConfig>(`/api/plc/points/${id}/write-approval`, { method: 'POST', body: JSON.stringify({ decision, note }) }),
@@ -254,7 +256,7 @@ const realApi = {
   processQueueScope: (processId: string, scope: string | null, reason: string) =>
     request<QueueScopeResult>(`/api/processes/${processId}/queue-scope`, { method: 'PUT', body: JSON.stringify({ scope, reason }) }),
   // CR-040: one rack record (Admin)
-  rackEditability: (id: string) => request<{ editable: boolean; code: string | null; message: string | null }>(`/api/inventory/racks/${id}/editability`),
+  rackEditability: (id: string) => request<{ editable: boolean; code: string | null; message: string | null; blockers?: RackBlocker[] | null }>(`/api/inventory/racks/${id}/editability`),
   processApplyCatalog: (processId: string, reason: string) => request<ProcessVersion>(`/api/processes/${processId}/apply-catalog`, { method: 'POST', body: JSON.stringify({ reason }) }),
   rackCreate: (b: { locationCode: string; rackKind: 'Full' | 'Empty'; externalRackId: string | null; reason: string; rackType?: string; productModelId?: string }) =>
     request<Rack>('/api/inventory/racks', { method: 'POST', body: JSON.stringify(b) }),

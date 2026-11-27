@@ -39,7 +39,8 @@ public sealed record IoPointView(Guid Id, string PlcId, string StationId, int Se
     string Description, string ConfigStatus, string? TemplateAddressReference, string? ActualAddress, int? WordLength, string? Encoding,
     bool? WriteAllowed, string? ApprovedBy, DateTimeOffset? ApprovedAt, bool? Pollable = null,
     string? WriteApproval = null, string? WriteDecidedBy = null, DateTimeOffset? WriteDecidedAt = null, string? WriteDecisionNote = null, bool? WriteSupported = null,
-    bool? InIoMap = null, string? Values = null, IReadOnlyList<string>? SharedRegisterWith = null, bool? Confirmed = null);
+    bool? InIoMap = null, string? Values = null, IReadOnlyList<string>? SharedRegisterWith = null, bool? Confirmed = null,
+    string? DefaultAddress = null, string? AddressOrigin = null);
 
 public sealed record SetPointAddressCommand(string Address, int? WordLength, string? Encoding);
 
@@ -62,15 +63,9 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     private async Task<List<StationIoPoint>> CurrentPointsAsync(string? plcId, string? stationId, CancellationToken ct) =>
         (await repo.ListPointsAsync(plcId, stationId, ct)).Where(Current).ToList();
 
-    /// <summary>Stations that carry only rows of an earlier IO map (e.g. X6, G3, G7): kept in the database, listed apart.</summary>
-    private static List<PlcStation> InUse(IReadOnlyList<PlcStation> stations, IReadOnlyList<StationIoPoint> all, Func<StationIoPoint, bool> current)
-    {
-        var retired = all.GroupBy(p => p.StationId).Where(g => !g.Any(current)).Select(g => g.Key).ToHashSet();
-        return stations.Where(s => !retired.Contains(s.Id)).ToList();
-    }
     public async Task<IReadOnlyList<PlcConnectionView>> ListConnectionsAsync(CancellationToken ct = default)
     {
-        var stations = InUse(await repo.ListStationsAsync(ct), await repo.ListPointsAsync(null, null, ct), Current);
+        var stations = await repo.ListStationsAsync(ct);
         return (await repo.ListConnectionsAsync(ct)).Select(c => ToView(c, stations.Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList())).ToList();
     }
 
@@ -113,7 +108,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
             // Switching a REAL connection on needs the complete, confirmed parameter set. The simulator never needs them.
             if (cmd.Enabled && options.Mode != PlcRuntimeMode.Simulator && c.MissingParameters() is { Count: > 0 } missing)
                 throw new ValidationFailedException(missing.Select(m => new FieldError(m, "Cần được kỹ sư PLC xác nhận trước khi bật kết nối thật (NEEDS_CONFIGURATION).", "NEEDS_ENGINEER_CONFIRMATION")).ToList());
-            var stations = InUse(await repo.ListStationsAsync(t), await repo.ListPointsAsync(c.Id, null, t), Current).Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList();
+            var stations = (await repo.ListStationsAsync(t)).Where(s => s.PlcId == c.Id).OrderBy(s => s.Order).Select(s => s.Id).ToList();
             return ToView(c, stations);
         }, ct);
     }
@@ -125,9 +120,8 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
 
     public async Task<IReadOnlyList<PlcStationView>> ListStationsAsync(CancellationToken ct = default)
     {
-        var all = await repo.ListPointsAsync(null, null, ct);
-        var points = all.Where(Current).ToList();
-        return InUse(await repo.ListStationsAsync(ct), all, Current).OrderBy(s => s.PlcId).ThenBy(s => s.Order).Select(s =>
+        var points = await CurrentPointsAsync(null, null, ct);
+        return (await repo.ListStationsAsync(ct)).OrderBy(s => s.PlcId).ThenBy(s => s.Order).Select(s =>
         {
             var mine = points.Where(p => p.StationId == s.Id).ToList();
             return new PlcStationView(s.Id, s.PlcId, s.Order, s.LocationCode, s.Enabled, s.Role, mine.Count,
@@ -135,10 +129,9 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         }).ToList();
     }
 
-    /// <param name="includeRetired">CR-046: also return the rows of an earlier IO map (shown apart; only their address can be cleared).</param>
-    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default, bool includeRetired = false)
+    public async Task<IReadOnlyList<IoPointView>> ListPointsAsync(string? plcId, string? stationId, bool includeConfiguration, CancellationToken ct = default)
     {
-        var points = (await repo.ListPointsAsync(plcId, stationId, ct)).Where(p => includeRetired || Current(p)).ToList();
+        var points = await CurrentPointsAsync(plcId, stationId, ct);
         // CR-012: Pollable = has an address that is valid and does not overlap another point of the same PLC (the other points of that PLC are needed for the overlap check)
         var pollable = new HashSet<Guid>();
         foreach (var group in points.GroupBy(p => p.PlcId))
@@ -158,6 +151,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         {
             InIoMap = s is not null, Values = s?.Values, SharedRegisterWith = s?.SharedRegisterWith is { Count: > 0 } w ? w : null,
             Confirmed = !UnconfirmedSignals.Contains(v.SignalName),
+            DefaultAddress = v.AddressOrigin is null ? null : template.DefaultAddress(v.PlcId, v.StationId, v.SignalName),   // configuration data: Admin only, like the address
         };
     }
 
@@ -166,7 +160,8 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         includeConfiguration ? p.TemplateAddressReference : null, includeConfiguration ? p.ActualAddress : null, includeConfiguration ? p.WordLength : null,
         includeConfiguration ? p.Encoding : null, includeConfiguration ? p.WriteAllowed : null, includeConfiguration ? p.ApprovedBy : null, includeConfiguration ? p.ApprovedAt : null, includeConfiguration ? pollable ?? p.IsPollable : null,
         PlcLabels.WriteStatus(p.WriteApproval), includeConfiguration ? p.WriteDecidedBy : null, includeConfiguration ? p.WriteDecidedAt : null, includeConfiguration ? p.WriteDecisionNote : null,
-        WriteValueValidator.IsWriteSupported(p.DataType, p.Encoding));
+        WriteValueValidator.IsWriteSupported(p.DataType, p.Encoding),
+        AddressOrigin: includeConfiguration ? p.AddressOrigin.ToString() : null);
 
     /// <summary>Records an address confirmed by the PLC engineer. Conflicts with other points of the SAME PLC are rejected; other PLCs are independent.</summary>
     public Task<IoPointView> SetAddressAsync(Guid pointId, SetPointAddressCommand cmd, CancellationToken ct = default) =>
@@ -179,13 +174,12 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
                 throw new ValidationFailedException([new("address", "Thiết bị X/Y chưa được hỗ trợ trong cấu hình địa chỉ IO (OUT_OF_SCOPE, NEEDS_CONFIRMATION: cần xác nhận cơ số với kỹ sư PLC). Chỉ dùng M, D hoặc W.", "ADDRESS_XY_UNSUPPORTED")]);
             var bases = await BasesOfAsync(p.PlcId, t);
             var address = string.IsNullOrWhiteSpace(cmd.Address) ? cmd.Address?.Trim() : DeviceAddress.Normalize(cmd.Address, bases);
-            var spec = new PointSpec(p.Id, p.StationId, p.SignalName, p.DataType, address, cmd.WordLength, p.Direction);
+            var spec = PointSpec.Of(p) with { Address = address, WordLength = cmd.WordLength };
             if (AddressValidator.ValidateOne(spec, bases) is { } issue) throw new ValidationFailedException([new("address", issue.Message, issue.Code, issue.Args)]);
             if (p.DataType == PlcDataType.String && string.IsNullOrWhiteSpace(cmd.Encoding))
                 throw new ValidationFailedException([new("encoding", "STRING cần encoding được xác nhận.", "ENCODING_REQUIRED")]);
 
-            var others = (await repo.ListPointsAsync(p.PlcId, null, t)).Where(x => x.Id != p.Id)
-                .Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction));
+            var others = (await repo.ListPointsAsync(p.PlcId, null, t)).Where(x => x.Id != p.Id).Select(PointSpec.Of);
             var conflict = AddressValidator.Validate(others.Append(spec), bases).FirstOrDefault(i => i.PointId == p.Id || i.ConflictWith == p.Id);
             if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message, conflict.Code, conflict.Args)]);
 
@@ -198,7 +192,24 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
         {
             var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
             p.ClearAddress(clock.UtcNow);
-            return ToView(p, true);
+            return Describe(ToView(p, true));
+        }, ct);
+
+    /// <summary>CR-048: gives the point the address written in the IO map again (it is then a default and follows the map). Refused when the map has none or another point holds it.</summary>
+    public Task<IoPointView> RestoreDefaultAddressAsync(Guid pointId, CancellationToken ct = default) =>
+        uow.ExecuteAsync(async t =>
+        {
+            var p = await repo.GetPointAsync(pointId, t) ?? throw AppException.NotFound("IO_POINT_NOT_FOUND", "Không tìm thấy IO point.");
+            RequireCurrent(p);
+            var address = template?.DefaultAddress(p.PlcId, p.StationId, p.SignalName)
+                ?? throw AppException.Rejected("IO_NO_DEFAULT_ADDRESS", "IO Map không có địa chỉ cho tín hiệu này.");
+            var bases = await BasesOfAsync(p.PlcId, t);
+            var spec = PointSpec.Of(p) with { Address = address, WordLength = null };
+            var others = (await repo.ListPointsAsync(p.PlcId, null, t)).Where(x => x.Id != p.Id).Select(PointSpec.Of);
+            var conflict = AddressValidator.Validate(others.Append(spec), bases).FirstOrDefault(i => i.PointId == p.Id || i.ConflictWith == p.Id);
+            if (conflict is not null) throw new ValidationFailedException([new("address", conflict.Message, conflict.Code, conflict.Args)]);
+            p.ApplyDefaultAddress(address, clock.UtcNow);
+            return Describe(ToView(p, true));
         }, ct);
 
     /// <summary>Records that the PLC engineer confirmed the address. The approver is the authenticated Admin; the note names the engineer / document.</summary>
@@ -216,7 +227,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
     /// <summary>Classifies every IO point of a PLC for a bulk read-approval without changing anything.</summary>
     private static IReadOnlyList<BulkApprovalItem> Classify(IReadOnlyList<StationIoPoint> points, AddressBases bases)
     {
-        var specs = points.Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction)).ToList();
+        var specs = points.Select(PointSpec.Of).ToList();
         var issues = AddressValidator.Validate(specs, bases);
         AddressIssue? IssueOf(Guid id) => issues.FirstOrDefault(i => i.PointId == id) ?? issues.FirstOrDefault(i => i.ConflictWith == id);
         return points.Select(p =>
@@ -329,7 +340,7 @@ public sealed class PlcConfigService(IPlcConfigRepository repo, IUnitOfWork uow,
 
     /// <summary>Address conflicts currently present on a PLC (empty list = consistent).</summary>
     public async Task<IReadOnlyList<AddressIssue>> CheckPlcAsync(string plcId, CancellationToken ct = default) =>
-        AddressValidator.Validate((await repo.ListPointsAsync(plcId, null, ct)).Select(x => new PointSpec(x.Id, x.StationId, x.SignalName, x.DataType, x.ActualAddress, x.WordLength, x.Direction)),
+        AddressValidator.Validate((await repo.ListPointsAsync(plcId, null, ct)).Select(PointSpec.Of),
             await BasesOfAsync(plcId, ct));
 
     private async Task<AddressBases> BasesOfAsync(string plcId, CancellationToken ct) =>

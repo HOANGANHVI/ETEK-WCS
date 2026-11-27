@@ -4,7 +4,11 @@ using WCS.Domain.Plc;
 namespace WCS.Application.Plc;
 
 /// <param name="Direction">Optional. When known, the validator also enforces that an X (input relay) point is never a Software -> PLC point.</param>
-public sealed record PointSpec(Guid Id, string StationId, string Signal, PlcDataType Type, string? Address, int? WordLength, PlcSignalDirection? Direction = null);
+/// <param name="SharedWith">CR-048: signals of the same station that the IO map puts in the same register (comma separated).</param>
+public sealed record PointSpec(Guid Id, string StationId, string Signal, PlcDataType Type, string? Address, int? WordLength, PlcSignalDirection? Direction = null, string? SharedWith = null)
+{
+    public static PointSpec Of(StationIoPoint p) => new(p.Id, p.StationId, p.SignalName, p.DataType, p.ActualAddress, p.WordLength, p.Direction, p.SharedWith);
+}
 
 public sealed record AddressIssue(Guid PointId, string StationId, string Signal, string Code, string Message, Guid? ConflictWith = null, IReadOnlyDictionary<string, object?>? Args = null);
 
@@ -25,6 +29,10 @@ public static class AddressValidator
         (PlcDataType.String, false) => wordLength is > 0 and <= MaxStringWords ? wordLength : null,
         _ => null,
     };
+
+    /// <summary>CR-048: true when each of the two signals names the other as sharing its register.</summary>
+    public static bool MayShare(string signal, string? sharedWith, string other, string? otherSharedWith) =>
+        (sharedWith?.Split(',').Contains(other) ?? false) && (otherSharedWith?.Split(',').Contains(signal) ?? false);
 
     /// <summary>Validates a single point on its own (format + type/device compatibility). Returns null when fine.</summary>
     public static AddressIssue? ValidateOne(PointSpec p, AddressBases? bases = null)
@@ -65,6 +73,8 @@ public static class AddressValidator
                 for (var j = i + 1; j < sorted.Count && sorted[j].Start <= sorted[i].End; j++)
                 {
                     var (x, y) = (sorted[i].Point, sorted[j].Point);
+                    // the one allowed overlap: two signals of one station that the IO map puts in exactly the same register
+                    if (x.StationId == y.StationId && sorted[i].Start == sorted[j].Start && sorted[i].End == sorted[j].End && MayShare(x.Signal, x.SharedWith, y.Signal, y.SharedWith)) continue;
                     issues.Add(new(y.Id, y.StationId, y.Signal, "ADDRESS_CONFLICT",
                         $"Địa chỉ {y.Address} trùng/chồng vùng nhớ với {x.StationId}/{x.Signal} ({x.Address}) trên cùng PLC.", x.Id, FieldArgs.Of(("address", y.Address), ("other", $"{x.StationId}/{x.Signal}"), ("otherAddress", x.Address))));
                 }
