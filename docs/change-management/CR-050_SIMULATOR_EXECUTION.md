@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `THIẾT KẾ ĐƯỢC DUYỆT QUA QUYẾT ĐỊNH D-01/D-03/D-04 (2026-11-27) – ĐÃ TRIỂN KHAI, ĐÃ KIỂM THỬ; NHÁNH `feature/cr-050-simulator`, CHƯA MERGE` |
+| **Trạng thái** | `THIẾT KẾ ĐƯỢC DUYỆT QUA QUYẾT ĐỊNH D-01/D-03/D-04 (2026-11-27) – ĐÃ TRIỂN KHAI, ĐÃ KIỂM THỬ; ĐÃ MERGE vào main (105549a), CHƯA DEPLOY` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-27 |
 | **Nền** | `feature/cr-049-qa-fixes` (`63e0883`) |
 | **Migration** | Không |

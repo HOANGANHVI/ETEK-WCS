@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `ĐÃ TRIỂN KHAI, ĐÃ KIỂM THỬ TRÊN SIMULATOR – NHÁNH feature/cr-050-simulator, CHƯA MERGE, CHƯA DEPLOY` |
+| **Trạng thái** | `ĐÃ TRIỂN KHAI, ĐÃ KIỂM THỬ TRÊN SIMULATOR – ĐÃ MERGE vào main (ae48ccd), CHƯA DEPLOY` |
 | **Nguồn phê duyệt** | Chỉ thị của chủ dự án, 2026-11-27 |
 | **Nền** | `feature/cr-050-simulator` (`321f884`) |
 | **Migration** | Không |
