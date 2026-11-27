@@ -135,6 +135,8 @@ public sealed class AmrExecutionSimulator
             if (run.IsTask) throw AppException.Rejected("AMR_TASK_ENDED", "WCS ended this task when the AMR reported the interruption; reconcile it on the task screen.");
             run.Phase = run.FailedIn; run.Failure = null; run.Handling = 0; _rcs.SetStatus(requestCode, RcsTaskStatus.Executing);
             Note(run, "recovered");
+            await using var recording = _scopes.CreateAsyncScope();
+            await RecordAsync(recording.ServiceProvider, "Recovered", run, new { phase = run.Phase.ToString() }, "Applied", ct);
         }
         finally { _step.Release(); }
     }
@@ -258,7 +260,14 @@ public sealed class AmrExecutionSimulator
         if (!await StillOpenAsync(run, sp, ct)) return;
         if (run.Phase == AmrRunPhase.Failed || run.Stalled) return;
         if (run.Wait > 0) { run.Wait -= seconds; if (run.Wait > 0) return; }
-        if (run.Phase == AmrRunPhase.Queued) { if (Assign(run)) { run.Phase = AmrRunPhase.ToSource; run.TravelTotal = 0; Note(run, $"{run.Robot!.Code} started"); if (run.IsTask) await TaskSignalAsync(run, sp, ct); } return; }
+        if (run.Phase == AmrRunPhase.Queued)
+        {
+            if (!Assign(run)) return;
+            run.Phase = AmrRunPhase.ToSource; run.TravelTotal = 0; Note(run, $"{run.Robot!.Code} started");
+            await RecordAsync(sp, "Started", run, new { source = run.Source }, "Applied", ct);   // CR-051: monitoring shows the work as being executed by this AMR
+            if (run.IsTask) await TaskSignalAsync(run, sp, ct);
+            return;
+        }
         if (run.Phase is AmrRunPhase.ToSource or AmrRunPhase.Picking or AmrRunPhase.ToDestination or AmrRunPhase.Dropping && Take(AmrFault.ExecutionStall)) { run.Stalled = true; Note(run, "stalled (no response)"); return; }
 
         switch (run.Phase)

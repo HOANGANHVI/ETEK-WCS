@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CreateTaskDialog } from './TaskDialogs'
+import { RcsWorkTable } from '../components/RcsWorkTable'
+import { orderCode } from '../lib/work'
 import { RequestOverview } from '../components/RequestOverview'
 import { api } from '../api/client'
 import type { Leg, OrderState, StationTransaction, WaitKind } from '../api/routingTypes'
@@ -103,11 +105,13 @@ function OrdersTab() {
   )
 }
 
-function OrderDetailPanel({ id }: { id: string }) {
+/** Also used by task management (CR-051): one detail view of a transport order. */
+export function OrderDetailPanel({ id }: { id: string }) {
   const t = useT()
   const { user } = useAuth()
   const isAdmin = hasRole(user, 'Admin')
   const detail = useApi(useCallback(() => api.routingOrder(id), [id]), [...EVENTS])
+  const rcsWork = useApi(useCallback(() => api.rcsWork(false, id), [id]), [...EVENTS, 'RcsMessageRecorded'])
   const [dialog, setDialog] = useState<{ kind: 'pick' | 'drop'; leg: Leg } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -148,6 +152,7 @@ function OrderDetailPanel({ id }: { id: string }) {
                 <dt>{t('routing.colRack')}</dt><dd>{RACK_KIND_LABEL[order.rackKind] ?? order.rackKind}</dd>
                 <dt>{t('routing.colRequest')}</dt><dd className="mono">{order.requestLocationCode}</dd>
                 <dt>{t('routing.rowRequestKey')}</dt><dd className="mono">{order.requestKey}</dd>
+                <dt>{t('linked.workRowId')}</dt><dd className="mono">{orderCode(order.id)} · {order.id}</dd>
                 <dt>{t('routing.colCreated')}</dt><dd>{formatDateTime(order.createdAt)}</dd>
                 <dt>{t('linked.rowRequestedBy')}</dt><dd>{order.requestedBy ?? '—'}</dd>
                 <dt>{t('linked.colQueue')}</dt><dd>{order.queueSequence != null ? t('linked.queueCell', { status: t(`linked.queue_${order.queueStatus}` as MsgKey), position: order.queueSequence, scope: order.queueScope ?? t('linked.scopeNone') }) : '—'}</dd>
@@ -187,6 +192,13 @@ function OrderDetailPanel({ id }: { id: string }) {
                 </div>
               )}
             </section>
+
+            {rcsWork.data && rcsWork.data.length > 0 && (
+              <section className="detail-sec">
+                <h3>{t('linked.secRcsWork')}</h3>
+                <RcsWorkTable rows={[...rcsWork.data].sort((a, b) => (a.legSequence ?? 0) - (b.legSequence ?? 0))} />
+              </section>
+            )}
 
             <section className="detail-sec">
               <h3>{t('routing.secTransactions')}</h3>

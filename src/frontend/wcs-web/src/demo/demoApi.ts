@@ -31,6 +31,8 @@ export const demoDataApi = {
   agvs: () => read(() => demo.listAgvs()),
   flows: () => read(() => Object.entries(DEMO_FLOWS).map(([flow, r]) => ({ flow, rackKind: r.kind, stations: [...r.stations] }))),
   routingStartable: () => read(() => []),   // CR-039: Demo Mode has no configured processes
+  routingOrders: () => read(() => ({ total: 0, items: [] })),   // CR-051
+  rcsWork: () => read(() => []),   // CR-051: Demo Mode keeps no RCS communication
   locations: () => read(() => demo.listLocations()),
   racks: (location?: string) => read(() => demo.listRacks(location)),
   transactions: (location?: string) => read(() => demo.listTransactions(location)),

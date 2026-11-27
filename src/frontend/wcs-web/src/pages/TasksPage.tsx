@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { TASK_STATES, type TaskState, type TransportTask } from '../api/types'
@@ -7,6 +7,10 @@ import { CreateTaskDialog, DeleteTaskDialog, EditTaskDialog } from './TaskDialog
 import { ReconciliationPanel } from './ReconciliationPanel'
 import { RequestOverview } from '../components/RequestOverview'
 import { USER_EDITABLE } from './taskRules'
+import { OrderDetailPanel, OrderStatePill } from './RoutingPage'
+import { ORDER_STATES, type OrderState } from '../api/routingTypes'
+import { ORDER_STATE_LABEL } from '../i18n/routing'
+import { filterWork, orderCode, orderRobots, orderRoute, workRows } from '../lib/work'
 import { Async, Button, FlowStepper, PageHeader, Panel, Pill, TaskStatePill } from '../components/ui'
 import { StackedSummary, type SummaryItem } from '../components/charts'
 import { DEMO_MODE, ENGINEERING_TOOLS } from '../config'
@@ -23,6 +27,7 @@ const CANCELLABLE: TaskState[] = [
   'Pending', 'Validating', 'Queued', 'Dispatching', 'Accepted', 'Executing', 'WaitingForPlc', 'WaitingForDestination', 'Continuing',
 ]
 const EVENTS = ['TaskCreated', 'TaskStateChanged', 'TaskDeleted'] as const
+const ORDER_EVENTS = ['OrderChanged'] as const
 
 type Dialog = { kind: 'create' } | { kind: 'edit'; task: TransportTask } | { kind: 'delete'; task: TransportTask } | null
 
@@ -33,40 +38,52 @@ export function TasksPage() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const [stateFilter, setStateFilter] = useState<TaskState | ''>('')
+  // CR-051: "task:<state>" or "order:<state>"; each engine keeps its own states
+  const [stateFilter, setStateFilter] = useState('')
+  const [kindFilter, setKindFilter] = useState<'' | 'task' | 'order'>('')
+  const taskState = stateFilter.startsWith('task:') ? (stateFilter.slice(5) as TaskState) : undefined
+  const orderState = stateFilter.startsWith('order:') ? (stateFilter.slice(6) as OrderState) : undefined
+  const showTasks = kindFilter !== 'order' && !orderState
+  const showOrders = kindFilter !== 'task' && !taskState
   const [agvFilter, setAgvFilter] = useState('')
   const [search, setSearch] = useState('')
   const [reconOnly, setReconOnly] = useState(false)
   const [cancelFor, setCancelFor] = useState<string | null>(null)
   const urlId = params.get('id')
+  const urlOrder = params.get('order')
 
-  const tasks = useApi(useCallback(() => api.tasks(stateFilter || undefined, 0, 200), [stateFilter]), [...EVENTS])
-  const allTasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])   // unfiltered, for the status summary only
+  const tasks = useApi(useCallback(() => api.tasks(taskState, 0, 200), [taskState]), [...EVENTS])
+  const orders = useApi(useCallback(() => api.routingOrders(orderState, 200), [orderState]), [...ORDER_EVENTS])
+  const allOrders = useApi(useCallback(() => api.routingOrders(undefined, 200), []), [...ORDER_EVENTS])
   const agvs = useApi(useCallback(() => api.agvs(), []))
   const locations = useApi(useCallback(() => api.locations(), []))
   const codes = useCodeMaps(locations.data, agvs.data)
-
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return (tasks.data?.items ?? []).filter((t) => (!agvFilter || t.agvId === agvFilter) && (!reconOnly || t.requiresReconciliation) && (!q || taskCode(t.id).toLowerCase().includes(q)))
-  }, [tasks.data, agvFilter, search, reconOnly])
+  const allTasks = useApi(useCallback(() => api.tasks(undefined, 0, 200), []), [...EVENTS])   // unfiltered, for the status summary only
+  const listed = useMemo(() => workRows(showTasks ? tasks.data?.items ?? [] : [], showOrders ? orders.data?.items ?? [] : []), [tasks.data, orders.data, showTasks, showOrders])
+  const rows = useMemo(() => filterWork(listed, { agvId: agvFilter, agvRobotCode: agvs.data?.find((a) => a.id === agvFilter)?.rcsRobotCode ?? null, search, reconOnly, taskCodeOf: taskCode }),
+    [listed, agvs.data, agvFilter, search, reconOnly])
 
   const summary = useMemo<SummaryItem[]>(() => {
     const items = allTasks.data?.items ?? []
-    const n = (f: (s: TaskState) => boolean) => items.filter((x) => f(x.state)).length
+    const placed = allOrders.data?.items ?? []
+    const n = (f: (s: TaskState) => boolean, o: OrderState[]) => items.filter((x) => f(x.state)).length + placed.filter((x) => o.includes(x.state)).length
     return [
-      { key: 'run', label: tr('tasks.sumInProgress'), tone: 'info', value: n((x) => OCCUPYING_STATES.includes(x)) },
-      { key: 'queue', label: tr('tasks.sumQueued'), tone: 'warn', value: n((x) => x === 'Pending' || x === 'Validating' || x === 'Queued') },
-      { key: 'done', label: tr('tasks.sumCompleted'), tone: 'ok', value: n((x) => x === 'Completed') },
-      { key: 'fail', label: tr('tasks.sumFailed'), tone: 'bad', value: n((x) => x === 'Failed') },
-      { key: 'cancel', label: tr('tasks.sumCancelled'), tone: 'muted', value: n((x) => x === 'Cancelled') },
+      { key: 'run', label: tr('tasks.sumInProgress'), tone: 'info', value: n((x) => OCCUPYING_STATES.includes(x), ['Accepted', 'InProgress']) },
+      { key: 'queue', label: tr('tasks.sumQueued'), tone: 'warn', value: n((x) => x === 'Pending' || x === 'Validating' || x === 'Queued', ['Created', 'Waiting']) },
+      { key: 'done', label: tr('tasks.sumCompleted'), tone: 'ok', value: n((x) => x === 'Completed', ['Completed']) },
+      { key: 'fail', label: tr('tasks.sumFailed'), tone: 'bad', value: n((x) => x === 'Failed', ['Failed', 'ReconciliationRequired']) },
+      { key: 'cancel', label: tr('tasks.sumCancelled'), tone: 'muted', value: n((x) => x === 'Cancelled', ['Cancelled']) },
     ]
-  }, [allTasks.data, tr])
+  }, [allTasks.data, allOrders.data, tr])
 
   // Nothing chosen yet: show the newest task so the detail area is never an empty void.
-  const selectedId = urlId ?? rows[0]?.id ?? null
+  const first = !urlId && !urlOrder ? rows[0] : undefined
+  const selectedOrder = urlOrder ?? (first?.kind === 'order' ? first.id : null)
+  const selectedId = selectedOrder ? null : urlId ?? first?.id ?? null
 
   const select = (id: string, cancel = false) => { setParams({ id }); setCancelFor(cancel ? id : null) }
+  const selectOrder = (id: string) => { setParams({ order: id }); setCancelFor(null) }
+  const total = (showTasks ? tasks.data?.total ?? 0 : 0) + (showOrders ? orders.data?.total ?? 0 : 0)
 
   return (
     <>
@@ -75,13 +92,13 @@ export function TasksPage() {
         description={tr('linked.roleTasks')}
         actions={<Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>{tr('tasks.create')}</Button>}
       />
-      <Panel title={tr('tasks.sumTitle')} subtitle={tr('tasks.sumSub', { n: allTasks.data?.items.length ?? 0 })} className="mb">
+      <Panel title={tr('tasks.sumTitle')} subtitle={tr('tasks.sumSub', { n: (allTasks.data?.items.length ?? 0) + (allOrders.data?.items.length ?? 0) })} className="mb">
         <StackedSummary items={summary} ariaLabel={tr('tasks.sumTitle')} emptyTitle={tr('tasks.sumEmpty')} />
       </Panel>
-      <div className={`task-layout ${selectedId ? 'with-detail' : ''}`}>
+      <div className={`task-layout ${selectedId || selectedOrder ? 'with-detail' : ''}`}>
         <Panel
           title={tr('tasks.listPanel')}
-          subtitle={tasks.data ? tr('tasks.listCount', { shown: rows.length, total: tasks.data.total }) : undefined}
+          subtitle={tasks.data ? tr('tasks.listCount', { shown: rows.length, total }) : undefined}
           flush
           actions={
             <>
@@ -91,14 +108,21 @@ export function TasksPage() {
                 <option value="">{tr('tasks.allAgv')}</option>
                 {(agvs.data ?? []).map((a) => <option key={a.id} value={a.id}>{a.code}</option>)}
               </select>
-              <select aria-label={tr('tasks.filterState')} value={stateFilter} onChange={(e) => setStateFilter(e.target.value as TaskState | '')}>
+              <select aria-label={tr('linked.workFilterKind')} value={kindFilter} onChange={(e) => { setKindFilter(e.target.value as '' | 'task' | 'order'); setStateFilter('') }}>
+                <option value="">{tr('linked.workAllKinds')}</option>
+                <option value="task">{tr('linked.workKindTask')}</option>
+                <option value="order">{tr('linked.workKindOrder')}</option>
+              </select>
+              <select aria-label={tr('tasks.filterState')} value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}>
                 <option value="">{tr('tasks.allStates')}</option>
-                {TASK_STATES.map((s) => <option key={s} value={s}>{TASK_STATE_VI[s]}</option>)}
+                {kindFilter !== 'order' && <optgroup label={tr('linked.workStatesTask')}>{TASK_STATES.map((s) => <option key={s} value={`task:${s}`}>{TASK_STATE_VI[s]}</option>)}</optgroup>}
+                {kindFilter !== 'task' && <optgroup label={tr('linked.workStatesOrder')}>{ORDER_STATES.map((s) => <option key={s} value={`order:${s}`}>{ORDER_STATE_LABEL[s]}</option>)}</optgroup>}
               </select>
             </>
           }
         >
-          <Async state={tasks} isEmpty={(d) => d.items.length === 0} empty={{ title: tr('tasks.none'), hint: stateFilter ? tr('tasks.noneHintFiltered') : tr('tasks.noneHint') }}>
+          {orders.error && <div className="notice notice-bad" role="alert">{tr('linked.workOrdersUnavailable')}</div>}
+          <Async state={tasks} isEmpty={() => listed.length === 0 && !orders.loading} empty={{ title: tr('tasks.none'), hint: stateFilter || kindFilter ? tr('tasks.noneHintFiltered') : tr('tasks.noneHint') }}>
             {() => rows.length === 0 ? (
               <div className="state state-empty"><div><strong>{tr('tasks.noMatch')}</strong></div></div>
             ) : (
@@ -108,9 +132,29 @@ export function TasksPage() {
                     <tr><th>{tr('tasks.colCode')}</th><th>{tr('tasks.colCreated')}</th><th>{tr('tasks.colFlow')}</th><th>{tr('tasks.colAgv')}</th><th>{tr('tasks.colSource')}</th><th>{tr('tasks.colDestination')}</th><th>{tr('tasks.colState')}</th><th>{tr('tasks.colActions')}</th></tr>
                   </thead>
                   <tbody>
-                    {rows.map((t) => (
-                      <tr key={t.id} className={t.id === selectedId ? 'selected' : ''} onClick={() => select(t.id)}>
-                        <td className="mono nowrap">{taskCode(t.id)}</td>
+                    {rows.map((row) => {
+                      if (row.kind === 'order') {
+                        const o = row.order, route = orderRoute(o)
+                        return (
+                          <tr key={o.id} data-request={o.requestKey} className={o.id === selectedOrder ? 'selected' : ''} onClick={() => selectOrder(o.id)}>
+                            <td className="nowrap" title={o.requestKey}><span className="mono">{orderCode(o.id)}</span><div className="muted small">{tr('linked.workKindOrder')} · {o.requestedBy ?? '—'}</div></td>
+                            <td className="nowrap num">{formatTime(o.createdAt)}</td>
+                            <td className="nowrap"><strong>{o.processCode}</strong></td>
+                            <td>{orderRobots(o, codes.agv) || '—'}</td>
+                            <td>{route.source}</td>
+                            <td>{route.destination ?? '—'}</td>
+                            <td><OrderStatePill state={o.state} />{(o.state === 'ReconciliationRequired' || o.racksHeld) && <span className="flag" title={tr('tasks.reconFlag')}> ⚠</span>}</td>
+                            <td className="nowrap" onClick={(e) => e.stopPropagation()}>
+                              <Button size="sm" onClick={() => selectOrder(o.id)}>{tr('tasks.btnDetail')}</Button>{' '}
+                              <Link to={`/routing?order=${o.id}`}>{tr('linked.workOpenRouting')}</Link>
+                            </td>
+                          </tr>
+                        )
+                      }
+                      const t = row.task
+                      return (
+                      <tr key={t.id} data-request={t.requestKey} className={t.id === selectedId ? 'selected' : ''} onClick={() => select(t.id)}>
+                        <td className="nowrap" title={t.requestKey}><span className="mono">{taskCode(t.id)}</span><div className="muted small">{tr('linked.workKindTask')} · {t.requestedBy ?? '—'}</div></td>
                         <td className="nowrap num">{formatTime(t.createdAt)}</td>
                         <td className="nowrap"><strong>{flowInfo(t.flow).code}</strong></td>
                         <td>{t.robotCode ?? codes.agv(t.agvId)}{t.rcsDispatchState && t.rcsDispatchState !== 'Assigned' && !['Completed', 'Failed', 'Cancelled'].includes(t.state) && <> <Pill tone={t.rcsDispatchState === 'SyncError' ? 'bad' : 'muted'} dot={false}>{tr(`tasks.dispatchState_${t.rcsDispatchState}` as MsgKey)}</Pill></>}</td>
@@ -123,7 +167,8 @@ export function TasksPage() {
                           {isAdmin && !USER_EDITABLE.includes(t.state) && CANCELLABLE.includes(t.state) && <Button size="sm" variant="danger" onClick={() => select(t.id, true)}>{tr('tasks.btnCancel')}</Button>}
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -131,6 +176,7 @@ export function TasksPage() {
           </Async>
         </Panel>
 
+        {selectedOrder && <OrderDetailPanel key={selectedOrder} id={selectedOrder} />}
         {selectedId && (
           <TaskDetail key={selectedId} id={selectedId} codes={codes} askCancel={isAdmin && cancelFor === selectedId} isAdmin={isAdmin}
             onCancelDone={() => setCancelFor(null)} onEdit={(t) => setDialog({ kind: 'edit', task: t })} onDelete={(t) => setDialog({ kind: 'delete', task: t })} />

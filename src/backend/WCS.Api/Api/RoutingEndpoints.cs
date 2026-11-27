@@ -62,6 +62,9 @@ public static class RoutingEndpoints
                     commands = await messages.ByRequestCodesAsync(o.Legs.Select(l => l.AgvRequestCode).ToList(), t),
                 };
             }, ct)));
+        // CR-051: what was sent to the RCS, by both engines (task and order leg), for the AGV monitoring and the task management pages; read only
+        orders.MapGet("rcs-work", async (HttpContext c, WCS.Application.Abstractions.IRcsWorkQuery work, bool? sentOnly, Guid? orderId, int? take, CancellationToken ct) =>
+            ApiResults.Ok(c, await work.ListAsync(sentOnly ?? true, orderId, take ?? 100, ct)));
         orders.MapGet("queue-alerts", async (HttpContext c, IRouteEngine engine, CancellationToken ct) => ApiResults.Ok(c, await engine.QueueAlertsAsync(ct)));
         // every published, enabled, not review-blocked process, with whether it accepts a request now (no configuration detail)
         orders.MapGet("startable-processes", async (HttpContext c, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.StartableAsync(ct)));

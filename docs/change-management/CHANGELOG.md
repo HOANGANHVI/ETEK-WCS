@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-051 Task visibility across modules (2026-11-27) – branch feature/cr-050-simulator, not merged
+
+- Task management lists Phase 1 tasks and transport orders together; AGV monitoring shows what both engines sent to the RCS, with the RCS state. Read only; no migration.
+
 ## CR-050 Simulator execution (2026-11-27) – branch feature/cr-050-simulator, not merged
 
 - Follow-up: optional names of the simulated fleet (`Rcs:Fleet:SimulatorRobotCodes`), fault "AMR does not leave the port", acceptance report.

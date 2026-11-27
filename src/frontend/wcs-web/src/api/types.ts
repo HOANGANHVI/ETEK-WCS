@@ -96,6 +96,8 @@ export interface TransportTask {
   assignedAt?: string | null
   /** CR-038: Simulator | Real, fixed when the task was created; null for a task created before CR-038 (nothing is sent for it) */
   executionMode?: 'Simulator' | 'Real' | null
+  /** CR-051: who / what created the task */
+  requestedBy?: string | null
   requestLocationId: string
   sourceLocationId: string | null
   destinationLocationId: string | null
