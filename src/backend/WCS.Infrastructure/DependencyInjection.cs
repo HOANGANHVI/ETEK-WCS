@@ -163,6 +163,7 @@ public static class DependencyInjection
         services.AddScoped<IExecutionModeService, WCS.Infrastructure.ModeControl.ExecutionModeService>();
         services.AddScoped<IFleetStatusReader, WCS.Infrastructure.ModeControl.FleetStatusReader>();
         services.AddScoped<IRcsMessageQuery, WCS.Infrastructure.ModeControl.RcsMessageQuery>();
+        services.AddScoped<IRcsWorkQuery, WCS.Infrastructure.Persistence.Repositories.RcsWorkQuery>();   // CR-051
         services.AddSingleton<WCS.Infrastructure.ModeControl.RoutedRcsClient>();
         services.AddSingleton<IRcsClient>(sp => new LoggingRcsClient(sp.GetRequiredService<WCS.Infrastructure.ModeControl.RoutedRcsClient>(), sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LoggingRcsClient>>()));
         // CR-008A: Production must not dispatch to the simulator (explicit opt-in only).

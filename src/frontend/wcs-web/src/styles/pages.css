@@ -60,7 +60,7 @@
 .route-arrow { color: var(--navy-500); font-size: 18px; }
 .route-leg { margin-left: auto; text-align: right; }
 .route-line { margin-top: 12px; gap: 22px; }
-.agv-history { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.agv-history { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 
 /* ---- stepper ---- */
 .stepper { list-style: none; margin: 0; padding: 0; display: flex; }

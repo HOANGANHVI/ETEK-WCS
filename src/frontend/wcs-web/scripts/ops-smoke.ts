@@ -19,6 +19,8 @@ import {
 import { readFileSync } from 'node:fs'
 import { requestRows } from '../src/lib/requestRows.ts'
 import { waitCause } from '../src/lib/waitReason.ts'
+import { filterWork, isWaitingToBeSent, isWithRcs, orderCode, orderRoute, workLink, workOfAgv, workRows } from '../src/lib/work.ts'
+import { RcsWorkTable } from '../src/components/RcsWorkTable.tsx'
 import { canRecover } from '../src/lib/amrSim.ts'
 import { blockerAction, blockerLink, orderInMotion, orderIsOpen, type RackBlocker } from '../src/lib/rackBlock.ts'
 import { RequestTable } from '../src/components/RequestTable.tsx'
@@ -254,10 +256,23 @@ check('multi-leg dispatch creates through the task management dialog, not throug
 check('no request form writes a process code', ['pages/TaskDialogs.tsx', 'pages/ops/CreateRequest.tsx', 'components/RequestOptions.tsx', 'pages/RoutingPage.tsx'].every((f) => !/['"](BP|PH2)-dd['"]/.test(src(f))))
 check('a task row leads to the RCS monitor and an order row to its legs', renderToStaticMarkup(createElement(MemoryRouter, null, createElement(RequestTable, { rows: requestRows([task({ id: 't-9', requestKey: 'K9' })], []) }))).includes('/operations?task=t-9'))
 i18n.setLang('vi')
-for (const r of results) console.log(r)
 check('QA-001: a held port is not shown as a missing rack', waitCause({ waitKind: 'SourceUnavailable', stateReason: 'PORT_HELD: port A1 is held' }) === 'portHeld'
   && waitCause({ waitKind: 'SourceUnavailable', stateReason: 'No usable rack at the request location' }) === 'kind' && waitCause({ waitKind: 'AgvBusy', stateReason: 'PORT_HELD: x' }) === 'kind')
 check('CR-050: recovery is offered for a stalled run and a failed or waiting leg, never for an ended task', [{ kind: 'Leg', phase: 'Failed', stalled: false }, { kind: 'Leg', phase: 'WaitingForTrigger', stalled: false }, { kind: 'Task', phase: 'ToSource', stalled: true }, { kind: 'Task', phase: 'Failed', stalled: false }, { kind: 'Leg', phase: 'Completed', stalled: false }].map((r) => canRecover(r as never)).join() === 'true,true,true,false,false')
+{ // CR-051: tasks and transport orders side by side, and the work the RCS has
+  const order = { id: 'abcd1234-0000', requestKey: 'OPS-O', createdAt: '2026-11-25T09:00:00Z', state: 'InProgress', requestLocationCode: 'A1', racksHeld: false, legs: [{ sequence: 2, sourceLocationCode: 'F1', destinationLocationCode: 'B1', agvId: 'g1', robotCode: null }, { sequence: 1, sourceLocationCode: 'A1', destinationLocationCode: 'F1', agvId: 'g1', robotCode: null }] } as never
+  const rows = workRows([task({ id: 't-1', requestKey: 'OPS-T', createdAt: '2026-11-25T08:00:00Z', agvId: 'g2' })], [order])
+  const f = { agvId: '', agvRobotCode: null, search: '', reconOnly: false, taskCodeOf: (id: string) => 'NV-' + id }
+  check('CR-051: one list of both engines, newest first, each once', rows.map((r) => r.kind + ':' + r.id).join() === 'order:abcd1234-0000,task:t-1')
+  check('CR-051: an order is found by its code, request key or id, and by the AGV of a leg', [orderCode('abcd1234-0000'), 'ops-o', 'abcd1234'].every((s) => filterWork(rows, { ...f, search: s }).length === 1) && filterWork(rows, { ...f, agvId: 'g1' }).map((r) => r.kind).join() === 'order' && filterWork(rows, { ...f, agvId: 'g2' }).map((r) => r.kind).join() === 'task')
+  check('CR-051: the route of an order runs from its first source to its last destination', orderRoute(order).source === 'A1' && orderRoute(order).destination === 'B1')
+  const w = (o: object) => ({ kind: 'OrderLeg', id: 'l1', orderId: 'abcd1234-0000', legSequence: 1, processCode: 'BP-01', agvId: 'g1', robotCode: '2048', rcsState: 'Executing', workState: 'InProgress', rcsRequestCode: 'LEG-1', rcsTaskCode: 'SIM-LEG-1', source: 'A1', destination: 'B1', updatedAt: NOW, sentAt: NOW, createdAt: NOW, ...o }) as never
+  check('CR-051: created is not sent; only what the RCS has counts as working', isWaitingToBeSent(w({ rcsState: 'NotSent' })) && !isWaitingToBeSent(w({ rcsState: 'NotSent', workState: 'Cancelled' })) && !isWithRcs(w({ rcsState: 'NotSent' })) && isWithRcs(w({})) && !isWithRcs(w({ rcsState: 'Completed' })))
+  check('CR-051: the work of an AGV is by its assignment, otherwise by the reported robot', workOfAgv([w({}), w({ agvId: null })], { id: 'g1', rcsRobotCode: '2048' }).length === 2 && workOfAgv([w({ agvId: 'g9' })], { id: 'g1', rcsRobotCode: '2048' }).length === 0)
+  const html = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(RcsWorkTable, { rows: [w({})] })))
+  check('CR-051: a sent leg shows its order, RCS task, AMR and state and leads to task management', html.includes(orderCode('abcd1234-0000')) && html.includes('SIM-LEG-1') && html.includes('2048') && html.includes(T('linked.rcsState_Executing')) && html.includes('/tasks?order=abcd1234-0000') && workLink(w({ kind: 'Task', id: 't2' })) === '/tasks?id=t2')
+  check('CR-051: task management lists orders and the AGV page reads the RCS work of both engines', readFileSync('src/pages/TasksPage.tsx', 'utf8').includes('api.routingOrders(') && readFileSync('src/pages/AgvPage.tsx', 'utf8').includes('api.rcsWork('))
+}
 // CR-047: a rack that cannot be removed says who holds it and where to go; nothing is cancelled from the rack screen
 const held = (o: Partial<RackBlocker>): RackBlocker => ({ kind: 'Order', id: 'a b', reference: 'R1', state: 'Waiting', process: 'BP-05', canCancel: true, racksHeld: false, ...o })
 check('next step of a held rack: cancel, finish, release, task', [held({}), held({ canCancel: false }), held({ canCancel: false, racksHeld: true }), held({ kind: 'Task' })].map(blockerAction).join() === 'cancelOrder,finishOrder,releaseRacks,openTask')
@@ -265,5 +280,6 @@ check('an order can be cancelled while open and nothing of it moves', orderIsOpe
 check('the order screen offers the cancellation of the API', readFileSync('src/pages/RoutingPage.tsx', 'utf8').includes('api.routingCancel('))
 check('the link leads to the order or the task', blockerLink(held({})) === '/routing?order=a%20b' && blockerLink(held({ kind: 'Task', id: 't1' })) === '/tasks?id=t1')
 
+for (const r of results) console.log(r)
 const failed = results.filter((r) => r.startsWith('FAIL')).length
 console.log(`\n${results.length - failed}/${results.length} passed`)

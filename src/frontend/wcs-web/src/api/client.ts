@@ -1,5 +1,6 @@
 import { DEMO_MODE } from '../config'
 import { demoDataApi } from '../demo/demoApi'
+import type { RcsWork } from './workTypes'
 import type { Preferences } from '../preferences/prefsStore'
 import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
@@ -228,6 +229,8 @@ const realApi = {
   // CR-010 multi-leg Transport Tasks, Station Transactions and configurable Business Processes
   routingOrders: (state?: string, take = 100) => request<OrderPage>(`/api/routing/orders${qs({ state, take })}`),
   routingOrder: (id: string) => request<OrderDetail>(`/api/routing/orders/${id}`),
+  // CR-051: what was created / sent to the RCS by both engines (task and order leg)
+  rcsWork: (sentOnly = true, orderId?: string, take = 200) => request<RcsWork[]>(`/api/routing/rcs-work${qs({ sentOnly: String(sentOnly), orderId, take })}`),
   routingStartable: () => request<StartableProcess[]>('/api/routing/startable-processes'),
   routingStart: (b: { requestKey: string; locationCode: string; requestType: string; rackKind?: string; processCode: string }) =>
     request<{ order: Order; created: boolean }>('/api/routing/orders', { method: 'POST', body: JSON.stringify(b) }),
