@@ -1,14 +1,14 @@
 # Change Log
 
-## CR-055 Process removal (2026-11-27) – branch fix/cr-053-dashboard-counts, not merged
+## CR-055 Process removal (2026-11-27) – merged into main (e3a8aae)
 
 - An Admin can delete a process that never had an order, retire one with finished orders and delete an unpublished version; BP-01..06 are protected. Reason and audit required. No migration.
 
-## CR-054 Process names language (2026-11-27) – branch fix/cr-053-dashboard-counts, not merged
+## CR-054 Process names language (2026-11-27) – merged into main (e3a8aae)
 
 - Delivered reference process names are shown in the chosen language. Frontend only; stored names unchanged.
 
-## CR-053 Dashboard counts (2026-11-27) – branch fix/cr-053-dashboard-counts, not merged
+## CR-053 Dashboard counts (2026-11-27) – merged into main (e3a8aae)
 
 - The dashboard counts multi-leg transport orders together with the single tasks. Frontend only.
 

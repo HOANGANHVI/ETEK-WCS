@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `ĐÃ TRIỂN KHAI – nhánh fix/cr-053-dashboard-counts, CHƯA MERGE` |
+| **Trạng thái** | `ĐÃ TRIỂN KHAI – ĐÃ MERGE vào main (e3a8aae), CHƯA DEPLOY PRODUCTION` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-27 |
 | **Migration** | Không; chỉ đổi giao diện |
 
