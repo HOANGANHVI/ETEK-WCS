@@ -1,3 +1,4 @@
+import type { RcsMapImportResult, RcsMapInfo, RcsMapSettings, RcsMapView } from './rcsMapTypes'
 import type { LocationRemoval } from './types'
 import type { ProcessRemoval } from './routingTypes'
 import { DEMO_MODE } from '../config'
@@ -144,6 +145,10 @@ const realApi = {
   agvs: () => request<Agv[]>('/api/agvs'),
   /** CR-027: the AMR fleet reported by the RCS (read-only). */
   agvFleet: () => request<FleetView>('/api/agvs/fleet'),
+  // CR-065: the monitoring map
+  rcsMap: () => request<RcsMapView | null>('/api/rcs-map'),
+  rcsMapImport: (fileName: string, content: string) => request<RcsMapImportResult>('/api/config/rcs-map', { method: 'POST', body: JSON.stringify({ fileName, content }) }),
+  rcsMapSettings: (b: RcsMapSettings) => request<RcsMapInfo>('/api/config/rcs-map/settings', { method: 'PUT', body: JSON.stringify(b) }),
   flows: () => request<FlowOption[]>('/api/flows'),
   locations: () => request<Location[]>('/api/locations'),
   racks: (location?: string) => request<Rack[]>(`/api/inventory/racks${qs({ location, take: 500 })}`),
@@ -369,6 +374,7 @@ const demoApi: typeof realApi = {
   ...realApi,
   ...demoDataApi,
   removedLocations: () => Promise.resolve([]),   // CR-057: the demo data has no removed location
+  rcsMap: () => Promise.resolve(null),   // CR-065: Demo Mode has no imported map
   login: async (u, p) => { const me = await realApi.login(u, p); setDemoSessionRole(me.role); return me },
   me: async () => { try { const me = await realApi.me(); setDemoSessionRole(me.role); return me } catch (e) { setDemoSessionRole(null); throw e } },
   logout: async () => { try { return await realApi.logout() } finally { setDemoSessionRole(null) } },

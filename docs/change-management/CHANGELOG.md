@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-065 RCS map and AMR map monitor (2026-11-28) – branch feature/cr-065-rcs-map-monitor, NOT MERGED
+
+- An Admin imports the RCS map XML; AGV monitoring draws it with the AMRs of the fleet data. Migration AddRcsMap (one new table, applied to wcs_db). Read only.
+
 ## CR-064 Publishing makes a process usable (2026-11-28) – on main
 
 - The manual Ready step is removed: a published version is Ready at once, earlier NotReady versions are usable; device conditions still apply. Readiness endpoints removed. No migration. Not tested.

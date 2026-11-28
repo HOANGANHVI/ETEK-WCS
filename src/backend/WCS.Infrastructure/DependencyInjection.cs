@@ -75,6 +75,7 @@ public static class DependencyInjection
         services.Configure<WCS.Application.RcsDiagnostics.RcsDiagnosticsOptions>(configuration.GetSection(WCS.Application.RcsDiagnostics.RcsDiagnosticsOptions.SectionName));
         // CR-027: the AMR fleet read model and where the list comes from (Rcs:Fleet:Source = Simulator (default) | Real = HTTP queryAgvStatus)
         services.AddScoped<WCS.Application.Fleet.IRcsFleetRepository, WCS.Infrastructure.Fleet.RcsFleetRepository>();
+        services.AddScoped<WCS.Application.RcsMaps.IRcsMapRepository, WCS.Infrastructure.Persistence.Configurations.RcsMapRepository>();   // CR-065
         if (string.Equals(configuration[$"{WCS.Application.Fleet.RcsFleetOptions.SectionName}:Source"], "Real", StringComparison.OrdinalIgnoreCase)) services.AddScoped<WCS.Application.Fleet.IRcsFleetQuery, WCS.Infrastructure.Fleet.HikFleetQueryClient>();
         else services.AddScoped<WCS.Application.Fleet.IRcsFleetQuery, WCS.Infrastructure.Fleet.SimulatorFleetQuery>();
         services.AddScoped<IAgvRepository, AgvRepository>();

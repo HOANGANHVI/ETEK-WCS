@@ -221,8 +221,8 @@ for (const lang of ['vi'] as const) {
     { code: 'MY-ROUTE', name: 'user route', requestType: 'ManualRequest', rackKind: 'Empty', triggerLocationCodes: ['NEW-1'], readiness: 'NotReady', acceptsRequests: false, blockedCode: 'PROCESS_NOT_READY', blockedDetail: null },
   ]
   const listed = wrap(createElement(CreateRequest, { flows, processes, processApi: { start: async () => { throw new Error('not called') }, list: async () => [] }, gate: dispatchGate(health(), fleet()), api, onCreated: () => {} }))
-  check(`${lang}: every published process is listed beside the Phase 1 flows, whatever its stations or code`, listed.includes('process:PH2-07') && listed.includes('process:MY-ROUTE') && listed.includes('value="BP01"'))
-  check(`${lang}: a process that accepts no request is listed and marked, not hidden`, !listed.includes('MY-ROUTE · user route'))   // CR-063: only what can be requested is offered
+  check(`${lang}: every process that can be requested is listed beside the Phase 1 flows, whatever its stations or code`, listed.includes('process:PH2-07') && listed.includes('value="BP01"'))
+  check(`${lang}: a process that accepts no request is not offered`, !listed.includes('process:MY-ROUTE'))   // CR-063: only what can be requested is offered
   check(`${lang}: nothing is sent or confirmed on first render`, !open.includes(T('ops.createConfirmTitle')) && !open.includes('data-create='))
 }
 {
