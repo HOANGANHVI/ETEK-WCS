@@ -17,6 +17,7 @@ public class RcsMapDataMatcherTests
             ["000001CC000001", "x", "Passing Point", null], ["bad", "y", "Passing Point", null], ["007000CC008000", "d", "Parking Point", null], ["007000CC008000", "d2", "Parking Point", null], [null, null, null, null]);
         Assert.Equal([("Matched", 2L), ("Matched", 1L), ("OtherMap", null), ("NoPoint", null), ("Invalid", null), ("Duplicate", null), ("Duplicate", (long?)null)], d.Rows.Select(r => (r.Status, r.PointId)));
         Assert.Equal(("A1", "100011", 2), (d.Rows[0].CallCode, d.Rows[0].RackNo, d.Rows[0].RowNumber));
+        Assert.Equal([3L, 3L], d.Rows.Where(r => r.Status == "Duplicate").Select(r => r.ConflictPointId!.Value));   // CR-068
     }
 
     [Fact]

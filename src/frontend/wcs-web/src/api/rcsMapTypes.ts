@@ -12,7 +12,7 @@ export interface MapPointNote { pointId: number; x: number; y: number; name: str
 export type MapDataStatus = 'Matched' | 'OtherMap' | 'NoPoint' | 'Duplicate' | 'Ambiguous' | 'Invalid'
 export interface MapDataRow {
   rowNumber: number; mapDataId: string | null; callCode: string | null; dataType: string | null; linkedLocation: string | null; linkedArea: string | null; linkedRackType: string | null
-  linkedDeviceType: string | null; rackNo: string | null; fixRackNo: string | null; machineDataNumber: string | null; status: MapDataStatus; pointId: number | null
+  linkedDeviceType: string | null; rackNo: string | null; fixRackNo: string | null; machineDataNumber: string | null; status: MapDataStatus; pointId: number | null; conflictPointId?: number | null
 }
 export interface MapDataSet { fileName: string; sha256: string; sheet: string; rows: MapDataRow[] }
 export interface RcsMapFiles { fileName: string; content: string; mapDataFileName: string | null; mapDataBase64: string | null }

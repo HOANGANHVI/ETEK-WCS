@@ -31,7 +31,8 @@ public static class MapDataStatus
 
 /// <summary>One row exactly as the file states it, with the result of the matching. Nothing of the file is changed and no row is left out.</summary>
 public sealed record MapDataRow(int RowNumber, string? MapDataId, string? CallCode, string? DataType, string? LinkedLocation, string? LinkedArea, string? LinkedRackType,
-    string? LinkedDeviceType, string? RackNo, string? FixRackNo, string? MachineDataNumber, string Status, long? PointId);
+    string? LinkedDeviceType, string? RackNo, string? FixRackNo, string? MachineDataNumber, string Status, long? PointId,
+    long? ConflictPointId = null);   // CR-068: the point a repeated Map Data ID refers to; the rows are shown there as a conflict and attached to no point
 public sealed record MapDataSet(string FileName, string Sha256, string Sheet, IReadOnlyList<MapDataRow> Rows);
 
 /// <summary>
@@ -79,7 +80,7 @@ public static partial class RcsMapDataMatcher
                 Cell("linked device type"), Cell("rack no."), Cell("fix rack no."), Cell("machine data number"), status, point));
         }
         var repeated = rows.Where(r => r.MapDataId is not null).GroupBy(r => r.MapDataId!, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        rows = rows.Select(r => r.MapDataId is not null && repeated.Contains(r.MapDataId) ? r with { Status = MapDataStatus.Duplicate, PointId = null } : r).ToList();
+        rows = rows.Select(r => r.MapDataId is not null && repeated.Contains(r.MapDataId) ? r with { Status = MapDataStatus.Duplicate, PointId = null, ConflictPointId = r.PointId } : r).ToList();
         if (!rows.Any(r => r.Status == MapDataStatus.Matched))
             throw AppException.Validation("RCS_MAPDATA_MISMATCH", $"No row of the Excel file matches a point of this map (MapQRCode {mapQrCode}): the two files do not belong together.");
         return new MapDataSet(fileName, sha256, sheet.Name, rows);

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type CSSProperties } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Location, Rack } from '../api/types'
 import { Async, EmptyState, OccupancyPill, PageHeader, Panel, RackPill } from '../components/ui'
@@ -42,7 +42,8 @@ function SlotStrip({ loc, racks }: { loc: Location; racks: Rack[] }) {
 
 export function InventoryPage() {
   const t = useT()
-  const [selected, setSelected] = useState<string | null>(null)
+  const [params] = useSearchParams()
+  const [selected, setSelected] = useState<string | null>(() => params.get('location'))   // CR-068: opened from a point of the AMR map
   const { user } = useAuth()
   const isAdmin = hasRole(user, 'Admin')
   const [rackDialog, setRackDialog] = useState<RackDialogState | null>(null)

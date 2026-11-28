@@ -1,16 +1,18 @@
 import { useCallback, useState } from 'react'
 import { api } from '../api/client'
+import { Link } from 'react-router-dom'
 import type { MapDataRow, MapPoint, MapPointNote } from '../api/rcsMapTypes'
+import type { PointMapping } from '../lib/mapData'
 import { useApi } from '../hooks/useApi'
-import { useT } from '../i18n'
+import { useT, type MsgKey } from '../i18n'
 import { formatDateTime } from '../i18n/format'
 import { describeError } from '../i18n/vi'
 import { Field } from '../pages/config/FormKit'
-import { Button } from './ui'
+import { Button, Pill } from './ui'
 
 /** CR-066: one point of the map: what the file says, and the name and WCS location WCS adds. An Admin edits; everyone reads. */
-export function MapPointPanel({ point, note, notes, mapSha256, row = null, dataRows = [], canEdit, onSaved, onClose }: {
-  point: MapPoint; note: MapPointNote | null; notes: MapPointNote[]; mapSha256: string; row?: MapDataRow | null; dataRows?: MapDataRow[]; canEdit: boolean; onSaved: () => void; onClose: () => void
+export function MapPointPanel({ point, note, notes, mapSha256, row = null, dataRows = [], mapping = null, conflicts = [], canEdit, onSaved, onClose }: {
+  point: MapPoint; note: MapPointNote | null; notes: MapPointNote[]; mapSha256: string; row?: MapDataRow | null; dataRows?: MapDataRow[]; mapping?: PointMapping | null; conflicts?: MapDataRow[]; canEdit: boolean; onSaved: () => void; onClose: () => void
 }) {
   const t = useT()
   const locations = useApi(useCallback(() => api.locations(), []), ['InventoryChanged'])
@@ -38,7 +40,8 @@ export function MapPointPanel({ point, note, notes, mapSha256, row = null, dataR
       <div className="amr-map-detail-head"><strong>{t('agv.pointTitle', { id: point.id })}</strong>
         <button type="button" className="modal-x" aria-label={t('common.close')} onClick={onClose}>×</button></div>
       <dl className="kv2">
-        <dt>{'Point ID'}</dt><dd className="mono">{point.id}</dd>
+        <dt>{t('agv.pointXmlId')}</dt><dd className="mono">{point.id}</dd>
+        {mapping && <><dt>{t('agv.pointMapping')}</dt><dd><Pill tone={mapping === 'Matched' ? 'ok' : mapping === 'Duplicate' ? 'warn' : 'muted'}>{t(`agv.mapping_${mapping}` as MsgKey)}</Pill></dd></>}
         <dt>{t('agv.pointXY')}</dt><dd className="mono">{point.x}, {point.y}</dd>
         {point.value && <><dt>{'value'}</dt><dd className="mono">{point.value}</dd></>}
         {point.storageType && <><dt>{'StorageType'}</dt><dd className="mono">{point.storageType}</dd></>}
@@ -61,8 +64,12 @@ export function MapPointPanel({ point, note, notes, mapSha256, row = null, dataR
           </dl>
         </section>
       )}
-      {!row && dataRows.length > 0 && <p className="muted small">{t('agv.pointNoExcel')}</p>}
+      {!row && dataRows.length > 0 && <p className="muted small">{t(mapping === 'Duplicate' ? 'agv.pointDuplicate' : 'agv.pointNoExcel')}</p>}
+      {conflicts.length > 0 && <ul className="small">{conflicts.map((r) => <li key={r.rowNumber}>{t('agv.pointConflictRow', { row: r.rowNumber, code: r.callCode ?? '–', type: r.dataType ?? '–' })}</li>)}</ul>}
       <h4>{t('agv.pointWcsTitle')}</h4>
+      {note?.locationCode && !note.locationRemoved && <p><Pill tone="info">{t('agv.pointLinked', { code: note.locationCode })}</Pill>{' '}
+        <Link to={`/inventory?location=${encodeURIComponent(note.locationCode)}`}>{t('agv.pointOpenLocation', { code: note.locationCode })}</Link></p>}
+      {note && !note.locationCode && <p className="muted small">{t('agv.pointNotLinked')}</p>}
       {removed && <div className="notice notice-warn">{t('agv.pointLocationRemoved', { code })}</div>}
       {canEdit && (
         <>
