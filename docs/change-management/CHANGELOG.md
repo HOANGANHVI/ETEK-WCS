@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-059 Replaced process versions keep no location (2026-11-28) – branch feature/cr-059-replaced-version-location, NOT MERGED
+## CR-059 Replaced process versions keep no location (2026-11-28) – MERGED into main (cb9cb0d)
 
 - A disabled process version no longer stops a location from being removed unless an unfinished order follows it. The removal dialog names the version. No migration.
 

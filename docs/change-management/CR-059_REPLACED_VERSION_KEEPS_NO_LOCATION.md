@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-059-replaced-version-location, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (cb9cb0d)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28: đã bỏ Z2 khỏi quy trình nhưng không xóa được, yêu cầu "sửa các lỗi này" |
 | **Migration** | Không |
 
@@ -30,4 +30,4 @@ Quay lại bản trước (không có migration).
 
 ## Kiểm thử
 
-`Cr057LocationRemovalTests` (thêm trường hợp CR-059), `ops-smoke`, toàn bộ test backend.
+`Cr057LocationRemovalTests` (thêm trường hợp CR-059), `ops-smoke`, toàn bộ test backend (1458/1458).
