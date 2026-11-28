@@ -21,7 +21,7 @@ import { requestRows } from '../src/lib/requestRows.ts'
 import { waitCause } from '../src/lib/waitReason.ts'
 import { processName } from '../src/i18n/processNames.ts'
 import { RemovalDialog } from '../src/components/RemovalDialog.tsx'
-import { BlockerList } from '../src/pages/config/BlockerList.tsx'
+import { BlockerList, WarningList } from '../src/pages/config/BlockerList.tsx'
 import { RequestOptions } from '../src/components/RequestOptions.tsx'
 import { filterWork, isWaitingToBeSent, isWithRcs, orderCode, orderRoute, workLink, workOfAgv, workRows } from '../src/lib/work.ts'
 import { RcsWorkTable } from '../src/components/RcsWorkTable.tsx'
@@ -298,6 +298,8 @@ check('CR-052: a held destination port is named before and after the pick; other
 { // CR-057: removal of a location
   const html = renderToStaticMarkup(createElement(BlockerList, { blockers: [{ code: 'LOCATION_DELETE_RACKS', detail: '2' }, { code: 'LOCATION_DELETE_PROCESS', detail: 'BP-01, QT001' }] }))
   check('CR-057: every reason a location is kept is shown in words', html.includes(T('config.blk_LOCATION_DELETE_RACKS', { detail: '2' })) && html.includes('BP-01, QT001') && !html.includes('LOCATION_DELETE'))
+  const warned = renderToStaticMarkup(createElement(WarningList, { warnings: [{ code: 'LOCATION_WARN_FLOW_STATION', detail: 'BP-05, BP-06' }] }))
+  check('CR-058: a use by the deployment configuration is shown as a warning in words', warned.includes(T('config.warn_LOCATION_WARN_FLOW_STATION', { detail: 'BP-05, BP-06' })) && !warned.includes('LOCATION_WARN') && renderToStaticMarkup(createElement(WarningList, { warnings: [] })) === '')
   const dialog = readFileSync('src/pages/config/LocationRemovalDialog.tsx', 'utf8')
   check('CR-057: the deletion asks the server first and needs the typed code', dialog.includes('api.locationRemoval(') && dialog.includes('typeToConfirm={code}') && readFileSync('src/pages/config/OperationsTab.tsx', 'utf8').includes('<LocationRemovalDialog'))
 }

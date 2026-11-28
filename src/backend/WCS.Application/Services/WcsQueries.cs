@@ -39,6 +39,14 @@ public sealed class WcsQueries(
     public async Task<IReadOnlyList<RemovedLocationDto>> ListRemovedLocationsAsync(CancellationToken ct = default) =>
         (await locations.ListRemovedAsync(ct)).Select(l => new RemovedLocationDto(l.Id, l.Code)).ToList();
 
+    /// <summary>CR-058: codes that belonged to a removed location and to no present one; the deployed flow list leaves them out.</summary>
+    public async Task<IReadOnlySet<string>> RemovedOnlyCodesAsync(CancellationToken ct = default)
+    {
+        var codes = (await locations.ListRemovedAsync(ct)).Select(l => l.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (codes.Count > 0) codes.ExceptWith((await locations.ListAsync(ct)).Select(l => l.Code));
+        return codes;
+    }
+
     public async Task<LocationDto> GetLocationAsync(string code, CancellationToken ct = default)
     {
         var l = await locations.GetByCodeAsync(code, ct) ?? throw AppException.NotFound("LOCATION_NOT_FOUND", $"Location '{code}' not found.");

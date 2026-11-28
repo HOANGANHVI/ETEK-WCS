@@ -21,7 +21,7 @@ public sealed record OperationsView(PolicyView Policy, SchedulerView Scheduler, 
 
 /// <summary>CR-057: one reason a location is kept; <see cref="Detail"/> = a count or the ports / processes concerned.</summary>
 public sealed record LocationBlocker(string Code, string Detail);
-public sealed record LocationRemovalDto(string Code, bool CanDelete, IReadOnlyList<LocationBlocker> Blockers);
+public sealed record LocationRemovalDto(string Code, bool CanDelete, IReadOnlyList<LocationBlocker> Blockers, IReadOnlyList<LocationBlocker> Warnings);
 
 public sealed record UpdateAgvCommand(string? RcsRobotCode, bool Enabled);
 public sealed record SaveLocationCommand(string Code, string Name, LocationType Type, int RackCapacity, AllowedRackKind AllowedRackKind,
@@ -100,8 +100,8 @@ public sealed partial class OperationalConfigService(
     // ------------------------------------------------------------------ CR-057: removal
 
     /// <summary>
-    /// What stops a location from being removed. It is removed only when nothing depends on it any more: not protected, not named by the deployment configuration, no rack on it, no PLC port
-    /// linked to it, in no process definition and in no unfinished work. Finished records stay: the row is only marked, so history keeps showing the code, and the code can be used again.
+    /// What stops a location from being removed. It is removed only when nothing depends on it any more: not protected, no rack on it, no PLC port
+    /// linked to it, in no process definition and in no unfinished work (a use by the deployment configuration is a warning, CR-058). Finished records stay: the row is only marked, so history keeps showing the code, and the code can be used again.
     /// </summary>
     public Task<LocationRemovalDto> RemovalAsync(string code, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
     {
@@ -134,15 +134,33 @@ public sealed partial class OperationalConfigService(
         bool Names(IEnumerable<string> list) => list.Contains(code, StringComparer.OrdinalIgnoreCase);
         var blockers = new List<LocationBlocker>();
         if (Names(routeOptions.Value.ProtectedLocationCodes)) blockers.Add(new("LOCATION_DELETE_PROTECTED", ""));
-        var configured = flowOptions.Value.Flows.Values.Any(f => Names(f.AllowedRequestStations) || f.SourceGroups.Any(Names) || f.DestinationGroups.Any(Names) || Names(f.NoBindDropLocations))
-            || Names(routeOptions.Value.PlcLocationCodes.Values);
-        if (configured) blockers.Add(new("LOCATION_DELETE_CONFIGURED", ""));
         var usage = await locations.UsageAsync(location, ct);
         if (usage.Racks > 0) blockers.Add(new("LOCATION_DELETE_RACKS", usage.Racks.ToString()));
         if (usage.Ports.Count > 0) blockers.Add(new("LOCATION_DELETE_PORT", string.Join(", ", usage.Ports)));
         if (usage.Processes.Count > 0) blockers.Add(new("LOCATION_DELETE_PROCESS", string.Join(", ", usage.Processes)));
         if (usage.OpenWork > 0) blockers.Add(new("LOCATION_DELETE_OPEN_WORK", usage.OpenWork.ToString()));
-        return new LocationRemovalDto(code, blockers.Count == 0, blockers);
+        return new LocationRemovalDto(code, blockers.Count == 0, blockers, ConfiguredUse(code));
+    }
+
+    /// <summary>
+    /// CR-058: the deployment configuration (single-task flows, PLC location codes) no longer keeps a location. Each use is a warning the Admin sees before confirming: afterwards a flow
+    /// skips the removed source or destination, and a request from the removed station or PLC code is refused.
+    /// </summary>
+    private List<LocationBlocker> ConfiguredUse(string code)
+    {
+        bool Names(IEnumerable<string> list) => list.Contains(code, StringComparer.OrdinalIgnoreCase);
+        var warnings = new List<LocationBlocker>();
+        void Flows(string warning, Func<FlowRuleOptions, bool> uses)
+        {
+            var names = flowOptions.Value.Flows.Where(f => uses(f.Value)).Select(f => f.Key.ToUpperInvariant().Replace("BP", "BP-")).Order(StringComparer.Ordinal).ToList();
+            if (names.Count > 0) warnings.Add(new(warning, string.Join(", ", names)));
+        }
+        Flows("LOCATION_WARN_FLOW_STATION", f => Names(f.AllowedRequestStations));
+        Flows("LOCATION_WARN_FLOW_SOURCE", f => f.SourceGroups.Any(Names));
+        Flows("LOCATION_WARN_FLOW_DESTINATION", f => f.DestinationGroups.Any(Names));
+        var plc = routeOptions.Value.PlcLocationCodes.Where(x => string.Equals(x.Value, code, StringComparison.OrdinalIgnoreCase)).Select(x => x.Key).Order(StringComparer.Ordinal).ToList();
+        if (plc.Count > 0) warnings.Add(new("LOCATION_WARN_PLC_CODE", string.Join(", ", plc)));
+        return warnings;
     }
 
     public async Task<LocationDto> SaveLocationAsync(SaveLocationCommand cmd, bool create, CancellationToken ct = default)

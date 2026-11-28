@@ -23,7 +23,7 @@ Xóa = **đánh dấu** (`RemovedAt`, đồng thời tắt "Đang sử dụng"),
 | Mã | Điều kiện |
 |---|---|
 | `LOCATION_DELETE_PROTECTED` | Trạm được bảo vệ (A3, A4, D1, D2 theo cấu hình) |
-| `LOCATION_DELETE_CONFIGURED` | Cấu hình triển khai (luồng nhiệm vụ đơn, mã vị trí PLC) đang nêu mã |
+| `LOCATION_DELETE_CONFIGURED` | *Đã bỏ bởi CR-058: chỉ còn là cảnh báo* |
 | `LOCATION_DELETE_RACKS` | Còn rack tại vị trí |
 | `LOCATION_DELETE_PORT` | Còn liên kết với cổng PLC |
 | `LOCATION_DELETE_PROCESS` | Một phiên bản quy trình bất kỳ (kể cả nháp) đang dùng |
