@@ -34,8 +34,9 @@ public sealed record AmrRobotView(string RobotCode, double X, double Y, double B
 /// <summary>CR-069: one run as the map monitor shows it. Positions in millimetres; <paramref name="Path"/> = the segment being driven, <paramref name="NextPath"/> = the one planned after the pick.</summary>
 public sealed record AmrLiveRun(string RequestCode, string Kind, Guid? OrderId, string Order, string? ProcessCode, int? LegSequence, string? StepKey, string? RobotCode, string? RackId, string? RackKind, bool Carrying,
     string? Pick, string? Drop, string Phase, string Action, bool Stalled, string? Failure, double Progress, IReadOnlyList<double[]> Path, double Travelled, IReadOnlyList<double[]> NextPath,
-    DateTimeOffset? CreatedAt, DateTimeOffset? PickedAt, DateTimeOffset? DroppedAt);
-public sealed record AmrLiveView(bool Active, bool Paused, double SpeedMultiplier, bool Connected, string? MapId, string? MapCode, IReadOnlyList<AmrRobotView> Robots, IReadOnlyList<AmrLiveRun> Runs)
+    DateTimeOffset? CreatedAt, DateTimeOffset? PickedAt, DateTimeOffset? DroppedAt, double At = 0);
+/// <param name="Time">CR-071: the clock of the simulation in milliseconds (it stands still while paused). <see cref="AmrLiveRun.At"/> = the time <c>Travelled</c> was reached.</param>
+public sealed record AmrLiveView(bool Active, bool Paused, double SpeedMultiplier, bool Connected, string? MapId, string? MapCode, IReadOnlyList<AmrRobotView> Robots, IReadOnlyList<AmrLiveRun> Runs, double Time = 0)
 {
     public static AmrLiveView Inactive { get; } = new(false, false, 1, false, null, null, [], []);
 }
@@ -64,11 +65,11 @@ public sealed class AmrExecutionSimulator
         public Guid EntityId; public string Parent = ""; public string? RequestedRobot; public Robot? Robot;
         public string? Source, Destination; public AmrRunPhase Phase = AmrRunPhase.Queued, FailedIn;
         public bool Picked, Dropped, SourceExitPending, DestinationExitPending, Stalled;
-        public double Handling, Wait, HalfTravelled, TravelTotal;
+        public double Handling, Wait, ExitWait, HalfTravelled, TravelTotal;
         public string? Failure, LastRefusal;
         public readonly List<string> Events = [];
         // CR-069: the route being driven, and what the monitor shows about the work
-        public List<(double X, double Y)>? Path; public double Along; public List<(double X, double Y)> Next = [];
+        public List<(double X, double Y)>? Path; public double Along, At; public List<(double X, double Y)> Next = [];
         public Guid? OrderId; public string? ProcessCode, StepKey, RackCode, RackKind; public int? LegSequence; public DateTimeOffset? CreatedAt, PickedAt, DroppedAt;
     }
 
@@ -91,6 +92,7 @@ public sealed class AmrExecutionSimulator
     public double SpeedMultiplier { get; private set; } = 1;
     public bool Paused { get; private set; }
     private SimMapGraph? _map;
+    private double _time;   // CR-071: milliseconds simulated
     private int _mapAge;
 
     public AmrExecutionSimulator(IServiceScopeFactory scopes, RcsSimulator rcs, IClock clock, IOptions<AmrSimulationOptions> options, IOptions<RealDispatchOptions> real, ILogger<AmrExecutionSimulator> logger)
@@ -145,7 +147,7 @@ public sealed class AmrExecutionSimulator
             return new(true, Paused, SpeedMultiplier, _connected, _map?.MapId, _map?.MapCode, Robots(),
                 open.Concat(done).Select(r => new AmrLiveRun(r.RequestCode, r.IsTask ? "Task" : "Leg", r.OrderId, r.Parent, r.ProcessCode, r.LegSequence, r.StepKey, r.Robot?.Code ?? r.RequestedRobot, r.RackCode, r.RackKind,
                     r.Picked && !r.Dropped, r.Source, r.Destination, r.Phase.ToString(), ActionOf(r), r.Stalled, r.Failure, ProgressOf(r), Line(r.Path), Math.Round(r.Along), Line(r.Next),
-                    r.CreatedAt, r.PickedAt, r.DroppedAt)).ToList());
+                    r.CreatedAt, r.PickedAt, r.DroppedAt, r.Path is null ? _time : r.At)).ToList(), _time);
         }
     }
 
@@ -273,6 +275,7 @@ public sealed class AmrExecutionSimulator
         try
         {
             if (Paused) return;
+            lock (_gate) _time += elapsed.TotalMilliseconds;
             var seconds = elapsed.TotalSeconds * SpeedMultiplier;
             await using (var scope = _scopes.CreateAsyncScope())
             {
@@ -346,6 +349,7 @@ public sealed class AmrExecutionSimulator
     {
         if (!await StillOpenAsync(run, sp, ct)) return;
         if (run.Phase == AmrRunPhase.Failed || run.Stalled) return;
+        if (run.ExitWait > 0) run.ExitWait -= seconds;   // CR-071: a refused port release is retried later; the AMR keeps driving meanwhile
         if (run.Wait > 0) { run.Wait -= seconds; if (run.Wait > 0) return; }
         if (run.Phase == AmrRunPhase.Queued)
         {
@@ -414,7 +418,7 @@ public sealed class AmrExecutionSimulator
         lock (_gate)
         {
             var r = run.Robot!; var path = run.Path!; var total = SimMapGraph.Length(path);
-            var before = run.Along; run.Along = Math.Min(total, run.Along + SpeedMmPerSecond * seconds);
+            var before = run.Along; run.Along = Math.Min(total, run.Along + SpeedMmPerSecond * seconds); run.At = _time;
             r.Battery = Math.Max(0, r.Battery - (run.Along - before) / 100_000);
             var left = run.Along;
             for (var i = 1; i < path.Count; i++)
@@ -544,7 +548,7 @@ public sealed class AmrExecutionSimulator
     private async Task ExitIfOutsideAsync(Run run, string location, IServiceProvider sp, CancellationToken ct)
     {
         var p = Place(location); var r = run.Robot!;
-        if (Math.Sqrt(Math.Pow(p.X - r.X, 2) + Math.Pow(p.Y - r.Y, 2)) <= (_map is null ? PortRadius : MapPortRadius) || !_connected) return;
+        if (Math.Sqrt(Math.Pow(p.X - r.X, 2) + Math.Pow(p.Y - r.Y, 2)) <= (_map is null ? PortRadius : MapPortRadius) || !_connected || run.ExitWait > 0) return;
         try
         {
             var released = await sp.GetRequiredService<StationTransactionService>().ConfirmAgvExitedForLegAsync(run.EntityId, location, ct);
@@ -552,7 +556,7 @@ public sealed class AmrExecutionSimulator
             if (location == run.Destination && run.Dropped) run.DestinationExitPending = false;
             if (released > 0) { Note(run, $"left the port of {location}"); await RecordAsync(sp, "AMR left port", run, new { location }, "Applied", ct); }
         }
-        catch (AppException e) when (e.Code is "HANDOVER_NOT_COMPLETED" or "TRANSACTION_NEEDS_RECONCILIATION") { Note(run, $"port of {location} not released: {e.Code}"); run.Wait = RetrySeconds; }
+        catch (AppException e) when (e.Code is "HANDOVER_NOT_COMPLETED" or "TRANSACTION_NEEDS_RECONCILIATION") { Note(run, $"port of {location} not released: {e.Code}"); run.ExitWait = RetrySeconds; }
     }
 
     /// <summary>Reports a pick or a drop to WCS. FALSE = not delivered yet (delay, lost connection, refused): the AMR stays at the station and tries again.</summary>
@@ -655,9 +659,14 @@ public sealed class AmrSimulationHostedService(AmrExecutionSimulator simulator, 
     {
         var tick = TimeSpan.FromMilliseconds(Math.Clamp(options.Value.TickMs, 50, 5000));
         using var timer = new PeriodicTimer(tick);
+        var last = System.Diagnostics.Stopwatch.GetTimestamp();
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            try { await simulator.StepAsync(tick, stoppingToken); }
+            // CR-071: the time that really passed (a slow step does not slow the AMRs down); after a long stop at most one second is caught up
+            var now = System.Diagnostics.Stopwatch.GetTimestamp();
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(last, now); last = now;
+            if (elapsed > TimeSpan.FromSeconds(1)) elapsed = TimeSpan.FromSeconds(1);
+            try { await simulator.StepAsync(elapsed, stoppingToken); }
             catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogWarning(ex, "AMR simulation step failed. {EventCode}", "AMR_SIM_STEP_FAILED"); }
         }
     }

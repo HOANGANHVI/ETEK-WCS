@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-071 Even movement of the simulated AMR (2026-11-28) – branch feature/cr-071-even-movement, NOT MERGED
+
+- The map draws the simulated AMR by the simulation clock, at an even speed; the simulator uses the time that really passed.
+
 ## CR-070 Simulated AMR follows the road (2026-11-28) – MERGED into main (8e4c980)
 
 - The simulated AMR is drawn along its route frame by frame and turns smoothly through corners. Frontend only.

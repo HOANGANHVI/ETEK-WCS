@@ -60,7 +60,9 @@ export interface AmrLiveRun {
   requestCode: string; kind: 'Leg' | 'Task'; orderId: string | null; order: string; processCode: string | null; legSequence: number | null; stepKey: string | null; robotCode: string | null
   rackId: string | null; rackKind: string | null; carrying: boolean; pick: string | null; drop: string | null; phase: string; action: string; stalled: boolean; failure: string | null; progress: number
   path: number[][]; travelled: number; nextPath: number[][]; createdAt: string | null; pickedAt: string | null; droppedAt: string | null
+  /** CR-071: simulation time (ms) at which travelled was reached. */
+  at?: number
 }
-export interface AmrLive { active: boolean; paused: boolean; speedMultiplier: number; connected: boolean; mapId: string | null; mapCode: string | null; robots: AmrRobot[]; runs: AmrLiveRun[] }
+export interface AmrLive { active: boolean; paused: boolean; speedMultiplier: number; connected: boolean; mapId: string | null; mapCode: string | null; robots: AmrRobot[]; runs: AmrLiveRun[]; time?: number }
 export interface AmrRun { requestCode: string; kind: 'Leg' | 'Task'; parentTask: string; robotCode: string | null; source: string | null; destination: string | null; phase: string; stalled: boolean; failure: string | null; events: string[] }
 export interface AmrSimulation { enabled: boolean; speedMultiplier: number; connected: boolean; responseDelaySeconds: number; armedFaults: Record<string, number>; robots: AmrRobot[]; runs: AmrRun[] }

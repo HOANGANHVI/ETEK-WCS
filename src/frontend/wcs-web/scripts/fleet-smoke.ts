@@ -1,5 +1,5 @@
 // AMR monitoring: RCS status classification, KPIs, freshness and filters, checked on hand-made data (no backend). Run: npm run fleet:test
-import { headingAt, passed, pointAt, turnTowards, type Point } from '../src/lib/track.ts'
+import { approachOffset, distanceAt, headingAt, nextOffset, passed, pointAt, turnTowards, type Point } from '../src/lib/track.ts'
 import { classifyStatus, DOCUMENTED_STATUS } from '../src/lib/rcsStatus.ts'
 import { batteryPercent, computeKpis, distinctMaps, filterAmrs, isMoving, NO_FILTER } from '../src/lib/fleetModel.ts'
 import type { FleetAmr, FleetView } from '../src/api/fleetTypes.ts'
@@ -83,5 +83,11 @@ check('every status text of the fleet screen is at most 90 characters (VI and EN
   check('CR-070: a new route starts after the rest of the old one', JSON.stringify(both) === JSON.stringify([[10, 8], [10, 10], [10, 10], [7, 10]]))
   check('CR-070: nothing is passed while the AMR stands (paused)', passed({ path: road, travelled: 6, at: [6, 0] }, { path: road, travelled: 6, at: [6, 0] }).length === 0)
   check('CR-070: the heading turns through the corner', headingAt(road, 5, 1) === 0 && headingAt(road, 10, 1) === 45 && headingAt(road, 15, 1) === 90 && turnTowards(170, -170, 5) === 175 && pointAt(road, 12)[1] === 2)
+}
+{ // CR-071: the drawing follows the simulation time, not the arrival of the answers
+  const marks = [{ t: 0, d: 0 }, { t: 250, d: 250 }, { t: 750, d: 750 }]
+  check('CR-071: one or two simulator steps between two answers give the same speed', distanceAt(marks, 125) === 125 && distanceAt(marks, 500) === 500 && distanceAt(marks, 900) === 750 && distanceAt(marks, -5) === 0)
+  check('CR-071: uneven arrival moves the drawing clock only slightly, a pause resets it', Math.abs(nextOffset(1000, 1300, 100) - 1020) < 1e-9 && nextOffset(1000, 9000, 100) === 8900 && nextOffset(null, 700, 100) === 600)
+  check('CR-071: the clock is corrected a little per frame, never in a jump', approachOffset(1000, 1100, 16) === 1001.6 && approachOffset(1000, 999.5, 16) === 999.5 && approachOffset(1000, 5000, 16) === 5000 && approachOffset(null, 7, 16) === 7)
 }
 console.log(results.join('\n'))

@@ -60,6 +60,37 @@ export function headingAt(line: Point[], distance: number, window: number): numb
   return length(a, b) > 1e-9 ? (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI : null
 }
 
+/** CR-071: how far along the track the AMR had come at a simulation time; samples are ordered by time. */
+export interface Mark { t: number; d: number }
+export function distanceAt(marks: Mark[], time: number): number {
+  if (marks.length === 0) return 0
+  if (time <= marks[0].t) return marks[0].d
+  for (let i = 1; i < marks.length; i++) {
+    const a = marks[i - 1]; const b = marks[i]
+    if (time <= b.t) return b.t > a.t ? a.d + ((b.d - a.d) * (time - a.t)) / (b.t - a.t) : b.d
+  }
+  return marks[marks.length - 1].d
+}
+
+/** The drawing runs this far behind the newest answer, so that there is always a next position to move to (one answer interval and one simulator step). */
+export const DRAW_DELAY_MS = 800
+
+/**
+ * The drawing clock: simulation time = screen time minus an offset. Each answer measures the offset; the wanted value follows those measures gently, and after a gap
+ * (pause, hidden window) it is taken as it is.
+ */
+export function nextOffset(wanted: number | null, screenNow: number, newest: number): number {
+  const measured = screenNow - newest
+  return wanted === null || Math.abs(measured - wanted) > 1500 ? measured : wanted + (measured - wanted) * 0.1
+}
+
+/** The offset in use moves to the wanted one a little every frame (at most a tenth of the frame time), so that the correction is never seen as a jump. */
+export function approachOffset(current: number | null, wanted: number, frameMs: number): number {
+  if (current === null || Math.abs(wanted - current) > 1500) return wanted
+  const most = frameMs * 0.1
+  return current + Math.max(-most, Math.min(most, wanted - current))
+}
+
 /** One step towards a heading by the shorter way round. */
 export function turnTowards(current: number, wanted: number, most: number): number {
   const delta = ((((wanted - current) % 360) + 540) % 360) - 180

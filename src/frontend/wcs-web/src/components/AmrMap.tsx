@@ -220,7 +220,7 @@ export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = ()
             const rotate = -((map.info.headingClockwise ? -(r.dir ?? 0) : (r.dir ?? 0)) + map.info.headingOffsetDeg)
             const rackFull = run?.rackKind === 'Full' ? true : run?.rackKind === 'Empty' ? false : null
             return (
-              <SimMover key={r.robotCode} path={toDraw(run?.path ?? [])} travelled={(run?.travelled ?? 0) / map.info.mmPerUnit} at={[x, y]} heading={rotate} upp={upp} body={<AmrIcon rotate={0} />}
+              <SimMover key={r.robotCode} path={toDraw(run?.path ?? [])} travelled={(run?.travelled ?? 0) / map.info.mmPerUnit} at={[x, y]} time={run?.at ?? sim.time ?? 0} heading={rotate} upp={upp} body={<AmrIcon rotate={0} />}
                 className={`sim-robot state-${state}${sim.paused ? ' paused' : ''}${run && run.requestCode === selectedRun ? ' selected' : ''}`} data-amr={r.robotCode} data-state={state} data-x={r.x} data-y={r.y}
                 data-carrying={run?.carrying ? 'yes' : 'no'} role="button" tabIndex={0} aria-label={r.robotCode}
                 onClick={() => { const any = run ?? sim.runs.find((z) => z.robotCode === r.robotCode); if (any) onSimSelect(any.requestCode); setPoint(null); setSelected(null) }}
