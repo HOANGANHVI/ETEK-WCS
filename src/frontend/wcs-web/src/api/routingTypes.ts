@@ -134,6 +134,7 @@ export interface ProcessVersion {
   definition: VersionDefinition; issues: ProcessIssue[]; validatedAt: string | null
 }
 export interface ProcessHeaderBody { code: string; name: string; description: string | null; requestType: string; rackKind: string; triggerLocationCodes: string[]; enabled?: boolean }
+export interface ReferenceImportPlan { add: { code: string; name: string; reviewBlocked: boolean; missingLocations: string[] }[]; keep: string[] }
 export interface ImportResult { imported: number; skipped: number; importedCodes: string[] }
 export interface AddPlcBody { plcId: string; name: string; ipAddress: string; stations: { stationId: string; locationCode: string | null }[] }
 export interface PortView { stationId: string; plcId: string; order: number; locationCode: string | null; enabled: boolean; role: string; pointCount: number; configuredPoints: number; approvedPoints: number }

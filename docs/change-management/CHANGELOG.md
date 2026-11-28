@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-062 Confirmation before loading reference processes (2026-11-28) – branch feature/cr-062-import-confirmation, NOT MERGED
+
+- The button shows which processes would be added or kept before anything is loaded. No migration.
+
 ## CR-061 Location map as a floor plan (2026-11-28) – MERGED into main (f15743b)
 
 - The location map of "Locations and inventory" draws the machine, buffer and manual QC zones around a path. Frontend only; cards and data unchanged.

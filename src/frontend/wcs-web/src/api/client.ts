@@ -12,7 +12,7 @@ import type { AmrFault, AmrSimulation, SimFlow, SimStartResult, SimStation, SimS
 import type { ExecMode, ExecutionModeView, LegacyAdoptionResult, ModeReadiness, ModeTransitionBody, ModeTransitionResult, ModeTransitionView, RcsMessageDetail, RcsMessageSummary } from './modeTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoMapInfo, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
-import type { AddPlcBody, QueueAlert, StartableProcess, QueueScopeResult, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
+import type { AddPlcBody, QueueAlert, StartableProcess, QueueScopeResult, ReferenceImportPlan, ImportResult, Order, OrderDetail, OrderPage, PortView, Process, ProcessHeaderBody, ProcessVersion, StationTransaction, VersionDefinition } from './routingTypes'
 import type {
   ApplyBody, ApplyResult, ExportDependencyReport, ImportPlan, MaintenanceView, ProductModelInfo, Selection, TransferGroup, TransferGroupId, TransferStatus, UploadResult,
 } from './configTransferTypes'
@@ -252,6 +252,7 @@ const realApi = {
   processRemove: (id: string, reason: string, confirmCode: string) => request<{ code: string; orders: number }>(`/api/processes/${id}${qs({ reason, confirmCode })}`, { method: 'DELETE' }),
   processVersionDelete: (id: string, reason: string) => request<{ number: number }>(`/api/process-versions/${id}${qs({ reason })}`, { method: 'DELETE' }),
   processNewVersion: (id: string, fromVersionId?: string) => request<ProcessVersion>(`/api/processes/${id}/versions`, { method: 'POST', body: JSON.stringify({ fromVersionId }) }),
+  processImportPreview: () => request<ReferenceImportPlan>('/api/processes/import-reference'),
   processImportReference: () => request<ImportResult>('/api/processes/import-reference', { method: 'POST' }),
   processAudit: () => request<AuditRow[]>('/api/processes/audit?take=200'),
   processVersion: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}`),

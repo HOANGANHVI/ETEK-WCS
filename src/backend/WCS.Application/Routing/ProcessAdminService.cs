@@ -13,7 +13,7 @@ namespace WCS.Application.Routing;
 /// Publishing is refused unless <see cref="ProcessValidator"/> passes at that very moment. A Published version is never edited: a change is a new version,
 /// and running Transport Tasks keep their own snapshot.
 /// </summary>
-public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository routing, ProcessValidator validator, IClock clock, IProductModelRepository productModels, IOptions<RouteEngineOptions> routeOptions)
+public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository routing, ProcessValidator validator, IClock clock, IProductModelRepository productModels, IOptions<RouteEngineOptions> routeOptions, ILocationRepository locations)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
@@ -33,6 +33,26 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
     {
         var v = await routing.GetVersionAsync(versionId, t) ?? throw AppException.NotFound("VERSION_NOT_FOUND", "Process version not found.");
         return ToVersionDto(await ProcessOf(v, t), v);
+    }, ct);
+
+    /// <summary>CR-062: read-only preview of <see cref="ImportReferenceAsync"/>. A location is missing when the definition names it and it does not exist (any more).</summary>
+    public Task<ReferenceImportPlan> PreviewReferenceAsync(IReadOnlyList<ReferenceProcess> items, CancellationToken ct = default) => uow.ExecuteAsync(async t =>
+    {
+        var present = (await locations.ListAsync(t)).Select(l => l.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var add = new List<ReferenceImportCandidate>(); var keep = new List<string>();
+        foreach (var r in items)
+        {
+            var code = r.Code.ToUpperInvariant();
+            if (await routing.GetProcessByCodeAsync(code, t) is not null) { keep.Add(code); continue; }
+            var steps = r.Definition.Steps.Select(s => s.ToStep()).ToList();
+            var named = r.TriggerLocationCodes
+                .Concat(steps.Select(s => s.WaitingPositionCode).OfType<string>())
+                .Concat(steps.SelectMany(s => s.Conditions).Select(c => c.LocationCode).OfType<string>())
+                .Concat(steps.SelectMany(s => s.Candidates).SelectMany(c => c.Conditions.Select(x => x.LocationCode).OfType<string>().Prepend(c.LocationCode)));
+            var missing = named.Where(c => !string.IsNullOrWhiteSpace(c) && !present.Contains(c)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
+            add.Add(new ReferenceImportCandidate(code, r.Name, r.ReviewBlocked, missing));
+        }
+        return new ReferenceImportPlan(add, keep);
     }, ct);
 
     // ------------------------------------------------------------------ write
