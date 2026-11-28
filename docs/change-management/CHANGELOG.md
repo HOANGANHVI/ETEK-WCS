@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-067 RCS map XML with map data Excel (2026-11-28) – branch feature/cr-067-rcs-mapdata, NOT MERGED
+## CR-067 RCS map XML with map data Excel (2026-11-28) – MERGED into main (920ee28)
 
 - The map XML and the map data Excel are imported together after a matching preview; the AMR map shows call codes and data types. New package ExcelDataReader. No migration.
 

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-067-rcs-mapdata, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (920ee28)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 ("Import & integrate RCS map XML + Mapdata Excel") |
 | **Migration** | **Không.** Dữ liệu Excel lưu cùng cấu trúc bản đồ trong `rcs_maps.GeometryJson` |
 | **Thư viện mới** | `ExcelDataReader` 3.7.0 (MIT), chỉ đọc `.xls` / `.xlsx` |
