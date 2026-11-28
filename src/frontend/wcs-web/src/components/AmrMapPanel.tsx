@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { hasRole, useAuth } from '../auth/AuthContext'
@@ -15,6 +15,13 @@ export function AmrMapPanel() {
   const { user } = useAuth()
   const fleet = useFleet()
   const map = useApi(useCallback(() => api.rcsMap(), []))
+  // CR-068: another import (by this or another user) shows without reopening the page
+  const { reload } = map
+  useEffect(() => {
+    const timer = setInterval(reload, 20_000)
+    window.addEventListener('focus', reload)
+    return () => { clearInterval(timer); window.removeEventListener('focus', reload) }
+  }, [reload])
   const subtitle = map.data ? `${map.data.info.mapName} · ${map.data.info.mapId}` : undefined
   return (
     <Panel title={t('agv.mapPanel')} subtitle={subtitle} className="mb">

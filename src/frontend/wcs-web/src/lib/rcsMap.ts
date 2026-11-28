@@ -33,6 +33,12 @@ export function nearestDistances(points: { id: number; x: number; y: number }[])
 export const pointLabel = (n: { name: string | null; locationCode: string | null }, full: boolean): string =>
   full ? [n.locationCode, n.name].filter(Boolean).join(' · ') : n.locationCode ?? n.name ?? ''
 
+/**
+ * The mapCode values that mean this map: its MapID, its MapQRCode (CR-068: the RCS API guide shows mapCode as the short code written in the Map Data IDs)
+ * and the codes an Admin added.
+ */
+export const mapCodesOf = (map: RcsMapView): string[] => [...new Set([map.info.mapId, map.info.mapQrCode ?? '', ...map.info.rcsMapCodes].filter(Boolean))]
+
 /** Green only when the RCS link answers and this AMR was in the latest answer; everything else is grey. */
 export const isLive = (a: FleetAmr, fleet: FleetView, loadFailed: boolean): boolean => !loadFailed && fleet.connection === 'Connected' && a.state === 'Fresh'
 
@@ -45,7 +51,7 @@ export type Placement =
  * rotate = degrees clockwise on the screen for a marker that points to the right; null = the RCS reports no direction.
  */
 export function placeAmr(map: RcsMapView, b: Bounds, amr: FleetAmr): Placement {
-  const codes = [map.info.mapId, ...map.info.rcsMapCodes].map((c) => c.toUpperCase())
+  const codes = mapCodesOf(map).map((c) => c.toUpperCase())
   if (!amr.mapCode || !codes.includes(amr.mapCode.trim().toUpperCase())) return { kind: 'otherMap', amr }
   const px = num(amr.posX); const py = num(amr.posY)
   if (px === null || py === null) return { kind: 'noPosition', amr }

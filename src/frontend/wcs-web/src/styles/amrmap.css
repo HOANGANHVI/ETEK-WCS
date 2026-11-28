@@ -44,3 +44,10 @@
 .amr-map-detail { width: 320px; max-height: 520px; overflow: auto; }
 .map-preview { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 @media (max-width: 900px) { .amr-map-detail { width: auto; max-height: none; } }
+
+/* CR-068: a point without Excel data (or with a conflicting one) is hollow and dashed */
+.amr-map-hit.no-data .amr-map-point { fill: var(--surface); opacity: 1; stroke: #334155; stroke-width: 1.5px; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.amr-map-hit.no-data.duplicate .amr-map-point { stroke: var(--bad); }
+.amr-map-hit.no-data.named .amr-map-point { stroke: var(--amber); stroke-width: 3px; }
+.amr-map-name.no-data { fill: var(--text-2); font-weight: 400; }
+.amr-map-dot.no-data { background: var(--surface); border: 2px dashed #334155; box-sizing: border-box; }

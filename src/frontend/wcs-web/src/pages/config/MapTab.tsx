@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { RcsMapFiles, RcsMapInfo, RcsMapPreview } from '../../api/rcsMapTypes'
 import { MapDataReport } from '../../components/MapDataReport'
+import { mismatches } from '../../lib/mapData'
 import { Button, Loading, Panel, Pill } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { useFleet } from '../../fleet/fleetState'
@@ -18,6 +19,7 @@ export function MapTab() {
   const [file, setFile] = useState<File | null>(null)
   const [excel, setExcel] = useState<File | null>(null)   // CR-067: the two files are one set
   const [checked, setChecked] = useState<{ files: RcsMapFiles; result: RcsMapPreview } | null>(null)
+  const [anyway, setAnyway] = useState(false)   // CR-068: a pair that does not match completely is saved only on purpose
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +27,7 @@ export function MapTab() {
   // the files are read once: what is saved is exactly what the preview showed
   const preview = async () => {
     if (!file || !excel) return
-    setBusy(true); setError(null); setMessage(null); setChecked(null)
+    setBusy(true); setError(null); setMessage(null); setChecked(null); setAnyway(false)
     try {
       const files: RcsMapFiles = { fileName: file.name, content: await file.text(), mapDataFileName: excel.name, mapDataBase64: toBase64(new Uint8Array(await excel.arrayBuffer())) }
       setChecked({ files, result: await api.rcsMapPreview(files) })
@@ -42,6 +44,8 @@ export function MapTab() {
     } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
   }
 
+  const gaps = checked?.result.mapData ? mismatches(checked.result.mapData, []) : null
+  const incomplete = !!checked && ((gaps?.rows ?? 0) > 0 || checked.result.pointsWithoutRow.length > 0)
   const info = map.data?.info
   return (
     <>
@@ -61,8 +65,14 @@ export function MapTab() {
             {checked.result.mapData && <MapDataReport data={checked.result.mapData} pointsWithoutRow={checked.result.pointsWithoutRow} />}
             {checked.result.currentMapId && checked.result.currentMapId !== checked.result.mapId && <div className="notice notice-warn">{t('config.mdOtherId', { now: checked.result.currentMapId, next: checked.result.mapId })}</div>}
             {(checked.result.namedPointsKept > 0 || checked.result.namedPointsForReview > 0) && <p>{t('config.mdNamed', { kept: checked.result.namedPointsKept, review: checked.result.namedPointsForReview })}</p>}
+            {incomplete && (
+              <div className="notice notice-warn" role="alert" data-notice="incomplete">
+                <p>{t('config.mdIncomplete', { rows: gaps?.rows ?? 0, points: checked.result.pointsWithoutRow.length })}</p>
+                <label className="inline-check"><input type="checkbox" checked={anyway} onChange={(e) => setAnyway(e.target.checked)} /> {t('config.mdAnyway')}</label>
+              </div>
+            )}
             <div className="btn-row">
-              <Button variant="primary" disabled={busy} onClick={() => void save()}>{t(info ? 'config.mapReplace' : 'config.mapImport')}</Button>
+              <Button variant="primary" disabled={busy || (incomplete && !anyway)} onClick={() => void save()}>{t(info ? 'config.mapReplace' : 'config.mapImport')}</Button>
               <Button disabled={busy} onClick={() => setChecked(null)}>{t('config.mdCancel')}</Button>
             </div>
           </div>

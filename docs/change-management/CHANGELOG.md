@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-068 AMR map point display (2026-11-28) – branch feature/cr-068-amr-map-display, NOT MERGED
+
+- All call codes, points without Excel data and the mapping state are shown; location link; warning and confirmation for files that do not match; the map code of the QR code is accepted. No migration.
+
 ## CR-067 RCS map XML with map data Excel (2026-11-28) – MERGED into main (920ee28)
 
 - The map XML and the map data Excel are imported together after a matching preview; the AMR map shows call codes and data types. New package ExcelDataReader. No migration.
