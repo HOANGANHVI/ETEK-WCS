@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-063-create-task-processes, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (c1d1a69)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 (yêu cầu sửa ngay, không chạy test, commit, push, restart, merge) |
 | **Migration** | Không |
 

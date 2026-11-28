@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-063 Create-task list follows the process module (2026-11-28) – branch feature/cr-063-create-task-processes, NOT MERGED
+## CR-063 Create-task list follows the process module (2026-11-28) – MERGED into main (c1d1a69)
 
 - The request forms and the task API offer only processes that are published and ready in the process settings; a Phase 1 flow needs its process there. Config ProcessFlows:RequireModuleProcess. No migration. Not tested.
 
