@@ -35,10 +35,13 @@ internal sealed class LocationRepository(WcsDbContext db) : ILocationRepository
         var id = location.Id; var code = location.Code; var upper = code.ToUpper(); var quoted = "\"" + code + "\"";
         var racks = await db.Racks.CountAsync(r => r.CurrentLocationId == id, ct);
         var ports = await db.PlcStations.Where(p => p.LocationCode != null && p.LocationCode.ToUpper() == upper && p.RetiredAt == null).Select(p => p.Id).OrderBy(x => x).ToListAsync(ct);
-        // every version of every process: candidates, waiting positions, conditions and the trigger locations
+        // candidates, waiting positions, conditions and the trigger locations; CR-059: a disabled version counts only while an unfinished order still follows it
         var steps = db.RouteSteps.Where(s => (s.WaitingPositionCode != null && s.WaitingPositionCode.ToUpper() == upper) || (s.ConditionsJson != null && s.ConditionsJson.Contains(quoted))
             || s.Candidates.Any(c => c.LocationCode.ToUpper() == upper || (c.ConditionsJson != null && c.ConditionsJson.Contains(quoted))));
-        var named = await (from st in steps join v in db.BusinessProcessVersions on st.VersionId equals v.Id join p in db.BusinessProcesses on v.ProcessId equals p.Id select p.Code).ToListAsync(ct);
+        var versions = db.BusinessProcessVersions.Where(v => v.State != ProcessConfigState.Disabled
+            || db.TransportOrders.Any(o => o.ProcessVersionId == v.Id && o.State != OrderState.Completed && o.State != OrderState.Failed && o.State != OrderState.Cancelled));
+        var named = (await (from st in steps join v in versions on st.VersionId equals v.Id join p in db.BusinessProcesses on v.ProcessId equals p.Id select new { p.Code, v.Number }).Distinct().ToListAsync(ct))
+            .Select(x => $"{x.Code} v{x.Number}");   // the version is named, so the Admin sees which definition still uses the location
         var triggered = (await db.BusinessProcesses.Select(p => new { p.Code, p.TriggerLocationCodesCsv }).ToListAsync(ct))
             .Where(p => p.TriggerLocationCodesCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(code, StringComparer.OrdinalIgnoreCase)).Select(p => p.Code);
         // unfinished work only: finished records keep referring to the removed row

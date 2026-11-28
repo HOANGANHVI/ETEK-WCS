@@ -122,7 +122,7 @@ export default defineMessages({
   blk_LOCATION_DELETE_PROTECTED: 'Là trạm được bảo vệ (giữ nguyên quy trình cũ)',
   blk_LOCATION_DELETE_RACKS: 'Đang chứa {detail} rack',
   blk_LOCATION_DELETE_PORT: 'Đang liên kết với cổng PLC: {detail} (bỏ liên kết trước)',
-  blk_LOCATION_DELETE_PROCESS: 'Được quy trình sử dụng: {detail}',
+  blk_LOCATION_DELETE_PROCESS: 'Đang được quy trình sử dụng: {detail}. Hãy bỏ vị trí khỏi bước tuyến (tạo phiên bản mới, lưu rồi công bố) hoặc khỏi trạm kích hoạt',
   blk_LOCATION_DELETE_OPEN_WORK: 'Còn {detail} việc chưa kết thúc (giữ chỗ, nhiệm vụ, lệnh, giao dịch trạm hoặc đang chờ đối soát)',
 }, {
   title: 'System Settings',
@@ -243,6 +243,6 @@ export default defineMessages({
   blk_LOCATION_DELETE_PROTECTED: 'A protected station (the legacy process is kept)',
   blk_LOCATION_DELETE_RACKS: 'Holds {detail} rack(s)',
   blk_LOCATION_DELETE_PORT: 'Linked to PLC port: {detail} (unlink first)',
-  blk_LOCATION_DELETE_PROCESS: 'Used by process: {detail}',
+  blk_LOCATION_DELETE_PROCESS: 'Used by process: {detail}. Remove it from the route steps (new version, save, publish) or from the trigger locations',
   blk_LOCATION_DELETE_OPEN_WORK: '{detail} unfinished item(s) (reservations, tasks, orders, station transactions or a pending reconciliation)',
 })

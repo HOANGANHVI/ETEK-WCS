@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
 using WCS.Application.Config;
+using WCS.Application.Routing;
 using WCS.Application.Services;
 using WCS.Domain.Common;
 using WCS.Domain.Locations;
@@ -57,7 +58,7 @@ public class Cr057LocationRemovalTests(DatabaseFixture fixture)
         Assert.Equal("LOCATION_DELETE_RACKS", await RefusedAsync(kit, "Q1"));
         var (_, v) = await kit.CreateProcessAsync("T-LOC", RequestType.PickupRequest, RackKind.Full, ["Q1"], OneLeg("Request", Dest(1, "Q2")));
         var named = (await Config(kit, s => s.RemovalAsync("Q2"))).Blockers.Single();
-        Assert.Equal(("LOCATION_DELETE_PROCESS", "T-LOC"), (named.Code, named.Detail));                  // a draft counts as well
+        Assert.Equal(("LOCATION_DELETE_PROCESS", "T-LOC v1"), (named.Code, named.Detail));                  // a draft counts as well
         Assert.Contains("LOCATION_DELETE_PROCESS", await BlockersAsync(kit, "Q1"));                     // as a trigger location
         await kit.PublishAsync(v);
         var order = (await kit.StartAsync("R-1", "Q1", RequestType.PickupRequest, RackKind.Full)).Order.Id;
@@ -68,6 +69,29 @@ public class Cr057LocationRemovalTests(DatabaseFixture fixture)
         await kit.TickAsync();
         Assert.Equal(["LOCATION_DELETE_PROCESS"], await BlockersAsync(kit, "Q1"));                      // finished: only the definition still names it
         Assert.True(await ExistsAsync(kit, "Q1"));
+    }
+
+    [Fact]
+    public async Task A_replaced_version_keeps_a_location_only_while_an_order_still_follows_it()
+    {
+        await using var kit = await RoutingKit.CreateAsync(fixture);                                   // CR-059
+        await NewAsync(kit, "Q1"); await NewAsync(kit, "Q2"); await NewAsync(kit, "Q3");
+        await kit.H.StockAsync("Q1", RackKind.Full, 1);
+        var (process, v1) = await kit.CreateProcessAsync("T-VER", RequestType.PickupRequest, RackKind.Full, ["Q1"], OneLeg("Request", Dest(1, "Q2")));
+        await kit.PublishAsync(v1);
+        var order = (await kit.StartAsync("R-1", "Q1", RequestType.PickupRequest, RackKind.Full)).Order.Id;
+        await kit.TickAsync();
+        var v2 = (await kit.With(sp => sp.GetRequiredService<ProcessAdminService>().NewVersionAsync(process, v1, "test"))).Id;
+        await kit.With(sp => sp.GetRequiredService<ProcessAdminService>().SaveDefinitionAsync(v2, OneLeg("Request", Dest(1, "Q3"))));
+        async Task<string?> UsedByAsync(string code) => (await Config(kit, s => s.RemovalAsync(code))).Blockers.SingleOrDefault(b => b.Code == "LOCATION_DELETE_PROCESS")?.Detail;
+        Assert.Equal("T-VER v2", await UsedByAsync("Q3"));                                              // a draft counts
+        await kit.PublishAsync(v2);                                                                      // version 1 is replaced
+        Assert.Equal("T-VER v1", await UsedByAsync("Q2"));                                              // the running order still follows it
+        var leg = (await kit.OrderAsync(order)).Legs.Single();
+        await kit.PickAsync(leg.Id); await kit.DropAsync(leg.Id); await kit.TickAsync();
+        Assert.True((await kit.OrderAsync(order)).IsTerminal);
+        Assert.Null(await UsedByAsync("Q2"));
+        Assert.Equal("T-VER v2", await UsedByAsync("Q3"));
     }
 
     [Fact]
