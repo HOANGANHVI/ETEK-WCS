@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-065-rcs-map-monitor, CHƯA MERGE; migration đã áp lên wcs_db ngày 2026-11-28` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (4a8cdbc); migration đã áp lên wcs_db ngày 2026-11-28` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 ("Import RCS map & live AMR map monitor") |
 | **Migration** | `AddRcsMap`: thêm bảng `rcs_maps`; không đổi bảng hay dữ liệu có sẵn |
 

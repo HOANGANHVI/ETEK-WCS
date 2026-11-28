@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-065 RCS map and AMR map monitor (2026-11-28) – branch feature/cr-065-rcs-map-monitor, NOT MERGED
+## CR-065 RCS map and AMR map monitor (2026-11-28) – MERGED into main (4a8cdbc)
 
 - An Admin imports the RCS map XML; AGV monitoring draws it with the AMRs of the fleet data. Migration AddRcsMap (one new table, applied to wcs_db). Read only.
 
