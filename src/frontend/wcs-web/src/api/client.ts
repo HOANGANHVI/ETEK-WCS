@@ -1,4 +1,4 @@
-import type { RcsMapImportResult, RcsMapInfo, RcsMapSettings, RcsMapView } from './rcsMapTypes'
+import type { MapPointNote, RcsMapImportResult, RcsMapInfo, RcsMapSettings, RcsMapView } from './rcsMapTypes'
 import type { LocationRemoval } from './types'
 import type { ProcessRemoval } from './routingTypes'
 import { DEMO_MODE } from '../config'
@@ -148,6 +148,8 @@ const realApi = {
   // CR-065: the monitoring map
   rcsMap: () => request<RcsMapView | null>('/api/rcs-map'),
   rcsMapImport: (fileName: string, content: string) => request<RcsMapImportResult>('/api/config/rcs-map', { method: 'POST', body: JSON.stringify({ fileName, content }) }),
+  rcsMapPointSet: (pointId: number, b: { mapSha256: string; name: string | null; locationCode: string | null }) => request<MapPointNote[]>(`/api/config/rcs-map/points/${pointId}`, { method: 'PUT', body: JSON.stringify(b) }),
+  rcsMapPointRemove: (pointId: number) => request<MapPointNote[]>(`/api/config/rcs-map/points/${pointId}`, { method: 'DELETE' }),
   rcsMapSettings: (b: RcsMapSettings) => request<RcsMapInfo>('/api/config/rcs-map/settings', { method: 'PUT', body: JSON.stringify(b) }),
   flows: () => request<FlowOption[]>('/api/flows'),
   locations: () => request<Location[]>('/api/locations'),

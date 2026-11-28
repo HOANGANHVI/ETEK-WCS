@@ -3,7 +3,10 @@ import type { FleetView } from '../api/fleetTypes'
 import type { RcsMapView } from '../api/rcsMapTypes'
 import { hasMessage, useT, type MsgKey } from '../i18n'
 import { formatDateTime } from '../i18n/format'
-import { boundsOf, drawY, isLive, placeAmr, type Bounds, type Placement } from '../lib/rcsMap'
+import { boundsOf, drawY, isLive, placeAmr, nearestDistances, pointLabel, type Bounds, type Placement } from '../lib/rcsMap'
+import { api } from '../api/client'
+import { describeError } from '../i18n/vi'
+import { MapPointPanel } from './MapPointPanel'
 import { Button, Pill } from './ui'
 
 interface Box { x: number; y: number; w: number; h: number }
@@ -13,7 +16,8 @@ const fitBox = (b: Bounds): Box => {
 }
 
 /** CR-065: the connections and points of the imported map. Drawn once per map and zoom level. */
-function Roads({ map, bounds, upp }: { map: RcsMapView; bounds: Bounds; upp: number }) {
+function Roads({ map, bounds, upp, showNames, selected, onSelect }: { map: RcsMapView; bounds: Bounds; upp: number; showNames: boolean; selected: number | null; onSelect: (id: number) => void }) {
+  const notes = useMemo(() => new Map((map.points ?? []).filter((n) => n.current).map((n) => [n.pointId, n])), [map])
   const byId = useMemo(() => new Map(map.geometry.points.map((p) => [p.id, p])), [map])
   const path = useMemo(() => map.geometry.edges.map((e) => {
     const a = byId.get(e.from); const z = byId.get(e.to)
@@ -21,13 +25,27 @@ function Roads({ map, bounds, upp }: { map: RcsMapView; bounds: Bounds; upp: num
     return [[a.x, a.y], ...e.ctrl, [z.x, z.y]].map((c, i) => `${i === 0 ? 'M' : 'L'}${c[0]} ${drawY(map, bounds, c[1])}`).join(' ')
   }).join(' '), [map, bounds, byId])
   const r = Math.min(Math.max(0.09, 2 * upp), 6 * upp)
+  const near = useMemo(() => nearestDistances(map.geometry.points), [map])
+  // a named point is drawn above its neighbours; each click area ends half way to the nearest point
+  const ordered = useMemo(() => [...map.geometry.points].sort((a, b) => Number(notes.has(a.id)) - Number(notes.has(b.id))), [map, notes])
   return (
     <>
       <path d={path} className="amr-map-road" />
-      {map.geometry.points.map((p) => (
-        <circle key={p.id} cx={p.x} cy={drawY(map, bounds, p.y)} r={r} className="amr-map-point">
-          <title>{`#${p.id} (${p.x}, ${p.y})${p.value ? ` · value ${p.value}` : ''}`}</title>
-        </circle>
+      {ordered.map((p) => {
+        const n = notes.get(p.id); const y = drawY(map, bounds, p.y)
+        const half = (near.get(p.id) ?? Infinity) / 2
+        return (
+          <g key={p.id} className={`amr-map-hit${n ? ' named' : ''}${p.id === selected ? ' selected' : ''}`} data-point={p.id} role="button" tabIndex={0} aria-label={`#${p.id}${n ? ` ${pointLabel(n, true)}` : ''}`}
+            onClick={() => onSelect(p.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(p.id) } }}>
+            <circle cx={p.x} cy={y} r={Math.min(Math.max(r, 9 * upp), half * 0.95)} className="amr-map-target" />
+            {p.id === selected && <circle cx={p.x} cy={y} r={Math.max(r * 2, 11 * upp)} className="amr-map-ring" />}
+            <circle cx={p.x} cy={y} r={n ? Math.max(r * 1.5, 5 * upp) : Math.min(r, half * 0.95)} className="amr-map-point" />
+            <title>{`#${p.id} (${p.x}, ${p.y})${n ? ` · ${pointLabel(n, true)}` : ''}`}</title>
+          </g>
+        )
+      })}
+      {showNames && [...notes.values()].map((n) => (
+        <text key={`n${n.pointId}`} x={n.x} y={drawY(map, bounds, n.y) + 18 * upp} fontSize={11 * upp} className="amr-map-name">{pointLabel(n, upp < 0.02)}</text>
       ))}
       {upp < 0.012 && map.geometry.points.map((p) => (
         <text key={`t${p.id}`} x={p.x + r * 1.4} y={drawY(map, bounds, p.y) - r * 1.4} fontSize={11 * upp} className="amr-map-label">{p.id}</text>
@@ -37,12 +55,15 @@ function Roads({ map, bounds, upp }: { map: RcsMapView; bounds: Bounds; upp: num
 }
 
 /** CR-065: read-only 2D view of the AMRs on the imported map: zoom, pan, fit; one click shows what the RCS reports about an AMR. */
-export function AmrMap({ map, fleet, loadFailed }: { map: RcsMapView; fleet: FleetView; loadFailed: boolean }) {
+export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = () => {} }: { map: RcsMapView; fleet: FleetView; loadFailed: boolean; canEdit?: boolean; onChanged?: () => void }) {
   const t = useT()
   const bounds = useMemo(() => boundsOf(map), [map])
   const [view, setView] = useState<Box>(() => fitBox(bounds))
-  const [fitted, setFitted] = useState(bounds)
-  if (fitted !== bounds) { setFitted(bounds); setView(fitBox(bounds)) }      // a new map is shown whole
+  const [fitted, setFitted] = useState(map.info.sha256 + map.info.importedAt + map.info.yAxisUp)
+  const identity = map.info.sha256 + map.info.importedAt + map.info.yAxisUp
+  if (fitted !== identity) { setFitted(identity); setView(fitBox(bounds)) }   // a new map is shown whole; saving a point keeps the zoom
+  const [point, setPoint] = useState<number | null>(null)   // CR-066
+  const [showNames, setShowNames] = useState(true)
   const [size, setSize] = useState({ w: 1000, h: 480 })
   const [selected, setSelected] = useState<string | null>(null)
   const svg = useRef<SVGSVGElement>(null)
@@ -79,7 +100,7 @@ export function AmrMap({ map, fleet, loadFailed }: { map: RcsMapView; fleet: Fle
   }, [zoom])
 
   const down = (e: ReactPointerEvent<SVGSVGElement>) => {
-    if ((e.target as Element).closest('.amr-map-robot')) return
+    if ((e.target as Element).closest('.amr-map-robot, .amr-map-hit')) return
     drag.current = { x: e.clientX, y: e.clientY }; e.currentTarget.setPointerCapture(e.pointerId)
   }
   const move = (e: ReactPointerEvent<SVGSVGElement>) => {
@@ -94,6 +115,15 @@ export function AmrMap({ map, fleet, loadFailed }: { map: RcsMapView; fleet: Fle
   const drawn = placed.filter((p): p is Extract<Placement, { kind: 'drawn' }> => p.kind === 'drawn')
   const missed = placed.filter((p) => p.kind !== 'drawn')
   const sel = fleet.amrs.find((a) => a.robotCode === selected) ?? null
+  const chosen = map.geometry.points.find((p) => p.id === point) ?? null
+  const stale = (map.points ?? []).filter((n) => !n.current)
+  const pickPoint = (id: number) => { setPoint(id); setSelected(null) }
+  const pickAmr = (code: string) => { setSelected(code); setPoint(null) }
+  const [removeError, setRemoveError] = useState<string | null>(null)
+  const removeStale = async (id: number) => {
+    setRemoveError(null)
+    try { await api.rcsMapPointRemove(id); onChanged() } catch (e) { setRemoveError(describeError(e)) }
+  }
   const status = (raw: string | null) => {
     if (!raw) return t('agv.noData')
     const key = `agv.amrStatus_${raw}` as MsgKey
@@ -106,6 +136,8 @@ export function AmrMap({ map, fleet, loadFailed }: { map: RcsMapView; fleet: Fle
         <span><i className="amr-map-dot live" />{t('agv.mapLive')}</span>
         <span><i className="amr-map-dot lost" />{t('agv.mapLost')}</span>
         <span className="muted">{t('agv.mapCount', { shown: drawn.length, total: fleet.amrs.length })}</span>
+        <span><i className="amr-map-dot named" />{t('agv.pointNamed')}</span>
+        <label className="inline-check"><input type="checkbox" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} /> {t('agv.pointShowNames')}</label>
         <span className="amr-map-tools">
           <Button size="sm" onClick={() => zoom(1 / 1.4)} title={t('agv.mapZoomIn')}>+</Button>
           <Button size="sm" onClick={() => zoom(1.4)} title={t('agv.mapZoomOut')}>−</Button>
@@ -115,11 +147,11 @@ export function AmrMap({ map, fleet, loadFailed }: { map: RcsMapView; fleet: Fle
       <div className="amr-map-body">
         <svg ref={svg} className="amr-map-svg" viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`} role="img" aria-label={t('agv.mapTitle', { name: map.info.mapName })}
           onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-          <Roads map={map} bounds={bounds} upp={upp} />
+          <Roads map={map} bounds={bounds} upp={upp} showNames={showNames} selected={point} onSelect={pickPoint} />
           {drawn.map((p) => (
             <g key={p.amr.robotCode} className={`amr-map-robot ${isLive(p.amr, fleet, loadFailed) ? 'live' : 'lost'}${p.amr.robotCode === selected ? ' selected' : ''}`}
               transform={`translate(${p.x} ${p.y}) scale(${upp})`} role="button" tabIndex={0} aria-label={p.amr.robotCode} data-amr={p.amr.robotCode}
-              onClick={() => setSelected(p.amr.robotCode)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(p.amr.robotCode) } }}>
+              onClick={() => pickAmr(p.amr.robotCode)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickAmr(p.amr.robotCode) } }}>
               <circle r={13} />
               {p.rotate !== null && <path d="M10 0 L-6 7 L-2 0 L-6 -7 Z" className="amr-map-arrow" transform={`rotate(${p.rotate})`} />}
               <text y={-18} fontSize={12}>{p.amr.robotCode}</text>
@@ -127,6 +159,8 @@ export function AmrMap({ map, fleet, loadFailed }: { map: RcsMapView; fleet: Fle
             </g>
           ))}
         </svg>
+        {chosen && <MapPointPanel key={`${chosen.id}-${map.info.sha256}`} point={chosen} note={(map.points ?? []).find((n) => n.pointId === chosen.id && n.current) ?? null} notes={map.points ?? []}
+          mapSha256={map.info.sha256} canEdit={canEdit} onSaved={onChanged} onClose={() => setPoint(null)} />}
         {sel && (
           <aside className="amr-map-detail">
             <div className="amr-map-detail-head"><strong className="mono">{sel.robotCode}</strong>
@@ -144,12 +178,24 @@ export function AmrMap({ map, fleet, loadFailed }: { map: RcsMapView; fleet: Fle
           </aside>
         )}
       </div>
+      {stale.length > 0 && (
+        <div className="notice notice-warn" role="status">
+          <p>{t('agv.pointStale', { n: stale.length })}</p>
+          {removeError && <p role="alert">{removeError}</p>}
+          <ul>
+            {stale.map((n) => (
+              <li key={n.pointId}>#{n.pointId} ({n.x}, {n.y}): {pointLabel(n, true)}{' '}
+                {canEdit && <Button size="sm" onClick={() => void removeStale(n.pointId)}>{t('agv.pointRemove')}</Button>}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {missed.length > 0 && (
         <div className="notice notice-warn" role="status">
           <p>{t('agv.mapNotDrawn', { n: missed.length })}</p>
           <ul>
             {missed.map((p) => (
-              <li key={p.amr.robotCode}><button type="button" className="link-button mono" onClick={() => setSelected(p.amr.robotCode)}>{p.amr.robotCode}</button>
+              <li key={p.amr.robotCode}><button type="button" className="link-button mono" onClick={() => pickAmr(p.amr.robotCode)}>{p.amr.robotCode}</button>
                 {' — '}{t(`agv.mapWhy_${p.kind}` as MsgKey, { code: p.amr.mapCode ?? '–', map: map.info.mapId })}</li>
             ))}
           </ul>

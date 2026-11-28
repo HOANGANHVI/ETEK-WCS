@@ -28,7 +28,7 @@ export function AmrMapPanel() {
             {!map.data.info.confirmedAt && <div className="notice notice-warn" role="status">{t('agv.mapUnconfirmed')}</div>}
             {fleet.data?.simulatedData && <div className="notice notice-warn" role="status">{t('agv.mapSimulated')}</div>}
             {fleet.data && (fleet.data.connection !== 'Connected' || !!fleet.error) && <div className="notice notice-bad" role="alert">{t('agv.mapNoLink')}</div>}
-            {fleet.data ? <AmrMap map={map.data} fleet={fleet.data} loadFailed={!!fleet.error} /> : <div className="notice notice-bad" role="alert">{fleet.error ?? t('agv.fleetNoData')}</div>}
+            {fleet.data ? <AmrMap map={map.data} fleet={fleet.data} loadFailed={!!fleet.error} canEdit={hasRole(user, 'Admin')} onChanged={map.reload} /> : <div className="notice notice-bad" role="alert">{fleet.error ?? t('agv.fleetNoData')}</div>}
           </>
         )}
     </Panel>

@@ -6,6 +6,8 @@ export interface RcsMapInfo {
   fileName: string; sha256: string; pointCount: number; edgeCount: number; importedAt: string; importedBy: string | null
   mmPerUnit: number; yAxisUp: boolean; headingOffsetDeg: number; headingClockwise: boolean; rcsMapCodes: string[]; confirmedAt: string | null; confirmedBy: string | null
 }
-export interface RcsMapView { info: RcsMapInfo; geometry: { points: MapPoint[]; edges: MapEdge[] } }
+/** CR-066: what WCS adds to a point. current = false: the record no longer matches the imported map and is shown on no point. */
+export interface MapPointNote { pointId: number; x: number; y: number; name: string | null; locationCode: string | null; locationRemoved: boolean; current: boolean; updatedAt: string; updatedBy: string | null }
+export interface RcsMapView { info: RcsMapInfo; geometry: { points: MapPoint[]; edges: MapEdge[] }; points?: MapPointNote[] }
 export interface RcsMapImportResult { info: RcsMapInfo; replaced: boolean; unknownNeighbours: number }
 export interface RcsMapSettings { mmPerUnit: number; yAxisUp: boolean; headingOffsetDeg: number; headingClockwise: boolean; rcsMapCodes: string[]; confirmed: boolean }
