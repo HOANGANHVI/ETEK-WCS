@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-058 Configured locations can be removed (2026-11-27) – branch feature/cr-058-remove-configured-location, NOT MERGED
+
+- A location named by the deployment configuration is no longer kept for that reason: the removal dialog warns which flows and PLC codes are affected. The flow list no longer offers a removed station. No migration.
+
 ## CR-057 Location removal (2026-11-27) – MERGED into main (f27fa1b)
 
 - An Admin can remove a location nothing depends on any more; past records keep showing its code and the code can be used again. Migration AddLocationRemovedAt.

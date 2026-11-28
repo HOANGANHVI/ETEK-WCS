@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using WCS.Application.Abstractions;
 using WCS.Application.Common;
 using WCS.Application.Config;
 using WCS.Application.Services;
@@ -70,11 +71,26 @@ public class Cr057LocationRemovalTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task A_linked_port_the_deployment_configuration_and_protected_stations_keep_a_location()
+    public async Task A_location_named_by_the_deployment_configuration_is_removed_after_a_warning()
+    {
+        await using var kit = await RoutingKit.CreateAsync(fixture);
+        var plan = await Config(kit, s => s.RemovalAsync("F5"));                                       // CR-058
+        Assert.True(plan.CanDelete, string.Join(",", plan.Blockers.Select(b => b.Code)));
+        Assert.Equal([("LOCATION_WARN_FLOW_STATION", "BP-05, BP-06"), ("LOCATION_WARN_FLOW_DESTINATION", "BP-01")], plan.Warnings.Select(w => (w.Code, w.Detail)));
+        await Config(kit, s => s.DeleteLocationAsync("F5", "not used on this site", "F5"));
+        Assert.False(await ExistsAsync(kit, "F5"));
+        Assert.Contains("F5", await kit.With(sp => sp.GetRequiredService<WcsQueries>().RemovedOnlyCodesAsync()));
+        var refused = await Assert.ThrowsAsync<AppException>(() => kit.With(sp => sp.GetRequiredService<ITaskOrchestrator>().CreateTaskAsync(new CreateTaskCommand("R-F5", "BP05", "F5", null))));
+        Assert.Equal("STATION_NOT_FOUND", refused.Code);
+        await NewAsync(kit, "F5");
+        Assert.DoesNotContain("F5", await kit.With(sp => sp.GetRequiredService<WcsQueries>().RemovedOnlyCodesAsync()));
+    }
+
+    [Fact]
+    public async Task A_linked_port_and_protected_stations_keep_a_location()
     {
         await using var kit = await RoutingKit.CreateAsync(fixture);
         var a1 = await BlockersAsync(kit, "A1");
-        Assert.Contains("LOCATION_DELETE_CONFIGURED", a1);
         Assert.Contains("LOCATION_DELETE_PORT", a1);
         await NewAsync(kit, "A3");
         Assert.Contains("LOCATION_DELETE_PROTECTED", await BlockersAsync(kit, "A3"));

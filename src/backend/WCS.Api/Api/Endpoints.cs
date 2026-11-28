@@ -197,13 +197,16 @@ public static class Endpoints
         api.MapDiagnosticApi();   // PLC diagnostic export
 
         // ---- Process flows available for task requests (read-only view of the deployed configuration; lets the UI avoid hard-coding stations)
-        api.MapGet("/flows", (HttpContext c, WCS.Application.Flows.IFlowCatalog flows) =>
-            ApiResults.Ok(c, flows.All.OrderBy(f => f.Flow).Select(f => new
+        api.MapGet("/flows", async (HttpContext c, WCS.Application.Flows.IFlowCatalog flows, WcsQueries q, CancellationToken ct) =>
+        {
+            var removed = await q.RemovedOnlyCodesAsync(ct);   // CR-058: a removed location is not offered as a request station
+            return ApiResults.Ok(c, flows.All.OrderBy(f => f.Flow).Select(f => new
             {
                 flow = f.Flow.ToString(),
                 rackKind = f.RackKind.ToString(),
-                stations = f.AllowedRequestStations.OrderBy(x => x).ToArray(),
-            }))).WithTags("Flow");
+                stations = f.AllowedRequestStations.Where(x => !removed.Contains(x)).OrderBy(x => x).ToArray(),
+            }));
+        }).WithTags("Flow");
 
         // ---- Task
         var task = api.MapGroup("/tasks").WithTags("Task");
