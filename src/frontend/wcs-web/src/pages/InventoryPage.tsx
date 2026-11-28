@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Location, Rack } from '../api/types'
@@ -8,6 +8,7 @@ import { hasRole, useAuth } from '../auth/AuthContext'
 import { RackDialog, type RackDialogState } from './RackDialog'
 import { useApi } from '../hooks/useApi'
 import { useCodeMaps } from '../hooks/useLookups'
+import { floorPlan } from '../lib/floorPlan'
 import { t, useT } from '../i18n'
 import { formatDateTime } from '../i18n/format'
 import {
@@ -57,16 +58,19 @@ export function InventoryPage() {
     return m
   }, [racks.data])
 
+  const plan = useMemo(() => floorPlan(locations.data ?? []), [locations.data])   // CR-061
+
+  // the locations the floor drawing has no place for keep the grouped list
   const groups = useMemo(() => {
     const m = new Map<string, { title: string; order: number; items: Location[] }>()
-    for (const l of locations.data ?? []) {
+    for (const l of plan.others) {
       const g = groupOf(l, t)
       const entry = m.get(g.key) ?? { title: g.title, order: g.order, items: [] }
       entry.items.push(l)
       m.set(g.key, entry)
     }
     return [...m.values()].sort((a, b) => a.order - b.order).map((g) => ({ ...g, items: g.items.sort((a, b) => a.code.localeCompare(b.code)) }))
-  }, [locations.data, t])
+  }, [plan, t])
 
   const rackSummary = useMemo<SummaryItem[]>(() => {
     const r = racks.data ?? []
@@ -85,6 +89,15 @@ export function InventoryPage() {
     [racks.data, current],
   )
 
+  const tile = (l: Location, style?: CSSProperties) => (
+    <button type="button" key={l.id} style={style} className={`loc-tile tone-${OCCUPANCY_TONE[l.occupancy]} ${l.code === selected ? 'selected' : ''} ${l.enabled ? '' : 'disabled'}`}
+      aria-pressed={l.code === selected} onClick={() => setSelected(l.code === selected ? null : l.code)}>
+      <span className="tile-top"><strong>{l.code}</strong><OccupancyPill value={l.occupancy} /></span>
+      <SlotStrip loc={l} racks={racksByLoc.get(l.id) ?? []} />
+      <span className="tile-foot">{t('inventory.tileFoot', { occupied: l.occupied, capacity: l.rackCapacity })}{l.reserved > 0 ? t('inventory.tileReserved', { n: l.reserved }) : ''}</span>
+    </button>
+  )
+
   return (
     <>
       <PageHeader title={t('inventory.title')} />
@@ -93,7 +106,7 @@ export function InventoryPage() {
         <StackedSummary items={rackSummary} ariaLabel={t('inventory.sumTitle')} emptyTitle={t('inventory.sumEmpty')} />
       </Panel>
 
-      <div className="inv-top">
+      <div className="inv-top inv-floor">
         <Panel title={t('inventory.mapPanel')} className="inv-map">
           <div className="legend" aria-label={t('inventory.legend')}>
             <span><i className="slot slot-full">{t('inventory.slotFullLetter')}</i>{t('inventory.legendFull')}</span>
@@ -104,23 +117,31 @@ export function InventoryPage() {
           </div>
           <Async state={locations} isEmpty={(d) => d.length === 0} empty={{ title: t('inventory.noLocations'), hint: t('inventory.noLocationsHint') }}>
             {() => (
-              <div className="map-groups">
-                {groups.map((g) => (
-                  <section key={g.title} className="map-group">
-                    <h3>{g.title}</h3>
-                    <div className="map-tiles">
-                      {g.items.map((l) => (
-                        <button type="button" key={l.id} className={`loc-tile tone-${OCCUPANCY_TONE[l.occupancy]} ${l.code === selected ? 'selected' : ''} ${l.enabled ? '' : 'disabled'}`}
-                          aria-pressed={l.code === selected} onClick={() => setSelected(l.code === selected ? null : l.code)}>
-                          <span className="tile-top"><strong>{l.code}</strong><OccupancyPill value={l.occupancy} /></span>
-                          <SlotStrip loc={l} racks={racksByLoc.get(l.id) ?? []} />
-                          <span className="tile-foot">{t('inventory.tileFoot', { occupied: l.occupied, capacity: l.rackCapacity })}{l.reserved > 0 ? t('inventory.tileReserved', { n: l.reserved }) : ''}</span>
-                        </button>
+              <>
+                {plan.zones.length > 0 && (
+                  <div className="floor-scroll">
+                    <div className="floor-plan">
+                      {plan.zones.map((zone) => (
+                        <section key={zone.area} className={`map-group floor-zone zone-${zone.area}`}>
+                          <h3>{t(zone.title)}</h3>
+                          <div className="floor-tiles">{zone.cells.map((c) => tile(c.location, { gridColumn: c.column, gridRow: c.row }))}</div>
+                        </section>
                       ))}
+                      <div className="floor-road" aria-hidden="true"><span>{t('inventory.road')}</span></div>
                     </div>
-                  </section>
-                ))}
-              </div>
+                  </div>
+                )}
+                {groups.length > 0 && (
+                  <div className="map-groups">
+                    {groups.map((g) => (
+                      <section key={g.title} className="map-group">
+                        <h3>{g.title}</h3>
+                        <div className="map-tiles">{g.items.map((l) => tile(l))}</div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </Async>
         </Panel>

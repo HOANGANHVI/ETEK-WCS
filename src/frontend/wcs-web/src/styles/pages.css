@@ -111,6 +111,20 @@
 .map-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 18px 22px; }
 .map-group h3 { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); padding-bottom: 6px; border-bottom: 2px solid var(--navy-100); margin-bottom: 10px; }
 .map-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+/* CR-061: the location map drawn as the shop floor: three zones above the path, three below. Cells are fixed, so a card never moves when others change. */
+.inv-floor .legend + * { margin-top: 0; }
+.floor-scroll { overflow-x: auto; padding: 4px; }
+.floor-plan { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "cnc-a qc-bd qc-eg" "road road road" "cnc-x buffer manual-qc"; gap: 14px; min-width: 760px; }
+.floor-zone { display: flex; flex-direction: column; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.zone-cnc-a { grid-area: cnc-a; } .zone-qc-bd { grid-area: qc-bd; } .zone-qc-eg { grid-area: qc-eg; } .zone-cnc-x { grid-area: cnc-x; } .zone-buffer { grid-area: buffer; } .zone-manual-qc { grid-area: manual-qc; }
+.floor-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-content: start; }
+.floor-tiles .tile-top { flex-wrap: wrap; gap: 4px 8px; }
+.floor-road { grid-area: road; display: grid; place-items: center; min-height: 64px; border-block: 3px solid var(--line-strong); background: linear-gradient(to right, var(--line-strong) 50%, transparent 0) left center / 28px 2px repeat-x; }
+.floor-road span { padding: 2px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: var(--fs-xs); color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; }
+.floor-scroll + .map-groups { margin-top: 18px; }
+/* the drawing needs the width: below this size the detail panel goes under the map */
+@media (max-width: 1599px) { .inv-top.inv-floor { grid-template-columns: 1fr; } }
+
 .loc-tile { display: flex; flex-direction: column; gap: 9px; text-align: left; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line-strong); border-left: 5px solid var(--muted-solid); border-radius: var(--radius); cursor: pointer; }
 .loc-tile:hover { border-color: var(--navy-500); background: var(--navy-50); }
 .loc-tile.tone-info { border-left-color: var(--navy-500); } .loc-tile.tone-warn { border-left-color: var(--amber); } .loc-tile.tone-bad { border-left-color: var(--bad); background: var(--bad-bg); }
