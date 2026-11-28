@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-071 Even movement of the simulated AMR (2026-11-28) – branch feature/cr-071-even-movement, NOT MERGED
+## CR-071 Even movement of the simulated AMR (2026-11-28) – MERGED into main (30756d8)
 
 - The map draws the simulated AMR by the simulation clock, at an even speed; the simulator uses the time that really passed.
 

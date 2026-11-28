@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-071-even-movement, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (30756d8)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 (báo lỗi: AMR mô phỏng chạy giật, nhanh chậm thất thường) |
 | **Migration** | Không |
 
