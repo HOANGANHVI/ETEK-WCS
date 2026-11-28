@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-061-inventory-floor-plan, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (f15743b)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 (yêu cầu thiết kế lại sơ đồ vị trí, cho phép commit, push, merge, restart) |
 | **Migration** | Không |
 
