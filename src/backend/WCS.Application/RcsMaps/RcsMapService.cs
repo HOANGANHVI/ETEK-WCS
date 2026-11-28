@@ -25,10 +25,15 @@ public sealed record RcsMapView(RcsMapInfo Info, MapGeometry Geometry, IReadOnly
 public sealed record RcsMapPointView(long PointId, double X, double Y, string? Name, string? LocationCode, bool LocationRemoved, bool Current, DateTimeOffset UpdatedAt, string? UpdatedBy);
 public sealed record RcsMapPointInput(string? MapSha256, string? Name, string? LocationCode);
 public sealed record RcsMapImportResult(RcsMapInfo Info, bool Replaced, int UnknownNeighbours);
+/// <summary>CR-067: what an import of these files would store. Nothing is saved.</summary>
+public sealed record RcsMapPreview(string MapId, string MapName, string? MapQrCode, int PointCount, int EdgeCount, int UnknownNeighbours, MapDataSet? MapData, IReadOnlyList<long> PointsWithoutRow,
+    string? CurrentMapId, int NamedPointsKept, int NamedPointsForReview);
+/// <param name="MapDataBase64">The Excel file, base64.</param>
+public sealed record RcsMapFiles(string? FileName, string? Content, string? MapDataFileName = null, string? MapDataBase64 = null);
 public sealed record RcsMapSettings(double MmPerUnit, bool YAxisUp, double HeadingOffsetDeg, bool HeadingClockwise, IReadOnlyList<string>? RcsMapCodes, bool Confirmed);
 
 /// <summary>CR-065: import and read the monitoring map. It reads and writes only its own record: nothing is sent to the RCS or to an AMR.</summary>
-public sealed class RcsMapService(IUnitOfWork uow, IRcsMapRepository repo, ILocationRepository locations, IClock clock)
+public sealed class RcsMapService(IUnitOfWork uow, IRcsMapRepository repo, ILocationRepository locations, IClock clock, IMapDataReader mapDataReader)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -109,18 +114,60 @@ public sealed class RcsMapService(IUnitOfWork uow, IRcsMapRepository repo, ILoca
         return list;
     }
 
-    public async Task<RcsMapImportResult> ImportAsync(string? fileName, string? xml, string? user, CancellationToken ct = default)
+    public const int MaxMapDataBytes = 5_000_000;
+
+    /// <summary>Reads and matches both files completely; used by the preview and by the import, so both say the same.</summary>
+    private (ParsedRcsMap Map, MapGeometry Geometry, string FileName, string Sha256) Read(RcsMapFiles files)
     {
-        var parsed = RcsMapParser.Parse(xml);   // checked completely before anything is stored
-        var name = Path.GetFileName((fileName ?? "").Trim());
-        if (name.Length is 0 or > 200) name = "map.xml";
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(xml!))).ToLowerInvariant();
+        var parsed = RcsMapParser.Parse(files.Content);
+        var name = FileName(files.FileName, "map.xml");
+        var hash = Hash(Encoding.UTF8.GetBytes(files.Content!));
+        MapDataSet? data = null;
+        if (!string.IsNullOrWhiteSpace(files.MapDataBase64))
+        {
+            if (files.MapDataBase64.Length > MaxMapDataBytes * 4 / 3 + 8) throw AppException.Validation("RCS_MAPDATA_INVALID", "The Excel file is larger than 5 MB.");
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(files.MapDataBase64); }
+            catch (FormatException) { throw AppException.Validation("RCS_MAPDATA_INVALID", "The Excel file was not sent completely."); }
+            data = RcsMapDataMatcher.Match(mapDataReader.Read(bytes), FileName(files.MapDataFileName, "mapdata.xls"), Hash(bytes), parsed.MapQrCode, parsed.Geometry.Points);
+        }
+        return (parsed, parsed.Geometry with { MapData = data }, name, hash);
+    }
+
+    private static string FileName(string? given, string fallback)
+    {
+        var name = Path.GetFileName((given ?? "").Trim());
+        return name.Length is 0 or > 200 ? fallback : name;
+    }
+
+    private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+    /// <summary>CR-067: what the import would store, including which named points would stay where they are. Nothing is saved.</summary>
+    public async Task<RcsMapPreview> PreviewAsync(RcsMapFiles files, CancellationToken ct = default)
+    {
+        var read = Read(files);
+        return await uow.ExecuteAsync(async t =>
+        {
+            var current = await repo.GetAsync(t);
+            var named = await repo.ListPointsAsync(read.Map.MapId, t);
+            var kept = named.Count(r => IsCurrent(r, read.Geometry));
+            var matched = read.Geometry.MapData?.Rows.Where(r => r.PointId is not null).Select(r => r.PointId!.Value).ToHashSet() ?? [];
+            return new RcsMapPreview(read.Map.MapId, read.Map.MapName, read.Map.MapQrCode, read.Geometry.Points.Count, read.Geometry.Edges.Count, read.Map.UnknownNeighbours, read.Geometry.MapData,
+                read.Geometry.MapData is null ? [] : read.Geometry.Points.Where(p => !matched.Contains(p.Id)).Select(p => p.Id).ToList(), current?.MapId, kept, named.Count - kept);
+        }, ct);
+    }
+
+    public Task<RcsMapImportResult> ImportAsync(string? fileName, string? xml, string? user, CancellationToken ct = default) => ImportAsync(new RcsMapFiles(fileName, xml), user, ct);
+
+    public async Task<RcsMapImportResult> ImportAsync(RcsMapFiles files, string? user, CancellationToken ct = default)
+    {
+        var (parsed, geometry, name, hash) = Read(files);   // checked completely before anything is stored
         return await uow.ExecuteAsync(async t =>
         {
             var map = await repo.GetAsync(t); var replaced = map is not null;
             if (map is null) { map = new RcsMap(clock.UtcNow); repo.Add(map); }
             map.Replace(parsed.MapId, parsed.MapName, parsed.MapQrCode, parsed.MapType, parsed.Row, parsed.Col, parsed.Width, parsed.Height, name, hash,
-                parsed.Geometry.Points.Count, parsed.Geometry.Edges.Count, JsonSerializer.Serialize(parsed.Geometry, Json), xml!, user, clock.UtcNow);
+                geometry.Points.Count, geometry.Edges.Count, JsonSerializer.Serialize(geometry, Json), files.Content!, user, clock.UtcNow);
             return new RcsMapImportResult(Info(map), replaced, parsed.UnknownNeighbours);
         }, ct);
     }

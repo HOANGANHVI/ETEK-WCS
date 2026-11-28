@@ -8,7 +8,8 @@ namespace WCS.Application.RcsMaps;
 public sealed record MapPoint(long Id, double X, double Y, string? Value, string? StorageType);
 /// <param name="Ctrl">Intermediate positions of a curved path, as [x, y], in file order. Empty = a straight connection.</param>
 public sealed record MapEdge(long From, long To, double? Distance, IReadOnlyList<double[]> Ctrl);
-public sealed record MapGeometry(IReadOnlyList<MapPoint> Points, IReadOnlyList<MapEdge> Edges);
+/// <param name="MapData">CR-067: the identification rows of the Excel file of the same import; null for a map imported without it.</param>
+public sealed record MapGeometry(IReadOnlyList<MapPoint> Points, IReadOnlyList<MapEdge> Edges, MapDataSet? MapData = null);
 public sealed record ParsedRcsMap(string MapId, string MapName, string? MapQrCode, string? MapType, string? Row, string? Col, string? Width, string? Height,
     MapGeometry Geometry, int UnknownNeighbours);
 

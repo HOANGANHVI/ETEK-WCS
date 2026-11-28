@@ -24,8 +24,23 @@
 /* CR-066: points can be chosen; named / linked points stand out */
 .amr-map-hit { cursor: pointer; }
 .amr-map-target { fill: transparent; }
-.amr-map-hit.named .amr-map-point { fill: var(--amber); opacity: 1; stroke: var(--surface); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.amr-map-hit.named .amr-map-point { fill: var(--amber); opacity: 1; }
 .amr-map-ring { fill: none; stroke: var(--bad); stroke-width: 3px; vector-effect: non-scaling-stroke; }
 .amr-map-hit:focus-visible .amr-map-target { stroke: var(--navy-500); stroke-width: 2px; vector-effect: non-scaling-stroke; }
 .amr-map-name { fill: var(--heading); font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; vector-effect: non-scaling-stroke; pointer-events: none; }
 .amr-map-dot.named { background: var(--amber); }
+
+/* CR-067: data types of the RCS map data; green and grey stay reserved for the AMRs */
+.amr-map-hit.kind-working .amr-map-point, .amr-map-dot.kind-working { fill: #2563eb; background: #2563eb; opacity: 1; }
+.amr-map-hit.kind-rotating .amr-map-point, .amr-map-dot.kind-rotating { fill: #7c3aed; background: #7c3aed; opacity: 1; }
+.amr-map-hit.kind-swerving .amr-map-point, .amr-map-dot.kind-swerving { fill: #0891b2; background: #0891b2; opacity: 1; }
+.amr-map-hit.kind-parking .amr-map-point, .amr-map-dot.kind-parking { fill: #92400e; background: #92400e; opacity: 1; }
+.amr-map-hit.kind-charging .amr-map-point, .amr-map-dot.kind-charging { fill: #db2777; background: #db2777; opacity: 1; }
+.amr-map-hit.kind-other .amr-map-point, .amr-map-dot.kind-other { fill: #334155; background: #334155; opacity: 1; }
+.amr-map-hit.kind-passing .amr-map-point, .amr-map-dot.kind-passing { fill: #94a3b8; background: #94a3b8; }
+/* a point WCS names or links keeps its type colour and gets an amber ring */
+.amr-map-hit.named .amr-map-point { stroke: var(--amber); stroke-width: 3px; vector-effect: non-scaling-stroke; }
+.map-excel h4, .amr-map-detail h4 { margin: 10px 0 6px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); }
+.amr-map-detail { width: 320px; max-height: 520px; overflow: auto; }
+.map-preview { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 900px) { .amr-map-detail { width: auto; max-height: none; } }
