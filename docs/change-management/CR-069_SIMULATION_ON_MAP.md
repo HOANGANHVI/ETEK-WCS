@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-069-sim-animation, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (bea0a35)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 ("Trực quan hóa mô phỏng vận chuyển AMR") |
 | **Migration** | Không |
 

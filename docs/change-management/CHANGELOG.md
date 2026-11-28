@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-069 AMR simulation on the map (2026-11-28) – branch feature/cr-069-sim-animation, NOT MERGED
+## CR-069 AMR simulation on the map (2026-11-28) – MERGED into main (bea0a35)
 
 - The AMR simulator drives on the imported map; the monitor animates movement, pick and drop with racks and routes; pause / resume. No migration.
 
