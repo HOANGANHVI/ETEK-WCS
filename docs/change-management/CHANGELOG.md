@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-064 Publishing makes a process usable (2026-11-28) – on main
+
+- The manual Ready step is removed: a published version is Ready at once, earlier NotReady versions are usable; device conditions still apply. Readiness endpoints removed. No migration. Not tested.
+
 ## CR-063 Create-task list follows the process module (2026-11-28) – MERGED into main (c1d1a69)
 
 - The request forms and the task API offer only processes that are published and ready in the process settings; a Phase 1 flow needs its process there. Config ProcessFlows:RequireModuleProcess. No migration. Not tested.

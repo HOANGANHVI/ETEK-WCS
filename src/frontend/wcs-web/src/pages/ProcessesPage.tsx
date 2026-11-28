@@ -219,7 +219,7 @@ function RemovalPanel({ p, onRemoved }: { p: Process; onRemoved: (code: string, 
   )
 }
 
-/** CR-040: what a published process needs before its requests run - Operational Readiness of the published version (D-12) and the queue ordering scope (D-13). The server decides. */
+/** CR-040: the queue ordering scope of a process (D-13). CR-064: a published version is usable at once; there is no separate Ready step. */
 function OperationPanel({ p, onSaved, onError }: { p: Process; onSaved: (msg: string) => void; onError: (m: string) => void }) {
   const t = useT()
   const published = p.versions.find((v) => v.state === 'Published')
@@ -243,7 +243,7 @@ function OperationPanel({ p, onSaved, onError }: { p: Process; onSaved: (msg: st
         </div>
       )}
       <dl className="kv2">
-        <dt>{t('linked.opReadiness')}</dt><dd>{published ? `${t('routing.versionShort', { n: published.number })} · ${t(`linked.readiness_${published.readiness ?? 'NotReady'}` as never)}` : t('routing.procNotPublished')}</dd>
+        <dt>{t('linked.opVersion')}</dt><dd>{published ? `${t('routing.versionShort', { n: published.number })}${published.readiness === 'Suspended' ? ` · ${t('linked.readiness_Suspended')}` : ''}` : t('routing.procNotPublished')}</dd>
         <dt>{t('linked.opScope')}</dt><dd className="mono">{p.queueScope ?? t('linked.scopeNone')}</dd>
       </dl>
       <div className="form-grid">
@@ -252,8 +252,6 @@ function OperationPanel({ p, onSaved, onError }: { p: Process; onSaved: (msg: st
       </div>
       <div className="btn-row">
         <Button disabled={!ready || scope.trim().toUpperCase() === (p.queueScope ?? '')} onClick={() => void run(async () => setShared((await api.processQueueScope(p.id, scope.trim() || null, reason)).sharedLocationsWithOtherScopes))}>{t('linked.opSaveScope')}</Button>
-        <Button variant="primary" disabled={!ready || !published || published.readiness === 'Ready'} onClick={() => void run(() => api.processReadiness(published!.id, 'Ready', reason))}>{t('linked.opSetReady')}</Button>
-        <Button disabled={!ready || !published || published.readiness !== 'Ready'} onClick={() => void run(() => api.processReadiness(published!.id, 'Suspended', reason))}>{t('linked.opSuspend')}</Button>
       </div>
       {shared.length > 0 && <div className="notice notice-warn" role="status"><p>{t('linked.opShared')}</p><ul>{shared.map((s) => <li key={s}>{s}</li>)}</ul></div>}
     </section>

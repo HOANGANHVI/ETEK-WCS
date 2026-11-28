@@ -153,10 +153,17 @@ public class BusinessProcessVersion
         State = ProcessConfigState.Draft; ValidatedAt = null; ValidationJson = issuesJson; UpdatedAt = now;
     }
 
+    /// <summary>CR-064: only a version an Admin suspended earlier is held back. A version published before CR-064 and left NotReady is usable without publishing it again.</summary>
+    public bool IsSuspended => Readiness == OperationalReadiness.Suspended;
+
+    /// <summary>CR-064: what the screens show. A published version is Ready unless it was suspended.</summary>
+    public OperationalReadiness EffectiveReadiness => State == ProcessConfigState.Published && !IsSuspended ? OperationalReadiness.Ready : Readiness;
+
     public void Publish(string? by, DateTimeOffset now)
     {
         if (State != ProcessConfigState.Validated) throw new DomainException("VERSION_NOT_VALIDATED", "Only a validated version can be published.");
         State = ProcessConfigState.Published; PublishedBy = by; PublishedAt = now; UpdatedAt = now;
+        Readiness = OperationalReadiness.Ready; ReadinessChangedBy = by; ReadinessChangedAt = now; ReadinessReason = "Published";   // CR-064: publishing is the only step
     }
 
     /// <summary>CR-035 (D-11/OQ-51): only NotReady->Ready, Ready->Suspended and Suspended->Ready are decided. Other moves are refused until OQ-51 is answered. Never changes State.</summary>

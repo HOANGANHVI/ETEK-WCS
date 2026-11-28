@@ -24,7 +24,6 @@ public sealed record SimStartRequest([property: Required, StringLength(60)] stri
 public sealed record SimActivateRequest(bool Confirmed);
 public sealed record SimSignalRequest([property: StringLength(100)] string? Value);
 public sealed record SimEvaluateRequest(bool SafetyAcknowledged);
-public sealed record SetReadinessRequest([property: Required] string Readiness, [property: Required, StringLength(500)] string Reason);
 public sealed record NewVersionRequest(Guid? FromVersionId);
 public sealed record AddPlcRequest([property: Required, StringLength(20)] string PlcId, [property: Required, StringLength(100)] string Name, [property: Required, StringLength(64)] string IpAddress,
     AddPlcStationCommand[]? Stations);
@@ -201,11 +200,6 @@ public static class RoutingEndpoints
                 return ApiResults.Fail(c, 422, ex.Code, ex.Message, ex.Issues);
             }
         });
-        // CR-035 (D-11): Operational Readiness is a separate axis; it never changes the Publication state
-        ver.MapGet("{id:guid}/readiness", async (HttpContext c, Guid id, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.GetReadinessAsync(id, ct)));
-        ver.MapPut("{id:guid}/readiness", async (HttpContext c, Guid id, SetReadinessRequest r, ProcessAdminService s, CancellationToken ct) =>
-            ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_READINESS", "BusinessProcessVersion", id.ToString(), null,
-                () => s.SetReadinessAsync(id, r.Readiness, r.Reason, c.Actor().Username, ct), x => new { x.PublicationState, x.Readiness, x.Reason })));
         ver.MapPost("{id:guid}/disable", async (HttpContext c, Guid id, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_DISABLE", "BusinessProcessVersion", id.ToString(), null,
                 () => s.DisableAsync(id, ct), x => new { x.ProcessCode, x.Number, x.State })));

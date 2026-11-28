@@ -171,9 +171,9 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
             if (await routing.GetPublishedVersionAsync(p.Id, t) is not { } published) continue;
             var v = await routing.GetVersionAsync(published.Id, t) ?? published;
             string? blocked = null; string? detail = null;
-            if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.Readiness != OperationalReadiness.Ready) blocked = "PROCESS_NOT_READY";
+            if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.IsSuspended) blocked = "PROCESS_NOT_READY";   // CR-064
             if (p.RequiresReadiness && await validator.DeviceConditionsAsync(p, v, t) is { Count: > 0 } unmet) { blocked = "PROCESS_NOT_READY"; detail = unmet[0].Message; }
-            list.Add(new StartableProcessDto(p.Code, p.Name, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, v.Readiness.ToString(), blocked is null, blocked, detail,
+            list.Add(new StartableProcessDto(p.Code, p.Name, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, v.EffectiveReadiness.ToString(), blocked is null, blocked, detail,
                 p.RequiresReadiness, p.QueueScope));
         }
         return list;
@@ -388,7 +388,7 @@ public sealed class ProcessAdminService(IUnitOfWork uow, IRoutingRepository rout
         return new ProcessDto(p.Id, p.Code, p.Name, p.Description, p.RequestType.ToString(), p.RackKind.ToString(), p.TriggerLocationCodes, p.Enabled, p.ReviewBlocked, p.ReviewReason,
             p.SourceReference, versions.FirstOrDefault(v => v.State == ProcessConfigState.Published)?.Number, versions.Count == 0 ? 0 : versions.Max(v => v.Number),
             versions.OrderByDescending(v => v.Number).Select(v => new VersionSummaryDto(v.Id, v.Number, v.State.ToString(), v.CreatedAt, v.CreatedBy, v.ValidatedAt, v.PublishedAt,
-                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count, v.Readiness.ToString())).ToList(), p.ProductModelId, p.RequiresReadiness, p.QueueScope,
+                v.PublishedBy, v.DisabledAt, v.Note, v.Steps.Count, v.EffectiveReadiness.ToString())).ToList(), p.ProductModelId, p.RequiresReadiness, p.QueueScope,
             await CatalogStatusAsync(p, ReferenceProcessCatalog.Load(), ct));
     }
 

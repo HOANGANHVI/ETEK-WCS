@@ -401,7 +401,7 @@ const ERROR_VI = localizedMap({
   PICK_NOT_CONFIRMED: 'Phải xác nhận Pick trước Drop.',
   RCS_NOT_EXECUTING: 'Chỉ xác nhận khi RCS báo task đang thực hiện.',
   LOCATION_DISABLED: 'Vị trí đang bị tắt.',
-  PROCESS_NOT_READY: 'Quy trình đã Publish nhưng chưa sẵn sàng vận hành: yêu cầu không được nhận.',
+  PROCESS_NOT_READY: 'Quy trình chưa nhận được yêu cầu: kiểm tra PLC, cổng và mapping IO của các trạm (hoặc phiên bản đang bị tạm đình chỉ).',
 }, {
   RCS_DIAG_ADMIN_ONLY: 'RCS Diagnostics is for Administrators only.',
   RCS_DIAG_VALIDATION_FAILED: 'The request does not match the RCS API document, so it was NOT sent. See the error of each field.',
@@ -588,7 +588,7 @@ const ERROR_VI = localizedMap({
   PICK_NOT_CONFIRMED: 'Confirm the pick before the drop.',
   RCS_NOT_EXECUTING: 'A confirmation is accepted only while the RCS reports executing.',
   LOCATION_DISABLED: 'The location is disabled.',
-  PROCESS_NOT_READY: 'The process is Published but not operationally ready: the request is not accepted.',
+  PROCESS_NOT_READY: 'The process accepts no request: check the PLC, ports and IO mapping of its stations (or the version is suspended).',
 })
 
 /** Translated message of a backend error code, or undefined when the code is unknown. */

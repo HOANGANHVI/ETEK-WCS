@@ -83,7 +83,7 @@ public sealed class ProcessValidator(ILocationRepository locations, IRoutingRepo
                 else if (loc.ProductModelId is not null) ModelIssue(ModelCodes.LegacyProcessModelLocation, $"{role} location '{code}' belongs to a product model, but process {process.Code} has none (a process without a model never uses a modelled location).", step);
             }
             if (!checkedPorts.Add(code)) return;
-            if (await DeviceIssueAsync(code, ct) is { } d) Warn(d.Code, d.Message + " Publication is allowed; the process accepts no request until this is solved and the version is Ready.", step);
+            if (await DeviceIssueAsync(code, ct) is { } d) Warn(d.Code, d.Message + " Publication is allowed; the process accepts no request until this is solved.", step);
         }
 
         foreach (var t in process.TriggerLocationCodes) await UseLocation(t, null, "Trigger");

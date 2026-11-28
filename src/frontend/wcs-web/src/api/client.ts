@@ -261,8 +261,6 @@ const realApi = {
   processPublish: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/publish`, { method: 'POST' }),
   processDisable: (id: string) => request<ProcessVersion>(`/api/process-versions/${id}/disable`, { method: 'POST' }),
   // CR-040: Operational Readiness of a version and the queue ordering scope of a process (Admin)
-  processReadiness: (versionId: string, readiness: 'Ready' | 'Suspended' | 'NotReady', reason: string) =>
-    request<unknown>(`/api/process-versions/${versionId}/readiness`, { method: 'PUT', body: JSON.stringify({ readiness, reason }) }),
   processQueueScope: (processId: string, scope: string | null, reason: string) =>
     request<QueueScopeResult>(`/api/processes/${processId}/queue-scope`, { method: 'PUT', body: JSON.stringify({ scope, reason }) }),
   // CR-040: one rack record (Admin)

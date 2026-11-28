@@ -158,9 +158,9 @@ public sealed class PlcSimulationService(IUnitOfWork uow, IRoutingRepository rou
             if (!p.Enabled) why = "Process is disabled.";
             else if (p.ReviewBlocked) why = "Process is REVIEW-blocked.";
             else if (v is null) why = "No Published version.";
-            else if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.Readiness != OperationalReadiness.Ready) why = $"Operational Readiness is {v.Readiness}.";
+            else if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.IsSuspended) why = "The published version is suspended.";
             else if (triggers.Count == 0) why = "No trigger location.";
-            list.Add(new(p.Code, p.Name, p.RequestType.ToString(), p.RackKind.ToString(), v?.State.ToString() ?? "NoPublishedVersion", v?.Readiness.ToString(), v?.Number, triggers, why is null, why));
+            list.Add(new(p.Code, p.Name, p.RequestType.ToString(), p.RackKind.ToString(), v?.State.ToString() ?? "NoPublishedVersion", v?.EffectiveReadiness.ToString(), v?.Number, triggers, why is null, why));
         }
         return list;
     }, ct);

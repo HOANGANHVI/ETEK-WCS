@@ -133,8 +133,8 @@ public sealed class RouteEngine(
             if (!p.Enabled) throw AppException.Rejected("PROCESS_DISABLED", $"Process {p.Code} is disabled.");
             if (p.ReviewBlocked) throw AppException.Rejected("PROCESS_REVIEW_BLOCKED", $"Process {p.Code} is REVIEW and not approved for execution.");
             var v = await routing.GetPublishedVersionAsync(p.Id, ct) ?? throw AppException.Rejected("PROCESS_NOT_PUBLISHED", $"Process {p.Code} has no published version.");
-            if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.Readiness != OperationalReadiness.Ready)
-                throw AppException.Rejected("PROCESS_NOT_READY", $"Process {p.Code} v{v.Number} is Published but its Operational Readiness is {v.Readiness}; the request is not accepted.");   // CR-035 D-12, CR-039
+            if ((routeOptions.Value.EnforceReadiness || p.RequiresReadiness) && v.IsSuspended)
+                throw AppException.Rejected("PROCESS_NOT_READY", $"Process {p.Code} v{v.Number} is suspended; the request is not accepted. Publish a new version to use the process again.");   // CR-064
             if (await UnmetDeviceConditionAsync(p, v, ct) is { } unmet)
                 throw AppException.Rejected("PROCESS_NOT_READY", $"Process {p.Code} v{v.Number} cannot accept a request: {unmet}");
             if (!p.TriggerLocationCodes.Contains(locationCode, StringComparer.OrdinalIgnoreCase))
@@ -145,8 +145,8 @@ public sealed class RouteEngine(
         found = found.Where(x => !x.Process.ReviewBlocked).ToList();
         if (found.Count > 0 && (routeOptions.Value.EnforceReadiness || found.Any(x => x.Process.RequiresReadiness)))
         {   // CR-035 D-12 / CR-039: a process that needs Readiness is matched only when Published + Ready; no other version is substituted
-            var ready = found.Where(x => x.Version.Readiness == OperationalReadiness.Ready || !(routeOptions.Value.EnforceReadiness || x.Process.RequiresReadiness)).ToList();
-            if (ready.Count == 0) throw AppException.Rejected("PROCESS_NOT_READY", $"A process answers a {cmd.RequestType} request at {locationCode} but none is Ready; the request is not accepted.");
+            var ready = found.Where(x => !x.Version.IsSuspended || !(routeOptions.Value.EnforceReadiness || x.Process.RequiresReadiness)).ToList();
+            if (ready.Count == 0) throw AppException.Rejected("PROCESS_NOT_READY", $"A process answers a {cmd.RequestType} request at {locationCode} but its version is suspended; the request is not accepted.");
             found = ready;
         }
         if (found.Count == 1 && await UnmetDeviceConditionAsync(found[0].Process, found[0].Version, ct) is { } why)
@@ -273,7 +273,7 @@ public sealed class RouteEngine(
         string? why = null;
         if (p is null || v is null) why = "The pinned process version no longer exists.";
         else if (!p.Enabled) why = "The process is disabled (OQ-45).";
-        else if (v.Readiness != OperationalReadiness.Ready) why = $"Operational Readiness of version {v.Number} is {v.Readiness}.";
+        else if (v.IsSuspended) why = $"Version {v.Number} is suspended.";   // CR-064
         else if (v.WithdrawnByAdmin) why = $"Version {v.Number} was disabled by an Admin (OQ-45): the request is not dispatched; cancel it and request again.";
         else if (v.State != ProcessConfigState.Published && await routing.GetPublishedVersionAsync(p.Id, ct) is null) why = "The process version was disabled and no version replaces it (OQ-45).";
         else if ((await validator.DeviceConditionsAsync(p, v, ct)).FirstOrDefault() is { } unmet) why = unmet.Message;
