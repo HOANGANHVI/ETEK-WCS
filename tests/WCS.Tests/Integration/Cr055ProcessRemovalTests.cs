@@ -107,16 +107,16 @@ public class Cr055ProcessRemovalTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task BP_04_under_review_is_the_only_protected_reference_process()
+    public async Task BP_04_under_review_can_be_removed_and_stays_blocked_when_imported_again()
     {
-        await using var kit = await RoutingKit.CreateAsync(fixture);
+        await using var kit = await RoutingKit.CreateAsync(fixture);                          // CR-060
+        Assert.Empty(ReferenceProcessCatalog.Load().Where(r => r.Protected));
         var existing = await kit.H.Db(d => d.BusinessProcesses.Where(p => p.Code == "BP-04").Select(p => (Guid?)p.Id).SingleOrDefaultAsync());
         var process = existing ?? (await MakeAsync(kit, "BP-04")).Process;
-        var plan = await Admin(kit, s => s.RemovalAsync(process));
-        Assert.Equal((ProcessRemovalActions.None, "PROCESS_PROTECTED"), (plan.Action, plan.BlockCode));
-        Assert.Equal("PROCESS_PROTECTED", await RefusedAsync(kit, s => s.RemoveAsync(process, "x", "BP-04")));
-        Assert.Equal(1, (await Count(kit, process)).Processes);
-        Assert.Equal(["BP-04"], ReferenceProcessCatalog.Load().Where(r => r.Protected).Select(r => r.Code));
+        Assert.Equal(ProcessRemovalActions.Delete, (await Admin(kit, s => s.RemovalAsync(process))).Action);
+        await Admin(kit, s => s.RemoveAsync(process, "not used", "BP-04"));
+        Assert.Equal(0, (await Count(kit, process)).Processes);
+        Assert.True(ReferenceProcessCatalog.Load().Single(r => r.Code == "BP-04").ReviewBlocked);
     }
 
     [Fact]

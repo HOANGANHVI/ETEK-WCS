@@ -200,7 +200,6 @@
   },
   {
     "code": "BP-04",
-    "protected": true,
     "name": "B1/B2 needs a full rack",
     "description": "REVIEW: slide 8 is inconsistent about AGV1/AGV2 (BR-02). Draft kept for traceability only; it can never be published.",
     "requestType": "DeliveryRequest",
