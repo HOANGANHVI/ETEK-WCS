@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-069 AMR simulation on the map (2026-11-28) – branch feature/cr-069-sim-animation, NOT MERGED
+
+- The AMR simulator drives on the imported map; the monitor animates movement, pick and drop with racks and routes; pause / resume. No migration.
+
 ## CR-068 AMR map point display (2026-11-28) – MERGED into main (f3db996)
 
 - All call codes, points without Excel data and the mapping state are shown; location link; warning and confirmation for files that do not match; the map code of the QR code is accepted. No migration.

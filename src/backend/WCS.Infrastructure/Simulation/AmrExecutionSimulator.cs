@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using WCS.Application.Abstractions;
 using WCS.Application.Common;
 using WCS.Application.Fleet;
+using WCS.Application.RcsMaps;
 using WCS.Application.RealDispatch;
 using WCS.Application.Routing;
 using WCS.Domain.Common;
@@ -29,21 +30,33 @@ public enum AmrFault { RejectDispatch = 1, DispatchTimeout = 2, MoveFailure = 3,
 
 public enum AmrRunPhase { Queued = 1, ToSource = 2, Picking = 3, WaitingForTrigger = 4, ToDestination = 5, Dropping = 6, Leaving = 7, Completed = 8, Failed = 9, Cancelled = 10 }
 
-public sealed record AmrRobotView(string RobotCode, double X, double Y, double Battery, string State, string? RequestCode);
+public sealed record AmrRobotView(string RobotCode, double X, double Y, double Battery, string State, string? RequestCode, double Dir = 90);
+/// <summary>CR-069: one run as the map monitor shows it. Positions in millimetres; <paramref name="Path"/> = the segment being driven, <paramref name="NextPath"/> = the one planned after the pick.</summary>
+public sealed record AmrLiveRun(string RequestCode, string Kind, Guid? OrderId, string Order, string? ProcessCode, int? LegSequence, string? StepKey, string? RobotCode, string? RackId, string? RackKind, bool Carrying,
+    string? Pick, string? Drop, string Phase, string Action, bool Stalled, string? Failure, double Progress, IReadOnlyList<double[]> Path, double Travelled, IReadOnlyList<double[]> NextPath,
+    DateTimeOffset? CreatedAt, DateTimeOffset? PickedAt, DateTimeOffset? DroppedAt);
+public sealed record AmrLiveView(bool Active, bool Paused, double SpeedMultiplier, bool Connected, string? MapId, string? MapCode, IReadOnlyList<AmrRobotView> Robots, IReadOnlyList<AmrLiveRun> Runs)
+{
+    public static AmrLiveView Inactive { get; } = new(false, false, 1, false, null, null, [], []);
+}
 public sealed record AmrRunView(string RequestCode, string Kind, string ParentTask, string? RobotCode, string? Source, string? Destination, string Phase, bool Stalled, string? Failure, IReadOnlyList<string> Events);
 public sealed record AmrSimulationView(bool Enabled, double SpeedMultiplier, bool Connected, double ResponseDelaySeconds, IReadOnlyDictionary<string, int> ArmedFaults,
-    IReadOnlyList<AmrRobotView> Robots, IReadOnlyList<AmrRunView> Runs);
+    IReadOnlyList<AmrRobotView> Robots, IReadOnlyList<AmrRunView> Runs, bool Paused = false, string? MapId = null);
 
 /// <summary>
 /// CR-050: the part of the AMRs behind the simulated RCS. It receives work only through the dispatch interfaces WCS already uses, and reports back only through the entry points a real system's
 /// events use (leg pick / drop, AMR left the port, task signals). It never touches inventory, reservations, order states or ports itself, writes no PLC signal and opens no network connection.
-/// It acts only on legs of orders, and on Simulator tasks, created after it was enabled. Positions and distances are synthetic. State is in memory: a restart forgets it.
+/// It acts only on legs of orders, and on Simulator tasks, created after it was enabled. State is in memory: a restart forgets it.
+/// CR-069: with an imported RCS map the AMRs drive along its connections between the points of the locations (no point or no route = the run fails, nothing moves across the map);
+/// without a map positions and distances stay synthetic.
 /// </summary>
 public sealed class AmrExecutionSimulator
 {
     private const double SpeedMmPerSecond = 1000, PortRadius = 1500, HandlingSeconds = 2, RetrySeconds = 2, Spacing = 5000;
+    private const double MapPortRadius = 700, OnPoint = 300;   // CR-069: on a map a station is left beyond 0.7 m; an AMR within 0.3 m of a point stands on it
+    private const int MapReloadSteps = 12;
 
-    private sealed class Robot { public required string Code; public double X, Y; public double Battery = 100; public Run? Run; }
+    private sealed class Robot { public required string Code; public double X, Y; public double Battery = 100; public double Dir = 90; public Run? Run; }
 
     private sealed class Run
     {
@@ -54,6 +67,9 @@ public sealed class AmrExecutionSimulator
         public double Handling, Wait, HalfTravelled, TravelTotal;
         public string? Failure, LastRefusal;
         public readonly List<string> Events = [];
+        // CR-069: the route being driven, and what the monitor shows about the work
+        public List<(double X, double Y)>? Path; public double Along; public List<(double X, double Y)> Next = [];
+        public Guid? OrderId; public string? ProcessCode, StepKey, RackCode, RackKind; public int? LegSequence; public DateTimeOffset? CreatedAt, PickedAt, DroppedAt;
     }
 
     private readonly IServiceScopeFactory _scopes;
@@ -73,6 +89,9 @@ public sealed class AmrExecutionSimulator
 
     public bool Enabled { get; private set; }
     public double SpeedMultiplier { get; private set; } = 1;
+    public bool Paused { get; private set; }
+    private SimMapGraph? _map;
+    private int _mapAge;
 
     public AmrExecutionSimulator(IServiceScopeFactory scopes, RcsSimulator rcs, IClock clock, IOptions<AmrSimulationOptions> options, IOptions<RealDispatchOptions> real, ILogger<AmrExecutionSimulator> logger)
     {
@@ -98,7 +117,7 @@ public sealed class AmrExecutionSimulator
             }
             else
             {   // switching off forgets the runs: nothing in WCS is changed; legs and tasks stay as they are and can be handled by hand
-                _runs.Clear(); _faults.Clear(); foreach (var r in _robots.Values) r.Run = null; _connected = true; _rcs.Unreachable = false;
+                _runs.Clear(); _faults.Clear(); foreach (var r in _robots.Values) r.Run = null; _connected = true; _rcs.Unreachable = false; Paused = false; _mapAge = 0;
             }
             Publish();
         }
@@ -110,6 +129,46 @@ public sealed class AmrExecutionSimulator
         if (!Enum.IsDefined(fault) || count is < 1 or > 20) throw AppException.Validation("AMR_SIMULATION_FAULT", "Unknown fault or count outside 1..20.");
         lock (_gate) { _faults[fault] = count; if (delaySeconds is { } d) _delaySeconds = Math.Clamp(d, 0.1, 600); }
     }
+
+    /// <summary>CR-069: while paused nothing moves and nothing is reported to WCS; resuming goes on from the same place.</summary>
+    public void SetPaused(bool paused) { RequireEnabled(); lock (_gate) Paused = paused; }
+
+    /// <summary>CR-069: the state the map monitor draws.</summary>
+    public AmrLiveView Live()
+    {
+        lock (_gate)
+        {
+            if (!Enabled) return AmrLiveView.Inactive;
+            static double[][] Line(IEnumerable<(double X, double Y)>? p) => p?.Select(x => new[] { Math.Round(x.X), Math.Round(x.Y) }).ToArray() ?? [];
+            var open = _runs.Values.Where(r => r.Phase is not (AmrRunPhase.Completed or AmrRunPhase.Cancelled)).ToList();
+            var done = _runs.Values.Where(r => r.Phase is AmrRunPhase.Completed or AmrRunPhase.Cancelled).Reverse().Take(10);
+            return new(true, Paused, SpeedMultiplier, _connected, _map?.MapId, _map?.MapCode, Robots(),
+                open.Concat(done).Select(r => new AmrLiveRun(r.RequestCode, r.IsTask ? "Task" : "Leg", r.OrderId, r.Parent, r.ProcessCode, r.LegSequence, r.StepKey, r.Robot?.Code ?? r.RequestedRobot, r.RackCode, r.RackKind,
+                    r.Picked && !r.Dropped, r.Source, r.Destination, r.Phase.ToString(), ActionOf(r), r.Stalled, r.Failure, ProgressOf(r), Line(r.Path), Math.Round(r.Along), Line(r.Next),
+                    r.CreatedAt, r.PickedAt, r.DroppedAt)).ToList());
+        }
+    }
+
+    private static string ActionOf(Run r) => r.Phase switch
+    {
+        AmrRunPhase.Queued => "Queued", AmrRunPhase.ToSource => "MovingToPick", AmrRunPhase.Picking => "Picking", AmrRunPhase.WaitingForTrigger => "Waiting", AmrRunPhase.ToDestination => "MovingToDrop",
+        AmrRunPhase.Dropping => "Dropping", AmrRunPhase.Leaving => "Leaving", AmrRunPhase.Completed => "Completed", AmrRunPhase.Failed => "Failed", _ => "Cancelled",
+    };
+
+    /// <summary>0..100: driving to the pick 0-40, picking 40-50, driving to the drop 50-90, dropping 90-100.</summary>
+    private static double ProgressOf(Run r)
+    {
+        var way = r.Path is { Count: > 0 } p ? Math.Clamp(r.Along / Math.Max(1, SimMapGraph.Length(p)), 0, 1) : 0;
+        var phase = r.Phase == AmrRunPhase.Failed ? r.FailedIn : r.Phase;
+        return Math.Round(phase switch
+        {
+            AmrRunPhase.ToSource => 40 * way, AmrRunPhase.Picking => 40 + 10 * Math.Min(1, r.Handling / HandlingSeconds), AmrRunPhase.WaitingForTrigger => 50,
+            AmrRunPhase.ToDestination => 50 + 40 * way, AmrRunPhase.Dropping => 90 + 10 * Math.Min(1, r.Handling / HandlingSeconds), AmrRunPhase.Leaving or AmrRunPhase.Completed => 100, _ => r.Dropped ? 100 : 0,
+        }, 1);
+    }
+
+    private List<AmrRobotView> Robots() => _robots.Values.OrderBy(r => r.Code, StringComparer.Ordinal)
+        .Select(r => new AmrRobotView(r.Code, Math.Round(r.X), Math.Round(r.Y), Math.Round(r.Battery, 1), r.Run?.Phase.ToString() ?? "Idle", r.Run?.RequestCode, r.Dir)).ToList();
 
     public void ClearFaults() { lock (_gate) { _faults.Clear(); foreach (var r in _runs.Values) r.Stalled = false; } }
 
@@ -133,7 +192,7 @@ public sealed class AmrExecutionSimulator
             }
             if (run.Phase != AmrRunPhase.Failed) throw AppException.Rejected("AMR_RUN_NOT_FAILED", "Only a failed or stalled run is recovered.");
             if (run.IsTask) throw AppException.Rejected("AMR_TASK_ENDED", "WCS ended this task when the AMR reported the interruption; reconcile it on the task screen.");
-            run.Phase = run.FailedIn; run.Failure = null; run.Handling = 0; _rcs.SetStatus(requestCode, RcsTaskStatus.Executing);
+            run.Phase = run.FailedIn; run.Failure = null; run.Handling = 0; if (run.Path is null) run.Along = 0; _rcs.SetStatus(requestCode, RcsTaskStatus.Executing);
             Note(run, "recovered");
             await using var recording = _scopes.CreateAsyncScope();
             await RecordAsync(recording.ServiceProvider, "Recovered", run, new { phase = run.Phase.ToString() }, "Applied", ct);
@@ -144,9 +203,9 @@ public sealed class AmrExecutionSimulator
     public AmrSimulationView View()
     {
         lock (_gate)
-            return new(Enabled, SpeedMultiplier, _connected, _delaySeconds, _faults.ToDictionary(f => f.Key.ToString(), f => f.Value),
-                _robots.Values.OrderBy(r => r.Code, StringComparer.Ordinal).Select(r => new AmrRobotView(r.Code, Math.Round(r.X), Math.Round(r.Y), Math.Round(r.Battery, 1), r.Run?.Phase.ToString() ?? "Idle", r.Run?.RequestCode)).ToList(),
-                _runs.Values.Reverse().Take(50).Select(r => new AmrRunView(r.RequestCode, r.IsTask ? "Task" : "Leg", r.Parent, r.Robot?.Code ?? r.RequestedRobot, r.Source, r.Destination, r.Phase.ToString(), r.Stalled, r.Failure, r.Events.ToList())).ToList());
+            return new(Enabled, SpeedMultiplier, _connected, _delaySeconds, _faults.ToDictionary(f => f.Key.ToString(), f => f.Value), Robots(),
+                _runs.Values.Reverse().Take(50).Select(r => new AmrRunView(r.RequestCode, r.IsTask ? "Task" : "Leg", r.Parent, r.Robot?.Code ?? r.RequestedRobot, r.Source, r.Destination, r.Phase.ToString(), r.Stalled, r.Failure, r.Events.ToList())).ToList(),
+                Paused, _map?.MapId);
     }
 
     // ------------------------------------------------------------------ the RCS side (called by the simulated dispatchers)
@@ -209,15 +268,17 @@ public sealed class AmrExecutionSimulator
     /// <summary>Moves the simulation forward by <paramref name="elapsed"/> real time (times the speed). The hosted loop calls it; tests call it directly.</summary>
     public async Task StepAsync(TimeSpan elapsed, CancellationToken ct = default)
     {
-        if (!Enabled) return;
+        if (!Enabled || Paused) return;
         await _step.WaitAsync(ct);
         try
         {
+            if (Paused) return;
             var seconds = elapsed.TotalSeconds * SpeedMultiplier;
             await using (var scope = _scopes.CreateAsyncScope())
             {
+                await LoadMapAsync(scope.ServiceProvider, ct);
                 await DiscoverTasksAsync(scope.ServiceProvider, ct);
-                await LoadPlacesAsync(scope.ServiceProvider, ct);
+                if (_map is null) await LoadPlacesAsync(scope.ServiceProvider, ct);
             }
             List<Run> open;
             lock (_gate) open = _runs.Values.Where(r => r.Phase is not (AmrRunPhase.Completed or AmrRunPhase.Cancelled)).ToList();
@@ -253,7 +314,33 @@ public sealed class AmrExecutionSimulator
         lock (_gate) for (var i = 0; i < codes.Count; i++) _places.TryAdd(codes[i], ((i % 8 + 1) * Spacing, (i / 8 + 1) * Spacing));
     }
 
-    private (double X, double Y) Place(string? code) => code is not null && _places.TryGetValue(code, out var p) ? p : (0, 0);
+    private (double X, double Y) Place(string? code) =>
+        _map is { } m ? (m.PointOf(code) is { } id ? m.Position(id) : (0, 0)) : code is not null && _places.TryGetValue(code, out var p) ? p : (0, 0);
+
+    /// <summary>CR-069: reads the imported map (again after a few steps, so a new import or link is followed) and places AMRs that stand on no point of it.</summary>
+    private async Task LoadMapAsync(IServiceProvider sp, CancellationToken ct)
+    {
+        if (_mapAge++ % MapReloadSteps != 0) return;
+        var view = await sp.GetRequiredService<RcsMapService>().GetAsync(ct);
+        var graph = view is null ? null : new SimMapGraph(view);
+        lock (_gate)
+        {
+            if (graph?.Key == _map?.Key) return;
+            _map = graph;
+            if (graph is null) return;
+            var taken = new HashSet<long>();
+            foreach (var r in _robots.Values.Where(r => graph.Nearest((r.X, r.Y)).Distance <= OnPoint)) taken.Add(graph.Nearest((r.X, r.Y)).Id);
+            foreach (var r in _robots.Values.Where(r => r.Run is null).OrderBy(r => r.Code, StringComparer.Ordinal)) Park(graph, r, taken);
+        }
+    }
+
+    /// <summary>A simulated AMR that is on no point of the map starts at a free parking place of the map.</summary>
+    private static void Park(SimMapGraph map, Robot r, HashSet<long> taken)
+    {
+        if (map.Nearest((r.X, r.Y)).Distance <= OnPoint) return;
+        var home = map.Homes.FirstOrDefault(id => !taken.Contains(id), map.Homes[0]);
+        taken.Add(home); (r.X, r.Y) = map.Position(home);
+    }
 
     private async Task AdvanceAsync(Run run, double seconds, IServiceProvider sp, CancellationToken ct)
     {
@@ -263,7 +350,8 @@ public sealed class AmrExecutionSimulator
         if (run.Phase == AmrRunPhase.Queued)
         {
             if (!Assign(run)) return;
-            run.Phase = AmrRunPhase.ToSource; run.TravelTotal = 0; Note(run, $"{run.Robot!.Code} started");
+            run.Phase = AmrRunPhase.ToSource; run.TravelTotal = 0; run.Path = null; run.Along = 0;
+            if (_map is { } m) lock (_gate) { Park(m, run.Robot!, []); run.Next = NextRoute(m, run); } Note(run, $"{run.Robot!.Code} started");
             await RecordAsync(sp, "Started", run, new { source = run.Source }, "Applied", ct);   // CR-051: monitoring shows the work as being executed by this AMR
             if (run.IsTask) await TaskSignalAsync(run, sp, ct);
             return;
@@ -273,23 +361,28 @@ public sealed class AmrExecutionSimulator
         switch (run.Phase)
         {
             case AmrRunPhase.ToSource:
-                if (await TravelAsync(run, Place(run.Source), seconds, sp, ct)) { run.Phase = AmrRunPhase.Picking; run.Handling = 0; Note(run, $"at {run.Source}: pick trigger"); }
+                if (await TravelAsync(run, run.Source, seconds, sp, ct)) { run.Phase = AmrRunPhase.Picking; run.Handling = 0; Note(run, $"at {run.Source}: pick trigger"); }
                 break;
             case AmrRunPhase.Picking:
                 if ((run.Handling += seconds) < HandlingSeconds) break;
                 if (Take(AmrFault.PickFailure)) { await FailAsync(run, "PICK_FAILED", sp, ct); break; }
                 if (!await ReportAsync(run, drop: false, sp, ct)) break;
-                run.Picked = true; run.SourceExitPending = !run.IsTask; run.TravelTotal = 0;
+                run.Picked = true; run.SourceExitPending = !run.IsTask; run.TravelTotal = 0; run.Path = null; run.Along = 0; run.Next = [];
                 run.Phase = run.Destination is null ? AmrRunPhase.WaitingForTrigger : AmrRunPhase.ToDestination;
                 break;
             case AmrRunPhase.WaitingForTrigger:
                 if (run.IsTask) { run.Destination ??= await TaskDestinationAsync(run, sp, ct); }
                 // the AMR waits outside the port it picked at, so that port is released
-                if (run.SourceExitPending) { var src = Place(run.Source); Move(run.Robot!, (src.X, src.Y + PortRadius * 2), seconds); await ExitIfOutsideAsync(run, run.Source!, sp, ct); }
-                if (run.Destination is not null) { run.Phase = AmrRunPhase.ToDestination; run.TravelTotal = 0; }
+                if (run.SourceExitPending)
+                {
+                    if (_map is not null) { if (!await LeaveOnMapAsync(run, run.Source!, seconds, sp, ct)) break; }
+                    else { var src = Place(run.Source); Move(run.Robot!, (src.X, src.Y + PortRadius * 2), seconds); }
+                    await ExitIfOutsideAsync(run, run.Source!, sp, ct);
+                }
+                if (run.Destination is not null) { run.Phase = AmrRunPhase.ToDestination; run.TravelTotal = 0; run.Path = null; run.Along = 0; }
                 break;
             case AmrRunPhase.ToDestination:
-                var arrived = await TravelAsync(run, Place(run.Destination), seconds, sp, ct);
+                var arrived = await TravelAsync(run, run.Destination, seconds, sp, ct);
                 if (run.Phase == AmrRunPhase.Failed) break;
                 if (run.SourceExitPending) await ExitIfOutsideAsync(run, run.Source!, sp, ct);
                 if (arrived) { run.Phase = AmrRunPhase.Dropping; run.Handling = 0; Note(run, $"at {run.Destination}: drop trigger"); }
@@ -298,18 +391,76 @@ public sealed class AmrExecutionSimulator
                 if ((run.Handling += seconds) < HandlingSeconds) break;
                 if (Take(AmrFault.DropFailure)) { await FailAsync(run, "DROP_FAILED", sp, ct); break; }
                 if (!await ReportAsync(run, drop: true, sp, ct)) break;
-                run.Dropped = true; run.DestinationExitPending = !run.IsTask; run.Phase = AmrRunPhase.Leaving;
+                run.Dropped = true; run.DestinationExitPending = !run.IsTask; run.Phase = AmrRunPhase.Leaving; run.Path = null; run.Along = 0;
                 break;
             case AmrRunPhase.Leaving:
                 // the AMR stays in the destination port after the drop: nothing releases the port until it really leaves
                 if (Take(AmrFault.ExitStall)) { run.Stalled = true; Note(run, $"stalled in the port of {run.Destination} (not leaving)"); break; }
-                var dest = Place(run.Destination);
-                Move(run.Robot!, (dest.X, dest.Y - PortRadius * 2), seconds);
+                if (_map is not null) { if (!await LeaveOnMapAsync(run, run.Destination!, seconds, sp, ct)) break; }
+                else { var dest = Place(run.Destination); Move(run.Robot!, (dest.X, dest.Y - PortRadius * 2), seconds); }
                 if (run.SourceExitPending) await ExitIfOutsideAsync(run, run.Source!, sp, ct);
                 if (run.DestinationExitPending) await ExitIfOutsideAsync(run, run.Destination!, sp, ct);
                 if (!run.DestinationExitPending && !run.SourceExitPending) { Finish(run, AmrRunPhase.Completed, "completed"); _rcs.SetStatus(run.RequestCode, RcsTaskStatus.Completed); }
                 break;
         }
+    }
+
+    private static List<(double X, double Y)> NextRoute(SimMapGraph m, Run run) =>
+        m.PointOf(run.Source) is { } a && m.PointOf(run.Destination) is { } b ? m.Route(a, b) ?? [] : [];
+
+    /// <summary>Drives <paramref name="seconds"/> along the route of the run; true = at its end.</summary>
+    private bool Drive(Run run, double seconds)
+    {
+        lock (_gate)
+        {
+            var r = run.Robot!; var path = run.Path!; var total = SimMapGraph.Length(path);
+            var before = run.Along; run.Along = Math.Min(total, run.Along + SpeedMmPerSecond * seconds);
+            r.Battery = Math.Max(0, r.Battery - (run.Along - before) / 100_000);
+            var left = run.Along;
+            for (var i = 1; i < path.Count; i++)
+            {
+                var a = path[i - 1]; var b = path[i]; var d = SimMapGraph.Distance(a, b);
+                if (d <= 0) continue;
+                if (left <= d || i == path.Count - 1)
+                {
+                    var f = Math.Clamp(left / d, 0, 1); (r.X, r.Y) = (a.X + (b.X - a.X) * f, a.Y + (b.Y - a.Y) * f); r.Dir = _map!.DirectionOf(b.X - a.X, b.Y - a.Y);
+                    break;
+                }
+                left -= d;
+            }
+            if (total <= 0 && path.Count > 0) (r.X, r.Y) = path[^1];
+            return run.Along >= total;
+        }
+    }
+
+    private async Task<bool> TravelOnMapAsync(Run run, SimMapGraph m, string? location, double seconds, IServiceProvider sp, CancellationToken ct)
+    {
+        if (run.Path is null)
+        {
+            if (m.PointOf(location) is not { } to) { await FailAsync(run, $"NO_MAP_POINT: {location ?? "?"} has no point on map {m.MapId}", sp, ct); return false; }
+            var at = m.Nearest((run.Robot!.X, run.Robot.Y));
+            if (m.Route(at.Id, to) is not { } route) { await FailAsync(run, $"NO_MAP_PATH: map {m.MapId} has no route from point {at.Id} to {location} (point {to})", sp, ct); return false; }
+            if (at.Distance > 1) route.Insert(0, (run.Robot.X, run.Robot.Y));   // stopped between two points: first back to the point
+            run.Path = route; run.Along = 0;
+            Note(run, $"route to {location}: {route.Count} positions, {Math.Round(SimMapGraph.Length(route))} mm");
+        }
+        var half = SimMapGraph.Length(run.Path) / 2;
+        var arrived = Drive(run, seconds);
+        if (run.Along >= half && Take(AmrFault.MoveFailure)) { await FailAsync(run, "MOVE_FAILED", sp, ct); return false; }
+        return arrived;
+    }
+
+    /// <summary>Drives out of a station along the map; false = it cannot (the run has failed).</summary>
+    private async Task<bool> LeaveOnMapAsync(Run run, string location, double seconds, IServiceProvider sp, CancellationToken ct)
+    {
+        var m = _map!;
+        if (run.Path is null)
+        {
+            if (m.PointOf(location) is not { } from || m.Leave(from, MapPortRadius) is not { } route) { await FailAsync(run, $"NO_MAP_PATH: the AMR cannot leave {location} on map {m.MapId}", sp, ct); return false; }
+            run.Path = route; run.Along = 0;
+        }
+        Drive(run, seconds);
+        return true;
     }
 
     /// <summary>WCS decides whether the work still exists: a cancelled or finished leg or task stops the run; anything that is not a Simulator record is left alone.</summary>
@@ -321,6 +472,11 @@ public sealed class AmrExecutionSimulator
             if (run.IsTask)
             {
                 var task = await sp.GetRequiredService<ITransportTaskRepository>().GetAsync(run.EntityId, t);
+                if (task is not null)
+                {
+                    run.RackKind = task.RackKind.ToString(); run.CreatedAt = task.CreatedAt; run.PickedAt = task.PickConfirmedAt; run.DroppedAt = task.DropConfirmedAt; run.ProcessCode = task.Flow.ToString();
+                    if (run.RackCode is null && task.RackId is { } rid && await sp.GetRequiredService<IRackRepository>().GetAsync(rid, t) is { } rack) run.RackCode = rack.ExternalRackId ?? rid.ToString()[..8];
+                }
                 var alive = task is not null && task.ExecutionMode == ExecutionMode.Simulator && (task.State is not (TaskState.Completed or TaskState.Failed or TaskState.Cancelled) || run.Dropped || run.Phase == AmrRunPhase.Failed
                     || (run.Phase == AmrRunPhase.Dropping && task.DropConfirmedAt is not null));
                 return (alive, run.Parent, run.Destination);
@@ -329,6 +485,12 @@ public sealed class AmrExecutionSimulator
             var leg = await routing.GetLegAsync(run.EntityId, t);
             var order = leg is null ? null : await routing.GetOrderAsync(leg.OrderId, t);
             var ok = leg is not null && order is not null && order.ExecutionMode == ExecutionMode.Simulator && (run.Dropped || (!leg.IsTerminal && !order.IsTerminal));
+            if (leg is not null && order is not null)
+            {
+                run.OrderId = order.Id; run.ProcessCode = order.ProcessCode; run.LegSequence = leg.Sequence; run.StepKey = leg.StepKey; run.RackKind = leg.RackKind.ToString();
+                run.CreatedAt = leg.CreatedAt; run.PickedAt = leg.PickConfirmedAt; run.DroppedAt = leg.DropConfirmedAt;
+                if (run.RackCode is null && leg.RackId is { } rid && await sp.GetRequiredService<IRackRepository>().GetAsync(rid, t) is { } rack) run.RackCode = rack.ExternalRackId ?? rid.ToString()[..8];
+            }
             return (ok, order?.RequestKey ?? run.Parent, leg?.DestinationLocationCode ?? run.Destination);
         }, ct);
         if (!open) { Finish(run, AmrRunPhase.Cancelled, "the work is closed in WCS"); return false; }
@@ -366,8 +528,10 @@ public sealed class AmrExecutionSimulator
         r.X += dx / distance * step; r.Y += dy / distance * step; return false;
     }
 
-    private async Task<bool> TravelAsync(Run run, (double X, double Y) to, double seconds, IServiceProvider sp, CancellationToken ct)
+    private async Task<bool> TravelAsync(Run run, string? location, double seconds, IServiceProvider sp, CancellationToken ct)
     {
+        if (_map is { } m) return await TravelOnMapAsync(run, m, location, seconds, sp, ct);
+        var to = Place(location);
         var r = run.Robot!;
         if (run.TravelTotal == 0) { run.TravelTotal = Math.Max(1, Math.Sqrt(Math.Pow(to.X - r.X, 2) + Math.Pow(to.Y - r.Y, 2))); run.HalfTravelled = run.TravelTotal / 2; }
         var arrived = Move(r, to, seconds);
@@ -380,7 +544,7 @@ public sealed class AmrExecutionSimulator
     private async Task ExitIfOutsideAsync(Run run, string location, IServiceProvider sp, CancellationToken ct)
     {
         var p = Place(location); var r = run.Robot!;
-        if (Math.Sqrt(Math.Pow(p.X - r.X, 2) + Math.Pow(p.Y - r.Y, 2)) <= PortRadius || !_connected) return;
+        if (Math.Sqrt(Math.Pow(p.X - r.X, 2) + Math.Pow(p.Y - r.Y, 2)) <= (_map is null ? PortRadius : MapPortRadius) || !_connected) return;
         try
         {
             var released = await sp.GetRequiredService<StationTransactionService>().ConfirmAgvExitedForLegAsync(run.EntityId, location, ct);
@@ -476,7 +640,8 @@ public sealed class AmrExecutionSimulator
             var phase = r.Run?.Phase;
             var status = r.Run is { Stalled: true } || phase == AmrRunPhase.Failed ? "3" : phase is AmrRunPhase.Picking or AmrRunPhase.Dropping ? "6" : phase is null or AmrRunPhase.Queued ? "4" : "2";
             var speed = phase is AmrRunPhase.ToSource or AmrRunPhase.ToDestination or AmrRunPhase.Leaving && r.Run is { Stalled: false } ? N(SpeedMmPerSecond) : "0";
-            return new RcsFleetAmr(r.Code, "90", null, N(r.Battery), N(r.X), N(r.Y), "SIM-MAP", speed, status, "0", "0", null, null, []);
+            var carrying = r.Run is { Picked: true, Dropped: false } c ? c.RackCode : null;
+            return new RcsFleetAmr(r.Code, r.Dir.ToString(CultureInfo.InvariantCulture), null, N(r.Battery), N(r.X), N(r.Y), _map?.MapCode ?? "SIM-MAP", speed, status, "0", "0", carrying, null, []);
         }));
     }
 

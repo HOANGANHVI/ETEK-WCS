@@ -54,6 +54,13 @@ export interface SimStartResult {
 
 /** CR-050: the AMR simulation behind the simulated RCS. */
 export type AmrFault = 'RejectDispatch' | 'DispatchTimeout' | 'MoveFailure' | 'PickFailure' | 'DropFailure' | 'ExecutionStall' | 'ResponseDelay' | 'DuplicateResponse' | 'ExitStall'
-export interface AmrRobot { robotCode: string; x: number; y: number; battery: number; state: string; requestCode: string | null }
+export interface AmrRobot { robotCode: string; x: number; y: number; battery: number; state: string; requestCode: string | null; dir?: number }
+/** CR-069: the simulation as the map monitor draws it. Positions in millimetres. */
+export interface AmrLiveRun {
+  requestCode: string; kind: 'Leg' | 'Task'; orderId: string | null; order: string; processCode: string | null; legSequence: number | null; stepKey: string | null; robotCode: string | null
+  rackId: string | null; rackKind: string | null; carrying: boolean; pick: string | null; drop: string | null; phase: string; action: string; stalled: boolean; failure: string | null; progress: number
+  path: number[][]; travelled: number; nextPath: number[][]; createdAt: string | null; pickedAt: string | null; droppedAt: string | null
+}
+export interface AmrLive { active: boolean; paused: boolean; speedMultiplier: number; connected: boolean; mapId: string | null; mapCode: string | null; robots: AmrRobot[]; runs: AmrLiveRun[] }
 export interface AmrRun { requestCode: string; kind: 'Leg' | 'Task'; parentTask: string; robotCode: string | null; source: string | null; destination: string | null; phase: string; stalled: boolean; failure: string | null; events: string[] }
 export interface AmrSimulation { enabled: boolean; speedMultiplier: number; connected: boolean; responseDelaySeconds: number; armedFaults: Record<string, number>; robots: AmrRobot[]; runs: AmrRun[] }
