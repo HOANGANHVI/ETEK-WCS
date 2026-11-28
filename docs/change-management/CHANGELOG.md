@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-070 Simulated AMR follows the road (2026-11-28) – branch feature/cr-070-amr-follows-road, NOT COMMITTED
+## CR-070 Simulated AMR follows the road (2026-11-28) – MERGED into main (8e4c980)
 
 - The simulated AMR is drawn along its route frame by frame and turns smoothly through corners. Frontend only.
 

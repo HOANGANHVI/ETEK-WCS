@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-070-amr-follows-road, CHƯA COMMIT` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (8e4c980)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 (báo lỗi: AMR qua góc cua không bám đường khi phóng to) |
 | **Migration** | Không |
 
