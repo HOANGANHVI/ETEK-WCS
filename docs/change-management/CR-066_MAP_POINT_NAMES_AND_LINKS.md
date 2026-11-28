@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-066-map-points, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (0171848); migration đã áp lên wcs_db ngày 2026-11-28` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 ("Map point naming & port linking") |
 | **Migration** | `AddRcsMapPoints`: thêm bảng `rcs_map_points`; không đổi bảng hay dữ liệu có sẵn |
 

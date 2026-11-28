@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-066 Map point names and location links (2026-11-28) – branch feature/cr-066-map-points, NOT MERGED
+## CR-066 Map point names and location links (2026-11-28) – MERGED into main (0171848)
 
 - An Admin names a point of the RCS map and links it to a WCS location; shown on the AMR map. Migration AddRcsMapPoints (one new table). Display only.
 
