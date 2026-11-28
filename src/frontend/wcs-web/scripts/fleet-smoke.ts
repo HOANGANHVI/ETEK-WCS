@@ -1,4 +1,5 @@
 // AMR monitoring: RCS status classification, KPIs, freshness and filters, checked on hand-made data (no backend). Run: npm run fleet:test
+import { headingAt, passed, pointAt, turnTowards, type Point } from '../src/lib/track.ts'
 import { classifyStatus, DOCUMENTED_STATUS } from '../src/lib/rcsStatus.ts'
 import { batteryPercent, computeKpis, distinctMaps, filterAmrs, isMoving, NO_FILTER } from '../src/lib/fleetModel.ts'
 import type { FleetAmr, FleetView } from '../src/api/fleetTypes.ts'
@@ -73,4 +74,14 @@ const hits = texts.filter((s) => banned.some((b) => b.test(s)))
 check('no developer-facing explanation remains in the AMR / header / about texts', hits.length === 0, hits.join(' | '))
 check('Unclassified status text is short and carries the raw code', agv.vi.amrStatusUnknown === 'Chưa phân loại ({code})' && agv.en.amrStatusUnknown === 'Unclassified ({code})')
 check('every status text of the fleet screen is at most 90 characters (VI and EN)', Object.entries({ ...agv.vi, ...agv.en }).filter(([k]) => /^(fleet|fMissing|fOld|amrStatus|kpi|fPoll)/.test(k)).every(([, v]) => (v as string).length <= 90))
+{ // CR-070: between two answers the drawing follows the road, corners included
+  const road: Point[] = [[0, 0], [10, 0], [10, 10]]
+  const way = passed({ path: road, travelled: 6, at: [6, 0] }, { path: road, travelled: 14, at: [10, 4] })
+  check('CR-070: the corner passed between two answers is driven through', JSON.stringify(way) === JSON.stringify([[6, 0], [10, 0], [10, 4]]))
+  const next: Point[] = [[10, 10], [0, 10]]
+  const both = passed({ path: road, travelled: 18, at: [10, 8] }, { path: next, travelled: 3, at: [7, 10] })
+  check('CR-070: a new route starts after the rest of the old one', JSON.stringify(both) === JSON.stringify([[10, 8], [10, 10], [10, 10], [7, 10]]))
+  check('CR-070: nothing is passed while the AMR stands (paused)', passed({ path: road, travelled: 6, at: [6, 0] }, { path: road, travelled: 6, at: [6, 0] }).length === 0)
+  check('CR-070: the heading turns through the corner', headingAt(road, 5, 1) === 0 && headingAt(road, 10, 1) === 45 && headingAt(road, 15, 1) === 90 && turnTowards(170, -170, 5) === 175 && pointAt(road, 12)[1] === 2)
+}
 console.log(results.join('\n'))

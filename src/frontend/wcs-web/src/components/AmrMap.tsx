@@ -8,6 +8,8 @@ import { api } from '../api/client'
 import { describeError } from '../i18n/vi'
 import { MapPointPanel } from './MapPointPanel'
 import { AmrIcon, RackIcon, Racks, Routes } from './SimLayer'
+import { SimMover } from './SimMover'
+import { useTrail } from '../hooks/useTrail'
 import { isOpenRun, type RackSpot } from '../lib/simMap'
 import type { AmrLive } from '../api/simTypes'
 import { callName, kindOf, mismatches, pointMapping, rowsByPoint } from '../lib/mapData'
@@ -149,6 +151,10 @@ export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = ()
   const sim = live?.active && live.mapId === map.info.mapId && fleet.source !== 'Real' ? live : null
   const simCodes = new Set(sim?.robots.map((r) => r.robotCode) ?? [])
   const simRuns = sim?.runs.filter(isOpenRun) ?? []
+  // CR-070: millimetres of the simulator to drawing units
+  const toDraw = (line: number[][]): [number, number][] => line.map((c) => [c[0] / map.info.mmPerUnit, drawY(map, bounds, c[1] / map.info.mmPerUnit)])
+  // the driven part of a route ends where the drawing of the AMR is: one answer behind the simulator
+  const trail = useTrail(simRuns)
   const placed = fleet.amrs.filter((a) => !simCodes.has(a.robotCode)).map((a) => placeAmr(map, bounds, a))
   const drawn = placed.filter((p): p is Extract<Placement, { kind: 'drawn' }> => p.kind === 'drawn')
   const missed = placed.filter((p) => p.kind !== 'drawn')
@@ -195,7 +201,7 @@ export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = ()
         <svg ref={svg} className="amr-map-svg" viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`} role="img" aria-label={t('agv.mapTitle', { name: map.info.mapName })}
           onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
           <Roads map={map} bounds={bounds} upp={upp} showNames={showNames} selected={point} onSelect={pickPoint} />
-          {sim && <Routes map={map} bounds={bounds} runs={simRuns} />}
+          {sim && <Routes map={map} bounds={bounds} runs={trail} />}
           <Racks map={map} bounds={bounds} spots={spots} upp={upp} />
           {drawn.map((p) => (
             <g key={p.amr.robotCode} className={`amr-map-robot ${isLive(p.amr, fleet, loadFailed) ? 'live' : 'lost'}${p.amr.robotCode === selected ? ' selected' : ''}`}
@@ -214,18 +220,18 @@ export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = ()
             const rotate = -((map.info.headingClockwise ? -(r.dir ?? 0) : (r.dir ?? 0)) + map.info.headingOffsetDeg)
             const rackFull = run?.rackKind === 'Full' ? true : run?.rackKind === 'Empty' ? false : null
             return (
-              <g key={r.robotCode} className={`sim-robot state-${state}${sim.paused ? ' paused' : ''}${run && run.requestCode === selectedRun ? ' selected' : ''}`} data-amr={r.robotCode} data-state={state} data-x={r.x} data-y={r.y}
-                data-carrying={run?.carrying ? 'yes' : 'no'} style={{ transform: `translate(${x}px, ${y}px) scale(${upp})` }} role="button" tabIndex={0} aria-label={r.robotCode}
+              <SimMover key={r.robotCode} path={toDraw(run?.path ?? [])} travelled={(run?.travelled ?? 0) / map.info.mmPerUnit} at={[x, y]} heading={rotate} upp={upp} body={<AmrIcon rotate={0} />}
+                className={`sim-robot state-${state}${sim.paused ? ' paused' : ''}${run && run.requestCode === selectedRun ? ' selected' : ''}`} data-amr={r.robotCode} data-state={state} data-x={r.x} data-y={r.y}
+                data-carrying={run?.carrying ? 'yes' : 'no'} role="button" tabIndex={0} aria-label={r.robotCode}
                 onClick={() => { const any = run ?? sim.runs.find((z) => z.robotCode === r.robotCode); if (any) onSimSelect(any.requestCode); setPoint(null); setSelected(null) }}
                 onKeyDown={(e) => { if (e.key === 'Enter' && run) onSimSelect(run.requestCode) }}>
                 <circle className="sim-halo" r={20} />
-                <AmrIcon rotate={rotate} />
                 {run?.carrying && run.phase !== 'Dropping' && <g className="sim-carried"><RackIcon full={rackFull} /></g>}
                 {run?.phase === 'Picking' && <g className="sim-lift"><RackIcon full={rackFull} /></g>}
                 {run?.phase === 'Dropping' && <g className="sim-lower"><RackIcon full={rackFull} /></g>}
                 <text x={20} y={-12} fontSize={12}>{r.robotCode}</text>
                 <text className="sim-state" x={20} y={2} fontSize={10}>{t(`agv.simState_${state}` as MsgKey)}</text>
-              </g>
+              </SimMover>
             )
           })}
         </svg>
