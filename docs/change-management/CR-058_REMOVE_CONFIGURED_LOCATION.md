@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED (phương án A), IMPLEMENTED – nhánh feature/cr-058-remove-configured-location, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED (phương án A), IMPLEMENTED – đã MERGE vào main (1ee4fe9)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-27: chọn "A" sau khi báo F5 không xóa được |
 | **Migration** | Không |
 
@@ -39,4 +39,4 @@ Quay lại bản trước (không có migration). Vị trí đã xóa vẫn ở 
 
 ## Kiểm thử
 
-`Cr057LocationRemovalTests` (thêm trường hợp CR-058), `ops-smoke`, trình duyệt trên bản sao dữ liệu: [hộp xác nhận](../reports/cr-058/1-warning.png).
+`Cr057LocationRemovalTests` (thêm trường hợp CR-058), `ops-smoke`, toàn bộ test backend (1457/1457), trình duyệt trên bản sao dữ liệu: [hộp xác nhận](../reports/cr-058/1-warning.png).
