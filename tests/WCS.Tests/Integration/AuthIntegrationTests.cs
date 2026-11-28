@@ -24,6 +24,7 @@ public sealed class DbApiFactory(DatabaseFixture db) : WebApplicationFactory<Pro
         {
             ["ConnectionStrings:WcsDatabase"] = db.ConnectionString,
             ["Database:Password"] = null,
+            ["ProcessFlows:RequireModuleProcess"] = "false",   // CR-063: these tests exercise the Phase 1 task API itself, without configured processes
             ["Logging:SystemLog:Enabled"] = "false",   // CR-007: tests that need the database sink create it explicitly (no background rows in assertions)
         }));
         builder.ConfigureServices(s => s.RemoveAll<IHostedService>());

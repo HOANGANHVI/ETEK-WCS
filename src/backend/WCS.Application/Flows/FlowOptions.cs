@@ -15,6 +15,9 @@ public sealed class ProcessFlowOptions
     /// <summary>Key = ProcessFlow name (Bp01, Bp02, Bp03, Bp05, Bp06). A Bp04 key is rejected at startup (REVIEW).</summary>
     public Dictionary<string, FlowRuleOptions> Flows { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>CR-063: true (default) = a person creates a task only for a flow whose process is published and ready in the process module.</summary>
+    public bool RequireModuleProcess { get; set; } = true;
+
     /// <summary>What to do when no source rack can be found: Fail (default) or Wait (stay VALIDATING). NEEDS_CONFIRMATION (BP-02 note).</summary>
     public string NoSourceBehavior { get; set; } = "Fail";
 }

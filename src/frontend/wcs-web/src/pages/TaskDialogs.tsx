@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { ApiRequestError } from '../api/errors'
 import type { TransportTask } from '../api/types'
@@ -38,6 +38,14 @@ export function CreateTaskDialog({ onClose, onCreated, onOrderCreated }: { onClo
   const process = processOf(flow, processes.data ?? [])
   const stations = process ? process.triggerLocationCodes : flows.data?.find((f) => f.flow === flow)?.stations ?? []
   const a = useAction(() => undefined, () => undefined)
+  // CR-063: the list is read again while the dialog is open, so publishing or switching off a process shows without reopening it
+  const { reload: reloadFlows } = flows
+  const { reload: reloadProcesses } = processes
+  useEffect(() => {
+    const timer = setInterval(() => { reloadFlows(); reloadProcesses() }, 5000)
+    return () => clearInterval(timer)
+  }, [reloadFlows, reloadProcesses])
+  const offered = process ? process.acceptsRequests : !!flows.data?.some((f) => f.flow === flow && f.available !== false)
   const create = async () => {
     if (process) {
       await api.routingStart({ requestKey, locationCode: station, requestType: process.requestType, rackKind: process.rackKind, processCode: process.code })
@@ -48,7 +56,7 @@ export function CreateTaskDialog({ onClose, onCreated, onOrderCreated }: { onClo
   return (
     <Modal title={t('tasks.createTitle')} onClose={onClose} footer={<>
       <Button onClick={onClose}>{t('tasks.skip')}</Button>
-      <Button variant="primary" disabled={a.busy || !flow || !station || (!!process && !process.acceptsRequests)}
+      <Button variant="primary" disabled={a.busy || !flow || !station || !offered}
         onClick={() => void a.run(create)}>{t('tasks.create')}</Button>
     </>}>
       {a.error && <div className="notice notice-bad" role="alert">{a.error}</div>}
@@ -106,7 +114,7 @@ export function EditTaskDialog({ task, stationCode, onClose, onChanged }: {
             const allowed = flows.data?.find((f) => f.flow === next)?.stations ?? []
             if (!allowed.includes(station)) setStation(allowed[0] ?? '')
           }}>
-            {(flows.data ?? [{ flow: currentFlow, rackKind: '', stations: [] }]).map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
+            {(flows.data ?? [{ flow: currentFlow, rackKind: '', stations: [] }]).filter((f) => f.flow === currentFlow || !('available' in f) || f.available !== false).map((f) => <option key={f.flow} value={f.flow}>{flowInfo(f.flow).code} · {flowInfo(f.flow).label}</option>)}
           </select>
         </Field>
         <Field label={t('tasks.stationField')}>

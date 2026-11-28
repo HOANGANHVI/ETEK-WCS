@@ -12,6 +12,7 @@ public static class DependencyInjection
     public static IServiceCollection AddWcsApplication(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<ProcessFlowOptions>(configuration.GetSection(ProcessFlowOptions.SectionName));
+        services.AddScoped<TaskFlowAvailability>();   // CR-063
         services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
         services.Configure<Diagnostics.DiagnosticExportOptions>(configuration.GetSection(Diagnostics.DiagnosticExportOptions.SectionName));
         services.Configure<Routing.RouteEngineOptions>(configuration.GetSection(Routing.RouteEngineOptions.SectionName));
