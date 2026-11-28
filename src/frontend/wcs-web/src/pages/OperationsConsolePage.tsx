@@ -67,10 +67,11 @@ export function OperationsConsolePage() {
   const { reload: reloadHealth } = health
   const { reload: reloadMode } = mode
   const { reload: reloadProcesses } = processes
+  const { reload: reloadFlows } = flows
   useEffect(() => {
-    const timer = setInterval(() => { reloadHealth(); reloadMode(); reloadProcesses() }, GATE_REFRESH_MS)
+    const timer = setInterval(() => { reloadHealth(); reloadMode(); reloadProcesses(); reloadFlows() }, GATE_REFRESH_MS)
     return () => clearInterval(timer)
-  }, [reloadHealth, reloadMode, reloadProcesses])
+  }, [reloadHealth, reloadMode, reloadProcesses, reloadFlows])
 
   return (
     <>

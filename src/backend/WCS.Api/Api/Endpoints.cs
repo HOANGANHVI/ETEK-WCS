@@ -197,16 +197,9 @@ public static class Endpoints
         api.MapDiagnosticApi();   // PLC diagnostic export
 
         // ---- Process flows available for task requests (read-only view of the deployed configuration; lets the UI avoid hard-coding stations)
-        api.MapGet("/flows", async (HttpContext c, WCS.Application.Flows.IFlowCatalog flows, WcsQueries q, CancellationToken ct) =>
-        {
-            var removed = await q.RemovedOnlyCodesAsync(ct);   // CR-058: a removed location is not offered as a request station
-            return ApiResults.Ok(c, flows.All.OrderBy(f => f.Flow).Select(f => new
-            {
-                flow = f.Flow.ToString(),
-                rackKind = f.RackKind.ToString(),
-                stations = f.AllowedRequestStations.Where(x => !removed.Contains(x)).OrderBy(x => x).ToArray(),
-            }));
-        }).WithTags("Flow");
+        // CR-063: "available" follows the process module; the others are listed only so that an existing task can still be shown
+        api.MapGet("/flows", async (HttpContext c, WCS.Application.Flows.TaskFlowAvailability availability, CancellationToken ct) =>
+            ApiResults.Ok(c, await availability.ListAsync(ct))).WithTags("Flow");
 
         // ---- Task
         var task = api.MapGroup("/tasks").WithTags("Task");
@@ -215,19 +208,27 @@ public static class Endpoints
         task.MapGet("{id:guid}", async (HttpContext c, Guid id, WcsQueries q, CancellationToken ct) => ApiResults.Ok(c, await q.GetTaskAsync(id, ct)));
         task.MapGet("{id:guid}/history", async (HttpContext c, Guid id, WcsQueries q, CancellationToken ct) =>
             ApiResults.Ok(c, await q.GetTaskHistoryAsync(id, ct)));
-        task.MapPost("", async (HttpContext c, CreateTaskRequest r, ITaskOrchestrator o, CancellationToken ct) =>
+        task.MapPost("", async (HttpContext c, CreateTaskRequest r, ITaskOrchestrator o, WCS.Application.Flows.TaskFlowAvailability availability, CancellationToken ct) =>
         {
             // RequestedBy always comes from the session; a value sent in the body is ignored.
             var result = await Audited.RunAsync(c, "TASK_CREATE", "Task", null, null,
-                () => o.CreateTaskAsync(new CreateTaskCommand(r.RequestKey, r.Flow, r.StationCode, c.Actor().Username), ct),
+                async () =>
+                {
+                    await availability.EnsureAvailableAsync(r.RequestKey, r.Flow, r.StationCode, ct);   // CR-063
+                    return await o.CreateTaskAsync(new CreateTaskCommand(r.RequestKey, r.Flow, r.StationCode, c.Actor().Username), ct);
+                },
                 res => Audited.TaskSnapshot(res.Task), $"flow={r.Flow}, station={r.StationCode}");
             return ApiResults.Ok(c, result.Task, result.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK);
         });
-        task.MapPut("{id:guid}", async (HttpContext c, Guid id, UpdateTaskRequest r, ITaskOrchestrator o, WcsQueries q, CancellationToken ct) =>
+        task.MapPut("{id:guid}", async (HttpContext c, Guid id, UpdateTaskRequest r, ITaskOrchestrator o, WcsQueries q, WCS.Application.Flows.TaskFlowAvailability availability, CancellationToken ct) =>
         {
             var before = await q.GetTaskAsync(id, ct);
             var updated = await Audited.RunAsync(c, "TASK_UPDATE", "Task", id.ToString(), Audited.TaskSnapshot(before),
-                () => o.UpdateTaskAsync(id, r.Flow, r.StationCode, r.ExpectedState, c.Actor(), ct), Audited.TaskSnapshot);
+                async () =>
+                {   // CR-063: changing the flow follows the module; the station of a task that exists may still be corrected
+                    if (!string.Equals((r.Flow ?? "").Replace("-", ""), before.Flow.ToString(), StringComparison.OrdinalIgnoreCase)) await availability.EnsureAvailableAsync(null, r.Flow!, r.StationCode, ct);
+                    return await o.UpdateTaskAsync(id, r.Flow!, r.StationCode, r.ExpectedState, c.Actor(), ct);
+                }, Audited.TaskSnapshot);
             return ApiResults.Ok(c, updated);
         });
         task.MapDelete("{id:guid}", async (HttpContext c, Guid id, string? expectedState, ITaskOrchestrator o, WcsQueries q, CancellationToken ct) =>

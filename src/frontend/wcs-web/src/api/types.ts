@@ -172,6 +172,8 @@ export interface FlowOption {
   flow: string
   rackKind: string
   stations: string[]
+  /** CR-063: false = the process settings do not offer it for a new task. */
+  available?: boolean
 }
 
 // ---- Server Resource Monitoring (GET /api/system/resources, Admin only)
