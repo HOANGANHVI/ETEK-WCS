@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-061 Location map as a floor plan (2026-11-28) – branch feature/cr-061-inventory-floor-plan, NOT MERGED
+
+- The location map of "Locations and inventory" draws the machine, buffer and manual QC zones around a path. Frontend only; cards and data unchanged.
+
 ## CR-060 BP-04 removable; PH2-04 guidance (2026-11-28) – MERGED into main (c6d5a65)
 
 - BP-04 is no longer protected from removal (it stays REVIEW and unpublishable). The REVIEW error explains how to apply the default catalog (PH2-04). No migration.
