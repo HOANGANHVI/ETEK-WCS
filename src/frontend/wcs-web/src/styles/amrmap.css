@@ -65,8 +65,7 @@
 .sim-route.ahead { stroke: #2563eb; stroke-width: 5px; stroke-dasharray: 10 6; animation: sim-flow 1s linear infinite; }
 .sim-route.done { stroke: #16a34a; stroke-width: 5px; opacity: .8; }
 .sim-route.next { stroke: #7c3aed; stroke-width: 2.5px; stroke-dasharray: 3 6; opacity: .8; }
-.sim-robot { cursor: pointer; transition: transform .45s linear; }
-.sim-robot.paused { transition: none; }
+.sim-robot { cursor: pointer; }
 .sim-robot .amr-body { fill: #2563eb; }
 .sim-robot.state-idle .amr-body, .sim-robot.state-completed .amr-body { fill: var(--ok); }
 .sim-robot.state-picking .amr-body, .sim-robot.state-dropping .amr-body { fill: #d97706; }
@@ -85,7 +84,7 @@
 @keyframes sim-lower { from { transform: translateY(0) scale(.85); opacity: 1 } to { transform: translateY(22px) scale(1.15); opacity: .55 } }
 @keyframes sim-pulse { 0%, 100% { opacity: .2 } 50% { opacity: 1 } }
 @keyframes sim-flow { to { stroke-dashoffset: -16 } }
-@media (prefers-reduced-motion: reduce) { .sim-robot { transition: none } .sim-lift, .sim-lower, .sim-halo, .sim-route.ahead { animation: none } }
+@media (prefers-reduced-motion: reduce) { .sim-lift, .sim-lower, .sim-halo, .sim-route.ahead { animation: none } }
 .sim-panel { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .sim-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
 .sim-runs { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }

@@ -1,5 +1,9 @@
 # Change Log
 
+## CR-070 Simulated AMR follows the road (2026-11-28) – branch feature/cr-070-amr-follows-road, NOT COMMITTED
+
+- The simulated AMR is drawn along its route frame by frame and turns smoothly through corners. Frontend only.
+
 ## CR-069 AMR simulation on the map (2026-11-28) – MERGED into main (bea0a35)
 
 - The AMR simulator drives on the imported map; the monitor animates movement, pick and drop with racks and routes; pause / resume. No migration.
