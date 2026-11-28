@@ -9,7 +9,7 @@ import { setDemoSessionRole } from '../demo/session'
 import { ApiRequestError } from './errors'
 import type { AuditFilter, AuditRow, Me, Profile, Role, UserRow } from './authTypes'
 import type { LogDetail, LogFilter, LogPage, LogStats } from './logTypes'
-import type { AmrFault, AmrSimulation, SimFlow, SimStartResult, SimStation, SimStatus } from './simTypes'
+import type { AmrFault, AmrLive, AmrSimulation, SimFlow, SimStartResult, SimStation, SimStatus } from './simTypes'
 import type { ExecMode, ExecutionModeView, LegacyAdoptionResult, ModeReadiness, ModeTransitionBody, ModeTransitionResult, ModeTransitionView, RcsMessageDetail, RcsMessageSummary } from './modeTypes'
 import type { DiagExportBody, DiagExportJob, DiagExportOptions } from './diagTypes'
 import type { AddressIssue, BulkApprovalPreview, BulkApprovalResult, HandshakeState, IoMapInfo, IoPointConfig, IoPointState, MonitorList, PlcConnection, PlcLogRow, PlcOverview, ProbeResultView, ReadNowResult, SavePlcConnectionBody, StationSnapshot, TestWriteResult } from './plcTypes'
@@ -330,6 +330,8 @@ const realApi = {
   // CR-035 Admin manual PLC simulation (PLC only; RCS is real). The server enforces Admin and the safety acknowledgement.
   queueAlerts: () => request<QueueAlert[]>('/api/routing/queue-alerts'),
   amrStatus: () => request<AmrSimulation>('/api/simulator/amr'),
+  amrLive: () => request<AmrLive>('/api/simulator/amr/live'),
+  amrPause: (paused: boolean) => request<AmrSimulation>('/api/simulator/amr/pause', { method: 'POST', body: JSON.stringify({ paused }) }),
   amrConfig: (enabled: boolean, speedMultiplier: number) => request<AmrSimulation>('/api/simulator/amr/config', { method: 'POST', body: JSON.stringify({ enabled, speedMultiplier }) }),
   amrFault: (fault: AmrFault, delaySeconds?: number) => request<AmrSimulation>('/api/simulator/amr/faults', { method: 'POST', body: JSON.stringify({ fault, count: 1, delaySeconds }) }),
   amrClearFaults: () => request<AmrSimulation>('/api/simulator/amr/faults', { method: 'DELETE' }),
@@ -378,6 +380,7 @@ const demoApi: typeof realApi = {
   ...demoDataApi,
   removedLocations: () => Promise.resolve([]),   // CR-057: the demo data has no removed location
   rcsMap: () => Promise.resolve(null),   // CR-065: Demo Mode has no imported map
+  amrLive: () => Promise.resolve({ active: false, paused: false, speedMultiplier: 1, connected: false, mapId: null, mapCode: null, robots: [], runs: [] }),
   login: async (u, p) => { const me = await realApi.login(u, p); setDemoSessionRole(me.role); return me },
   me: async () => { try { const me = await realApi.me(); setDemoSessionRole(me.role); return me } catch (e) { setDemoSessionRole(null); throw e } },
   logout: async () => { try { return await realApi.logout() } finally { setDemoSessionRole(null) } },

@@ -387,8 +387,16 @@ public static class Endpoints
             ApiResults.Ok(c, await Audited.RunAsync(c, "SIMULATOR_ADVANCE", "Task", id.ToString(), null, () => d.AdvanceAsync(id, ct), res => new { res.Signal, res.Message })));
         sim.MapPost("tasks/{id:guid}/run", async (HttpContext c, Guid id, SimulationDriver d, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "SIMULATOR_RUN", "Task", id.ToString(), null, () => d.RunAsync(id, 20, ct), res => new { steps = res.Count })));
+        // CR-069: what the map monitor draws. Every signed-in user; nothing while the operating mode is Real.
+        app.MapGet("/api/simulator/amr/live", async (HttpContext c, AmrExecutionSimulator a, IExecutionModeGate gate, IUnitOfWork uow, CancellationToken ct) =>
+        {
+            var real = await uow.ExecuteAsync(t => gate.ModeForNewWorkAsync(t), ct) == WCS.Domain.Rcs.ExecutionMode.Real;
+            return ApiResults.Ok(c, real ? AmrLiveView.Inactive : a.Live());
+        }).WithTags("Simulator").RequireAuthorization();
         // CR-050: the AMR simulation behind the simulated RCS (Admin; audited)
         var amr = sim.MapGroup("/amr");
+        amr.MapPost("pause", async (HttpContext c, AmrPauseRequest r, AmrExecutionSimulator a) =>
+            ApiResults.Ok(c, await Audited.RunAsync(c, "AMR_SIM_PAUSE", "AmrSimulation", r.Paused ? "pause" : "resume", null, () => { a.SetPaused(r.Paused); return Task.FromResult(a.View()); }, _ => new { r.Paused })));
         amr.MapGet("", (HttpContext c, AmrExecutionSimulator a) => ApiResults.Ok(c, a.View()));
         amr.MapPost("config", async (HttpContext c, AmrConfigRequest r, AmrExecutionSimulator a) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "AMR_SIM_CONFIG", "AmrSimulation", null, null, () => { a.Configure(r.Enabled, r.SpeedMultiplier); return Task.FromResult(a.View()); }, v => new { v.Enabled, v.SpeedMultiplier })));
@@ -415,3 +423,5 @@ public static class Endpoints
         });
     }
 }
+
+public sealed record AmrPauseRequest(bool Paused);
