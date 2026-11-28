@@ -88,7 +88,7 @@ export const VERSION_STATE_TONE: Record<string, Tone> = { Draft: 'muted', Valida
 /** Validation issue codes (ProcessValidator) -> text. The server text is the fallback for any unknown code. */
 export const ISSUE_LABEL = localizedMap(
   {
-    PROCESS_REVIEW_BLOCKED: 'Quy trình ở trạng thái REVIEW (chưa được duyệt triển khai) nên không thể Publish.',
+    PROCESS_REVIEW_BLOCKED: 'Quy trình ở trạng thái REVIEW (chưa được duyệt triển khai) nên không thể Publish. Nếu danh mục chuẩn đã duyệt quy trình (ví dụ PH2-04): ở mục "Vận hành: sẵn sàng và hàng đợi", nhập lý do rồi bấm "Tạo bản nháp theo danh mục", sau đó Kiểm tra và Công bố bản nháp mới.',
     NO_TRIGGER_LOCATION: 'Quy trình chưa có vị trí nào được phép khởi tạo.',
     NO_STEPS: 'Phiên bản chưa có bước nào.',
     FIRST_STEP_MISSING: 'Bước đầu tiên không tồn tại.',
@@ -132,7 +132,7 @@ export const ISSUE_LABEL = localizedMap(
     AMBIGUOUS_TRIGGER: 'Đã có quy trình khác được Publish cho cùng yêu cầu: yêu cầu không chỉ rõ mã quy trình sẽ bị từ chối.',
   },
   {
-    PROCESS_REVIEW_BLOCKED: 'The process is REVIEW (not approved for implementation) and cannot be published.',
+    PROCESS_REVIEW_BLOCKED: 'The process is REVIEW (not approved for implementation) and cannot be published. If the default catalog approves it (for example PH2-04): under "Operation: readiness and queue" give a reason, press "Create a draft from the catalog", then validate and publish the new draft.',
     NO_TRIGGER_LOCATION: 'The process has no location allowed to start it.',
     NO_STEPS: 'The version has no step.',
     FIRST_STEP_MISSING: 'The first step does not exist.',
