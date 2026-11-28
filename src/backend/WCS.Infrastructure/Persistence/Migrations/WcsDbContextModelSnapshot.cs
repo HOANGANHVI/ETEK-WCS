@@ -1417,6 +1417,40 @@ namespace WCS.Infrastructure.Persistence.Migrations
                     b.ToTable("rcs_maps", (string)null);
                 });
 
+            modelBuilder.Entity("WCS.Domain.Rcs.RcsMapPoint", b =>
+                {
+                    b.Property<string>("MapId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("PointId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<double>("X")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("Y")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("MapId", "PointId");
+
+                    b.ToTable("rcs_map_points", (string)null);
+                });
+
             modelBuilder.Entity("WCS.Domain.Rcs.RcsMessage", b =>
                 {
                     b.Property<Guid>("Id")

@@ -16,6 +16,23 @@ export const drawY = (map: RcsMapView, b: Bounds, y: number): number => (map.inf
 
 const num = (v: string | null): number | null => { if (v === null || v.trim() === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null }
 
+/** CR-066: for every point the distance to its nearest neighbour, so that the click areas of two points never overlap. Sweep over x. */
+export function nearestDistances(points: { id: number; x: number; y: number }[]): Map<number, number> {
+  const s = [...points].sort((a, b) => a.x - b.x)
+  const out = new Map<number, number>()
+  s.forEach((p, i) => {
+    let best = Infinity
+    for (let j = i + 1; j < s.length && s[j].x - p.x < best; j++) best = Math.min(best, Math.hypot(s[j].x - p.x, s[j].y - p.y))
+    for (let j = i - 1; j >= 0 && p.x - s[j].x < best; j--) best = Math.min(best, Math.hypot(s[j].x - p.x, s[j].y - p.y))
+    out.set(p.id, best)
+  })
+  return out
+}
+
+/** CR-066: the short text of a named or linked point: the location code, then the name. */
+export const pointLabel = (n: { name: string | null; locationCode: string | null }, full: boolean): string =>
+  full ? [n.locationCode, n.name].filter(Boolean).join(' · ') : n.locationCode ?? n.name ?? ''
+
 /** Green only when the RCS link answers and this AMR was in the latest answer; everything else is grey. */
 export const isLive = (a: FleetAmr, fleet: FleetView, loadFailed: boolean): boolean => !loadFailed && fleet.connection === 'Connected' && a.state === 'Fresh'
 

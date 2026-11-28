@@ -20,3 +20,12 @@
 .amr-map-detail-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .amr-map-detail-head .modal-x { margin-left: auto; }
 @media (max-width: 900px) { .amr-map-body { flex-direction: column; } .amr-map-detail { width: auto; } .amr-map-svg { height: 360px; flex: none; } }
+
+/* CR-066: points can be chosen; named / linked points stand out */
+.amr-map-hit { cursor: pointer; }
+.amr-map-target { fill: transparent; }
+.amr-map-hit.named .amr-map-point { fill: var(--amber); opacity: 1; stroke: var(--surface); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.amr-map-ring { fill: none; stroke: var(--bad); stroke-width: 3px; vector-effect: non-scaling-stroke; }
+.amr-map-hit:focus-visible .amr-map-target { stroke: var(--navy-500); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+.amr-map-name { fill: var(--heading); font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.amr-map-dot.named { background: var(--amber); }
