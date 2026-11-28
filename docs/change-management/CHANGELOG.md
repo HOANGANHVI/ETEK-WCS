@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-068 AMR map point display (2026-11-28) – branch feature/cr-068-amr-map-display, NOT MERGED
+## CR-068 AMR map point display (2026-11-28) – MERGED into main (f3db996)
 
 - All call codes, points without Excel data and the mapping state are shown; location link; warning and confirmation for files that do not match; the map code of the QR code is accepted. No migration.
 

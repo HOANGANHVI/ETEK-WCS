@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-068-amr-map-display, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (f3db996)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28 (bổ sung CR-067: hiển thị bản đồ và thông tin điểm) |
 | **Migration** | Không |
 
