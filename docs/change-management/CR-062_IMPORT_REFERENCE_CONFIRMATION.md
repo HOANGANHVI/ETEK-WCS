@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-062-import-confirmation, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (756144c)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28: "tôi đồng ý triển khai" |
 | **Migration** | Không |
 

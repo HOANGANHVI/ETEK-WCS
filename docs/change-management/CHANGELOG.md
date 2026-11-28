@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-062 Confirmation before loading reference processes (2026-11-28) – branch feature/cr-062-import-confirmation, NOT MERGED
+## CR-062 Confirmation before loading reference processes (2026-11-28) – MERGED into main (756144c)
 
 - The button shows which processes would be added or kept before anything is loaded. No migration.
 
