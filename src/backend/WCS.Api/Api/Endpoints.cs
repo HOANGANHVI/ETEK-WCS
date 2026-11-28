@@ -194,6 +194,7 @@ public static class Endpoints
         // ---- PLC topology, IO catalog, monitoring (CR-002)
         api.MapPlcApi();
         api.MapRoutingApi();   // CR-010
+        api.MapRcsMapApi(admin);   // CR-065
         api.MapDiagnosticApi();   // PLC diagnostic export
 
         // ---- Process flows available for task requests (read-only view of the deployed configuration; lets the UI avoid hard-coding stations)

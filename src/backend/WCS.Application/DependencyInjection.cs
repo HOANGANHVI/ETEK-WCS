@@ -13,6 +13,7 @@ public static class DependencyInjection
     {
         services.Configure<ProcessFlowOptions>(configuration.GetSection(ProcessFlowOptions.SectionName));
         services.AddScoped<TaskFlowAvailability>();   // CR-063
+        services.AddScoped<WCS.Application.RcsMaps.RcsMapService>();   // CR-065
         services.Configure<SchedulerOptions>(configuration.GetSection(SchedulerOptions.SectionName));
         services.Configure<Diagnostics.DiagnosticExportOptions>(configuration.GetSection(Diagnostics.DiagnosticExportOptions.SectionName));
         services.Configure<Routing.RouteEngineOptions>(configuration.GetSection(Routing.RouteEngineOptions.SectionName));

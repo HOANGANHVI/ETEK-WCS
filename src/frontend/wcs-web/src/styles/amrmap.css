@@ -1,0 +1,22 @@
+/* CR-065: the AMR map of the monitoring page */
+.amr-map-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-bottom: 10px; font-size: var(--fs-xs); color: var(--text-2); }
+.amr-map-bar span { display: inline-flex; align-items: center; gap: 6px; }
+.amr-map-tools { margin-left: auto; }
+.amr-map-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.amr-map-dot.live { background: var(--ok); } .amr-map-dot.lost { background: var(--muted-solid); }
+.amr-map-body { display: flex; gap: 12px; align-items: stretch; }
+.amr-map-svg { flex: 1; min-width: 0; height: 520px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); cursor: grab; touch-action: none; user-select: none; }
+.amr-map-svg:active { cursor: grabbing; }
+.amr-map-road { fill: none; stroke: var(--line-strong); stroke-width: 2.5px; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.amr-map-point { fill: var(--navy-500); opacity: .75; }
+.amr-map-label { fill: var(--text-2); pointer-events: none; }
+.amr-map-robot { cursor: pointer; }
+.amr-map-robot circle { stroke: #fff; stroke-width: 2px; }
+.amr-map-robot.live circle { fill: var(--ok); } .amr-map-robot.lost circle { fill: var(--muted-solid); }
+.amr-map-robot.selected circle, .amr-map-robot:focus-visible circle { stroke: var(--amber); stroke-width: 4px; }
+.amr-map-arrow { fill: #fff; }
+.amr-map-robot text { fill: var(--heading); font-weight: 700; text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.amr-map-detail { width: 280px; flex: none; border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; background: var(--surface); }
+.amr-map-detail-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.amr-map-detail-head .modal-x { margin-left: auto; }
+@media (max-width: 900px) { .amr-map-body { flex-direction: column; } .amr-map-detail { width: auto; } .amr-map-svg { height: 360px; flex: none; } }

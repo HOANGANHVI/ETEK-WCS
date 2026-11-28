@@ -1,3 +1,4 @@
+import { AmrMapPanel } from '../components/AmrMapPanel'
 import { useCallback, useMemo } from 'react'
 import { api } from '../api/client'
 import { AgvCard } from '../components/AgvCard'
@@ -54,6 +55,7 @@ export function AgvPage() {
           <StackedSummary items={summary} ariaLabel={t('agv.sumTitle')} emptyTitle={t('agv.sumEmpty')} />
         </Panel>
       )}
+      <AmrMapPanel />
       <Async state={fleet} empty={{ title: t('agv.fleetNoData') }}>{(f) => <FleetPanel fleet={f} />}</Async>
       {!managed && <Async state={agvs} isEmpty={(d) => d.length === 0} empty={{ title: t('agv.emptyTitle'), hint: t('agv.emptyHint') }}>
         {(list) => (

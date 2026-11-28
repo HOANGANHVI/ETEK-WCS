@@ -1,12 +1,14 @@
 import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/ui'
 import { useT, type MsgKey } from '../i18n'
+import { MapTab } from './config/MapTab'
 import { OperationsTab } from './config/OperationsTab'
 import { RcsTab } from './config/RcsTab'
 
-const TABS: { key: 'rcs' | 'ops'; label: MsgKey }[] = [
+const TABS: { key: 'rcs' | 'ops' | 'map'; label: MsgKey }[] = [
   { key: 'rcs', label: 'config.tabRcs' },
   { key: 'ops', label: 'config.tabOps' },
+  { key: 'map', label: 'config.tabMap' },   // CR-065
 ]
 
 export function ConfigPage() {
@@ -25,6 +27,7 @@ export function ConfigPage() {
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === 'rcs' && <RcsTab />}
         {tab === 'ops' && <OperationsTab />}
+        {tab === 'map' && <MapTab />}
       </div>
     </>
   )
