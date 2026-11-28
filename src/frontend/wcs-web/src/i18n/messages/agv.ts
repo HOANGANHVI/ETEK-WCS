@@ -2,6 +2,11 @@ import { defineMessages } from '../core'
 
 export default defineMessages({
   fleetTitle: 'Đội AMR do RCS báo',
+  pointExcelTitle: 'Dữ liệu gốc từ Excel RCS',
+  pointNoExcel: 'Điểm này không có dòng khớp trong file Excel.',
+  pointWcsTitle: 'Cấu hình bổ sung của WCS',
+  pointSuggest: 'WCS có vị trí trùng mã {code}.',
+  pointUse: 'Chọn {code}',
   pointTitle: 'Điểm {id}',
   pointXY: 'Tọa độ X / Y',
   pointName: 'Tên hiển thị',
@@ -211,6 +216,11 @@ export default defineMessages({
   holdViewOnly: 'Bạn chỉ có quyền xem. Liên hệ Admin để gỡ giữ.',
 }, {
   fleetTitle: 'AMR fleet reported by the RCS',
+  pointExcelTitle: 'From the RCS Excel file',
+  pointNoExcel: 'No Excel row matches this point.',
+  pointWcsTitle: 'Added by WCS',
+  pointSuggest: 'WCS has a location with the code {code}.',
+  pointUse: 'Choose {code}',
   pointTitle: 'Point {id}',
   pointXY: 'X / Y',
   pointName: 'Display name',

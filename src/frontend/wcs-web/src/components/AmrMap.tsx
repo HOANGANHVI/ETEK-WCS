@@ -7,6 +7,7 @@ import { boundsOf, drawY, isLive, placeAmr, nearestDistances, pointLabel, type B
 import { api } from '../api/client'
 import { describeError } from '../i18n/vi'
 import { MapPointPanel } from './MapPointPanel'
+import { callName, kindOf, rowsByPoint } from '../lib/mapData'
 import { Button, Pill } from './ui'
 
 interface Box { x: number; y: number; w: number; h: number }
@@ -18,6 +19,7 @@ const fitBox = (b: Bounds): Box => {
 /** CR-065: the connections and points of the imported map. Drawn once per map and zoom level. */
 function Roads({ map, bounds, upp, showNames, selected, onSelect }: { map: RcsMapView; bounds: Bounds; upp: number; showNames: boolean; selected: number | null; onSelect: (id: number) => void }) {
   const notes = useMemo(() => new Map((map.points ?? []).filter((n) => n.current).map((n) => [n.pointId, n])), [map])
+  const data = useMemo(() => rowsByPoint(map.geometry.mapData), [map])   // CR-067: identification of the Excel file
   const byId = useMemo(() => new Map(map.geometry.points.map((p) => [p.id, p])), [map])
   const path = useMemo(() => map.geometry.edges.map((e) => {
     const a = byId.get(e.from); const z = byId.get(e.to)
@@ -27,26 +29,40 @@ function Roads({ map, bounds, upp, showNames, selected, onSelect }: { map: RcsMa
   const r = Math.min(Math.max(0.09, 2 * upp), 6 * upp)
   const near = useMemo(() => nearestDistances(map.geometry.points), [map])
   // a named point is drawn above its neighbours; each click area ends half way to the nearest point
-  const ordered = useMemo(() => [...map.geometry.points].sort((a, b) => Number(notes.has(a.id)) - Number(notes.has(b.id))), [map, notes])
+  const ordered = useMemo(() => {
+    const rank = (id: number) => (notes.has(id) ? 2 : callName(data.get(id)) ? 1 : 0)
+    return [...map.geometry.points].sort((a, b) => rank(a.id) - rank(b.id))
+  }, [map, notes, data])
+  // what is written under a point: the call code of the RCS and, when WCS adds something different, the WCS link or name
+  const labels = useMemo(() => map.geometry.points.flatMap((p) => {
+    const n = notes.get(p.id); const call = callName(data.get(p.id))
+    return n || call ? [{ p, n, call }] : []
+  }), [map, notes, data])
   return (
     <>
       <path d={path} className="amr-map-road" />
       {ordered.map((p) => {
         const n = notes.get(p.id); const y = drawY(map, bounds, p.y)
         const half = (near.get(p.id) ?? Infinity) / 2
+        const row = data.get(p.id); const kind = kindOf(row?.dataType); const call = callName(row); const big = !!n || !!call
+        const text = [call, row?.dataType, n ? pointLabel(n, true) : null].filter(Boolean).join(' · ')
         return (
-          <g key={p.id} className={`amr-map-hit${n ? ' named' : ''}${p.id === selected ? ' selected' : ''}`} data-point={p.id} role="button" tabIndex={0} aria-label={`#${p.id}${n ? ` ${pointLabel(n, true)}` : ''}`}
+          <g key={p.id} className={`amr-map-hit${n ? ' named' : ''}${kind ? ` kind-${kind}` : ''}${p.id === selected ? ' selected' : ''}`} data-point={p.id} role="button" tabIndex={0} aria-label={`#${p.id}${text ? ` ${text}` : ''}`}
             onClick={() => onSelect(p.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(p.id) } }}>
             <circle cx={p.x} cy={y} r={Math.min(Math.max(r, 9 * upp), half * 0.95)} className="amr-map-target" />
             {p.id === selected && <circle cx={p.x} cy={y} r={Math.max(r * 2, 11 * upp)} className="amr-map-ring" />}
-            <circle cx={p.x} cy={y} r={n ? Math.max(r * 1.5, 5 * upp) : Math.min(r, half * 0.95)} className="amr-map-point" />
-            <title>{`#${p.id} (${p.x}, ${p.y})${n ? ` · ${pointLabel(n, true)}` : ''}`}</title>
+            <circle cx={p.x} cy={y} r={big ? Math.max(r * 1.5, 5 * upp) : Math.min(r, half * 0.95)} className="amr-map-point" />
+            <title>{`#${p.id} (${p.x}, ${p.y})${text ? ` · ${text}` : ''}`}</title>
           </g>
         )
       })}
-      {showNames && [...notes.values()].map((n) => (
-        <text key={`n${n.pointId}`} x={n.x} y={drawY(map, bounds, n.y) + 18 * upp} fontSize={11 * upp} className="amr-map-name">{pointLabel(n, upp < 0.02)}</text>
-      ))}
+      {showNames && labels.map(({ p, n, call }) => {
+        const wcs = n ? pointLabel(n, upp < 0.02) : ''
+        const label = !call ? wcs : wcs && wcs !== call ? `${call} · ${wcs}` : call
+        // zoomed out, the rotating points (the "_1" places beside a working point) are left out so that the main codes stay readable
+        if (!n && upp >= 0.02 && kindOf(data.get(p.id)?.dataType) === 'rotating') return null
+        return <text key={`n${p.id}`} x={p.x} y={drawY(map, bounds, p.y) + 18 * upp} fontSize={11 * upp} className="amr-map-name" data-label={p.id}>{label}</text>
+      })}
       {upp < 0.012 && map.geometry.points.map((p) => (
         <text key={`t${p.id}`} x={p.x + r * 1.4} y={drawY(map, bounds, p.y) - r * 1.4} fontSize={11 * upp} className="amr-map-label">{p.id}</text>
       ))}
@@ -116,6 +132,12 @@ export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = ()
   const missed = placed.filter((p) => p.kind !== 'drawn')
   const sel = fleet.amrs.find((a) => a.robotCode === selected) ?? null
   const chosen = map.geometry.points.find((p) => p.id === point) ?? null
+  const dataRows = useMemo(() => rowsByPoint(map.geometry.mapData), [map])
+  const kinds = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of dataRows.values()) if (r.dataType) m.set(r.dataType, (m.get(r.dataType) ?? 0) + 1)
+    return [...m].map(([type, n]) => ({ type, n, kind: kindOf(type) ?? 'other' })).sort((a, b) => a.type.localeCompare(b.type))
+  }, [dataRows])
   const stale = (map.points ?? []).filter((n) => !n.current)
   const pickPoint = (id: number) => { setPoint(id); setSelected(null) }
   const pickAmr = (code: string) => { setSelected(code); setPoint(null) }
@@ -137,6 +159,7 @@ export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = ()
         <span><i className="amr-map-dot lost" />{t('agv.mapLost')}</span>
         <span className="muted">{t('agv.mapCount', { shown: drawn.length, total: fleet.amrs.length })}</span>
         <span><i className="amr-map-dot named" />{t('agv.pointNamed')}</span>
+        {kinds.map((k) => <span key={k.type} data-kind={k.kind}><i className={`amr-map-dot kind-${k.kind}`} />{k.type} ({k.n})</span>)}
         <label className="inline-check"><input type="checkbox" checked={showNames} onChange={(e) => setShowNames(e.target.checked)} /> {t('agv.pointShowNames')}</label>
         <span className="amr-map-tools">
           <Button size="sm" onClick={() => zoom(1 / 1.4)} title={t('agv.mapZoomIn')}>+</Button>
@@ -159,8 +182,8 @@ export function AmrMap({ map, fleet, loadFailed, canEdit = false, onChanged = ()
             </g>
           ))}
         </svg>
-        {chosen && <MapPointPanel key={`${chosen.id}-${map.info.sha256}`} point={chosen} note={(map.points ?? []).find((n) => n.pointId === chosen.id && n.current) ?? null} notes={map.points ?? []}
-          mapSha256={map.info.sha256} canEdit={canEdit} onSaved={onChanged} onClose={() => setPoint(null)} />}
+        {chosen && <MapPointPanel key={`${chosen.id}-${map.info.sha256}-${map.info.importedAt}`} point={chosen} note={(map.points ?? []).find((n) => n.pointId === chosen.id && n.current) ?? null} notes={map.points ?? []}
+          mapSha256={map.info.sha256} row={dataRows.get(chosen.id) ?? null} dataRows={map.geometry.mapData?.rows ?? []} canEdit={canEdit} onSaved={onChanged} onClose={() => setPoint(null)} />}
         {sel && (
           <aside className="amr-map-detail">
             <div className="amr-map-detail-head"><strong className="mono">{sel.robotCode}</strong>

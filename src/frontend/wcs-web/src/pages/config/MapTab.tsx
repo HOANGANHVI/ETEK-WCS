@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
-import type { RcsMapInfo } from '../../api/rcsMapTypes'
+import type { RcsMapFiles, RcsMapInfo, RcsMapPreview } from '../../api/rcsMapTypes'
+import { MapDataReport } from '../../components/MapDataReport'
 import { Button, Loading, Panel, Pill } from '../../components/ui'
 import { useApi } from '../../hooks/useApi'
 import { useFleet } from '../../fleet/fleetState'
@@ -15,18 +16,29 @@ export function MapTab() {
   const t = useT()
   const map = useApi(useCallback(() => api.rcsMap(), []))
   const [file, setFile] = useState<File | null>(null)
+  const [excel, setExcel] = useState<File | null>(null)   // CR-067: the two files are one set
+  const [checked, setChecked] = useState<{ files: RcsMapFiles; result: RcsMapPreview } | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const upload = async () => {
-    if (!file) return
+  // the files are read once: what is saved is exactly what the preview showed
+  const preview = async () => {
+    if (!file || !excel) return
+    setBusy(true); setError(null); setMessage(null); setChecked(null)
+    try {
+      const files: RcsMapFiles = { fileName: file.name, content: await file.text(), mapDataFileName: excel.name, mapDataBase64: toBase64(new Uint8Array(await excel.arrayBuffer())) }
+      setChecked({ files, result: await api.rcsMapPreview(files) })
+    } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
+  }
+  const save = async () => {
+    if (!checked) return
     setBusy(true); setError(null); setMessage(null)
     try {
-      const r = await api.rcsMapImport(file.name, await file.text())
+      const r = await api.rcsMapImport(checked.files)
       setMessage(t(r.replaced ? 'config.mapReplaced' : 'config.mapImported', { name: r.info.mapName, points: r.info.pointCount, edges: r.info.edgeCount })
         + (r.unknownNeighbours > 0 ? ` ${t('config.mapUnknownNeighbours', { n: r.unknownNeighbours })}` : ''))
-      map.reload()
+      setChecked(null); map.reload()
     } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
   }
 
@@ -36,11 +48,25 @@ export function MapTab() {
       {message && <div className="notice notice-ok" role="status">{message}</div>}
       {error && <div className="notice notice-error" role="alert">{error}</div>}
       <Panel title={t('config.mapImportTitle')} subtitle={t('config.mapImportHint')} className="mb">
-        <div className="btn-row">
-          <input type="file" accept=".xml,text/xml,application/xml" aria-label={t('config.mapFile')} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <Button variant="primary" disabled={!file || busy} onClick={() => void upload()}>{t(info ? 'config.mapReplace' : 'config.mapImport')}</Button>
+        <div className="form-grid">
+          <Field label={t('config.mapFile')}><input type="file" accept=".xml,text/xml,application/xml" data-file="xml" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setChecked(null) }} /></Field>
+          <Field label={t('config.mdFile')}><input type="file" accept=".xls,.xlsx" data-file="excel" onChange={(e) => { setExcel(e.target.files?.[0] ?? null); setChecked(null) }} /></Field>
         </div>
+        <div className="btn-row"><Button variant="primary" disabled={!file || !excel || busy} onClick={() => void preview()}>{t('config.mdCheck')}</Button></div>
         {info && <p className="muted small">{t('config.mapReplaceHint')}</p>}
+        {checked && (
+          <div className="map-preview">
+            <h3>{t('config.mdPreviewTitle', { name: checked.result.mapName, id: checked.result.mapId, qr: checked.result.mapQrCode ?? '–' })}</h3>
+            <p>{t('config.mapCountsValue', { points: checked.result.pointCount, edges: checked.result.edgeCount })}{checked.result.unknownNeighbours > 0 ? ` · ${t('config.mapUnknownNeighbours', { n: checked.result.unknownNeighbours })}` : ''}</p>
+            {checked.result.mapData && <MapDataReport data={checked.result.mapData} pointsWithoutRow={checked.result.pointsWithoutRow} />}
+            {checked.result.currentMapId && checked.result.currentMapId !== checked.result.mapId && <div className="notice notice-warn">{t('config.mdOtherId', { now: checked.result.currentMapId, next: checked.result.mapId })}</div>}
+            {(checked.result.namedPointsKept > 0 || checked.result.namedPointsForReview > 0) && <p>{t('config.mdNamed', { kept: checked.result.namedPointsKept, review: checked.result.namedPointsForReview })}</p>}
+            <div className="btn-row">
+              <Button variant="primary" disabled={busy} onClick={() => void save()}>{t(info ? 'config.mapReplace' : 'config.mapImport')}</Button>
+              <Button disabled={busy} onClick={() => setChecked(null)}>{t('config.mdCancel')}</Button>
+            </div>
+          </div>
+        )}
       </Panel>
       {map.loading && !map.data ? <Loading /> : map.error && !map.data ? <div className="notice notice-bad" role="alert">{map.error}</div> : !info ? (
         <div className="state state-empty"><div><strong>{t('config.mapNone')}</strong></div></div>
@@ -59,11 +85,23 @@ export function MapTab() {
               <dt>{t('config.mapImportedAt')}</dt><dd>{formatDateTime(info.importedAt)}{info.importedBy ? ` · ${info.importedBy}` : ''}</dd>
             </dl>
           </Panel>
+          {map.data?.geometry.mapData && (
+            <Panel title={t('config.mdCurrentTitle')} className="mb">
+              <MapDataReport data={map.data.geometry.mapData} pointsWithoutRow={map.data.geometry.points.filter((x) => !map.data!.geometry.mapData!.rows.some((r) => r.pointId === x.id)).map((x) => x.id)} />
+            </Panel>
+          )}
+          {map.data && !map.data.geometry.mapData && <div className="notice notice-warn">{t('config.mdMissing')}</div>}
           <Calibration key={`${info.sha256}-${info.importedAt}-${info.confirmedAt}`} info={info} onSaved={(m) => { setError(null); setMessage(m); map.reload() }} onError={setError} />
         </>
       )}
     </>
   )
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let s = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(s)
 }
 
 function Calibration({ info, onSaved, onError }: { info: RcsMapInfo; onSaved: (m: string) => void; onError: (m: string) => void }) {
