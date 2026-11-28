@@ -21,6 +21,7 @@ import { requestRows } from '../src/lib/requestRows.ts'
 import { waitCause } from '../src/lib/waitReason.ts'
 import { processName } from '../src/i18n/processNames.ts'
 import { RemovalDialog } from '../src/components/RemovalDialog.tsx'
+import { ImportPlanView } from '../src/components/ImportPlanView.tsx'
 import { BlockerList, WarningList } from '../src/pages/config/BlockerList.tsx'
 import { RequestOptions } from '../src/components/RequestOptions.tsx'
 import { filterWork, isWaitingToBeSent, isWithRcs, orderCode, orderRoute, workLink, workOfAgv, workRows } from '../src/lib/work.ts'
@@ -294,6 +295,13 @@ check('CR-052: a held destination port is named before and after the pick; other
   check('CR-055: the confirmation starts with the action disabled until a reason is given', /disabled=""[^>]*>XOA|<button[^>]*disabled[^>]*>XOA/.test(html), html)
   const typed = renderToStaticMarkup(createElement(RemovalDialog, { title: 'T', body: 'B', confirm: 'XOA', typeToConfirm: 'BP-01', onClose: () => {}, onConfirm: async () => {} }))
   check('CR-056: deleting a process asks for its code and a reason, and sends both', typed.includes(T('routing.removeTypeCode', { code: 'BP-01' })) && page.includes('typeToConfirm={p.code}') && readFileSync('src/api/client.ts', 'utf8').includes('qs({ reason, confirmCode })'))
+}
+{ // CR-062: loading the reference processes is confirmed first
+  const some = renderToStaticMarkup(createElement(ImportPlanView, { plan: { add: [{ code: 'BP-04', name: 'x', reviewBlocked: true, missingLocations: ['F1', 'F2'] }], keep: ['PH2-01'] } }))
+  check('CR-062: what is added, what is missing and what is kept are shown', some.includes(T('routing.impNoOverwrite')) && some.includes('BP-04') && some.includes('F1, F2') && some.includes('PH2-01') && some.includes(T('routing.impReview')))
+  check('CR-062: nothing to load is said', renderToStaticMarkup(createElement(ImportPlanView, { plan: { add: [], keep: ['PH2-01'] } })).includes(T('routing.impNothing')))
+  const page = readFileSync('src/pages/ProcessesPage.tsx', 'utf8')
+  check('CR-062: the button previews; the import runs only from the confirmation', page.includes('onClick={previewImport}') && page.includes('disabled={busy || plan.add.length === 0}') && !page.includes('onClick={importReference}'))
 }
 { // CR-057: removal of a location
   const html = renderToStaticMarkup(createElement(BlockerList, { blockers: [{ code: 'LOCATION_DELETE_RACKS', detail: '2' }, { code: 'LOCATION_DELETE_PROCESS', detail: 'BP-01, QT001' }] }))

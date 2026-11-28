@@ -166,6 +166,8 @@ public static class RoutingEndpoints
         proc.MapPost("{id:guid}/versions", async (HttpContext c, Guid id, NewVersionRequest r, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_NEW_VERSION", "BusinessProcess", id.ToString(), null,
                 () => s.NewVersionAsync(id, r.FromVersionId, c.Actor().Username, ct), x => new { x.Number }), StatusCodes.Status201Created));
+        // CR-062: what the import would add and keep, shown before it runs
+        proc.MapGet("import-reference", async (HttpContext c, ProcessAdminService s, CancellationToken ct) => ApiResults.Ok(c, await s.PreviewReferenceAsync(ReferenceProcessCatalog.Load(), ct)));
         proc.MapPost("import-reference", async (HttpContext c, ProcessAdminService s, CancellationToken ct) =>
             ApiResults.Ok(c, await Audited.RunAsync(c, "PROCESS_IMPORT", "BusinessProcess", null, null,
                 () => s.ImportReferenceAsync(ReferenceProcessCatalog.Load(), c.Actor().Username, ct), x => new { x.Imported, x.Skipped })));

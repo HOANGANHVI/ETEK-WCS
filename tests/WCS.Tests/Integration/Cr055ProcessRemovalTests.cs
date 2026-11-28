@@ -120,6 +120,24 @@ public class Cr055ProcessRemovalTests(DatabaseFixture fixture)
     }
 
     [Fact]
+    public async Task The_import_preview_says_what_would_be_added_and_changes_nothing()
+    {
+        await using var kit = await RoutingKit.CreateAsync(fixture);                          // CR-062
+        var catalog = ReferenceProcessCatalog.Load();
+        Task<int> CountAsync() => kit.H.Db(d => d.BusinessProcesses.CountAsync());
+        var before = await CountAsync();
+        var plan = await Admin(kit, s => s.PreviewReferenceAsync(catalog));
+        Assert.Equal(before, await CountAsync());
+        Assert.Equal(catalog.Count, plan.Add.Count + plan.Keep.Count);
+        var done = await Admin(kit, s => s.ImportReferenceAsync(catalog, "test"));
+        Assert.Equal(plan.Add.Select(x => x.Code), done.ImportedCodes);
+        var after = await Admin(kit, s => s.PreviewReferenceAsync(catalog));
+        Assert.Empty(after.Add);
+        Assert.Equal(catalog.Count, after.Keep.Count);
+        Assert.Contains(plan.Add, x => x.MissingLocations.Count > 0);                         // the test kit has none of F1..F5
+    }
+
+    [Fact]
     public async Task Only_an_unpublished_version_that_is_not_the_only_one_is_deleted()
     {
         await using var kit = await RoutingKit.CreateAsync(fixture);

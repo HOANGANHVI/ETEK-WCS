@@ -1,6 +1,7 @@
+import { ImportPlanView } from '../components/ImportPlanView'
 import { useCallback, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import type { CandidateDef, ConditionDef, Process, ProcessHeaderBody, ProcessIssue, ProcessVersion, StepDef, VersionDefinition } from '../api/routingTypes'
+import type { ReferenceImportPlan, CandidateDef, ConditionDef, Process, ProcessHeaderBody, ProcessIssue, ProcessVersion, StepDef, VersionDefinition } from '../api/routingTypes'
 import { Modal } from '../components/Modal'
 import { RemovalDialog } from '../components/RemovalDialog'
 import { Async, Button, PageHeader, Panel, Pill } from '../components/ui'
@@ -33,18 +34,32 @@ export function ProcessesPage() {
   const [showOff, setShowOff] = useState(false)   // CR-055: switched-off processes are hidden by default
   const [busy, setBusy] = useState(false)
 
+  // CR-062: the button only asks what the import would do; it runs after the confirmation
+  const [plan, setPlan] = useState<ReferenceImportPlan | null>(null)
+  const previewImport = async () => {
+    setBusy(true); setError(null); setMessage(null)
+    try { setPlan(await api.processImportPreview()) } catch (e) { setError(describeError(e)) } finally { setBusy(false) }
+  }
   const importReference = async () => {
     setBusy(true); setError(null); setMessage(null)
     try { const r = await api.processImportReference(); setMessage(t('routing.procImportDone', { imported: r.imported, skipped: r.skipped })); list.reload() }
-    catch (e) { setError(describeError(e)) } finally { setBusy(false) }
+    catch (e) { setError(describeError(e)) } finally { setBusy(false); setPlan(null) }
   }
 
   return (
     <>
       <PageHeader title={t('routing.procTitle')}
-        actions={<><Button disabled={busy} onClick={importReference}>{t('routing.procImport')}</Button> <Button variant="primary" onClick={() => setCreating(true)}>{t('routing.procNew')}</Button></>} />
+        actions={<><Button disabled={busy} onClick={previewImport}>{t('routing.procImport')}</Button> <Button variant="primary" onClick={() => setCreating(true)}>{t('routing.procNew')}</Button></>} />
       {message && <div className="notice notice-ok" role="status">{message}</div>}
       {error && <div className="notice notice-error" role="alert">{error}</div>}
+      {plan && (
+        <Modal title={t('routing.impTitle')} onClose={() => setPlan(null)} footer={<>
+          <Button onClick={() => setPlan(null)}>{t('routing.impCancel')}</Button>
+          <Button variant="primary" disabled={busy || plan.add.length === 0} onClick={() => void importReference()}>{t('routing.impConfirm', { n: plan.add.length })}</Button>
+        </>}>
+          <ImportPlanView plan={plan} />
+        </Modal>
+      )}
       <Panel flush actions={<label className="inline-check"><input type="checkbox" checked={showOff} onChange={(e) => setShowOff(e.target.checked)} /> {t('routing.showDisabled', { n: (list.data ?? []).filter((p) => !p.enabled).length })}</label>}>
         <Async state={list} isEmpty={(d) => d.length === 0} empty={{ title: t('routing.procNone'), hint: t('routing.procNoneHint') }}>
           {(rows) => (

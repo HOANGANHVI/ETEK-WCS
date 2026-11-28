@@ -24,6 +24,10 @@ public sealed record StartableProcessDto(string Code, string Name, string Reques
 /// <summary>CR-040: the result of declaring a queue ordering scope.</summary>
 public sealed record QueueScopeDto(Guid ProcessId, string Code, string? QueueScope, bool RequiresReadiness, IReadOnlyList<string> SharedLocationsWithOtherScopes);
 
+/// <summary>CR-062: what loading the reference processes would do now: the processes it would ADD (as drafts) and the codes that exist and stay untouched.</summary>
+public sealed record ReferenceImportPlan(IReadOnlyList<ReferenceImportCandidate> Add, IReadOnlyList<string> Keep);
+public sealed record ReferenceImportCandidate(string Code, string Name, bool ReviewBlocked, IReadOnlyList<string> MissingLocations);
+
 public sealed record ReferenceProcess(string Code, string Name, string? Description, string RequestType, string RackKind, IReadOnlyList<string> TriggerLocationCodes,
     bool ReviewBlocked, string? ReviewReason, string? SourceReference, VersionDefinition Definition,
     /// <summary>CR-039: set = this process belongs to the default catalog of that version and is published once per database. NULL = reference only (import as Draft).</summary>
