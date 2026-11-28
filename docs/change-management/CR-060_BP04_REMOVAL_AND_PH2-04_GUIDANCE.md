@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Trạng thái** | `APPROVED, IMPLEMENTED – nhánh feature/cr-060-bp04-removal-ph204-hint, CHƯA MERGE` |
+| **Trạng thái** | `APPROVED, IMPLEMENTED – đã MERGE vào main (c6d5a65)` |
 | **Nguồn phê duyệt** | Chủ dự án, 2026-11-28: "Sửa tiếp 2 lỗi này" (thay quyết định "trừ BP-04" của CR-056) |
 | **Migration** | Không |
 

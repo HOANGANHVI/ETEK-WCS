@@ -1,6 +1,6 @@
 # Change Log
 
-## CR-060 BP-04 removable; PH2-04 guidance (2026-11-28) – branch feature/cr-060-bp04-removal-ph204-hint, NOT MERGED
+## CR-060 BP-04 removable; PH2-04 guidance (2026-11-28) – MERGED into main (c6d5a65)
 
 - BP-04 is no longer protected from removal (it stays REVIEW and unpublishable). The REVIEW error explains how to apply the default catalog (PH2-04). No migration.
 
